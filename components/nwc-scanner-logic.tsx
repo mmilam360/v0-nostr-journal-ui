@@ -91,6 +91,25 @@ export default function NwcScannerLogic({
 }: { onConnectSuccess: (result: any) => void; onClose: () => void }) {
   const { status, errorMessage, setStatus, handleScanResult, reset } = useNwcConnection({ onConnectSuccess })
 
+  const handleQrReaderResult = (result: any) => {
+    // Guard 1: Ignore all scans if we are not in the 'scanning' state.
+    if (status !== "scanning") {
+      return
+    }
+
+    // Guard 2: Check if the result is valid and has text.
+    if (result?.text) {
+      const scannedData = result.text
+
+      // Guard 3: The most important check. Only proceed if it's a valid NWC URI.
+      if (scannedData.startsWith("nostrconnect://")) {
+        // If all guards pass, we have a valid code. Now we can start the connection.
+        handleScanResult(scannedData)
+      }
+      // If it's not a valid URI, we do nothing and let the user keep scanning.
+    }
+  }
+
   switch (status) {
     case "scanning":
       return (
@@ -98,11 +117,7 @@ export default function NwcScannerLogic({
           <h2 className="text-xl font-bold text-center mb-4 text-white">Scan to Connect</h2>
           <div className="overflow-hidden rounded-lg bg-black">
             <QrReader
-              onResult={(result) => {
-                if (result && result.text) {
-                  handleScanResult(result.text)
-                }
-              }}
+              onResult={handleQrReaderResult} // Use our new, robust handler
               onError={(error) => {
                 if (error?.name === "NotAllowedError") setStatus("permission_denied")
               }}
