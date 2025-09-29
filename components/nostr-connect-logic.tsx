@@ -1,6 +1,7 @@
 "use client"
 import { useState, useCallback, useEffect } from "react"
-import { generateSecretKey, getPublicKey, relayInit, nip04 } from "nostr-tools"
+import { generateSecretKey, getPublicKey, nip04 } from "nostr-tools"
+import { SimplePool } from "nostr-tools/pool"
 import { Loader2, CheckCircle, AlertTriangle, ExternalLink } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
@@ -17,10 +18,12 @@ const useNostrConnect = ({ onConnectSuccess }: { onConnectSuccess: (result: { pu
       const relay = "wss://relay.getalby.com/v1"
       const uri = `nostrconnect://${pk}?relay=${relay}&metadata=${JSON.stringify({ name: "Nostr Journal" })}`
 
-      setAppSecretKey(sk) // Save the secret key in our state
+      console.log("[v0] Generated nostrconnect URI:", uri.substring(0, 50) + "...")
+      setAppSecretKey(sk)
       setConnectUri(uri)
-      setStatus("awaiting_approval") // Move to the main display state
+      setStatus("awaiting_approval")
     } catch (e) {
+      console.error("[v0] Failed to generate connection key:", e)
       setStatus("error")
       setErrorMessage("Failed to generate connection key.")
     }
@@ -28,48 +31,63 @@ const useNostrConnect = ({ onConnectSuccess }: { onConnectSuccess: (result: { pu
 
   const startListeningAndAwaitApproval = useCallback(async () => {
     if (!appSecretKey) return
-    let relay
+    let pool: SimplePool | null = null
     try {
       const appPublicKey = getPublicKey(appSecretKey)
-      relay = relayInit("wss://relay.getalby.com/v1")
-      await new Promise((resolve, reject) => {
-        relay.on("connect", resolve)
-        relay.on("error", reject)
-        relay.connect().catch(reject)
-        setTimeout(() => reject(new Error("Relay connection timed out")), 7000)
-      })
+      const relayUrl = "wss://relay.getalby.com/v1"
 
-      const sub = relay.sub([{ kinds: [24133], "#p": [appPublicKey] }])
+      console.log("[v0] Starting to listen for approval events...")
+      console.log("[v0] App public key:", appPublicKey)
+
+      pool = new SimplePool()
+      await pool.ensureRelay(relayUrl)
+
       const responsePromise = new Promise<{ pubkey: string }>((resolve, reject) => {
-        sub.on("event", async (event) => {
-          try {
-            const sharedSecret = nip04.getSharedSecret(appSecretKey, event.pubkey)
-            const decrypted = await nip04.decrypt(sharedSecret, event.content)
-            const response = JSON.parse(decrypted)
+        // The response will be AUTHORED by the user's pubkey, but TAGGED with our app's pubkey
+        const sub = pool!.subscribeMany([relayUrl], [{ kinds: [24133], "#p": [appPublicKey] }], {
+          onevent: async (event: any) => {
+            console.log("[v0] Received event from relay:", event.id)
+            console.log("[v0] Event author (user's pubkey):", event.pubkey)
+            try {
+              const sharedSecret = nip04.getSharedSecret(appSecretKey, event.pubkey)
+              const decrypted = await nip04.decrypt(sharedSecret, event.content)
+              const response = JSON.parse(decrypted)
 
-            // Handle different valid response formats from wallets
-            if (response.result === "auth_url" || response.result === true || response.result_type === "connect") {
-              resolve({ pubkey: event.pubkey })
-            } else {
-              reject(new Error(response.error?.message || "Connection rejected."))
+              console.log("[v0] Decrypted response:", response)
+
+              if (response.result === "connect" || response.result_type === "connect") {
+                console.log("[v0] Connection approved! User pubkey:", event.pubkey)
+                sub.close()
+                resolve({ pubkey: event.pubkey })
+              } else if (response.error) {
+                console.error("[v0] Connection rejected:", response.error)
+                sub.close()
+                reject(new Error(response.error.message || "Connection rejected."))
+              }
+            } catch (e) {
+              console.error("[v0] Failed to decrypt event:", e)
+              // Ignore decryption errors, might be other events
             }
-          } catch (e) {
-            // Ignore decryption errors, might be other events
-          }
+          },
         })
+
+        // Clean up subscription after timeout
+        setTimeout(() => {
+          console.log("[v0] Approval timeout reached")
+          sub.close()
+          reject(new Error("Approval timed out. Please try again."))
+        }, 120000)
       })
 
-      const result = await Promise.race([
-        responsePromise,
-        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("Approval timed out.")), 120000)),
-      ])
+      const result = await responsePromise
       setStatus("success")
       onConnectSuccess(result)
     } catch (error) {
+      console.error("[v0] Connection error:", error)
       setStatus("error")
       setErrorMessage(error instanceof Error ? error.message : "Connection failed")
     } finally {
-      if (relay) relay.close()
+      if (pool) pool.close(["wss://relay.getalby.com/v1"])
     }
   }, [appSecretKey, onConnectSuccess])
 
@@ -78,7 +96,6 @@ const useNostrConnect = ({ onConnectSuccess }: { onConnectSuccess: (result: { pu
     generateConnectUri()
   }, [generateConnectUri])
 
-  // Return the new listener function to be called by the UI
   return { status, errorMessage, connectUri, startListeningAndAwaitApproval }
 }
 
