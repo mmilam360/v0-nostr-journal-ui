@@ -1,17 +1,19 @@
 "use client"
 import { useState, useCallback } from "react"
 import { QrReader } from "react-qr-reader"
-import { generateSecretKey, getPublicKey, relayInit, nip04, finalizeEvent } from "nostr-tools"
+import { generateSecretKey, getPublicKey, nip04, finalizeEvent } from "nostr-tools"
+import { SimplePool } from "nostr-tools/pool"
 import { Loader2, CheckCircle, AlertTriangle, CameraOff, Wifi, KeyRound, Send } from "lucide-react"
 
 const useNwcConnection = ({ onConnectSuccess }: { onConnectSuccess: (result: any) => void }) => {
   // Expanded states for granular feedback
   const [status, setStatus] = useState("scanning") // scanning, scanned, connecting_relay, encrypting, awaiting_approval, success, error
   const [errorMessage, setErrorMessage] = useState("")
+  const [relayUrl, setRelayUrl] = useState("")
 
   const connectWithUri = useCallback(
     async (nwcUri: string) => {
-      let relay: any
+      let pool: SimplePool | null = null
       try {
         // Step 1: Acknowledge the scan immediately
         setStatus("scanned")
@@ -20,19 +22,16 @@ const useNwcConnection = ({ onConnectSuccess }: { onConnectSuccess: (result: any
         const url = new URL(nwcUri)
         const walletPubkey = url.hostname
         const relayUrl = url.searchParams.get("relay")
+        setRelayUrl(relayUrl || "")
         if (!walletPubkey || !relayUrl) throw new Error("Invalid NWC URI: Missing pubkey or relay.")
 
         // Step 2: Connect to the relay
         setStatus("connecting_relay")
         const appSecretKey = generateSecretKey()
         const appPublicKey = getPublicKey(appSecretKey)
-        relay = relayInit(relayUrl)
-        await new Promise((resolve, reject) => {
-          relay.on("connect", resolve)
-          relay.on("error", reject)
-          relay.connect().catch(reject)
-          setTimeout(() => reject(new Error("Relay connection timed out.")), 7000)
-        })
+
+        pool = new SimplePool()
+        await pool.ensureRelay(relayUrl)
 
         // Step 3: Encrypt the request
         setStatus("encrypting")
@@ -49,31 +48,39 @@ const useNwcConnection = ({ onConnectSuccess }: { onConnectSuccess: (result: any
           appSecretKey,
         )
 
-        const sub = relay.sub([{ kinds: [24133], authors: [walletPubkey], "#p": [appPublicKey] }])
         const responsePromise = new Promise((resolve, reject) => {
-          sub.on("event", async (event: any) => {
-            try {
-              const decrypted = await nip04.decrypt(sharedSecret, event.content)
-              const response = JSON.parse(decrypted)
-              if (response.result_type === "connect") {
-                const persistentConnectionString = `nostrconnect://${walletPubkey}?relay=${relayUrl}&secret=${Buffer.from(appSecretKey).toString("hex")}`
-                resolve({ pubkey: walletPubkey, connectionString: persistentConnectionString })
-              } else {
-                reject(new Error(response.error?.message || "Connection rejected."))
-              }
-            } catch (e) {}
-          })
+          const sub = pool!.subscribeMany(
+            [relayUrl],
+            [{ kinds: [24133], authors: [walletPubkey], "#p": [appPublicKey] }],
+            {
+              onevent: async (event: any) => {
+                try {
+                  const decrypted = await nip04.decrypt(sharedSecret, event.content)
+                  const response = JSON.parse(decrypted)
+                  if (response.result_type === "connect") {
+                    const persistentConnectionString = `nostrconnect://${walletPubkey}?relay=${relayUrl}&secret=${Buffer.from(appSecretKey).toString("hex")}`
+                    resolve({ pubkey: walletPubkey, connectionString: persistentConnectionString })
+                  } else {
+                    reject(new Error(response.error?.message || "Connection rejected."))
+                  }
+                } catch (e) {
+                  // Ignore decryption errors for irrelevant events
+                }
+              },
+            },
+          )
+
+          // Clean up subscription after timeout
+          setTimeout(() => {
+            sub.close()
+            reject(new Error("Approval timed out. Please try again."))
+          }, 60000)
         })
 
         // Step 4: Publish and wait for approval
-        await relay.publish(requestEvent)
+        await pool.publish([relayUrl], requestEvent)
         setStatus("awaiting_approval")
-        const result = await Promise.race([
-          responsePromise,
-          new Promise((_, reject) =>
-            setTimeout(() => reject(new Error("Approval timed out. Please try again.")), 60000),
-          ),
-        ])
+        const result = await responsePromise
 
         // Step 5: Success!
         setStatus("success")
@@ -82,7 +89,7 @@ const useNwcConnection = ({ onConnectSuccess }: { onConnectSuccess: (result: any
         setStatus("error")
         setErrorMessage(error.message)
       } finally {
-        if (relay) relay.close()
+        if (pool) pool.close([relayUrl])
       }
     },
     [onConnectSuccess],
