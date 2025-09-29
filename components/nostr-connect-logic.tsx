@@ -70,8 +70,17 @@ const useNostrConnect = ({ onConnectSuccess }: { onConnectSuccess: (result: { pu
       console.log("[v0] Sending connect request to wallet relay...")
 
       pool = new SimplePool()
-      await pool.ensureRelay(walletRelay)
-      await Promise.any(pool.publish([walletRelay], requestEvent))
+
+      const publishPromises = pool.publish([walletRelay], requestEvent)
+      const publishResults = await Promise.allSettled(publishPromises)
+
+      const successfulPublishes = publishResults.filter((result) => result.status === "fulfilled")
+
+      console.log(`[v0] Published to ${successfulPublishes.length}/${publishResults.length} relays`)
+
+      if (successfulPublishes.length === 0) {
+        throw new Error("Could not connect to the Nostr network. Please check your internet connection and try again.")
+      }
 
       console.log("[v0] Connect request sent! Now listening for response on multiple relays...")
 
@@ -104,6 +113,7 @@ const useNostrConnect = ({ onConnectSuccess }: { onConnectSuccess: (result: { pu
 
         setTimeout(() => {
           console.log("[v0] Approval timeout reached")
+          sub.close()
           reject(new Error("Approval timed out. Please scan and approve within 2 minutes."))
         }, 120000)
       })
