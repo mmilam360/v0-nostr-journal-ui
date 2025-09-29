@@ -1,0 +1,69 @@
+"use client"
+
+import { Inbox, Trash2, Hash } from "lucide-react"
+import UserMenu from "@/components/user-menu"
+
+interface TagsPanelProps {
+  tags: string[]
+  selectedTag: string | null
+  onSelectTag: (tag: string | null) => void
+  pubkey?: string
+  onLogout?: () => void
+}
+
+export default function TagsPanel({ tags, selectedTag, onSelectTag, pubkey, onLogout }: TagsPanelProps) {
+  return (
+    <div className="w-64 bg-slate-800 border-r border-slate-700 flex flex-col">
+      {pubkey && onLogout && (
+        <div className="border-b border-slate-700">
+          <UserMenu pubkey={pubkey} onLogout={onLogout} />
+        </div>
+      )}
+
+      <div className="p-4 space-y-2">
+        <button
+          onClick={() => onSelectTag("all")}
+          className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors ${
+            selectedTag === "all" ? "bg-slate-700 text-white" : "text-slate-400 hover:text-white hover:bg-slate-700"
+          }`}
+        >
+          <Inbox className="w-4 h-4" />
+          All Notes
+        </button>
+
+        <button
+          onClick={() => onSelectTag("trash")}
+          className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors ${
+            selectedTag === "trash" ? "bg-slate-700 text-white" : "text-slate-400 hover:text-white hover:bg-slate-700"
+          }`}
+        >
+          <Trash2 className="w-4 h-4" />
+          Trash
+        </button>
+      </div>
+
+      <div className="px-4 py-2">
+        <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">TAGS</h3>
+
+        <div className="space-y-1">
+          {tags.length === 0 ? (
+            <p className="text-slate-500 text-sm px-3 py-2">No tags created.</p>
+          ) : (
+            tags.map((tag) => (
+              <button
+                key={tag}
+                onClick={() => onSelectTag(tag)}
+                className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors ${
+                  selectedTag === tag ? "bg-slate-700 text-white" : "text-slate-400 hover:text-white hover:bg-slate-700"
+                }`}
+              >
+                <Hash className="w-4 h-4" />
+                {tag}
+              </button>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
