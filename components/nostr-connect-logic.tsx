@@ -1,6 +1,7 @@
 "use client"
 import { useState, useCallback, useEffect } from "react"
-import { generateSecretKey, getPublicKey, nip04, finalizeEvent } from "nostr-tools"
+import { generateSecretKey, getPublicKey, finalizeEvent } from "nostr-tools"
+import * as nip04 from "nostr-tools/nip04"
 import { SimplePool } from "nostr-tools/pool"
 import { Loader2, CheckCircle, AlertTriangle, ExternalLink } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -54,8 +55,7 @@ const useNostrConnect = ({ onConnectSuccess }: { onConnectSuccess: (result: { pu
 
       console.log("[v0] Connect payload:", connectPayload)
 
-      const sharedSecret = nip04.getSharedSecret(appSecretKey, walletPubkey)
-      const encryptedPayload = await nip04.encrypt(sharedSecret, JSON.stringify(connectPayload))
+      const encryptedPayload = await nip04.encrypt(appSecretKey, walletPubkey, JSON.stringify(connectPayload))
 
       const requestEvent = finalizeEvent(
         {
@@ -82,8 +82,7 @@ const useNostrConnect = ({ onConnectSuccess }: { onConnectSuccess: (result: { pu
             console.log("[v0] Event author (user's pubkey):", event.pubkey)
             try {
               const userPubkey = event.pubkey
-              const sharedSecret = nip04.getSharedSecret(appSecretKey, userPubkey)
-              const decrypted = await nip04.decrypt(sharedSecret, event.content)
+              const decrypted = await nip04.decrypt(appSecretKey, userPubkey, event.content)
               const response = JSON.parse(decrypted)
 
               console.log("[v0] Decrypted response:", response)
