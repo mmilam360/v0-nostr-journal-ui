@@ -7,9 +7,8 @@ import SyncUnlockModal from "@/components/sync-unlock-modal"
 
 export interface AuthData {
   pubkey: string
-  authMethod: "extension" | "nsec" | "nwc"
+  authMethod: "extension" | "nsec"
   privateKey?: string // Only for nsec login
-  nwcUri?: string // Only for NWC login
 }
 
 export default function Home() {
@@ -25,33 +24,6 @@ export default function Home() {
   useEffect(() => {
     const checkExistingSession = async () => {
       console.log("[v0] Checking for existing sessions...")
-
-      // Check for NWC session
-      const savedNwcUri = localStorage.getItem("nostr-journal-nwc-uri")
-      if (savedNwcUri) {
-        try {
-          console.log("[v0] Found existing NWC session")
-          const url = new URL(savedNwcUri)
-          const pubkey = url.pathname.replace("//", "")
-
-          const authData: AuthData = {
-            pubkey,
-            authMethod: "nwc",
-            nwcUri: savedNwcUri,
-          }
-
-          setAuthData(authData)
-          setIsAuthenticated(true)
-
-          // Show sync unlock modal for returning users
-          await handleExistingUser(authData)
-          setIsCheckingSession(false)
-          return
-        } catch (error) {
-          console.error("[v0] Failed to restore NWC session:", error)
-          localStorage.removeItem("nostr-journal-nwc-uri")
-        }
-      }
 
       // No existing session found
       setIsCheckingSession(false)
@@ -161,7 +133,7 @@ export default function Home() {
     console.log("[v0] Switching Nostr account...")
 
     // Clear all session data
-    localStorage.removeItem("nostr-journal-nwc-uri")
+    // localStorage.removeItem("nostr-journal-nwc-uri")
     // Clear any other stored session data if needed
 
     // Reset all state
@@ -179,11 +151,6 @@ export default function Home() {
 
   const handleLogout = () => {
     console.log("[v0] User logged out")
-
-    // Clear NWC session if it exists
-    if (authData?.authMethod === "nwc") {
-      localStorage.removeItem("nostr-journal-nwc-uri")
-    }
 
     setAuthData(null)
     setIsAuthenticated(false)
