@@ -9,8 +9,11 @@ export interface AuthManager {
   authState: AuthState
   userPubkey: string | null
   nostrSigner: Uint8Array | null
+  authMethod: "nsec" | "extension" | "bunker" | null
   createNewAccount: (password: string) => Promise<void>
   importAccount: (nsec: string, password: string) => Promise<void>
+  connectBunker: (bunkerUrl: string) => Promise<void>
+  connectExtension: (pubkey: string) => Promise<void>
   unlockAccount: (password: string) => Promise<void>
   logout: () => void
   forgetAccount: () => Promise<void>
@@ -20,6 +23,7 @@ export const useAuthManager = (): AuthManager => {
   const [authState, setAuthState] = useState<AuthState>("loading")
   const [userPubkey, setUserPubkey] = useState<string | null>(null)
   const [nostrSigner, setNostrSigner] = useState<Uint8Array | null>(null)
+  const [authMethod, setAuthMethod] = useState<"nsec" | "extension" | "bunker" | null>(null)
 
   useEffect(() => {
     const checkForLocalAccount = async () => {
@@ -83,6 +87,54 @@ export const useAuthManager = (): AuthManager => {
     }
   }
 
+  const connectBunker = async (bunkerUrl: string) => {
+    console.log("[v0] Connecting with bunker:", bunkerUrl)
+    try {
+      // For now, this is a placeholder implementation
+      // In a real implementation, this would:
+      // 1. Parse the bunker URL to extract pubkey and relay
+      // 2. Establish connection with the remote signer
+      // 3. Store the connection details for future use
+
+      // Extract pubkey from bunker URL (simplified)
+      const urlMatch = bunkerUrl.match(/bunker:\/\/([^?]+)/)
+      if (!urlMatch) {
+        throw new Error("Invalid bunker URL format")
+      }
+
+      const npub = urlMatch[1]
+      const { type, data } = nostrTools.nip19.decode(npub)
+      if (type !== "npub") {
+        throw new Error("Invalid public key in bunker URL")
+      }
+
+      const pubkey = nostrTools.nip19.npubEncode(data as Uint8Array)
+
+      setUserPubkey(pubkey)
+      setAuthMethod("bunker")
+      setAuthState("unlocked")
+
+      console.log("[v0] Bunker connection established")
+    } catch (error) {
+      console.error("[v0] Error connecting with bunker:", error)
+      throw error
+    }
+  }
+
+  const connectExtension = async (pubkey: string) => {
+    console.log("[v0] Connecting with browser extension:", pubkey)
+    try {
+      setUserPubkey(pubkey)
+      setAuthMethod("extension")
+      setAuthState("unlocked")
+
+      console.log("[v0] Browser extension connection established")
+    } catch (error) {
+      console.error("[v0] Error connecting with extension:", error)
+      throw error
+    }
+  }
+
   const unlockAccount = async (password: string) => {
     console.log("[v0] Unlocking account...")
     try {
@@ -91,6 +143,7 @@ export const useAuthManager = (): AuthManager => {
 
       setUserPubkey(pubkey)
       setNostrSigner(nsecBytes)
+      setAuthMethod("nsec")
       setAuthState("unlocked")
       console.log("[v0] Account unlocked successfully")
     } catch (error) {
@@ -100,9 +153,15 @@ export const useAuthManager = (): AuthManager => {
   }
 
   const logout = () => {
-    console.log("[v0] Logging out (locking account)...")
+    console.log("[v0] Logging out...")
     setNostrSigner(null)
-    setAuthState("locked")
+    if (authMethod === "nsec") {
+      setAuthState("locked")
+    } else {
+      setUserPubkey(null)
+      setAuthMethod(null)
+      setAuthState("no_account")
+    }
   }
 
   const forgetAccount = async () => {
@@ -111,6 +170,7 @@ export const useAuthManager = (): AuthManager => {
       await localKeystore.deleteAccount()
       setUserPubkey(null)
       setNostrSigner(null)
+      setAuthMethod(null)
       setAuthState("no_account")
       console.log("[v0] Account forgotten successfully")
     } catch (error) {
@@ -123,8 +183,11 @@ export const useAuthManager = (): AuthManager => {
     authState,
     userPubkey,
     nostrSigner,
+    authMethod,
     createNewAccount,
     importAccount,
+    connectBunker,
+    connectExtension,
     unlockAccount,
     logout,
     forgetAccount,

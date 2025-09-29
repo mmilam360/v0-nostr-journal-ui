@@ -1,13 +1,24 @@
 "use client"
 
 import { useAuthManager } from "@/hooks/useAuthManager"
-import OnboardingScreen from "@/components/onboarding-screen"
+import UnifiedLoginScreen from "@/components/unified-login-screen"
 import UnlockScreen from "@/components/unlock-screen"
 import MainApp from "@/components/main-app"
 
 export default function Home() {
-  const { authState, userPubkey, nostrSigner, createNewAccount, importAccount, unlockAccount, logout, forgetAccount } =
-    useAuthManager()
+  const {
+    authState,
+    userPubkey,
+    nostrSigner,
+    authMethod,
+    createNewAccount,
+    importAccount,
+    connectBunker,
+    connectExtension,
+    unlockAccount,
+    logout,
+    forgetAccount,
+  } = useAuthManager()
 
   // Loading state
   if (authState === "loading") {
@@ -21,9 +32,14 @@ export default function Home() {
     )
   }
 
-  // No account state - show onboarding
   if (authState === "no_account") {
-    return <OnboardingScreen onCreateAccount={createNewAccount} onImportAccount={importAccount} />
+    return (
+      <UnifiedLoginScreen
+        onCreateAccount={createNewAccount}
+        onBunkerConnect={connectBunker}
+        onExtensionLogin={connectExtension}
+      />
+    )
   }
 
   // Locked state - show unlock screen
@@ -31,24 +47,40 @@ export default function Home() {
     return <UnlockScreen userPubkey={userPubkey} onUnlock={unlockAccount} onForgetAccount={forgetAccount} />
   }
 
-  // Unlocked state - show main app
-  if (authState === "unlocked" && userPubkey && nostrSigner) {
-    // Convert Uint8Array to hex string for compatibility with existing MainApp
-    const privateKeyHex = Array.from(nostrSigner, (byte) => byte.toString(16).padStart(2, "0")).join("")
+  if (authState === "unlocked" && userPubkey) {
+    // Prepare auth data based on authentication method
+    let authData
 
-    const authData = {
-      pubkey: userPubkey,
-      authMethod: "nsec" as const,
-      privateKey: privateKeyHex,
+    if (authMethod === "nsec" && nostrSigner) {
+      // Convert Uint8Array to hex string for nsec method
+      const privateKeyHex = Array.from(nostrSigner, (byte) => byte.toString(16).padStart(2, "0")).join("")
+      authData = {
+        pubkey: userPubkey,
+        authMethod: "nsec" as const,
+        privateKey: privateKeyHex,
+      }
+    } else if (authMethod === "extension") {
+      authData = {
+        pubkey: userPubkey,
+        authMethod: "extension" as const,
+      }
+    } else if (authMethod === "bunker") {
+      authData = {
+        pubkey: userPubkey,
+        authMethod: "nwc" as const, // Use "nwc" for bunker connections in MainApp
+      }
+    } else {
+      // Fallback - should not happen
+      return (
+        <div className="min-h-screen bg-slate-900 flex items-center justify-center">
+          <div className="text-center">
+            <p className="text-slate-400">Authentication method not recognized. Please try logging in again.</p>
+          </div>
+        </div>
+      )
     }
 
-    return (
-      <MainApp
-        authData={authData}
-        onLogout={logout}
-        encryptionKey={null} // We'll handle encryption differently now
-      />
-    )
+    return <MainApp authData={authData} onLogout={logout} />
   }
 
   // Fallback - should never reach here
