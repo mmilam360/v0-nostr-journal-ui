@@ -11,6 +11,7 @@
   "dependencies": {
     "@getalby/sdk": "6.0.1",
     "@hookform/resolvers": "^3.10.0",
+    "@nostr-connect/connect": "latest",
     "@radix-ui/react-accordion": "1.2.2",
     "@radix-ui/react-alert-dialog": "1.1.4",
     "@radix-ui/react-aspect-ratio": "1.1.1",

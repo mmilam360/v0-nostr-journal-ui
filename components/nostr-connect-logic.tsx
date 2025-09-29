@@ -1,8 +1,7 @@
 "use client"
 import { useState, useCallback, useEffect } from "react"
-import { generateSecretKey, getPublicKey, finalizeEvent } from "nostr-tools"
-import * as nip04 from "nostr-tools/nip04"
-import { SimplePool } from "nostr-tools/pool"
+import { Connect } from "@nostr-connect/connect"
+import { generateSecretKey, getPublicKey } from "nostr-tools"
 import { Loader2, CheckCircle, AlertTriangle, ExternalLink } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
@@ -12,129 +11,83 @@ const useNostrConnect = ({ onConnectSuccess }: { onConnectSuccess: (result: { pu
   const [status, setStatus] = useState("generating")
   const [errorMessage, setErrorMessage] = useState("")
   const [connectUri, setConnectUri] = useState("")
-  const [appSecretKey, setAppSecretKey] = useState<Uint8Array | null>(null)
+  const [connectInstance, setConnectInstance] = useState<Connect | null>(null)
 
-  const generateConnectUri = useCallback(() => {
+  const initializeConnection = useCallback(async () => {
     try {
+      console.log("[v0] Initializing Nostr Connect with professional library...")
+
+      // Generate ephemeral key for this session
       const sk = generateSecretKey()
       const pk = getPublicKey(sk)
-      const metadata = JSON.stringify({ name: "Nostr Journal", url: "https://nostrjournal.app" })
-      const uri = `nostrconnect://${pk}?relay=${NWC_RELAYS[0]}&metadata=${encodeURIComponent(metadata)}`
 
-      console.log("[v0] Generated nostrconnect URI:", uri.substring(0, 50) + "...")
-      setAppSecretKey(sk)
+      console.log("[v0] App public key:", pk)
+
+      // Create Connect instance with the relay
+      const connect = new Connect({
+        secretKey: sk,
+        relay: NWC_RELAYS[0],
+      })
+
+      // Set up event listener for successful connection
+      connect.events.on("connect", (walletPubkey: string) => {
+        console.log("[v0] Connection successful! Wallet pubkey:", walletPubkey)
+        setStatus("success")
+        onConnectSuccess({ pubkey: walletPubkey })
+      })
+
+      // Set up error handler
+      connect.events.on("disconnect", () => {
+        console.log("[v0] Connection disconnected")
+      })
+
+      // Initialize the connection
+      await connect.init()
+
+      console.log("[v0] Connect instance initialized")
+
+      // Generate the connection URI
+      const metadata = {
+        name: "Nostr Journal",
+        url: "https://nostrjournal.app",
+      }
+
+      const uri = connect.generateConnectURI(metadata)
+
+      console.log("[v0] Generated ConnectURI:", uri.substring(0, 50) + "...")
+
+      setConnectInstance(connect)
       setConnectUri(uri)
       setStatus("awaiting_approval")
-    } catch (e) {
-      console.error("[v0] Failed to generate connection key:", e)
+
+      // Set up timeout for approval
+      setTimeout(() => {
+        if (status === "awaiting_approval") {
+          console.log("[v0] Approval timeout reached")
+          setStatus("error")
+          setErrorMessage("Approval timed out. Please scan and approve within 2 minutes.")
+          connect.disconnect()
+        }
+      }, 120000)
+    } catch (error) {
+      console.error("[v0] Failed to initialize connection:", error)
       setStatus("error")
-      setErrorMessage("Failed to generate a secure connection key.")
+      setErrorMessage(error instanceof Error ? error.message : "Failed to initialize secure connection")
+    }
+  }, [onConnectSuccess, status])
+
+  useEffect(() => {
+    initializeConnection()
+
+    // Cleanup on unmount
+    return () => {
+      if (connectInstance) {
+        connectInstance.disconnect()
+      }
     }
   }, [])
 
-  const startListeningAndAwaitApproval = useCallback(async () => {
-    if (!appSecretKey || !connectUri) return
-    let pool: SimplePool | null = null
-    try {
-      const appPublicKey = getPublicKey(appSecretKey)
-
-      console.log("[v0] Starting NIP-46 handshake...")
-      console.log("[v0] App public key:", appPublicKey)
-
-      const url = new URL(connectUri)
-      const walletPubkey = url.hostname
-      const walletRelay = url.searchParams.get("relay") || NWC_RELAYS[0]
-
-      console.log("[v0] Wallet pubkey:", walletPubkey)
-      console.log("[v0] Wallet relay:", walletRelay)
-
-      const connectPayload = {
-        method: "connect",
-        params: [appPublicKey],
-      }
-
-      console.log("[v0] Connect payload:", connectPayload)
-
-      const encryptedPayload = await nip04.encrypt(appSecretKey, walletPubkey, JSON.stringify(connectPayload))
-
-      const requestEvent = finalizeEvent(
-        {
-          kind: 24133,
-          created_at: Math.floor(Date.now() / 1000),
-          tags: [["p", walletPubkey]],
-          content: encryptedPayload,
-        },
-        appSecretKey,
-      )
-
-      console.log("[v0] Sending connect request to wallet relay...")
-
-      pool = new SimplePool()
-
-      const publishPromises = pool.publish([walletRelay], requestEvent)
-      const publishResults = await Promise.allSettled(publishPromises)
-
-      const successfulPublishes = publishResults.filter((result) => result.status === "fulfilled")
-
-      console.log(`[v0] Published to ${successfulPublishes.length}/${publishResults.length} relays`)
-
-      if (successfulPublishes.length === 0) {
-        throw new Error("Could not connect to the Nostr network. Please check your internet connection and try again.")
-      }
-
-      console.log("[v0] Connect request sent! Now listening for response on multiple relays...")
-
-      const responsePromise = new Promise<{ pubkey: string }>((resolve, reject) => {
-        const sub = pool!.subscribeMany(NWC_RELAYS, [{ kinds: [24133], "#p": [appPublicKey] }], {
-          onevent: async (event: any) => {
-            console.log("[v0] Received response event from relay")
-            console.log("[v0] Event author (user's pubkey):", event.pubkey)
-            try {
-              const userPubkey = event.pubkey
-              const decrypted = await nip04.decrypt(appSecretKey, userPubkey, event.content)
-              const response = JSON.parse(decrypted)
-
-              console.log("[v0] Decrypted response:", response)
-
-              if (response.result === "connect" || response.result_type === "connect") {
-                console.log("[v0] Connection approved! User pubkey:", userPubkey)
-                sub.close()
-                resolve({ pubkey: userPubkey })
-              } else if (response.error) {
-                console.error("[v0] Connection rejected:", response.error)
-                sub.close()
-                reject(new Error(response.error.message || "Connection rejected by the wallet."))
-              }
-            } catch (e) {
-              console.warn("[v0] Could not decrypt event, ignoring:", e)
-            }
-          },
-        })
-
-        setTimeout(() => {
-          console.log("[v0] Approval timeout reached")
-          sub.close()
-          reject(new Error("Approval timed out. Please scan and approve within 2 minutes."))
-        }, 120000)
-      })
-
-      const result = await responsePromise
-      setStatus("success")
-      onConnectSuccess(result)
-    } catch (error) {
-      console.error("[v0] Connection error:", error)
-      setStatus("error")
-      setErrorMessage(error instanceof Error ? error.message : "Connection failed")
-    } finally {
-      if (pool) pool.close(NWC_RELAYS)
-    }
-  }, [appSecretKey, connectUri, onConnectSuccess])
-
-  useEffect(() => {
-    generateConnectUri()
-  }, [generateConnectUri])
-
-  return { status, errorMessage, connectUri, startListeningAndAwaitApproval }
+  return { status, errorMessage, connectUri }
 }
 
 interface NostrConnectLogicProps {
@@ -143,13 +96,7 @@ interface NostrConnectLogicProps {
 }
 
 export default function NostrConnectLogic({ onConnectSuccess, onClose }: NostrConnectLogicProps) {
-  const { status, errorMessage, connectUri, startListeningAndAwaitApproval } = useNostrConnect({ onConnectSuccess })
-
-  useEffect(() => {
-    if (status === "awaiting_approval") {
-      startListeningAndAwaitApproval()
-    }
-  }, [status, startListeningAndAwaitApproval])
+  const { status, errorMessage, connectUri } = useNostrConnect({ onConnectSuccess })
 
   const renderContent = () => {
     switch (status) {
