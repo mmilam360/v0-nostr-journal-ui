@@ -1,244 +1,36 @@
 "use client"
-import { useState, useCallback } from "react"
-import { QrReader } from "react-qr-reader"
-import { SimplePool, generateSecretKey, getPublicKey, finalizeEvent, nip04 } from "nostr-tools"
-import { Loader2, CheckCircle, AlertTriangle, CameraOff, X } from "lucide-react"
+import dynamic from "next/dynamic"
+import { X, Loader2 } from "lucide-react"
 
-// This is the core logic that powers the component.
-const useNwcConnection = ({ onConnectSuccess }: { onConnectSuccess: (result: any) => void }) => {
-  const [status, setStatus] = useState("scanning") // 'scanning', 'connecting', 'success', 'error', 'permission_denied'
-  const [errorMessage, setErrorMessage] = useState("")
-  const [relayUrl, setRelayUrl] = useState("")
-  const [parsedRelayUrl, setParsedRelayUrl] = useState("")
-
-  const connectWithUri = useCallback(
-    async (nwcUri: string) => {
-      setStatus("connecting")
-      const pool = new SimplePool()
-      try {
-        console.log("[v0] Processing QR code:", nwcUri)
-
-        // Handle different URI formats
-        let processedUri = nwcUri
-        if (nwcUri.startsWith("nostr+walletconnect://")) {
-          processedUri = nwcUri.replace("nostr+walletconnect://", "nostrconnect://")
-          console.log("[v0] Converted Alby Hub format to standard NWC format:", processedUri)
-        }
-
-        if (!processedUri.startsWith("nostrconnect://")) {
-          throw new Error("Invalid QR Code. Please scan a Nostr Wallet Connect code.")
-        }
-
-        // 1. Parse URI for wallet's pubkey and relay
-        const url = new URL(processedUri)
-        const walletPubkey = url.hostname
-        const parsedRelayUrl = url.searchParams.get("relay") || ""
-        setParsedRelayUrl(parsedRelayUrl)
-
-        console.log("[v0] Parsed wallet pubkey:", walletPubkey)
-        console.log("[v0] Parsed relay URL:", parsedRelayUrl)
-
-        if (!walletPubkey || !parsedRelayUrl) throw new Error("Invalid NWC URI - missing wallet pubkey or relay URL")
-
-        const appSecretKey = generateSecretKey()
-        const appPublicKey = getPublicKey(appSecretKey)
-        console.log("[v0] Generated app keypair for connection")
-
-        console.log("[v0] Connecting to relay:", parsedRelayUrl)
-
-        // 4. Create and encrypt the permission request (NIP-04)
-        const connectPayload = { method: "connect", params: [{ name: "Nostr Journal" }] }
-        console.log("[v0] Creating connection request payload")
-
-        const sharedSecret = nip04.getSharedSecret(appSecretKey, walletPubkey)
-        const encryptedPayload = await nip04.encrypt(sharedSecret, JSON.stringify(connectPayload))
-
-        const requestEvent = finalizeEvent(
-          {
-            kind: 24133,
-            created_at: Math.floor(Date.now() / 1000),
-            tags: [["p", walletPubkey]],
-            content: encryptedPayload,
-          },
-          appSecretKey,
-        )
-
-        console.log("[v0] Created and encrypted connection request event")
-
-        // 5. Subscribe to the response using SimplePool
-        const responsePromise = new Promise((resolve, reject) => {
-          const timeout = setTimeout(() => {
-            reject(new Error("Connection request timed out. Please approve in your wallet."))
-          }, 60000)
-
-          const sub = pool.subscribeMany(
-            [parsedRelayUrl],
-            [{ kinds: [24133], authors: [walletPubkey], "#p": [appPublicKey] }],
-            {
-              onevent: async (event: any) => {
-                try {
-                  console.log("[v0] Received wallet response event")
-                  const decrypted = await nip04.decrypt(sharedSecret, event.content)
-                  const response = JSON.parse(decrypted)
-
-                  console.log("[v0] Decrypted response:", response)
-
-                  if (response.result_type === "connect") {
-                    clearTimeout(timeout)
-                    sub.close()
-                    const persistentConnectionString = `nostrconnect://${walletPubkey}?relay=${encodeURIComponent(parsedRelayUrl)}&secret=${Buffer.from(appSecretKey).toString("hex")}`
-                    console.log("[v0] Connection approved by wallet")
-                    resolve({ pubkey: walletPubkey, connectionString: persistentConnectionString })
-                  } else {
-                    clearTimeout(timeout)
-                    sub.close()
-                    reject(new Error(response.error?.message || "Connection rejected by wallet."))
-                  }
-                } catch (e) {
-                  console.log("[v0] Ignoring decryption error from unrelated event:", e)
-                  /* Ignore decryption errors from unrelated events */
-                }
-              },
-              oneose: () => {
-                console.log("[v0] Subscription established")
-              },
-            },
-          )
-        })
-
-        // 6. Publish the request using SimplePool
-        console.log("[v0] Publishing connection request...")
-        await pool.publish([parsedRelayUrl], requestEvent)
-
-        const result = await responsePromise
-
-        // 7. If we get here, it was successful!
-        console.log("[v0] Connection successful!")
-        setStatus("success")
-        onConnectSuccess(result)
-      } catch (error) {
-        console.error("[v0] Connection error:", error)
-        setStatus("error")
-        setErrorMessage(error instanceof Error ? error.message : "Connection failed")
-      } finally {
-        // 8. Clean up the connection
-        console.log("[v0] Closing pool connections")
-        pool.close([parsedRelayUrl])
-      }
-    },
-    [onConnectSuccess],
-  )
-
-  const reset = useCallback(() => {
-    setStatus("scanning")
-    setErrorMessage("")
-    setRelayUrl("")
-    setParsedRelayUrl("")
-  }, [])
-
-  return { status, errorMessage, setStatus, handleScanResult: connectWithUri, reset }
-}
+const NwcScannerLogic = dynamic(() => import("./nwc-scanner-logic"), {
+  ssr: false,
+  loading: () => (
+    <div className="flex flex-col items-center justify-center space-y-4 h-64">
+      <Loader2 className="h-16 w-16 animate-spin text-slate-400" />
+      <p className="text-slate-400">Loading Scanner...</p>
+    </div>
+  ),
+})
 
 interface NwcConnectionManagerProps {
   onConnectSuccess: (result: { pubkey: string; connectionString: string }) => void
   onClose: () => void
 }
 
-function NwcConnectionManager({ onConnectSuccess, onClose }: NwcConnectionManagerProps) {
-  const { status, errorMessage, setStatus, handleScanResult, reset } = useNwcConnection({ onConnectSuccess })
-
-  const renderContent = () => {
-    switch (status) {
-      case "scanning":
-        return (
-          <div className="text-center">
-            <h2 className="text-2xl font-semibold text-white mb-6">Scan to Connect</h2>
-            <div className="relative bg-black rounded-lg overflow-hidden mx-auto w-80 h-80 mb-4">
-              <QrReader
-                onResult={(result) => {
-                  if (result) {
-                    console.log("[v0] QR code scanned:", result.text)
-                    handleScanResult(result.text)
-                  }
-                }}
-                onError={(error) => {
-                  console.error("[v0] QR scan error:", error)
-                  if (error.name === "NotAllowedError" || error.name === "NotFoundError") {
-                    setStatus("permission_denied")
-                  }
-                }}
-                constraints={{ facingMode: "environment" }}
-                className="w-full h-full"
-              />
-              {/* Visual Guide - Square viewfinder overlay */}
-              <div className="absolute inset-4 border-2 border-white/50 rounded-lg pointer-events-none">
-                <div className="absolute top-0 left-0 w-6 h-6 border-t-4 border-l-4 border-green-400"></div>
-                <div className="absolute top-0 right-0 w-6 h-6 border-t-4 border-r-4 border-green-400"></div>
-                <div className="absolute bottom-0 left-0 w-6 h-6 border-b-4 border-l-4 border-green-400"></div>
-                <div className="absolute bottom-0 right-0 w-6 h-6 border-b-4 border-r-4 border-green-400"></div>
-              </div>
-            </div>
-            <p className="text-slate-400 text-sm">Position the QR code within the frame</p>
-          </div>
-        )
-      case "permission_denied":
-        return (
-          <div className="text-center py-12">
-            <CameraOff className="w-16 h-16 text-red-500 mx-auto mb-6" />
-            <h2 className="text-2xl font-semibold text-white mb-4">Camera Access Denied</h2>
-            <p className="text-slate-400 mb-6 max-w-sm mx-auto">
-              Please enable camera permissions in your browser's settings to continue.
-            </p>
-            <button onClick={reset} className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2 rounded-md">
-              Try Again
-            </button>
-          </div>
-        )
-      case "connecting":
-        return (
-          <div className="text-center py-12">
-            <Loader2 className="w-16 h-16 text-blue-500 animate-spin mx-auto mb-6" />
-            <h2 className="text-2xl font-semibold text-white mb-4">Connecting to Wallet...</h2>
-            <p className="text-slate-400 max-w-sm mx-auto">Please approve the connection in your wallet app.</p>
-          </div>
-        )
-      case "success":
-        return (
-          <div className="text-center py-12">
-            <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-6 animate-bounce" />
-            <h2 className="text-2xl font-semibold text-white">Connection Successful!</h2>
-          </div>
-        )
-      case "error":
-        return (
-          <div className="text-center py-12">
-            <AlertTriangle className="w-16 h-16 text-red-500 mx-auto mb-6" />
-            <h2 className="text-2xl font-semibold text-white mb-4">Connection Failed</h2>
-            <p className="text-slate-400 mb-6 max-w-sm mx-auto">{errorMessage}</p>
-            <button onClick={reset} className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2 rounded-md">
-              Scan Again
-            </button>
-          </div>
-        )
-      default:
-        return null
-    }
-  }
-
+export function NwcConnectionManager({ onConnectSuccess, onClose }: NwcConnectionManagerProps) {
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-      <div className="bg-slate-800 border border-slate-700 rounded-lg p-6 w-full max-w-md relative">
-        {/* Close button */}
-        {status !== "success" && (
-          <button onClick={onClose} className="absolute top-4 right-4 text-slate-400 hover:text-white z-10">
-            <X className="w-6 h-6" />
-          </button>
-        )}
-        {renderContent()}
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
+      <div className="relative w-full max-w-md rounded-lg bg-slate-800 p-6 shadow-lg">
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 text-slate-400 hover:text-white transition-colors z-10"
+        >
+          <X className="h-6 w-6" />
+        </button>
+        <NwcScannerLogic onConnectSuccess={onConnectSuccess} onClose={onClose} />
       </div>
     </div>
   )
 }
 
-export { NwcConnectionManager }
 export default NwcConnectionManager
