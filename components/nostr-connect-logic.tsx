@@ -1,9 +1,11 @@
 "use client"
 import { useState, useCallback, useEffect } from "react"
-import { generateSecretKey, getPublicKey, nip04 } from "nostr-tools"
+import { generateSecretKey, getPublicKey, nip04, finalizeEvent } from "nostr-tools"
 import { SimplePool } from "nostr-tools/pool"
 import { Loader2, CheckCircle, AlertTriangle, ExternalLink } from "lucide-react"
 import { Button } from "@/components/ui/button"
+
+const NWC_RELAYS = ["wss://relay.getalby.com/v1", "wss://relay.damus.io", "wss://nostr.mutinywallet.com"]
 
 const useNostrConnect = ({ onConnectSuccess }: { onConnectSuccess: (result: { pubkey: string }) => void }) => {
   const [status, setStatus] = useState("generating")
@@ -15,8 +17,8 @@ const useNostrConnect = ({ onConnectSuccess }: { onConnectSuccess: (result: { pu
     try {
       const sk = generateSecretKey()
       const pk = getPublicKey(sk)
-      const relay = "wss://relay.getalby.com/v1"
-      const uri = `nostrconnect://${pk}?relay=${relay}&metadata=${JSON.stringify({ name: "Nostr Journal" })}`
+      const metadata = JSON.stringify({ name: "Nostr Journal", url: "https://nostrjournal.app" })
+      const uri = `nostrconnect://${pk}?relay=${NWC_RELAYS[0]}&metadata=${encodeURIComponent(metadata)}`
 
       console.log("[v0] Generated nostrconnect URI:", uri.substring(0, 50) + "...")
       setAppSecretKey(sk)
@@ -25,57 +27,85 @@ const useNostrConnect = ({ onConnectSuccess }: { onConnectSuccess: (result: { pu
     } catch (e) {
       console.error("[v0] Failed to generate connection key:", e)
       setStatus("error")
-      setErrorMessage("Failed to generate connection key.")
+      setErrorMessage("Failed to generate a secure connection key.")
     }
   }, [])
 
   const startListeningAndAwaitApproval = useCallback(async () => {
-    if (!appSecretKey) return
+    if (!appSecretKey || !connectUri) return
     let pool: SimplePool | null = null
     try {
       const appPublicKey = getPublicKey(appSecretKey)
-      const relayUrl = "wss://relay.getalby.com/v1"
 
-      console.log("[v0] Starting to listen for approval events...")
+      console.log("[v0] Starting NIP-46 handshake...")
       console.log("[v0] App public key:", appPublicKey)
 
+      const url = new URL(connectUri)
+      const walletPubkey = url.hostname
+      const walletRelay = url.searchParams.get("relay") || NWC_RELAYS[0]
+
+      console.log("[v0] Wallet pubkey:", walletPubkey)
+      console.log("[v0] Wallet relay:", walletRelay)
+
+      const connectPayload = {
+        method: "connect",
+        params: [appPublicKey],
+      }
+
+      console.log("[v0] Connect payload:", connectPayload)
+
+      const sharedSecret = nip04.getSharedSecret(appSecretKey, walletPubkey)
+      const encryptedPayload = await nip04.encrypt(sharedSecret, JSON.stringify(connectPayload))
+
+      const requestEvent = finalizeEvent(
+        {
+          kind: 24133,
+          created_at: Math.floor(Date.now() / 1000),
+          tags: [["p", walletPubkey]],
+          content: encryptedPayload,
+        },
+        appSecretKey,
+      )
+
+      console.log("[v0] Sending connect request to wallet relay...")
+
       pool = new SimplePool()
-      await pool.ensureRelay(relayUrl)
+      await pool.ensureRelay(walletRelay)
+      await Promise.any(pool.publish([walletRelay], requestEvent))
+
+      console.log("[v0] Connect request sent! Now listening for response on multiple relays...")
 
       const responsePromise = new Promise<{ pubkey: string }>((resolve, reject) => {
-        // The response will be AUTHORED by the user's pubkey, but TAGGED with our app's pubkey
-        const sub = pool!.subscribeMany([relayUrl], [{ kinds: [24133], "#p": [appPublicKey] }], {
+        const sub = pool!.subscribeMany(NWC_RELAYS, [{ kinds: [24133], "#p": [appPublicKey] }], {
           onevent: async (event: any) => {
-            console.log("[v0] Received event from relay:", event.id)
+            console.log("[v0] Received response event from relay")
             console.log("[v0] Event author (user's pubkey):", event.pubkey)
             try {
-              const sharedSecret = nip04.getSharedSecret(appSecretKey, event.pubkey)
+              const userPubkey = event.pubkey
+              const sharedSecret = nip04.getSharedSecret(appSecretKey, userPubkey)
               const decrypted = await nip04.decrypt(sharedSecret, event.content)
               const response = JSON.parse(decrypted)
 
               console.log("[v0] Decrypted response:", response)
 
               if (response.result === "connect" || response.result_type === "connect") {
-                console.log("[v0] Connection approved! User pubkey:", event.pubkey)
+                console.log("[v0] Connection approved! User pubkey:", userPubkey)
                 sub.close()
-                resolve({ pubkey: event.pubkey })
+                resolve({ pubkey: userPubkey })
               } else if (response.error) {
                 console.error("[v0] Connection rejected:", response.error)
                 sub.close()
-                reject(new Error(response.error.message || "Connection rejected."))
+                reject(new Error(response.error.message || "Connection rejected by the wallet."))
               }
             } catch (e) {
-              console.error("[v0] Failed to decrypt event:", e)
-              // Ignore decryption errors, might be other events
+              console.warn("[v0] Could not decrypt event, ignoring:", e)
             }
           },
         })
 
-        // Clean up subscription after timeout
         setTimeout(() => {
           console.log("[v0] Approval timeout reached")
-          sub.close()
-          reject(new Error("Approval timed out. Please try again."))
+          reject(new Error("Approval timed out. Please scan and approve within 2 minutes."))
         }, 120000)
       })
 
@@ -87,11 +117,10 @@ const useNostrConnect = ({ onConnectSuccess }: { onConnectSuccess: (result: { pu
       setStatus("error")
       setErrorMessage(error instanceof Error ? error.message : "Connection failed")
     } finally {
-      if (pool) pool.close(["wss://relay.getalby.com/v1"])
+      if (pool) pool.close(NWC_RELAYS)
     }
-  }, [appSecretKey, onConnectSuccess])
+  }, [appSecretKey, connectUri, onConnectSuccess])
 
-  // Generate the URI once on mount
   useEffect(() => {
     generateConnectUri()
   }, [generateConnectUri])
@@ -128,10 +157,11 @@ export default function NostrConnectLogic({ onConnectSuccess, onClose }: NostrCo
           <div className="space-y-6">
             <div className="text-center">
               <h2 className="text-xl font-bold text-white mb-2">Approve Login</h2>
-              <p className="text-sm text-slate-400">Scan with an app like Nsec.app to connect your account securely.</p>
+              <p className="text-sm text-slate-400">
+                Scan with a compatible app like Nsec.app, Alby, or Amethyst to connect your account securely.
+              </p>
             </div>
 
-            {/* QR Code */}
             <div className="flex justify-center">
               <div className="w-48 h-48 bg-white rounded-lg flex items-center justify-center overflow-hidden">
                 <img
@@ -142,7 +172,6 @@ export default function NostrConnectLogic({ onConnectSuccess, onClose }: NostrCo
               </div>
             </div>
 
-            {/* Action Button */}
             <Button
               onClick={() => window.open(connectUri, "_blank")}
               className="w-full bg-indigo-600 hover:bg-indigo-500 text-white"

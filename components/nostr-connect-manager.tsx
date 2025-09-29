@@ -3,7 +3,7 @@ import dynamic from "next/dynamic"
 import { X, Loader2 } from "lucide-react"
 
 const NostrConnectLogic = dynamic(() => import("./nostr-connect-logic"), {
-  ssr: false, // This is essential to prevent server-side errors
+  ssr: false,
   loading: () => (
     <div className="flex flex-col items-center justify-center space-y-4 h-64">
       <Loader2 className="h-16 w-16 animate-spin text-slate-400" />

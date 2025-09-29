@@ -19,7 +19,7 @@ export default function UnifiedLoginScreen({
   onExtensionLogin,
 }: UnifiedLoginScreenProps) {
   const [showCreateModal, setShowCreateModal] = useState(false)
-  const [showBunkerModal, setShowBunkerModal] = useState(false)
+  const [showNostrConnectModal, setShowNostrConnectModal] = useState(false)
   const { toast } = useToast()
 
   const handleExtensionLogin = async () => {
@@ -95,7 +95,7 @@ export default function UnifiedLoginScreen({
             {/* Option 2: Use Signing App */}
             <button
               className="w-full p-6 bg-slate-700 hover:bg-slate-600 border border-slate-600 hover:border-slate-500 rounded-lg transition-all text-left"
-              onClick={() => setShowBunkerModal(true)}
+              onClick={() => setShowNostrConnectModal(true)}
             >
               <div className="flex items-center space-x-4">
                 <div className="p-3 bg-green-600 rounded-lg flex-shrink-0">
@@ -110,8 +110,8 @@ export default function UnifiedLoginScreen({
                       </TooltipTrigger>
                       <TooltipContent className="bg-slate-900 border-slate-700 text-white max-w-xs">
                         <p>
-                          Recommended. Securely connect using an app like Nsec.app without ever sharing your private
-                          key.
+                          Recommended. Securely connect using a nostrconnect-compatible app like Nsec.app, Alby, or
+                          Amethyst without sharing your private key.
                         </p>
                       </TooltipContent>
                     </Tooltip>
@@ -165,8 +165,8 @@ export default function UnifiedLoginScreen({
           <CreateAccountModal onCreateAccount={onCreateAccount} onClose={() => setShowCreateModal(false)} />
         )}
 
-        {showBunkerModal && (
-          <NostrConnectManager onConnectSuccess={onBunkerConnect} onClose={() => setShowBunkerModal(false)} />
+        {showNostrConnectModal && (
+          <NostrConnectManager onConnectSuccess={onBunkerConnect} onClose={() => setShowNostrConnectModal(false)} />
         )}
       </div>
     </TooltipProvider>
