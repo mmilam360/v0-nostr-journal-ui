@@ -9,6 +9,7 @@ const useNwcConnection = ({ onConnectSuccess }: { onConnectSuccess: (result: any
   const [status, setStatus] = useState("scanning") // 'scanning', 'connecting', 'success', 'error', 'permission_denied'
   const [errorMessage, setErrorMessage] = useState("")
   const [relayUrl, setRelayUrl] = useState("")
+  const [parsedRelayUrl, setParsedRelayUrl] = useState("")
 
   const connectWithUri = useCallback(
     async (nwcUri: string) => {
@@ -31,18 +32,19 @@ const useNwcConnection = ({ onConnectSuccess }: { onConnectSuccess: (result: any
         // 1. Parse URI for wallet's pubkey and relay
         const url = new URL(processedUri)
         const walletPubkey = url.hostname
-        setRelayUrl(url.searchParams.get("relay") || "")
+        const parsedRelayUrl = url.searchParams.get("relay") || ""
+        setParsedRelayUrl(parsedRelayUrl)
 
         console.log("[v0] Parsed wallet pubkey:", walletPubkey)
-        console.log("[v0] Parsed relay URL:", relayUrl)
+        console.log("[v0] Parsed relay URL:", parsedRelayUrl)
 
-        if (!walletPubkey || !relayUrl) throw new Error("Invalid NWC URI - missing wallet pubkey or relay URL")
+        if (!walletPubkey || !parsedRelayUrl) throw new Error("Invalid NWC URI - missing wallet pubkey or relay URL")
 
         const appSecretKey = generateSecretKey()
         const appPublicKey = getPublicKey(appSecretKey)
         console.log("[v0] Generated app keypair for connection")
 
-        console.log("[v0] Connecting to relay:", relayUrl)
+        console.log("[v0] Connecting to relay:", parsedRelayUrl)
 
         // 4. Create and encrypt the permission request (NIP-04)
         const connectPayload = { method: "connect", params: [{ name: "Nostr Journal" }] }
@@ -70,7 +72,7 @@ const useNwcConnection = ({ onConnectSuccess }: { onConnectSuccess: (result: any
           }, 60000)
 
           const sub = pool.subscribeMany(
-            [relayUrl],
+            [parsedRelayUrl],
             [{ kinds: [24133], authors: [walletPubkey], "#p": [appPublicKey] }],
             {
               onevent: async (event: any) => {
@@ -84,7 +86,7 @@ const useNwcConnection = ({ onConnectSuccess }: { onConnectSuccess: (result: any
                   if (response.result_type === "connect") {
                     clearTimeout(timeout)
                     sub.close()
-                    const persistentConnectionString = `nostrconnect://${walletPubkey}?relay=${encodeURIComponent(relayUrl)}&secret=${Buffer.from(appSecretKey).toString("hex")}`
+                    const persistentConnectionString = `nostrconnect://${walletPubkey}?relay=${encodeURIComponent(parsedRelayUrl)}&secret=${Buffer.from(appSecretKey).toString("hex")}`
                     console.log("[v0] Connection approved by wallet")
                     resolve({ pubkey: walletPubkey, connectionString: persistentConnectionString })
                   } else {
@@ -106,7 +108,7 @@ const useNwcConnection = ({ onConnectSuccess }: { onConnectSuccess: (result: any
 
         // 6. Publish the request using SimplePool
         console.log("[v0] Publishing connection request...")
-        await pool.publish([relayUrl], requestEvent)
+        await pool.publish([parsedRelayUrl], requestEvent)
 
         const result = await responsePromise
 
@@ -121,7 +123,7 @@ const useNwcConnection = ({ onConnectSuccess }: { onConnectSuccess: (result: any
       } finally {
         // 8. Clean up the connection
         console.log("[v0] Closing pool connections")
-        pool.close([relayUrl])
+        pool.close([parsedRelayUrl])
       }
     },
     [onConnectSuccess],
@@ -131,6 +133,7 @@ const useNwcConnection = ({ onConnectSuccess }: { onConnectSuccess: (result: any
     setStatus("scanning")
     setErrorMessage("")
     setRelayUrl("")
+    setParsedRelayUrl("")
   }, [])
 
   return { status, errorMessage, setStatus, handleScanResult: connectWithUri, reset }
