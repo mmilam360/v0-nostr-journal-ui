@@ -86,9 +86,19 @@ export default function BunkerConnectModal({ onConnect, onClose }: BunkerConnect
             <div className="space-y-4">
               {/* QR Code Placeholder */}
               <div className="flex justify-center">
-                <div className="w-48 h-48 bg-white rounded-lg flex items-center justify-center">
-                  <QrCode className="h-12 w-12 text-slate-600" />
-                  <span className="ml-2 text-slate-600 text-sm">QR Code</span>
+                <div className="w-48 h-48 bg-white rounded-lg flex items-center justify-center overflow-hidden">
+                  {qrCodeData ? (
+                    <img
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=192x192&data=${encodeURIComponent(qrCodeData)}`}
+                      alt="Bunker Connection QR Code"
+                      className="w-full h-full object-contain"
+                    />
+                  ) : (
+                    <div className="flex flex-col items-center">
+                      <QrCode className="h-12 w-12 text-slate-600" />
+                      <span className="ml-2 text-slate-600 text-sm">Generating...</span>
+                    </div>
+                  )}
                 </div>
               </div>
 

@@ -36,7 +36,9 @@ export default function Home() {
     return (
       <UnifiedLoginScreen
         onCreateAccount={createNewAccount}
-        onBunkerConnect={connectBunker}
+        onBunkerConnect={async (result: { pubkey: string }) => {
+          await connectBunker(result.pubkey)
+        }}
         onExtensionLogin={connectExtension}
       />
     )

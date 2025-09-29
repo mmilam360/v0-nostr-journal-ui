@@ -1,14 +1,15 @@
 "use client"
 import { useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { UserPlus, ShieldCheck, Zap } from "lucide-react"
+import { UserPlus, ShieldCheck, Zap, HelpCircle } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import CreateAccountModal from "@/components/create-account-modal"
-import BunkerConnectModal from "@/components/bunker-connect-modal"
+import { NostrConnectManager } from "@/components/nostr-connect-manager"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
 interface UnifiedLoginScreenProps {
   onCreateAccount: (password: string) => Promise<void>
-  onBunkerConnect: (bunkerUrl: string) => Promise<void>
+  onBunkerConnect: (result: { pubkey: string }) => Promise<void>
   onExtensionLogin: (pubkey: string) => Promise<void>
 }
 
@@ -56,77 +57,98 @@ export default function UnifiedLoginScreen({
   }
 
   return (
-    <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
-      <Card className="w-full max-w-lg bg-slate-800 border-slate-700">
-        <CardHeader className="text-center">
-          <CardTitle className="text-3xl text-white">Welcome to Nostr Journal</CardTitle>
-          <CardDescription className="text-slate-400 text-lg">
-            Your private, sovereign notes. How would you like to connect?
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Option 1: Create New Account */}
-          <Card
-            className="cursor-pointer transition-all hover:bg-slate-700/50 border-slate-600 hover:border-slate-500"
-            onClick={() => setShowCreateModal(true)}
-          >
-            <CardContent className="p-6">
-              <div className="flex items-start space-x-4">
-                <div className="p-2 bg-blue-600 rounded-lg">
+    <TooltipProvider>
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
+        <Card className="w-full max-w-lg bg-slate-800 border-slate-700">
+          <CardHeader className="text-center">
+            <CardTitle className="text-3xl text-white">Connect to Nostr Journal</CardTitle>
+            <CardDescription className="text-slate-400 text-lg">
+              Choose your preferred connection method
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Option 1: Create New Account */}
+            <button
+              className="w-full p-6 bg-slate-700 hover:bg-slate-600 border border-slate-600 hover:border-slate-500 rounded-lg transition-all text-left"
+              onClick={() => setShowCreateModal(true)}
+            >
+              <div className="flex items-center space-x-4">
+                <div className="p-3 bg-blue-600 rounded-lg flex-shrink-0">
                   <UserPlus className="h-6 w-6 text-white" />
                 </div>
                 <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-white mb-2">Create a New Account</h3>
-                  <p className="text-slate-400 text-sm">
-                    Perfect for new users. We'll create a new, secure Nostr identity for you and save it encrypted on
-                    this device.
-                  </p>
+                  <div className="flex items-center space-x-2 mb-1">
+                    <h3 className="text-lg font-semibold text-white">Create a New Account</h3>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <HelpCircle className="h-4 w-4 text-slate-400 hover:text-slate-300" />
+                      </TooltipTrigger>
+                      <TooltipContent className="bg-slate-900 border-slate-700 text-white max-w-xs">
+                        <p>For new users. Creates a secure Nostr identity and saves it encrypted in this browser.</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
                 </div>
               </div>
-            </CardContent>
-          </Card>
+            </button>
 
-          {/* Option 2: Use Signing App */}
-          <Card
-            className="cursor-pointer transition-all hover:bg-slate-700/50 border-slate-600 hover:border-slate-500"
-            onClick={() => setShowBunkerModal(true)}
-          >
-            <CardContent className="p-6">
-              <div className="flex items-start space-x-4">
-                <div className="p-2 bg-green-600 rounded-lg">
+            {/* Option 2: Use Signing App */}
+            <button
+              className="w-full p-6 bg-slate-700 hover:bg-slate-600 border border-slate-600 hover:border-slate-500 rounded-lg transition-all text-left"
+              onClick={() => setShowBunkerModal(true)}
+            >
+              <div className="flex items-center space-x-4">
+                <div className="p-3 bg-green-600 rounded-lg flex-shrink-0">
                   <ShieldCheck className="h-6 w-6 text-white" />
                 </div>
                 <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-white mb-2">Use a Signing App</h3>
-                  <p className="text-slate-400 text-sm">
-                    The most secure way to connect an existing account. Use a remote signer like Nsec.app to approve
-                    actions without sharing your key.
-                  </p>
+                  <div className="flex items-center space-x-2 mb-1">
+                    <h3 className="text-lg font-semibold text-white">Use a Signing App</h3>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <HelpCircle className="h-4 w-4 text-slate-400 hover:text-slate-300" />
+                      </TooltipTrigger>
+                      <TooltipContent className="bg-slate-900 border-slate-700 text-white max-w-xs">
+                        <p>
+                          Recommended. Securely connect using an app like Nsec.app without ever sharing your private
+                          key.
+                        </p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
                   <div className="mt-2">
                     <span className="inline-block px-2 py-1 bg-green-600/20 text-green-400 text-xs rounded">
-                      Recommended & Secure
+                      Most Secure
                     </span>
                   </div>
                 </div>
               </div>
-            </CardContent>
-          </Card>
+            </button>
 
-          {/* Option 3: Browser Extension */}
-          <Card
-            className="cursor-pointer transition-all hover:bg-slate-700/50 border-slate-600 hover:border-slate-500"
-            onClick={handleExtensionLogin}
-          >
-            <CardContent className="p-6">
-              <div className="flex items-start space-x-4">
-                <div className="p-2 bg-yellow-600 rounded-lg">
+            {/* Option 3: Browser Extension */}
+            <button
+              className="w-full p-6 bg-slate-700 hover:bg-slate-600 border border-slate-600 hover:border-slate-500 rounded-lg transition-all text-left"
+              onClick={handleExtensionLogin}
+            >
+              <div className="flex items-center space-x-4">
+                <div className="p-3 bg-yellow-600 rounded-lg flex-shrink-0">
                   <Zap className="h-6 w-6 text-white" />
                 </div>
                 <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-white mb-2">Use Browser Extension</h3>
-                  <p className="text-slate-400 text-sm">
-                    Connect instantly if you have a browser extension like Alby. Good for quick access.
-                  </p>
+                  <div className="flex items-center space-x-2 mb-1">
+                    <h3 className="text-lg font-semibold text-white">Use Browser Extension</h3>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <HelpCircle className="h-4 w-4 text-slate-400 hover:text-slate-300" />
+                      </TooltipTrigger>
+                      <TooltipContent className="bg-slate-900 border-slate-700 text-white max-w-xs">
+                        <p>
+                          Quickly connect using a browser extension like Alby. Good for read-only access or simple
+                          actions.
+                        </p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
                   <div className="mt-2">
                     <span className="inline-block px-2 py-1 bg-yellow-600/20 text-yellow-400 text-xs rounded">
                       Quick & Easy
@@ -134,18 +156,20 @@ export default function UnifiedLoginScreen({
                   </div>
                 </div>
               </div>
-            </CardContent>
-          </Card>
-        </CardContent>
-      </Card>
+            </button>
+          </CardContent>
+        </Card>
 
-      {/* Modals */}
-      {showCreateModal && (
-        <CreateAccountModal onCreateAccount={onCreateAccount} onClose={() => setShowCreateModal(false)} />
-      )}
+        {/* Modals */}
+        {showCreateModal && (
+          <CreateAccountModal onCreateAccount={onCreateAccount} onClose={() => setShowCreateModal(false)} />
+        )}
 
-      {showBunkerModal && <BunkerConnectModal onConnect={onBunkerConnect} onClose={() => setShowBunkerModal(false)} />}
-    </div>
+        {showBunkerModal && (
+          <NostrConnectManager onConnectSuccess={onBunkerConnect} onClose={() => setShowBunkerModal(false)} />
+        )}
+      </div>
+    </TooltipProvider>
   )
 }
 
