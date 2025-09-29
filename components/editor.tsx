@@ -15,9 +15,17 @@ interface EditorProps {
   onPublishNote: (note: Note) => void
   onPublishHighlight: (note: Note, highlightedText: string) => void
   onDeleteNote: (note: Note) => void
+  syncNoteToNostr: (note: Note) => Promise<void>
 }
 
-export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHighlight, onDeleteNote }: EditorProps) {
+export default function Editor({
+  note,
+  onUpdateNote,
+  onPublishNote,
+  onPublishHighlight,
+  onDeleteNote,
+  syncNoteToNostr,
+}: EditorProps) {
   const [title, setTitle] = useState("")
   const [content, setContent] = useState("")
   const [newTag, setNewTag] = useState("")
@@ -58,11 +66,19 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
     setHasUnsavedChanges(true)
   }
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (note && hasUnsavedChanges) {
+      console.log("[v0] Manual save triggered - syncing immediately...")
       const updatedNote = { ...note, title, content }
       onUpdateNote(updatedNote)
       setHasUnsavedChanges(false)
+
+      try {
+        await syncNoteToNostr(updatedNote)
+        console.log("[v0] Note saved and sync requested")
+      } catch (error) {
+        console.error("[v0] Error during immediate sync:", error)
+      }
     }
   }
 
@@ -196,8 +212,8 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
               size="sm"
               className={
                 hasUnsavedChanges
-                  ? "bg-green-600 hover:bg-green-500 text-xs px-2"
-                  : "bg-slate-600 opacity-50 text-xs px-2"
+                  ? "bg-green-600 hover:bg-green-500 text-xs px-2 no-select"
+                  : "bg-slate-600 opacity-50 text-xs px-2 no-select"
               }
             >
               💾
@@ -206,7 +222,7 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
               onClick={handlePublishClick}
               disabled={!content.trim()}
               size="sm"
-              className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-xs px-2"
+              className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-xs px-2 no-select"
             >
               📤 {selectedText ? "Highlight" : "Publish"}
             </Button>
@@ -214,7 +230,7 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
               onClick={handleDeleteClick}
               variant="ghost"
               size="sm"
-              className="text-red-400 hover:text-red-300 hover:bg-red-900/20 text-xs px-2"
+              className="text-red-400 hover:text-red-300 hover:bg-red-900/20 text-xs px-2 no-select"
             >
               ✕
             </Button>

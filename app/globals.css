@@ -3,23 +3,54 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* Mobile stability fixes - prevent bounce and overscroll */
-html,
+/* Improved mobile stability fixes - prevent bounce and zoom issues */
+html {
+  /* Prevent pull-to-refresh and overscroll bounce */
+  overscroll-behavior-y: none;
+  /* Prevent zoom on input focus */
+  -webkit-text-size-adjust: 100%;
+  /* Prevent horizontal scrolling */
+  overflow-x: hidden;
+}
+
 body {
-  overscroll-behavior-y: contain; /* Prevents "pull-to-refresh" on Chrome for Android */
+  /* Prevent pull-to-refresh and overscroll bounce */
+  overscroll-behavior-y: none;
+  /* Prevent horizontal scrolling */
+  overflow-x: hidden;
+  /* Ensure full height */
+  min-height: 100vh;
+  /* Prevent zoom on double tap */
+  touch-action: manipulation;
   position: fixed; /* Prevents bouncing and scrolling of the body on iOS */
-  overflow: hidden; /* Prevents body scrolling */
   width: 100%;
   height: 100%;
 }
 
-/* Ensure the main app container can scroll properly */
+/* Prevent zoom on form inputs */
+input,
+textarea,
+select {
+  font-size: 16px !important; /* Prevents zoom on iOS */
+  -webkit-appearance: none;
+  border-radius: 0;
+}
+
+/* Prevent zoom on buttons */
+button {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Ensure proper scrolling for the main app container */
 #__next,
 [data-nextjs-scroll-focus-boundary] {
   position: relative;
   width: 100%;
   height: 100%;
   overflow: auto;
+  min-height: 100vh;
+  overflow-x: hidden;
 }
 
 :root {
@@ -146,4 +177,11 @@ body {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+.no-select {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
 }

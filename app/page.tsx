@@ -25,6 +25,9 @@ export default function Home() {
 
       try {
         const savedNsec = localStorage.getItem("nostrUserNsec")
+        const savedExtensionPubkey = localStorage.getItem("nostrExtensionPubkey")
+        const savedEncryptionKey = localStorage.getItem("nostrEncryptionKey")
+
         if (savedNsec) {
           console.log("[v0] Found saved nsec in localStorage, auto-logging in...")
 
@@ -46,8 +49,53 @@ export default function Home() {
 
             setAuthData(authData)
             setIsAuthenticated(true)
-            setShowSyncModal(true)
-            console.log("[v0] Auto-login successful, showing unlock modal")
+
+            if (savedEncryptionKey) {
+              setEncryptionKey(savedEncryptionKey)
+              setIsUnlocked(true)
+              console.log("[v0] Auto-login with saved encryption key successful")
+            } else {
+              setShowSyncModal(true)
+              console.log("[v0] Auto-login successful, showing unlock modal")
+            }
+          }
+        } else if (savedExtensionPubkey) {
+          console.log("[v0] Found saved extension session, checking browser extension...")
+
+          if (typeof window !== "undefined" && window.nostr) {
+            try {
+              const pubkey = await window.nostr.getPublicKey()
+              if (pubkey === savedExtensionPubkey) {
+                const authData: AuthData = {
+                  pubkey: pubkey,
+                  authMethod: "extension",
+                }
+
+                setAuthData(authData)
+                setIsAuthenticated(true)
+
+                if (savedEncryptionKey) {
+                  setEncryptionKey(savedEncryptionKey)
+                  setIsUnlocked(true)
+                  console.log("[v0] Auto-login with extension and saved encryption key successful")
+                } else {
+                  setShowSyncModal(true)
+                  console.log("[v0] Extension auto-login successful, showing unlock modal")
+                }
+              } else {
+                console.log("[v0] Extension pubkey mismatch, clearing session")
+                localStorage.removeItem("nostrExtensionPubkey")
+                localStorage.removeItem("nostrEncryptionKey")
+              }
+            } catch (error) {
+              console.log("[v0] Extension not available, clearing session")
+              localStorage.removeItem("nostrExtensionPubkey")
+              localStorage.removeItem("nostrEncryptionKey")
+            }
+          } else {
+            console.log("[v0] No browser extension found, clearing session")
+            localStorage.removeItem("nostrExtensionPubkey")
+            localStorage.removeItem("nostrEncryptionKey")
           }
         } else {
           console.log("[v0] No saved session found")
@@ -56,6 +104,8 @@ export default function Home() {
         console.error("[v0] Error checking saved session:", error)
         // Clear invalid session data
         localStorage.removeItem("nostrUserNsec")
+        localStorage.removeItem("nostrExtensionPubkey")
+        localStorage.removeItem("nostrEncryptionKey")
       }
 
       setIsCheckingSession(false)
@@ -79,6 +129,9 @@ export default function Home() {
       } catch (error) {
         console.error("[v0] Error saving session:", error)
       }
+    } else if (authData.authMethod === "extension") {
+      localStorage.setItem("nostrExtensionPubkey", authData.pubkey)
+      console.log("[v0] Saved extension pubkey to localStorage for session persistence")
     }
 
     setAuthData(authData)
@@ -91,10 +144,17 @@ export default function Home() {
     setEncryptionKey(key)
     setShowSyncModal(false)
     setIsUnlocked(true)
+
+    localStorage.setItem("nostrEncryptionKey", key)
+    console.log("[v0] Saved encryption key for future auto-unlock")
   }
 
   const handleSwitchAccount = () => {
     console.log("[v0] Switching Nostr account...")
+
+    localStorage.removeItem("nostrUserNsec")
+    localStorage.removeItem("nostrExtensionPubkey")
+    localStorage.removeItem("nostrEncryptionKey")
 
     // Reset all state
     setAuthData(null)
@@ -111,7 +171,9 @@ export default function Home() {
     console.log("[v0] User logged out")
 
     localStorage.removeItem("nostrUserNsec")
-    console.log("[v0] Cleared session data from localStorage")
+    localStorage.removeItem("nostrExtensionPubkey")
+    localStorage.removeItem("nostrEncryptionKey")
+    console.log("[v0] Cleared all session data from localStorage")
 
     setAuthData(null)
     setIsAuthenticated(false)
@@ -140,7 +202,7 @@ export default function Home() {
           {/* Main App - shown in locked state until unlocked */}
           <div className={`${!isUnlocked ? "backdrop-blur-sm" : ""}`}>
             <div className={`${!isUnlocked ? "bg-black/20" : ""}`}>
-              <MainApp authData={authData} onLogout={handleLogout} />
+              <MainApp authData={authData} onLogout={handleLogout} encryptionKey={encryptionKey} />
             </div>
           </div>
 
