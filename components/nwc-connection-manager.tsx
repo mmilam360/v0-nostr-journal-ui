@@ -1,18 +1,19 @@
 "use client"
 import { useState, useCallback } from "react"
 import { QrReader } from "react-qr-reader"
-import * as nostrTools from "nostr-tools"
+import { SimplePool, generateSecretKey, getPublicKey, finalizeEvent, nip04 } from "nostr-tools"
 import { Loader2, CheckCircle, AlertTriangle, CameraOff, X } from "lucide-react"
 
 // This is the core logic that powers the component.
 const useNwcConnection = ({ onConnectSuccess }: { onConnectSuccess: (result: any) => void }) => {
   const [status, setStatus] = useState("scanning") // 'scanning', 'connecting', 'success', 'error', 'permission_denied'
   const [errorMessage, setErrorMessage] = useState("")
+  const [relayUrl, setRelayUrl] = useState("")
 
   const connectWithUri = useCallback(
     async (nwcUri: string) => {
       setStatus("connecting")
-      let relay: any = null // Using relay instead of SimplePool for compatibility
+      const pool = new SimplePool()
       try {
         console.log("[v0] Processing QR code:", nwcUri)
 
@@ -30,36 +31,27 @@ const useNwcConnection = ({ onConnectSuccess }: { onConnectSuccess: (result: any
         // 1. Parse URI for wallet's pubkey and relay
         const url = new URL(processedUri)
         const walletPubkey = url.hostname
-        const relayUrl = url.searchParams.get("relay")
+        setRelayUrl(url.searchParams.get("relay") || "")
 
         console.log("[v0] Parsed wallet pubkey:", walletPubkey)
         console.log("[v0] Parsed relay URL:", relayUrl)
 
         if (!walletPubkey || !relayUrl) throw new Error("Invalid NWC URI - missing wallet pubkey or relay URL")
 
-        const appSecretKey = nostrTools.generateSecretKey()
-        const appPublicKey = nostrTools.getPublicKey(appSecretKey)
+        const appSecretKey = generateSecretKey()
+        const appPublicKey = getPublicKey(appSecretKey)
         console.log("[v0] Generated app keypair for connection")
 
-        relay = nostrTools.relayInit(relayUrl)
         console.log("[v0] Connecting to relay:", relayUrl)
-
-        // Connect to relay with timeout
-        await new Promise((resolve, reject) => {
-          relay.on("connect", resolve)
-          relay.on("error", reject)
-          relay.connect().catch(reject)
-          setTimeout(() => reject(new Error("Relay connection timed out")), 5000)
-        })
 
         // 4. Create and encrypt the permission request (NIP-04)
         const connectPayload = { method: "connect", params: [{ name: "Nostr Journal" }] }
         console.log("[v0] Creating connection request payload")
 
-        const sharedSecret = nostrTools.nip04.getSharedSecret(appSecretKey, walletPubkey)
-        const encryptedPayload = await nostrTools.nip04.encrypt(sharedSecret, JSON.stringify(connectPayload))
+        const sharedSecret = nip04.getSharedSecret(appSecretKey, walletPubkey)
+        const encryptedPayload = await nip04.encrypt(sharedSecret, JSON.stringify(connectPayload))
 
-        const requestEvent = nostrTools.finalizeEvent(
+        const requestEvent = finalizeEvent(
           {
             kind: 24133,
             created_at: Math.floor(Date.now() / 1000),
@@ -71,40 +63,50 @@ const useNwcConnection = ({ onConnectSuccess }: { onConnectSuccess: (result: any
 
         console.log("[v0] Created and encrypted connection request event")
 
-        // 5. Subscribe to the response
-        const sub = relay.sub([{ kinds: [24133], authors: [walletPubkey], "#p": [appPublicKey] }])
+        // 5. Subscribe to the response using SimplePool
         const responsePromise = new Promise((resolve, reject) => {
           const timeout = setTimeout(() => {
             reject(new Error("Connection request timed out. Please approve in your wallet."))
           }, 60000)
 
-          sub.on("event", async (event: any) => {
-            try {
-              console.log("[v0] Received wallet response event")
-              const decrypted = await nostrTools.nip04.decrypt(sharedSecret, event.content)
-              const response = JSON.parse(decrypted)
+          const sub = pool.subscribeMany(
+            [relayUrl],
+            [{ kinds: [24133], authors: [walletPubkey], "#p": [appPublicKey] }],
+            {
+              onevent: async (event: any) => {
+                try {
+                  console.log("[v0] Received wallet response event")
+                  const decrypted = await nip04.decrypt(sharedSecret, event.content)
+                  const response = JSON.parse(decrypted)
 
-              console.log("[v0] Decrypted response:", response)
+                  console.log("[v0] Decrypted response:", response)
 
-              if (response.result_type === "connect") {
-                clearTimeout(timeout)
-                const persistentConnectionString = `nostrconnect://${walletPubkey}?relay=${encodeURIComponent(relayUrl)}&secret=${Buffer.from(appSecretKey).toString("hex")}`
-                console.log("[v0] Connection approved by wallet")
-                resolve({ pubkey: walletPubkey, connectionString: persistentConnectionString })
-              } else {
-                clearTimeout(timeout)
-                reject(new Error(response.error?.message || "Connection rejected by wallet."))
-              }
-            } catch (e) {
-              console.log("[v0] Ignoring decryption error from unrelated event:", e)
-              /* Ignore decryption errors from unrelated events */
-            }
-          })
+                  if (response.result_type === "connect") {
+                    clearTimeout(timeout)
+                    sub.close()
+                    const persistentConnectionString = `nostrconnect://${walletPubkey}?relay=${encodeURIComponent(relayUrl)}&secret=${Buffer.from(appSecretKey).toString("hex")}`
+                    console.log("[v0] Connection approved by wallet")
+                    resolve({ pubkey: walletPubkey, connectionString: persistentConnectionString })
+                  } else {
+                    clearTimeout(timeout)
+                    sub.close()
+                    reject(new Error(response.error?.message || "Connection rejected by wallet."))
+                  }
+                } catch (e) {
+                  console.log("[v0] Ignoring decryption error from unrelated event:", e)
+                  /* Ignore decryption errors from unrelated events */
+                }
+              },
+              oneose: () => {
+                console.log("[v0] Subscription established")
+              },
+            },
+          )
         })
 
-        // 6. Publish the request
+        // 6. Publish the request using SimplePool
         console.log("[v0] Publishing connection request...")
-        await relay.publish(requestEvent)
+        await pool.publish([relayUrl], requestEvent)
 
         const result = await responsePromise
 
@@ -118,10 +120,8 @@ const useNwcConnection = ({ onConnectSuccess }: { onConnectSuccess: (result: any
         setErrorMessage(error instanceof Error ? error.message : "Connection failed")
       } finally {
         // 8. Clean up the connection
-        if (relay) {
-          console.log("[v0] Closing relay connection")
-          relay.close()
-        }
+        console.log("[v0] Closing pool connections")
+        pool.close([relayUrl])
       }
     },
     [onConnectSuccess],
@@ -130,6 +130,7 @@ const useNwcConnection = ({ onConnectSuccess }: { onConnectSuccess: (result: any
   const reset = useCallback(() => {
     setStatus("scanning")
     setErrorMessage("")
+    setRelayUrl("")
   }, [])
 
   return { status, errorMessage, setStatus, handleScanResult: connectWithUri, reset }
