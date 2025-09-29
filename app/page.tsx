@@ -15,10 +15,8 @@ export default function Home() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [authData, setAuthData] = useState<AuthData | null>(null)
   const [showSyncModal, setShowSyncModal] = useState(false)
-  const [isFirstTime, setIsFirstTime] = useState(false)
-  const [syncModalLoading, setSyncModalLoading] = useState(false)
-  const [syncModalError, setSyncModalError] = useState("")
   const [isUnlocked, setIsUnlocked] = useState(false)
+  const [encryptionKey, setEncryptionKey] = useState<string | null>(null)
   const [isCheckingSession, setIsCheckingSession] = useState(true)
 
   useEffect(() => {
@@ -32,118 +30,30 @@ export default function Home() {
     checkExistingSession()
   }, [])
 
-  const handleExistingUser = async (authData: AuthData) => {
-    setSyncModalLoading(true)
-    try {
-      // TODO: Check for existing salt event on Nostr
-      // For now, simulate checking - in real implementation this would query Nostr
-      const hasExistingSalt = true // Existing users should have a salt
-
-      setIsFirstTime(!hasExistingSalt)
-      setShowSyncModal(true)
-    } catch (error) {
-      console.error("[v0] Error checking for existing salt:", error)
-      setSyncModalError("Failed to check encryption status")
-    } finally {
-      setSyncModalLoading(false)
-    }
-  }
-
   const handleLogin = async (authData: AuthData) => {
     console.log("[v0] User logged in with method:", authData.authMethod, "pubkey:", authData.pubkey)
     setAuthData(authData)
     setIsAuthenticated(true)
 
-    // Check if user has existing encryption salt
-    setSyncModalLoading(true)
-    try {
-      // TODO: Check for existing salt event on Nostr
-      // For now, simulate checking - in real implementation this would query Nostr
-      const hasExistingSalt = false // This will be replaced with actual salt check
-
-      setIsFirstTime(!hasExistingSalt)
-      setShowSyncModal(true)
-    } catch (error) {
-      console.error("[v0] Error checking for existing salt:", error)
-      setSyncModalError("Failed to check encryption status")
-    } finally {
-      setSyncModalLoading(false)
-    }
+    setShowSyncModal(true)
   }
 
-  const handleCreatePassword = async (password: string) => {
-    setSyncModalLoading(true)
-    setSyncModalError("")
-
-    try {
-      console.log("[v0] Creating master password and salt...")
-
-      // TODO: Implement salt generation and storage
-      // 1. Generate random salt
-      // 2. Derive master key from password + salt using PBKDF2
-      // 3. Store salt in Nostr event (kind: 30078)
-
-      // Simulate password creation process
-      await new Promise((resolve) => setTimeout(resolve, 1500))
-
-      console.log("[v0] Master password created successfully")
-      setShowSyncModal(false)
-      setIsUnlocked(true)
-    } catch (error) {
-      console.error("[v0] Error creating master password:", error)
-      setSyncModalError("Failed to create master password. Please try again.")
-    } finally {
-      setSyncModalLoading(false)
-    }
-  }
-
-  const handleUnlockPassword = async (password: string) => {
-    setSyncModalLoading(true)
-    setSyncModalError("")
-
-    try {
-      console.log("[v0] Unlocking journal with master password...")
-
-      // TODO: Implement password verification
-      // 1. Fetch salt from Nostr
-      // 2. Derive master key from password + salt
-      // 3. Try to decrypt a test note to verify password
-
-      // Simulate password verification process
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-
-      // Simulate password validation (in real implementation, this would verify against encrypted data)
-      if (password.length < 3) {
-        // Simple validation for demo
-        throw new Error("Invalid password")
-      }
-
-      console.log("[v0] Journal unlocked successfully")
-      setShowSyncModal(false)
-      setIsUnlocked(true)
-    } catch (error) {
-      console.error("[v0] Error unlocking journal:", error)
-      setSyncModalError("Invalid password. Please try again.")
-    } finally {
-      setSyncModalLoading(false)
-    }
+  const handleUnlocked = (key: string) => {
+    console.log("[v0] Journal unlocked successfully")
+    setEncryptionKey(key)
+    setShowSyncModal(false)
+    setIsUnlocked(true)
   }
 
   const handleSwitchAccount = () => {
     console.log("[v0] Switching Nostr account...")
-
-    // Clear all session data
-    // localStorage.removeItem("nostr-journal-nwc-uri")
-    // Clear any other stored session data if needed
 
     // Reset all state
     setAuthData(null)
     setIsAuthenticated(false)
     setShowSyncModal(false)
     setIsUnlocked(false)
-    setSyncModalError("")
-    setIsFirstTime(false)
-    setSyncModalLoading(false)
+    setEncryptionKey(null)
 
     // Force a page reload to ensure clean state
     window.location.reload()
@@ -156,7 +66,7 @@ export default function Home() {
     setIsAuthenticated(false)
     setShowSyncModal(false)
     setIsUnlocked(false)
-    setSyncModalError("")
+    setEncryptionKey(null)
   }
 
   if (isCheckingSession) {
@@ -183,15 +93,12 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Sync Unlock Modal */}
-          {showSyncModal && (
+          {showSyncModal && authData && (
             <SyncUnlockModal
-              isFirstTime={isFirstTime}
-              onCreatePassword={handleCreatePassword}
-              onUnlock={handleUnlockPassword}
+              userPubkey={authData.pubkey}
+              nostrSigner={authData.privateKey} // Pass the private key as signer
+              onUnlocked={handleUnlocked}
               onSwitchAccount={handleSwitchAccount}
-              isLoading={syncModalLoading}
-              error={syncModalError}
             />
           )}
         </>
