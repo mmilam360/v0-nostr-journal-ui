@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import type { Note } from "@/components/main-app"
+import { useDebounce } from "@/hooks/useDebounce"
 
 interface EditorProps {
   note: Note | null
@@ -24,6 +25,9 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
+  const debouncedTitle = useDebounce(title, 1500) // 1.5 second delay
+  const debouncedContent = useDebounce(content, 1500) // 1.5 second delay
+
   useEffect(() => {
     if (note) {
       setTitle(note.title)
@@ -31,6 +35,18 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
       setHasUnsavedChanges(false)
     }
   }, [note])
+
+  useEffect(() => {
+    if (note && (debouncedTitle !== note.title || debouncedContent !== note.content)) {
+      if (debouncedTitle.trim() || debouncedContent.trim()) {
+        console.log("[v0] Auto-saving note after 1.5s delay...")
+        const updatedNote = { ...note, title: debouncedTitle, content: debouncedContent }
+        onUpdateNote(updatedNote)
+        setHasUnsavedChanges(false)
+        console.log("[v0] Auto-save completed")
+      }
+    }
+  }, [debouncedTitle, debouncedContent, note, onUpdateNote])
 
   const handleTitleChange = (newTitle: string) => {
     setTitle(newTitle)
@@ -260,7 +276,7 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
             Created: {note.createdAt.toLocaleDateString()} {note.createdAt.toLocaleTimeString()}
           </span>
           <div className="flex items-center gap-2">
-            {hasUnsavedChanges && <span className="text-yellow-400 text-xs">● Unsaved changes</span>}
+            {hasUnsavedChanges && <span className="text-yellow-400 text-xs">● Auto-saving...</span>}
             <span>
               {note.lastSynced ? (
                 <span className="text-green-400">

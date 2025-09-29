@@ -21,6 +21,13 @@ export default function UserMenu({ pubkey, onLogout }: UserMenuProps) {
     }
   }
 
+  const handleLogout = () => {
+    localStorage.removeItem("nostrUserNsec")
+    console.log("[v0] Cleared session data on logout")
+    setIsOpen(false)
+    onLogout()
+  }
+
   return (
     <div className="relative">
       <Button
@@ -41,10 +48,7 @@ export default function UserMenu({ pubkey, onLogout }: UserMenuProps) {
           {/* Dropdown Menu */}
           <div className="absolute top-full left-0 right-0 mt-1 bg-slate-700 rounded-lg shadow-lg border border-slate-600 z-20">
             <Button
-              onClick={() => {
-                setIsOpen(false)
-                onLogout()
-              }}
+              onClick={handleLogout}
               variant="ghost"
               className="w-full justify-start text-slate-300 hover:text-red-400 hover:bg-slate-600 p-3 rounded-lg"
             >

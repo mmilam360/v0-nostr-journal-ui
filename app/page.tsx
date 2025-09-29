@@ -23,7 +23,41 @@ export default function Home() {
     const checkExistingSession = async () => {
       console.log("[v0] Checking for existing sessions...")
 
-      // No existing session found
+      try {
+        const savedNsec = localStorage.getItem("nostrUserNsec")
+        if (savedNsec) {
+          console.log("[v0] Found saved nsec in localStorage, auto-logging in...")
+
+          // Import nostr-tools functions for key derivation
+          const { nip19, getPublicKey } = await import("nostr-tools")
+
+          // Decode the nsec to get the private key
+          const { type, data } = nip19.decode(savedNsec)
+          if (type === "nsec") {
+            const privateKeyHex = Array.from(data as Uint8Array, (byte) => byte.toString(16).padStart(2, "0")).join("")
+            const pubkeyHex = getPublicKey(data as Uint8Array)
+
+            // Set auth data and proceed to unlock modal
+            const authData: AuthData = {
+              pubkey: pubkeyHex,
+              authMethod: "nsec",
+              privateKey: privateKeyHex,
+            }
+
+            setAuthData(authData)
+            setIsAuthenticated(true)
+            setShowSyncModal(true)
+            console.log("[v0] Auto-login successful, showing unlock modal")
+          }
+        } else {
+          console.log("[v0] No saved session found")
+        }
+      } catch (error) {
+        console.error("[v0] Error checking saved session:", error)
+        // Clear invalid session data
+        localStorage.removeItem("nostrUserNsec")
+      }
+
       setIsCheckingSession(false)
     }
 
@@ -32,9 +66,23 @@ export default function Home() {
 
   const handleLogin = async (authData: AuthData) => {
     console.log("[v0] User logged in with method:", authData.authMethod, "pubkey:", authData.pubkey)
+
+    if (authData.authMethod === "nsec" && authData.privateKey) {
+      try {
+        const { nip19 } = await import("nostr-tools")
+        const privateKeyBytes = new Uint8Array(
+          authData.privateKey.match(/.{1,2}/g)!.map((byte) => Number.parseInt(byte, 16)),
+        )
+        const nsec = nip19.nsecEncode(privateKeyBytes)
+        localStorage.setItem("nostrUserNsec", nsec)
+        console.log("[v0] Saved nsec to localStorage for session persistence")
+      } catch (error) {
+        console.error("[v0] Error saving session:", error)
+      }
+    }
+
     setAuthData(authData)
     setIsAuthenticated(true)
-
     setShowSyncModal(true)
   }
 
@@ -61,6 +109,9 @@ export default function Home() {
 
   const handleLogout = () => {
     console.log("[v0] User logged out")
+
+    localStorage.removeItem("nostrUserNsec")
+    console.log("[v0] Cleared session data from localStorage")
 
     setAuthData(null)
     setIsAuthenticated(false)
