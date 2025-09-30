@@ -82,7 +82,9 @@ export function BunkerLoginPage({ onLoginSuccess, onBack }: BunkerLoginPageProps
             const remotePubkey = event.pubkey
             console.log("[v0] 🔓 Decrypting event content...")
 
-            const decryptedContent = await nip04.decrypt(sk, remotePubkey, event.content)
+            const sharedSecret = nip04.getSharedSecret(sk, remotePubkey)
+            const decryptedContent = await nip04.decrypt(sharedSecret, event.content)
+
             console.log("[v0] ✅ Decryption successful!")
             console.log("[v0] 📋 Decrypted content:", decryptedContent)
 
@@ -191,6 +193,16 @@ export function BunkerLoginPage({ onLoginSuccess, onBack }: BunkerLoginPageProps
         return (
           <div>
             <h2 className="text-xl font-bold text-center mb-4 text-white">Approve Login</h2>
+            <div className="mb-4 p-3 bg-blue-900/30 border border-blue-700 rounded-lg">
+              <p className="text-sm text-blue-200 mb-2">
+                <strong>To connect:</strong>
+              </p>
+              <ol className="text-xs text-blue-300 space-y-1 list-decimal list-inside">
+                <li>Open a bunker-compatible app (Nsec.app, Amber, etc.)</li>
+                <li>Scan the QR code below or click "Open in Signing App"</li>
+                <li>Approve the connection request in your app</li>
+              </ol>
+            </div>
             <p className="text-center text-sm text-slate-400 mb-4">
               Scan with a Bunker-compatible app like Nsec.app to connect.
             </p>
@@ -205,8 +217,11 @@ export function BunkerLoginPage({ onLoginSuccess, onBack }: BunkerLoginPageProps
             </button>
             <div className="flex items-center justify-center mt-4 space-x-2 text-slate-400">
               <Loader2 className="h-4 w-4 animate-spin" />
-              <span>Waiting for approval...</span>
+              <span className="text-sm">Waiting for approval (2 min timeout)...</span>
             </div>
+            <p className="text-xs text-slate-500 text-center mt-2">
+              Connection will timeout after 2 minutes if not approved
+            </p>
             <details className="mt-4">
               <summary className="text-sm text-slate-400 cursor-pointer hover:text-slate-300">
                 Show connection URI
@@ -234,16 +249,32 @@ export function BunkerLoginPage({ onLoginSuccess, onBack }: BunkerLoginPageProps
 
       case "error":
         return (
-          <div className="flex flex-col items-center justify-center space-y-4 h-64 text-center">
+          <div className="flex flex-col items-center justify-center space-y-4 text-center">
             <AlertTriangle className="h-16 w-16 text-red-400" />
             <h2 className="text-xl font-bold text-white">Connection Failed</h2>
             <p className="text-slate-400 max-w-xs">{errorMessage}</p>
-            {onBack && (
-              <Button onClick={onBack} variant="outline" className="mt-4 bg-transparent">
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Back to Login Options
+            <div className="mt-4 p-3 bg-slate-900 rounded-lg text-left max-w-xs">
+              <p className="text-xs text-slate-400 mb-2">
+                <strong>Troubleshooting:</strong>
+              </p>
+              <ul className="text-xs text-slate-500 space-y-1 list-disc list-inside">
+                <li>Make sure you scanned the QR code with a compatible app</li>
+                <li>Check that your signing app is connected to the internet</li>
+                <li>Try using a different signing app (Nsec.app, Amber)</li>
+                <li>Make sure you approved the connection in your app</li>
+              </ul>
+            </div>
+            <div className="flex gap-2 mt-4">
+              {onBack && (
+                <Button onClick={onBack} variant="outline" className="bg-transparent">
+                  <ArrowLeft className="h-4 w-4 mr-2" />
+                  Back
+                </Button>
+              )}
+              <Button onClick={() => window.location.reload()} className="bg-indigo-600 hover:bg-indigo-500">
+                Try Again
               </Button>
-            )}
+            </div>
           </div>
         )
 
