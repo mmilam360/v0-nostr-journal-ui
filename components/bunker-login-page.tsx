@@ -1,12 +1,12 @@
 "use client"
 
-import { useState, useCallback, useEffect } from "react"
-import * as nostrTools from "nostr-tools"
+import { useState, useCallback, useEffect, useRef } from "react"
+import { generateSecretKey, getPublicKey, nip04 } from "nostr-tools"
+import { SimplePool } from "nostr-tools/pool"
 import { Loader2, CheckCircle, AlertTriangle, ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
-// This is the relay specified by the noauth protocol for handshakes.
-const NOAUTH_RELAY = "wss://relay.nostr.band"
+const DEFAULT_RELAYS = ["wss://relay.nostr.band", "wss://relay.damus.io", "wss://nos.lol"]
 
 interface BunkerLoginPageProps {
   onLoginSuccess: (result: { pubkey: string; token: string; relay: string }) => void
@@ -19,61 +19,95 @@ export function BunkerLoginPage({ onLoginSuccess, onBack }: BunkerLoginPageProps
   const [status, setStatus] = useState<ConnectionStatus>("generating")
   const [errorMessage, setErrorMessage] = useState("")
   const [bunkerUri, setBunkerUri] = useState("")
-  const [appSecretKey, setAppSecretKey] = useState<Uint8Array | null>(null)
+  const appSecretKeyRef = useRef<Uint8Array | null>(null)
+  const poolRef = useRef<SimplePool | null>(null)
 
   const startConnection = useCallback(
     async (sk: Uint8Array) => {
       if (!sk) return
-      let relay: any
+
       try {
-        const appPublicKey = nostrTools.getPublicKey(sk)
-        relay = nostrTools.relayInit(NOAUTH_RELAY)
+        const appPublicKey = getPublicKey(sk)
+        const pool = new SimplePool()
+        poolRef.current = pool
 
-        await new Promise((resolve, reject) => {
-          relay.on("connect", resolve)
-          relay.on("error", reject)
-          relay.connect().catch(reject)
-          setTimeout(() => reject(new Error("Relay connection timed out")), 7000)
-        })
+        console.log("[v0] 🔌 Connecting to relays:", DEFAULT_RELAYS)
 
-        const sub = relay.sub([{ kinds: [24133], "#p": [appPublicKey] }])
+        await Promise.all(DEFAULT_RELAYS.map((relay) => pool.ensureRelay(relay)))
+        console.log("[v0] ✅ Connected to all relays")
+
+        const now = Math.floor(Date.now() / 1000)
+        const filters = [
+          {
+            kinds: [24133],
+            "#p": [appPublicKey],
+            since: now,
+          },
+        ]
+
+        console.log("[v0] 📡 Subscribing for approval events with filters:", filters)
 
         const responsePromise = new Promise<{ pubkey: string; token: string; relay: string }>((resolve, reject) => {
-          sub.on("event", async (event: any) => {
-            try {
-              const userPubkey = event.pubkey
-              const sharedSecret = nostrTools.nip04.getSharedSecret(sk, userPubkey)
-              const decryptedContent = await nostrTools.nip04.decrypt(sharedSecret, event.content)
-              const response = JSON.parse(decryptedContent)
+          const sub = pool.subscribeMany(DEFAULT_RELAYS, filters, {
+            onevent: async (event: any) => {
+              try {
+                console.log("[v0] 📨 Received event from relay")
+                console.log("[v0] Event pubkey:", event.pubkey)
+                console.log("[v0] Event kind:", event.kind)
 
-              if (response.result === "ack") {
-                resolve({
-                  pubkey: userPubkey,
-                  token: response.params[0],
-                  relay: NOAUTH_RELAY,
-                })
-              } else {
-                reject(new Error(response.error || "Connection rejected."))
+                const userPubkey = event.pubkey
+
+                console.log("[v0] 🔓 Decrypting approval event...")
+                const decryptedContent = await nip04.decrypt(sk, userPubkey, event.content)
+                console.log("[v0] ✅ Decryption successful")
+
+                const response = JSON.parse(decryptedContent)
+                console.log("[v0] 📦 Parsed response:", response)
+
+                if (response.result === "ack") {
+                  console.log("[v0] ✅ Connection approved!")
+                  sub.close()
+                  resolve({
+                    pubkey: userPubkey,
+                    token: response.params?.[0] || "",
+                    relay: DEFAULT_RELAYS[0],
+                  })
+                } else {
+                  console.error("[v0] ❌ Connection rejected:", response.error)
+                  reject(new Error(response.error || "Connection rejected."))
+                }
+              } catch (e) {
+                console.error("[v0] ❌ Error processing bunker response:", e)
+                reject(e)
               }
-            } catch (e) {
-              console.error("[v0] Error processing bunker response:", e)
-            }
+            },
+            oneose: () => {
+              console.log("[v0] 📡 Subscription established on all relays")
+            },
           })
+
+          // Timeout after 2 minutes
+          setTimeout(() => {
+            console.log("[v0] ⏱️ Approval timeout reached")
+            sub.close()
+            reject(new Error("Approval timed out. Please try again."))
+          }, 120000)
         })
 
-        const result = await Promise.race([
-          responsePromise,
-          new Promise<never>((_, reject) => setTimeout(() => reject(new Error("Approval timed out.")), 120000)),
-        ])
+        const result = await responsePromise
+        console.log("[v0] 🎉 Login successful! User pubkey:", result.pubkey)
 
         setStatus("success")
         onLoginSuccess(result)
       } catch (error) {
         setStatus("error")
         setErrorMessage(error instanceof Error ? error.message : "Connection failed")
-        console.error("[v0] Bunker connection error:", error)
+        console.error("[v0] ❌ Bunker connection error:", error)
       } finally {
-        if (relay) relay.close()
+        if (poolRef.current) {
+          poolRef.current.close(DEFAULT_RELAYS)
+          poolRef.current = null
+        }
       }
     },
     [onLoginSuccess],
@@ -81,11 +115,15 @@ export function BunkerLoginPage({ onLoginSuccess, onBack }: BunkerLoginPageProps
 
   useEffect(() => {
     try {
-      const sk = nostrTools.generateSecretKey()
-      const pk = nostrTools.getPublicKey(sk)
-      const uri = `bunker://${pk}?relay=${NOAUTH_RELAY}`
+      console.log("[v0] 🚀 Initializing bunker connection...")
+      const sk = generateSecretKey()
+      const pk = getPublicKey(sk)
+      const uri = `bunker://${pk}?relay=${DEFAULT_RELAYS[0]}`
 
-      setAppSecretKey(sk)
+      console.log("[v0] 🔑 Generated ephemeral keypair")
+      console.log("[v0] 📱 Bunker URI:", uri)
+
+      appSecretKeyRef.current = sk
       setBunkerUri(uri)
       setStatus("awaiting_approval")
 
@@ -93,9 +131,17 @@ export function BunkerLoginPage({ onLoginSuccess, onBack }: BunkerLoginPageProps
     } catch (e) {
       setStatus("error")
       setErrorMessage("Failed to generate connection key.")
-      console.error("[v0] Failed to initialize bunker connection:", e)
+      console.error("[v0] ❌ Failed to initialize bunker connection:", e)
     }
   }, [startConnection])
+
+  useEffect(() => {
+    return () => {
+      if (poolRef.current) {
+        poolRef.current.close(DEFAULT_RELAYS)
+      }
+    }
+  }, [])
 
   const renderContent = () => {
     switch (status) {
