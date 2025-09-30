@@ -29,59 +29,93 @@ const useNostrConnect = ({ onConnectSuccess }: { onConnectSuccess: (result: { pu
         relay: NWC_RELAYS[0],
       })
 
+      console.log("[v0] Setting up event listeners...")
+
       // Set up event listener for successful connection
       connect.events.on("connect", (walletPubkey: string) => {
-        console.log("[v0] Connection successful! Wallet pubkey:", walletPubkey)
+        console.log("[v0] ✅ CONNECTION SUCCESS! Wallet pubkey:", walletPubkey)
         setStatus("success")
         onConnectSuccess({ pubkey: walletPubkey })
       })
 
       // Set up error handler
       connect.events.on("disconnect", () => {
-        console.log("[v0] Connection disconnected")
+        console.log("[v0] ⚠️ Connection disconnected")
       })
+
+      // Add listener for any other events that might exist
+      connect.events.on("error", (error: any) => {
+        console.error("[v0] ❌ Connect error event:", error)
+      })
+
+      // Log all events if possible
+      const originalEmit = connect.events.emit.bind(connect.events)
+      connect.events.emit = (event: string, ...args: any[]) => {
+        console.log("[v0] 📡 Event emitted:", event, args)
+        return originalEmit(event, ...args)
+      }
+
+      console.log("[v0] Calling connect.init()...")
 
       // Initialize the connection
       await connect.init()
 
-      console.log("[v0] Connect instance initialized")
+      console.log("[v0] ✅ Connect instance initialized successfully")
+      console.log("[v0] Connect instance state:", {
+        hasEvents: !!connect.events,
+        eventListenerCount: connect.events.listenerCount ? connect.events.listenerCount("connect") : "unknown",
+      })
 
-      // Generate the connection URI
       const metadata = {
         name: "Nostr Journal",
         url: "https://nostrjournal.app",
       }
 
-      const uri = connect.generateConnectURI(metadata)
+      // Construct the nostrconnect:// URI manually
+      const metadataEncoded = encodeURIComponent(JSON.stringify(metadata))
+      const relayEncoded = encodeURIComponent(NWC_RELAYS[0])
+      const uri = `nostrconnect://${pk}?relay=${relayEncoded}&metadata=${metadataEncoded}`
 
       console.log("[v0] Generated ConnectURI:", uri.substring(0, 50) + "...")
+      console.log("[v0] Full URI for debugging:", uri)
 
       setConnectInstance(connect)
       setConnectUri(uri)
       setStatus("awaiting_approval")
 
-      // Set up timeout for approval
-      setTimeout(() => {
-        if (status === "awaiting_approval") {
-          console.log("[v0] Approval timeout reached")
-          setStatus("error")
-          setErrorMessage("Approval timed out. Please scan and approve within 2 minutes.")
-          connect.disconnect()
-        }
+      // Set up timeout for approval with proper state reference
+      const timeoutId = setTimeout(() => {
+        console.log("[v0] ⏰ Approval timeout reached")
+        setStatus((currentStatus) => {
+          if (currentStatus === "awaiting_approval") {
+            console.log("[v0] Timeout triggered, disconnecting...")
+            setErrorMessage("Approval timed out. Please scan and approve within 2 minutes.")
+            connect.disconnect()
+            return "error"
+          }
+          return currentStatus
+        })
       }, 120000)
+
+      // Store timeout ID for cleanup
+      return () => clearTimeout(timeoutId)
     } catch (error) {
-      console.error("[v0] Failed to initialize connection:", error)
+      console.error("[v0] ❌ Failed to initialize connection:", error)
+      console.error("[v0] Error stack:", error instanceof Error ? error.stack : "No stack trace")
       setStatus("error")
       setErrorMessage(error instanceof Error ? error.message : "Failed to initialize secure connection")
     }
-  }, [onConnectSuccess, status])
+  }, [onConnectSuccess])
 
   useEffect(() => {
-    initializeConnection()
+    const cleanup = initializeConnection()
 
     // Cleanup on unmount
     return () => {
+      console.log("[v0] Component unmounting, cleaning up...")
+      if (cleanup) cleanup()
       if (connectInstance) {
+        console.log("[v0] Disconnecting Connect instance...")
         connectInstance.disconnect()
       }
     }
