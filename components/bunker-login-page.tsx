@@ -18,7 +18,7 @@
  */
 
 import { useState, useCallback, useEffect, useRef } from "react"
-import { generateSecretKey, getPublicKey, nip44, finalizeEvent } from "nostr-tools"
+import { generateSecretKey, getPublicKey, nip04 } from "nostr-tools"
 import { SimplePool } from "nostr-tools/pool"
 import { Loader2, CheckCircle, AlertTriangle, ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -41,95 +41,9 @@ export function BunkerLoginPage({ onLoginSuccess, onBack }: BunkerLoginPageProps
 
   const appSecretKeyRef = useRef<Uint8Array | null>(null)
   const appPublicKeyRef = useRef<string | null>(null)
-  const remotePubkeyRef = useRef<string | null>(null)
   const poolRef = useRef<SimplePool | null>(null)
   const subRef = useRef<any>(null)
   const timeoutRef = useRef<NodeJS.Timeout | null>(null)
-  const connectRequestSentRef = useRef<boolean>(false)
-
-  /**
-   * CRITICAL FUNCTION: Send connect request to remote signer
-   *
-   * This is what was missing! After the user scans the QR code,
-   * we need to ACTIVELY send a "connect" request to establish the session.
-   */
-  const sendConnectRequest = useCallback(async (remotePubkey: string) => {
-    if (!appSecretKeyRef.current || !appPublicKeyRef.current) {
-      console.error("[v0] ❌ Local keys not initialized")
-      return
-    }
-
-    if (connectRequestSentRef.current) {
-      console.log("[v0] ⚠️ Connect request already sent, skipping")
-      return
-    }
-
-    try {
-      console.log("[v0] 📤 Sending connect request to remote signer...")
-
-      // Create connect request payload
-      const requestPayload = {
-        id: "connect-" + Math.random().toString(36).substring(7),
-        method: "connect",
-        params: [appPublicKeyRef.current],
-      }
-
-      console.log("[v0] 📋 Connect request payload:", requestPayload)
-
-      // Encrypt the request using NIP-44
-      const encryptedContent = await nip44.encrypt(
-        appSecretKeyRef.current,
-        remotePubkey,
-        JSON.stringify(requestPayload),
-      )
-
-      console.log("[v0] 🔐 Encrypted connect request")
-
-      // Create the event
-      const unsignedEvent = {
-        kind: 24133,
-        created_at: Math.floor(Date.now() / 1000),
-        tags: [["p", remotePubkey]],
-        content: encryptedContent,
-        pubkey: appPublicKeyRef.current,
-      }
-
-      // Sign the event
-      const signedEvent = finalizeEvent(unsignedEvent, appSecretKeyRef.current)
-
-      console.log("[v0] ✍️ Signed connect request event:", signedEvent)
-
-      // Publish to all relays
-      const pool = poolRef.current
-      if (!pool) {
-        throw new Error("Pool not initialized")
-      }
-
-      // Use dynamic import to get Relay
-      const nostrTools = await import("nostr-tools")
-
-      // Publish to relays
-      await Promise.any(
-        DEFAULT_RELAYS.map(async (relayUrl) => {
-          try {
-            const relay = await nostrTools.Relay.connect(relayUrl)
-            await relay.publish(signedEvent)
-            console.log(`[v0] ✅ Published connect request to ${relayUrl}`)
-            relay.close()
-          } catch (err) {
-            console.warn(`[v0] ⚠️ Failed to publish to ${relayUrl}:`, err)
-            throw err
-          }
-        }),
-      )
-
-      connectRequestSentRef.current = true
-      console.log("[v0] ✅ Connect request sent successfully")
-    } catch (err) {
-      console.error("[v0] ❌ Failed to send connect request:", err)
-      throw err
-    }
-  }, [])
 
   /**
    * CORE FUNCTION: Generate nostrconnect:// URL and listen for approval
@@ -139,8 +53,8 @@ export function BunkerLoginPage({ onLoginSuccess, onBack }: BunkerLoginPageProps
    * 2. Create nostrconnect:// URL with metadata
    * 3. User scans QR code with their wallet or clicks "Use a signer" button
    * 4. Wallet connects to relays and sends initial event
-   * 5. Client SENDS "connect" request to wallet (THIS WAS MISSING!)
-   * 6. Wallet responds with user's pubkey
+   * 5. Client listens for connect response from wallet
+   * 6. Extract user's pubkey from the response
    */
   const startConnection = useCallback(
     async (sk: Uint8Array, pk: string) => {
@@ -152,15 +66,6 @@ export function BunkerLoginPage({ onLoginSuccess, onBack }: BunkerLoginPageProps
 
         console.log("[v0] 🔌 Connecting to relays:", DEFAULT_RELAYS)
 
-        /**
-         * CRITICAL SUBSCRIPTION LOGIC
-         *
-         * This is where most implementations fail. We must:
-         * 1. Subscribe to kind 24133 events (NIP-46 response events)
-         * 2. Filter for events tagged with our pubkey (#p tag)
-         * 3. Listen from current timestamp forward (since: now)
-         * 4. Handle the event immediately when it arrives
-         */
         const now = Math.floor(Date.now() / 1000)
         const filters = [
           {
@@ -170,69 +75,28 @@ export function BunkerLoginPage({ onLoginSuccess, onBack }: BunkerLoginPageProps
           },
         ]
 
-        console.log("[v0] 📡 Subscribing for approval events with filters:", filters)
+        console.log("[v0] 📡 Subscribing for approval events")
         console.log("[v0] 📡 Listening for events tagged with:", pk)
 
         const sub = pool.subscribeMany(DEFAULT_RELAYS, filters, {
           onevent: async (event: any) => {
             try {
-              console.log("[v0] ========================================")
-              console.log("[v0] 📨 RECEIVED EVENT FROM RELAY")
-              console.log("[v0] ========================================")
-              console.log("[v0] Event ID:", event.id)
-              console.log("[v0] Event pubkey (remote signer):", event.pubkey)
+              console.log("[v0] 📨 RECEIVED EVENT")
+              console.log("[v0] Event pubkey:", event.pubkey)
               console.log("[v0] Event kind:", event.kind)
-              console.log("[v0] Event created_at:", event.created_at, new Date(event.created_at * 1000).toISOString())
-              console.log("[v0] Event tags:", JSON.stringify(event.tags))
-              console.log("[v0] Event content (encrypted, first 100 chars):", event.content.substring(0, 100))
-              console.log("[v0] Event signature:", event.sig?.substring(0, 20) + "...")
-              console.log("[v0] ========================================")
 
-              const pTags = event.tags.filter((tag: string[]) => tag[0] === "p")
-              console.log("[v0] P tags in event:", pTags)
-              const isForUs = pTags.some((tag: string[]) => tag[1] === pk)
-              console.log("[v0] Is event for us?", isForUs, "(our pubkey:", pk, ")")
-
-              if (!isForUs) {
-                console.warn("[v0] ⚠️ Event not tagged for us, ignoring")
-                return
-              }
-
-              if (!remotePubkeyRef.current) {
-                remotePubkeyRef.current = event.pubkey
-                console.log("[v0] 📡 Stored remote signer pubkey:", event.pubkey)
-                console.log("[v0] 📤 This is the first event, sending connect request...")
-
-                try {
-                  await sendConnectRequest(event.pubkey)
-                  console.log("[v0] ✅ Connect request sent, waiting for response...")
-                } catch (err) {
-                  console.error("[v0] ❌ Failed to send connect request:", err)
-                  throw err
-                }
-
-                console.log("[v0] ⏳ Waiting for connect response from remote signer...")
-                return
-              }
-
-              console.log("[v0] 📨 Received subsequent event, attempting to decrypt...")
-              console.log("[v0] 🔓 Decrypting with our secret key and remote pubkey:", event.pubkey)
-
-              const decryptedContent = await nip44.decrypt(sk, event.pubkey, event.content)
+              console.log("[v0] 🔓 Decrypting event content...")
+              const decryptedContent = await nip04.decrypt(sk, event.pubkey, event.content)
               console.log("[v0] ✅ Decryption successful!")
               console.log("[v0] 📋 Decrypted content:", decryptedContent)
 
-              const response = JSON.parse(decryptedContent)
-              console.log("[v0] 📦 Parsed response object:", JSON.stringify(response, null, 2))
+              const payload = JSON.parse(decryptedContent)
+              console.log("[v0] 📦 Parsed payload:", JSON.stringify(payload, null, 2))
 
-              if (response.result) {
-                console.log("[v0] ✅ Response has 'result' field:", response.result)
-                const actualUserPubkey =
-                  typeof response.result === "string" && response.result.length === 64 ? response.result : event.pubkey
-
+              if (payload.result === "connect") {
+                const userPubkey = event.pubkey
                 console.log("[v0] ✅ CONNECTION SUCCESSFUL!")
-                console.log("[v0] 👤 User pubkey:", actualUserPubkey)
-                console.log("[v0] 🎉 Calling onLoginSuccess...")
+                console.log("[v0] 👤 User pubkey:", userPubkey)
 
                 sub.close()
                 if (timeoutRef.current) {
@@ -242,34 +106,27 @@ export function BunkerLoginPage({ onLoginSuccess, onBack }: BunkerLoginPageProps
                 setStatus("success")
 
                 onLoginSuccess({
-                  pubkey: actualUserPubkey,
-                  token: response.params?.[0] || "",
+                  pubkey: userPubkey,
+                  token: "",
                   relay: DEFAULT_RELAYS[0],
                 })
-              } else if (response.error) {
-                console.error("[v0] ❌ Remote signer returned error:", response.error)
-                throw new Error(response.error)
+              } else if (payload.error) {
+                console.error("[v0] ❌ Remote signer returned error:", payload.error)
+                throw new Error(payload.error)
               } else {
-                console.log("[v0] ⚠️ Unexpected response format:", response)
-                console.log("[v0] ⚠️ Response has no 'result' or 'error' field")
+                console.log("[v0] ⚠️ Unexpected response format:", payload)
               }
             } catch (e) {
-              console.error("[v0] ========================================")
               console.error("[v0] ❌ ERROR PROCESSING EVENT")
-              console.error("[v0] ========================================")
-              console.error("[v0] Error type:", e instanceof Error ? e.constructor.name : typeof e)
-              console.error("[v0] Error message:", e instanceof Error ? e.message : String(e))
-              console.error("[v0] Error stack:", e instanceof Error ? e.stack : "No stack trace")
-              console.error("[v0] ========================================")
+              console.error("[v0] Error:", e instanceof Error ? e.message : String(e))
               setStatus("error")
               setErrorMessage(e instanceof Error ? e.message : "Failed to process approval")
               cleanup()
             }
           },
           oneose: () => {
-            console.log("[v0] ✅ Subscription established on relays")
-            console.log("[v0] 📡 Now listening for events on:", DEFAULT_RELAYS)
-            console.log("[v0] 🔍 Waiting for remote signer to send events...")
+            console.log("[v0] ✅ Subscription established")
+            console.log("[v0] 🔍 Waiting for remote signer...")
           },
         })
 
@@ -278,17 +135,17 @@ export function BunkerLoginPage({ onLoginSuccess, onBack }: BunkerLoginPageProps
         timeoutRef.current = setTimeout(() => {
           console.log("[v0] ⏱️ Approval timeout reached")
           setStatus("error")
-          setErrorMessage("Connection timeout. Please try again.")
+          setErrorMessage("Connection timeout. Please scan the QR code and approve in your wallet.")
           cleanup()
         }, 120000)
       } catch (error) {
         setStatus("error")
         setErrorMessage(error instanceof Error ? error.message : "Connection failed")
-        console.error("[v0] ❌ Bunker connection error:", error)
+        console.error("[v0] ❌ Connection error:", error)
         cleanup()
       }
     },
-    [onLoginSuccess, sendConnectRequest],
+    [onLoginSuccess],
   )
 
   /**
@@ -317,14 +174,6 @@ export function BunkerLoginPage({ onLoginSuccess, onBack }: BunkerLoginPageProps
       const sk = generateSecretKey()
       const pk = getPublicKey(sk)
 
-      /**
-       * CRITICAL: Create proper nostrconnect:// URL format
-       *
-       * This MUST follow the exact NIP-46 specification:
-       * nostrconnect://<pubkey>?relay=<relay_url>&metadata=<url_encoded_json>
-       *
-       * The metadata should include app information for the wallet to display
-       */
       const metadata = {
         name: "Nostr Journal",
         url: typeof window !== "undefined" ? window.location.origin : "",
@@ -333,9 +182,7 @@ export function BunkerLoginPage({ onLoginSuccess, onBack }: BunkerLoginPageProps
       }
 
       const encodedMetadata = encodeURIComponent(JSON.stringify(metadata))
-
       const relayParams = DEFAULT_RELAYS.map((r) => `relay=${encodeURIComponent(r)}`).join("&")
-
       const url = `nostrconnect://${pk}?${relayParams}&metadata=${encodedMetadata}`
 
       console.log("[v0] 🔑 Generated ephemeral keypair")
@@ -350,7 +197,7 @@ export function BunkerLoginPage({ onLoginSuccess, onBack }: BunkerLoginPageProps
     } catch (e) {
       setStatus("error")
       setErrorMessage("Failed to generate connection key.")
-      console.error("[v0] ❌ Failed to initialize nostr connect:", e)
+      console.error("[v0] ❌ Failed to initialize:", e)
     }
   }, [startConnection])
 
