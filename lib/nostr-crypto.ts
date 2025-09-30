@@ -153,3 +153,114 @@ export function getShortPubkey(pubkey: string): string {
   }
   return pubkey.length > 20 ? `${pubkey.slice(0, 20)}...` : pubkey
 }
+
+// Generate a storage key for encrypted private keys
+function generatePrivateKeyStorageKey(pubkey: string): string {
+  return `nostr_journal_pk_${pubkey.slice(0, 16)}`
+}
+
+// Encrypt a private key with a password
+export async function encryptPrivateKey(privateKeyHex: string, password: string, pubkey: string): Promise<void> {
+  try {
+    const encoder = new TextEncoder()
+
+    // Derive encryption key from password using PBKDF2
+    const keyMaterial = await crypto.subtle.importKey("raw", encoder.encode(password), { name: "PBKDF2" }, false, [
+      "deriveKey",
+    ])
+
+    // Use pubkey as salt for deterministic key derivation
+    const salt = encoder.encode(pubkey.slice(0, 32))
+
+    const key = await crypto.subtle.deriveKey(
+      {
+        name: "PBKDF2",
+        salt,
+        iterations: 100000,
+        hash: "SHA-256",
+      },
+      keyMaterial,
+      { name: "AES-GCM", length: 256 },
+      false,
+      ["encrypt"],
+    )
+
+    const iv = crypto.getRandomValues(new Uint8Array(12))
+    const encrypted = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, encoder.encode(privateKeyHex))
+
+    const encryptedStorage = {
+      data: btoa(String.fromCharCode(...new Uint8Array(encrypted))),
+      iv: btoa(String.fromCharCode(...iv)),
+      timestamp: Date.now(),
+      version: "1.0",
+    }
+
+    const storageKey = generatePrivateKeyStorageKey(pubkey)
+    localStorage.setItem(storageKey, JSON.stringify(encryptedStorage))
+    console.log("[v0] Private key encrypted and saved to localStorage")
+  } catch (error) {
+    console.error("[v0] Error encrypting private key:", error)
+    throw error
+  }
+}
+
+// Decrypt a private key with a password
+export async function decryptPrivateKey(password: string, pubkey: string): Promise<string> {
+  try {
+    const storageKey = generatePrivateKeyStorageKey(pubkey)
+    const stored = localStorage.getItem(storageKey)
+
+    if (!stored) {
+      throw new Error("No encrypted private key found")
+    }
+
+    const encryptedStorage = JSON.parse(stored)
+    const encoder = new TextEncoder()
+    const decoder = new TextDecoder()
+
+    // Derive the same encryption key from password
+    const keyMaterial = await crypto.subtle.importKey("raw", encoder.encode(password), { name: "PBKDF2" }, false, [
+      "deriveKey",
+    ])
+
+    const salt = encoder.encode(pubkey.slice(0, 32))
+
+    const key = await crypto.subtle.deriveKey(
+      {
+        name: "PBKDF2",
+        salt,
+        iterations: 100000,
+        hash: "SHA-256",
+      },
+      keyMaterial,
+      { name: "AES-GCM", length: 256 },
+      false,
+      ["decrypt"],
+    )
+
+    const encrypted = Uint8Array.from(atob(encryptedStorage.data), (c) => c.charCodeAt(0))
+    const ivArray = Uint8Array.from(atob(encryptedStorage.iv), (c) => c.charCodeAt(0))
+
+    const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv: ivArray }, key, encrypted)
+
+    const privateKeyHex = decoder.decode(decrypted)
+    console.log("[v0] Private key decrypted successfully")
+    return privateKeyHex
+  } catch (error) {
+    console.error("[v0] Error decrypting private key:", error)
+    throw new Error("Failed to decrypt private key. Wrong password?")
+  }
+}
+
+// Check if a private key is stored for a given pubkey
+export function hasStoredPrivateKey(pubkey: string): boolean {
+  const storageKey = generatePrivateKeyStorageKey(pubkey)
+  return localStorage.getItem(storageKey) !== null
+}
+
+// Clear stored private key
+export function clearStoredPrivateKey(pubkey: string): void {
+  const storageKey = generatePrivateKeyStorageKey(pubkey)
+  localStorage.removeItem(storageKey)
+  console.log("[v0] Encrypted private key cleared from localStorage")
+}

@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useCallback, useEffect } from "react"
+import { NostrFetcher } from "nostr-fetch"
 import * as nostrTools from "nostr-tools"
 import { Loader2, CheckCircle, AlertTriangle } from "lucide-react"
 
@@ -39,61 +40,67 @@ const useBunkerConnection = ({ onConnectSuccess }: UseBunkerConnectionProps) => 
     }
   }, [])
 
-  // Step 2: Listen for the specific `noauth` response.
   const startListeningAndAwaitApproval = useCallback(async () => {
     if (!appSecretKey) return
-    let relay: any
+
+    // Initialize the proven, working engine.
+    const fetcher = NostrFetcher.init()
+
     try {
       const appPublicKey = nostrTools.getPublicKey(appSecretKey)
-      relay = nostrTools.relayInit(NOAUTH_RELAY)
-      await new Promise((resolve, reject) => {
-        relay.on("connect", resolve)
-        relay.on("error", reject)
-        relay.connect().catch(reject)
-        setTimeout(() => reject(new Error("Relay connection timed out")), 7000)
-      })
 
-      // Step 3: Use the correct filter.
-      const sub = relay.sub([{ kinds: [24133], "#p": [appPublicKey] }])
+      console.log("[v0] Starting bunker connection listener with nostr-fetch")
+      console.log("[v0] App public key:", appPublicKey)
+      console.log("[v0] Listening on relay:", NOAUTH_RELAY)
 
-      const responsePromise = new Promise<BunkerConnectionResult>((resolve, reject) => {
-        sub.on("event", async (event: any) => {
-          try {
-            // Step 4: Decrypt with the CORRECT key (the user's pubkey from the event).
-            const userPubkey = event.pubkey
-            const sharedSecret = nostrTools.nip04.getSharedSecret(appSecretKey, userPubkey)
-            const decryptedContent = await nostrTools.nip04.decrypt(sharedSecret, event.content)
-            const response = JSON.parse(decryptedContent)
+      // Use `allEventsIterator` to create a live, resilient subscription.
+      const sub = fetcher.allEventsIterator(
+        [NOAUTH_RELAY],
+        { kinds: [24133], "#p": [appPublicKey] },
+        { since: Math.floor(Date.now() / 1000) },
+        { realTime: true, timeout: 120000 }, // 2 minute timeout
+      )
 
-            // Step 5: Extract the session token.
-            if (response.result === "ack") {
-              resolve({
-                pubkey: userPubkey,
-                token: response.params[0], // The session token
-                relay: NOAUTH_RELAY,
-              })
-            } else {
-              reject(new Error(response.error || "Connection rejected by signing app."))
-            }
-          } catch (e) {
-            // Silently ignore decryption errors for events not meant for us
+      console.log("[v0] Subscription created, waiting for events...")
+
+      for await (const event of sub) {
+        console.log("[v0] Received event:", event.id)
+        try {
+          // Step 4: Decrypt with the CORRECT key (the user's pubkey from the event).
+          const userPubkey = event.pubkey
+          const sharedSecret = nostrTools.nip04.getSharedSecret(appSecretKey, userPubkey)
+          const decryptedContent = await nostrTools.nip04.decrypt(sharedSecret, event.content)
+          const response = JSON.parse(decryptedContent)
+
+          console.log("[v0] Decrypted response:", response)
+
+          // Step 5: Extract the session token.
+          if (response.result === "ack") {
+            console.log("[v0] Connection successful! User pubkey:", userPubkey)
+            setStatus("success")
+            onConnectSuccess({
+              pubkey: userPubkey,
+              token: response.params[0], // The session token
+              relay: NOAUTH_RELAY,
+            })
+            return // Success! Exit the loop.
           }
-        })
-      })
+        } catch (e) {
+          // Silently ignore decryption errors for events not meant for us
+          console.log("[v0] Could not decrypt event (likely not for us)")
+        }
+      }
 
-      const result = await Promise.race([
-        responsePromise,
-        new Promise<BunkerConnectionResult>((_, reject) =>
-          setTimeout(() => reject(new Error("Approval timed out. Please scan and approve within 2 minutes.")), 120000),
-        ),
-      ])
-      setStatus("success")
-      onConnectSuccess(result)
+      // If the loop finishes without finding a valid event, it timed out.
+      throw new Error("Approval timed out. Please scan and approve within 2 minutes.")
     } catch (error: any) {
+      console.error("[v0] Bunker connection error:", error)
       setStatus("error")
       setErrorMessage(error.message)
     } finally {
-      if (relay) relay.close()
+      // Clean up the fetcher and its connections.
+      console.log("[v0] Cleaning up nostr-fetch connections")
+      fetcher.shutdown()
     }
   }, [appSecretKey, onConnectSuccess])
 
