@@ -14,10 +14,11 @@
  * 3. Proper event subscription lifecycle - Critical for receiving approval events
  * 4. Ephemeral key pair for session security - Generated fresh each time
  * 5. Standard nostrconnect:// URL format - Compatible with all NIP-46 wallets
+ * 6. ACTIVE HANDSHAKE - Client must send "connect" request after receiving initial event
  */
 
 import { useState, useCallback, useEffect, useRef } from "react"
-import { generateSecretKey, getPublicKey, nip44 } from "nostr-tools"
+import { generateSecretKey, getPublicKey, nip44, finalizeEvent } from "nostr-tools"
 import { SimplePool } from "nostr-tools/pool"
 import { Loader2, CheckCircle, AlertTriangle, ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -39,9 +40,96 @@ export function BunkerLoginPage({ onLoginSuccess, onBack }: BunkerLoginPageProps
   const [connectUrl, setConnectUrl] = useState("")
 
   const appSecretKeyRef = useRef<Uint8Array | null>(null)
+  const appPublicKeyRef = useRef<string | null>(null)
+  const remotePubkeyRef = useRef<string | null>(null)
   const poolRef = useRef<SimplePool | null>(null)
   const subRef = useRef<any>(null)
   const timeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const connectRequestSentRef = useRef<boolean>(false)
+
+  /**
+   * CRITICAL FUNCTION: Send connect request to remote signer
+   *
+   * This is what was missing! After the user scans the QR code,
+   * we need to ACTIVELY send a "connect" request to establish the session.
+   */
+  const sendConnectRequest = useCallback(async (remotePubkey: string) => {
+    if (!appSecretKeyRef.current || !appPublicKeyRef.current) {
+      console.error("[v0] ❌ Local keys not initialized")
+      return
+    }
+
+    if (connectRequestSentRef.current) {
+      console.log("[v0] ⚠️ Connect request already sent, skipping")
+      return
+    }
+
+    try {
+      console.log("[v0] 📤 Sending connect request to remote signer...")
+
+      // Create connect request payload
+      const requestPayload = {
+        id: "connect-" + Math.random().toString(36).substring(7),
+        method: "connect",
+        params: [appPublicKeyRef.current],
+      }
+
+      console.log("[v0] 📋 Connect request payload:", requestPayload)
+
+      // Encrypt the request using NIP-44
+      const encryptedContent = await nip44.encrypt(
+        appSecretKeyRef.current,
+        remotePubkey,
+        JSON.stringify(requestPayload),
+      )
+
+      console.log("[v0] 🔐 Encrypted connect request")
+
+      // Create the event
+      const unsignedEvent = {
+        kind: 24133,
+        created_at: Math.floor(Date.now() / 1000),
+        tags: [["p", remotePubkey]],
+        content: encryptedContent,
+        pubkey: appPublicKeyRef.current,
+      }
+
+      // Sign the event
+      const signedEvent = finalizeEvent(unsignedEvent, appSecretKeyRef.current)
+
+      console.log("[v0] ✍️ Signed connect request event:", signedEvent)
+
+      // Publish to all relays
+      const pool = poolRef.current
+      if (!pool) {
+        throw new Error("Pool not initialized")
+      }
+
+      // Use dynamic import to get Relay
+      const nostrTools = await import("nostr-tools")
+
+      // Publish to relays
+      await Promise.any(
+        DEFAULT_RELAYS.map(async (relayUrl) => {
+          try {
+            const relay = await nostrTools.Relay.connect(relayUrl)
+            await relay.publish(signedEvent)
+            console.log(`[v0] ✅ Published connect request to ${relayUrl}`)
+            relay.close()
+          } catch (err) {
+            console.warn(`[v0] ⚠️ Failed to publish to ${relayUrl}:`, err)
+            throw err
+          }
+        }),
+      )
+
+      connectRequestSentRef.current = true
+      console.log("[v0] ✅ Connect request sent successfully")
+    } catch (err) {
+      console.error("[v0] ❌ Failed to send connect request:", err)
+      throw err
+    }
+  }, [])
 
   /**
    * CORE FUNCTION: Generate nostrconnect:// URL and listen for approval
@@ -50,15 +138,15 @@ export function BunkerLoginPage({ onLoginSuccess, onBack }: BunkerLoginPageProps
    * 1. Generate ephemeral keypair (local session keys)
    * 2. Create nostrconnect:// URL with metadata
    * 3. User scans QR code with their wallet or clicks "Use a signer" button
-   * 4. Wallet connects to relays and sends encrypted "connect" response (kind 24133)
-   * 5. We decrypt the response to get user's pubkey
+   * 4. Wallet connects to relays and sends initial event
+   * 5. Client SENDS "connect" request to wallet (THIS WAS MISSING!)
+   * 6. Wallet responds with user's pubkey
    */
   const startConnection = useCallback(
-    async (sk: Uint8Array) => {
+    async (sk: Uint8Array, pk: string) => {
       if (!sk) return
 
       try {
-        const appPublicKey = getPublicKey(sk)
         const pool = new SimplePool()
         poolRef.current = pool
 
@@ -77,13 +165,13 @@ export function BunkerLoginPage({ onLoginSuccess, onBack }: BunkerLoginPageProps
         const filters = [
           {
             kinds: [24133],
-            "#p": [appPublicKey],
+            "#p": [pk],
             since: now,
           },
         ]
 
         console.log("[v0] 📡 Subscribing for approval events with filters:", filters)
-        console.log("[v0] 📡 Listening for events tagged with:", appPublicKey)
+        console.log("[v0] 📡 Listening for events tagged with:", pk)
 
         const sub = pool.subscribeMany(DEFAULT_RELAYS, filters, {
           onevent: async (event: any) => {
@@ -92,6 +180,17 @@ export function BunkerLoginPage({ onLoginSuccess, onBack }: BunkerLoginPageProps
               console.log("[v0] Event pubkey (remote signer):", event.pubkey)
               console.log("[v0] Event kind:", event.kind)
               console.log("[v0] Event content (encrypted):", event.content.substring(0, 50) + "...")
+
+              if (!remotePubkeyRef.current) {
+                remotePubkeyRef.current = event.pubkey
+                console.log("[v0] 📡 Remote signer pubkey:", event.pubkey)
+
+                try {
+                  await sendConnectRequest(event.pubkey)
+                } catch (err) {
+                  console.error("[v0] ❌ Failed to send connect request:", err)
+                }
+              }
 
               const userPubkey = event.pubkey
 
@@ -110,8 +209,11 @@ export function BunkerLoginPage({ onLoginSuccess, onBack }: BunkerLoginPageProps
                * - id: request ID (for matching request/response)
                * - error: error message if connection failed
                */
-              if (response.result === "ack" || response.result) {
-                console.log("[v0] ✅ Connection approved!")
+              if (response.result) {
+                const actualUserPubkey =
+                  typeof response.result === "string" && response.result.length === 64 ? response.result : userPubkey
+
+                console.log("[v0] ✅ Connection approved! User pubkey:", actualUserPubkey)
 
                 sub.close()
                 if (timeoutRef.current) {
@@ -121,13 +223,15 @@ export function BunkerLoginPage({ onLoginSuccess, onBack }: BunkerLoginPageProps
                 setStatus("success")
 
                 onLoginSuccess({
-                  pubkey: userPubkey,
+                  pubkey: actualUserPubkey,
                   token: response.params?.[0] || "",
                   relay: DEFAULT_RELAYS[0],
                 })
               } else if (response.error) {
                 console.error("[v0] ❌ Connection rejected:", response.error)
                 throw new Error(response.error)
+              } else if (response.method === "connect") {
+                console.log("[v0] 📨 Received connect method from signer (acknowledgment)")
               } else {
                 console.log("[v0] ⚠️ Received event without result or error:", response)
               }
@@ -158,7 +262,7 @@ export function BunkerLoginPage({ onLoginSuccess, onBack }: BunkerLoginPageProps
         cleanup()
       }
     },
-    [onLoginSuccess],
+    [onLoginSuccess, sendConnectRequest],
   )
 
   /**
@@ -212,10 +316,11 @@ export function BunkerLoginPage({ onLoginSuccess, onBack }: BunkerLoginPageProps
       console.log("[v0] 📱 Nostr Connect URI:", url)
 
       appSecretKeyRef.current = sk
+      appPublicKeyRef.current = pk
       setConnectUrl(url)
       setStatus("awaiting_approval")
 
-      startConnection(sk)
+      startConnection(sk, pk)
     } catch (e) {
       setStatus("error")
       setErrorMessage("Failed to generate connection key.")
