@@ -176,44 +176,63 @@ export function BunkerLoginPage({ onLoginSuccess, onBack }: BunkerLoginPageProps
         const sub = pool.subscribeMany(DEFAULT_RELAYS, filters, {
           onevent: async (event: any) => {
             try {
-              console.log("[v0] 📨 Received event from relay:", event)
+              console.log("[v0] ========================================")
+              console.log("[v0] 📨 RECEIVED EVENT FROM RELAY")
+              console.log("[v0] ========================================")
+              console.log("[v0] Event ID:", event.id)
               console.log("[v0] Event pubkey (remote signer):", event.pubkey)
               console.log("[v0] Event kind:", event.kind)
-              console.log("[v0] Event content (encrypted):", event.content.substring(0, 50) + "...")
+              console.log("[v0] Event created_at:", event.created_at, new Date(event.created_at * 1000).toISOString())
+              console.log("[v0] Event tags:", JSON.stringify(event.tags))
+              console.log("[v0] Event content (encrypted, first 100 chars):", event.content.substring(0, 100))
+              console.log("[v0] Event signature:", event.sig?.substring(0, 20) + "...")
+              console.log("[v0] ========================================")
+
+              const pTags = event.tags.filter((tag: string[]) => tag[0] === "p")
+              console.log("[v0] P tags in event:", pTags)
+              const isForUs = pTags.some((tag: string[]) => tag[1] === pk)
+              console.log("[v0] Is event for us?", isForUs, "(our pubkey:", pk, ")")
+
+              if (!isForUs) {
+                console.warn("[v0] ⚠️ Event not tagged for us, ignoring")
+                return
+              }
 
               if (!remotePubkeyRef.current) {
                 remotePubkeyRef.current = event.pubkey
-                console.log("[v0] 📡 Remote signer pubkey:", event.pubkey)
+                console.log("[v0] 📡 Stored remote signer pubkey:", event.pubkey)
+                console.log("[v0] 📤 This is the first event, sending connect request...")
 
                 try {
                   await sendConnectRequest(event.pubkey)
+                  console.log("[v0] ✅ Connect request sent, waiting for response...")
                 } catch (err) {
                   console.error("[v0] ❌ Failed to send connect request:", err)
+                  throw err
                 }
+
+                console.log("[v0] ⏳ Waiting for connect response from remote signer...")
+                return
               }
 
-              const userPubkey = event.pubkey
+              console.log("[v0] 📨 Received subsequent event, attempting to decrypt...")
+              console.log("[v0] 🔓 Decrypting with our secret key and remote pubkey:", event.pubkey)
 
-              console.log("[v0] 🔓 Decrypting approval event...")
-
-              const decryptedContent = await nip44.decrypt(sk, userPubkey, event.content)
-              console.log("[v0] ✅ Decryption successful")
+              const decryptedContent = await nip44.decrypt(sk, event.pubkey, event.content)
+              console.log("[v0] ✅ Decryption successful!")
               console.log("[v0] 📋 Decrypted content:", decryptedContent)
 
               const response = JSON.parse(decryptedContent)
-              console.log("[v0] 📦 Parsed response:", response)
+              console.log("[v0] 📦 Parsed response object:", JSON.stringify(response, null, 2))
 
-              /**
-               * The payload should contain:
-               * - result: the user's actual pubkey or "ack" for connection approval
-               * - id: request ID (for matching request/response)
-               * - error: error message if connection failed
-               */
               if (response.result) {
+                console.log("[v0] ✅ Response has 'result' field:", response.result)
                 const actualUserPubkey =
-                  typeof response.result === "string" && response.result.length === 64 ? response.result : userPubkey
+                  typeof response.result === "string" && response.result.length === 64 ? response.result : event.pubkey
 
-                console.log("[v0] ✅ Connection approved! User pubkey:", actualUserPubkey)
+                console.log("[v0] ✅ CONNECTION SUCCESSFUL!")
+                console.log("[v0] 👤 User pubkey:", actualUserPubkey)
+                console.log("[v0] 🎉 Calling onLoginSuccess...")
 
                 sub.close()
                 if (timeoutRef.current) {
@@ -228,15 +247,20 @@ export function BunkerLoginPage({ onLoginSuccess, onBack }: BunkerLoginPageProps
                   relay: DEFAULT_RELAYS[0],
                 })
               } else if (response.error) {
-                console.error("[v0] ❌ Connection rejected:", response.error)
+                console.error("[v0] ❌ Remote signer returned error:", response.error)
                 throw new Error(response.error)
-              } else if (response.method === "connect") {
-                console.log("[v0] 📨 Received connect method from signer (acknowledgment)")
               } else {
-                console.log("[v0] ⚠️ Received event without result or error:", response)
+                console.log("[v0] ⚠️ Unexpected response format:", response)
+                console.log("[v0] ⚠️ Response has no 'result' or 'error' field")
               }
             } catch (e) {
-              console.error("[v0] ❌ Error processing bunker response:", e)
+              console.error("[v0] ========================================")
+              console.error("[v0] ❌ ERROR PROCESSING EVENT")
+              console.error("[v0] ========================================")
+              console.error("[v0] Error type:", e instanceof Error ? e.constructor.name : typeof e)
+              console.error("[v0] Error message:", e instanceof Error ? e.message : String(e))
+              console.error("[v0] Error stack:", e instanceof Error ? e.stack : "No stack trace")
+              console.error("[v0] ========================================")
               setStatus("error")
               setErrorMessage(e instanceof Error ? e.message : "Failed to process approval")
               cleanup()
@@ -244,6 +268,8 @@ export function BunkerLoginPage({ onLoginSuccess, onBack }: BunkerLoginPageProps
           },
           oneose: () => {
             console.log("[v0] ✅ Subscription established on relays")
+            console.log("[v0] 📡 Now listening for events on:", DEFAULT_RELAYS)
+            console.log("[v0] 🔍 Waiting for remote signer to send events...")
           },
         })
 
@@ -357,9 +383,16 @@ export function BunkerLoginPage({ onLoginSuccess, onBack }: BunkerLoginPageProps
       case "awaiting_approval":
         return (
           <div>
-            <h2 className="text-xl font-bold text-center mb-4 text-white">Approve Login</h2>
+            <h2 className="text-xl font-bold text-center mb-4 text-white">Connect Your Wallet</h2>
+            <div className="mb-4 p-3 bg-blue-900/30 border border-blue-700 rounded-lg">
+              <p className="text-sm text-blue-200 font-semibold mb-2">Choose one option:</p>
+              <ul className="text-sm text-blue-300 space-y-1 list-disc list-inside">
+                <li>Scan QR code with Nsec.app or compatible wallet</li>
+                <li>Click "Use a signer" to open in your wallet app</li>
+              </ul>
+            </div>
             <p className="text-center text-sm text-slate-400 mb-4">
-              Scan with your Nostr wallet (Nsec.app, Alby Hub, etc.) to connect.
+              Your wallet will ask you to approve the connection.
             </p>
             <div className="p-4 bg-white rounded-lg flex items-center justify-center mb-4">
               <QRCodeSVG value={connectUrl} size={256} level="M" />
@@ -372,7 +405,7 @@ export function BunkerLoginPage({ onLoginSuccess, onBack }: BunkerLoginPageProps
             </button>
             <div className="flex items-center justify-center mt-4 space-x-2 text-slate-400">
               <Loader2 className="h-4 w-4 animate-spin" />
-              <span>Waiting for approval...</span>
+              <span>Waiting for wallet approval...</span>
             </div>
             <details className="mt-4">
               <summary className="text-sm text-slate-400 cursor-pointer hover:text-slate-300">
