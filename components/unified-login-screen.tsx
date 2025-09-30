@@ -5,6 +5,7 @@ import { UserPlus, ShieldCheck, Zap, HelpCircle } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import CreateAccountModal from "@/components/create-account-modal"
 import { NostrConnectManager } from "@/components/nostr-connect-manager"
+import { BunkerConnectManager } from "@/components/bunker-connect-manager"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
 interface UnifiedLoginScreenProps {
@@ -20,6 +21,7 @@ export default function UnifiedLoginScreen({
 }: UnifiedLoginScreenProps) {
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showNostrConnectModal, setShowNostrConnectModal] = useState(false)
+  const [showBunkerConnectModal, setShowBunkerConnectModal] = useState(false)
   const { toast } = useToast()
 
   const handleExtensionLogin = async () => {
@@ -157,6 +159,36 @@ export default function UnifiedLoginScreen({
                 </div>
               </div>
             </button>
+
+            {/* Option 4: Bunker Connect */}
+            <button
+              className="w-full p-6 bg-slate-700 hover:bg-slate-600 border border-slate-600 hover:border-slate-500 rounded-lg transition-all text-left"
+              onClick={() => setShowBunkerConnectModal(true)}
+            >
+              <div className="flex items-center space-x-4">
+                <div className="p-3 bg-red-600 rounded-lg flex-shrink-0">
+                  <ShieldCheck className="h-6 w-6 text-white" />
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center space-x-2 mb-1">
+                    <h3 className="text-lg font-semibold text-white">Bunker Connect</h3>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <HelpCircle className="h-4 w-4 text-slate-400 hover:text-slate-300" />
+                      </TooltipTrigger>
+                      <TooltipContent className="bg-slate-900 border-slate-700 text-white max-w-xs">
+                        <p>Connect using Bunker services. Secure and reliable for advanced users.</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
+                  <div className="mt-2">
+                    <span className="inline-block px-2 py-1 bg-red-600/20 text-red-400 text-xs rounded">
+                      Secure & Reliable
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </button>
           </CardContent>
         </Card>
 
@@ -167,6 +199,10 @@ export default function UnifiedLoginScreen({
 
         {showNostrConnectModal && (
           <NostrConnectManager onConnectSuccess={onBunkerConnect} onClose={() => setShowNostrConnectModal(false)} />
+        )}
+
+        {showBunkerConnectModal && (
+          <BunkerConnectManager onConnectSuccess={onBunkerConnect} onClose={() => setShowBunkerConnectModal(false)} />
         )}
       </div>
     </TooltipProvider>
