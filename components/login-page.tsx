@@ -1,14 +1,9 @@
 "use client"
 
 /**
- * CORRECT NIP-46 CLIENT-INITIATED FLOW
+ * DEBUG VERSION - NIP-46 Login with Maximum Logging
  * 
- * Flow:
- * 1. Client generates nostrconnect:// URL with client pubkey
- * 2. User scans with Nsec.app
- * 3. Nsec.app sends connect REQUEST (method: "connect")
- * 4. Client sends RESPONSE with user pubkey (result: user-pubkey)
- * 5. Complete!
+ * This version will show us EXACTLY what's happening
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react'
@@ -46,14 +41,21 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
   const [connectUrl, setConnectUrl] = useState<string>('')
   const [error, setError] = useState<string>('')
   const [nsecInput, setNsecInput] = useState<string>('')
+  const [debugLog, setDebugLog] = useState<string[]>([])
 
-  // Refs
   const poolRef = useRef<any>(null)
   const subRef = useRef<any>(null)
   const localSecretRef = useRef<Uint8Array | null>(null)
   const localPubkeyRef = useRef<string | null>(null)
   const timeoutRef = useRef<NodeJS.Timeout | null>(null)
   const nostrRef = useRef<any>(null)
+
+  const addLog = (message: string) => {
+    const timestamp = new Date().toISOString().split('T')[1].split('.')[0]
+    const logMessage = `[${timestamp}] ${message}`
+    console.log(logMessage)
+    setDebugLog(prev => [...prev, logMessage])
+  }
 
   const containerStyle = {
     position: 'fixed' as const,
@@ -76,12 +78,14 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
     if (subRef.current) {
       try {
         subRef.current.close()
+        addLog('✅ Subscription closed')
       } catch (e) {}
       subRef.current = null
     }
     if (poolRef.current) {
       try {
         poolRef.current.close(RELAYS)
+        addLog('✅ Pool closed')
       } catch (e) {}
       poolRef.current = null
     }
@@ -92,15 +96,20 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
   }
 
   const initNostrTools = useCallback(async () => {
-    if (nostrRef.current) return nostrRef.current
+    if (nostrRef.current) {
+      addLog('♻️ nostr-tools already loaded')
+      return nostrRef.current
+    }
     
     try {
+      addLog('📦 Loading nostr-tools...')
       const nostr = await import('nostr-tools')
       nostrRef.current = nostr
-      console.log('✅ nostr-tools loaded')
+      addLog('✅ nostr-tools loaded successfully')
+      addLog(`Version check - has nip44: ${!!nostr.nip44}`)
       return nostr
     } catch (err) {
-      console.error('❌ Failed to load nostr-tools:', err)
+      addLog('❌ Failed to load nostr-tools: ' + err)
       throw new Error('Failed to initialize')
     }
   }, [])
@@ -112,18 +121,18 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
 
     try {
       if (!window.nostr) {
-        throw new Error('No Nostr extension found. Install Alby or nos2x.')
+        throw new Error('No Nostr extension found')
       }
 
       const pubkey = await window.nostr.getPublicKey()
-      console.log('✅ Extension login:', pubkey)
+      addLog('✅ Extension login: ' + pubkey)
 
       onLoginSuccess({
         pubkey,
         authMethod: 'extension',
       })
     } catch (err) {
-      console.error('Extension error:', err)
+      addLog('❌ Extension error: ' + err)
       setConnectionState('error')
       setError(err instanceof Error ? err.message : 'Extension login failed')
     }
@@ -145,11 +154,11 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
       } else if (nsecInput.length === 64) {
         privateKey = nostr.hexToBytes(nsecInput)
       } else {
-        throw new Error('Invalid format. Use nsec1... or 64-char hex')
+        throw new Error('Invalid format')
       }
 
       const pubkey = nostr.getPublicKey(privateKey)
-      console.log('✅ Nsec login:', pubkey)
+      addLog('✅ Nsec login: ' + pubkey)
 
       onLoginSuccess({
         pubkey,
@@ -157,7 +166,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
         authMethod: 'nsec',
       })
     } catch (err) {
-      console.error('Nsec error:', err)
+      addLog('❌ Nsec error: ' + err)
       setConnectionState('error')
       setError(err instanceof Error ? err.message : 'Invalid key')
     }
@@ -167,20 +176,23 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
     setLoginMethod('remote')
     setConnectionState('generating')
     setError('')
+    setDebugLog([])
 
     try {
+      addLog('🚀 Starting remote signer login')
       const nostr = await initNostrTools()
 
-      // Generate ephemeral keypair
+      // Generate keypair
+      addLog('🔑 Generating ephemeral keypair...')
       const localSecret = nostr.generateSecretKey()
       const localPubkey = nostr.getPublicKey(localSecret)
 
       localSecretRef.current = localSecret
       localPubkeyRef.current = localPubkey
 
-      console.log('🔑 Client pubkey:', localPubkey)
+      addLog('✅ Client pubkey: ' + localPubkey)
 
-      // Create nostrconnect URL
+      // Create URL
       const metadata = {
         name: 'Nostr Journal',
         url: typeof window !== 'undefined' ? window.location.origin : '',
@@ -191,18 +203,20 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
       const relayParams = RELAYS.map(r => `relay=${encodeURIComponent(r)}`).join('&')
       const url = `nostrconnect://${localPubkey}?${relayParams}&metadata=${encodedMetadata}`
 
-      console.log('📱 Connect URL:', url)
+      addLog('📱 Generated URL: ' + url.substring(0, 50) + '...')
       setConnectUrl(url)
       setConnectionState('waiting')
 
       // Initialize pool
+      addLog('🔌 Initializing relay pool...')
       const pool = new nostr.SimplePool()
       poolRef.current = pool
 
       const now = Math.floor(Date.now() / 1000)
+      addLog(`⏰ Subscribing from timestamp: ${now}`)
 
-      console.log('🔌 Subscribing to relays for kind 24133 events...')
-
+      // Subscribe
+      addLog('📡 Subscribing to relays: ' + RELAYS.join(', '))
       const sub = pool.subscribeMany(
         RELAYS,
         [
@@ -214,98 +228,125 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
         ],
         {
           onevent: (event: NostrEvent) => {
-            console.log('📨 ========================================')
-            console.log('📨 RECEIVED EVENT FROM SIGNER')
-            console.log('Signer pubkey:', event.pubkey)
-            console.log('Kind:', event.kind)
-            console.log('Tags:', event.tags)
-            console.log('========================================')
+            addLog('📨 ========== EVENT RECEIVED ==========')
+            addLog('Event ID: ' + (event.id || 'no id'))
+            addLog('From pubkey: ' + event.pubkey)
+            addLog('Kind: ' + event.kind)
+            addLog('Created: ' + new Date(event.created_at * 1000).toISOString())
+            addLog('Tags: ' + JSON.stringify(event.tags))
+            addLog('Content length: ' + event.content.length)
+            addLog('Content preview: ' + event.content.substring(0, 100))
+            addLog('======================================')
 
-            handleSignerRequest(event, nostr)
+            handleSignerEvent(event, nostr)
           },
           oneose: () => {
-            console.log('✅ Listening on relays')
+            addLog('✅ EOSE received - subscription active')
           }
         }
       )
 
       subRef.current = sub
+      addLog('✅ Subscription created')
 
+      // Timeout
       timeoutRef.current = setTimeout(() => {
         if (connectionState !== 'success') {
-          console.log('⏱️ Connection timeout')
+          addLog('⏱️ TIMEOUT - No connection after 120s')
           setConnectionState('error')
-          setError('Connection timeout. Please try again.')
+          setError('Timeout - no response from signer')
           cleanup()
         }
       }, 120000)
 
+      addLog('✅ Setup complete - waiting for Nsec.app to connect')
+
     } catch (err) {
-      console.error('❌ Init error:', err)
+      addLog('❌ Init error: ' + err)
+      addLog('Stack: ' + (err instanceof Error ? err.stack : 'no stack'))
       setConnectionState('error')
       setError(err instanceof Error ? err.message : 'Failed to initialize')
     }
   }
 
-  /**
-   * CRITICAL: Handle the connect REQUEST from Nsec.app
-   */
-  const handleSignerRequest = async (event: NostrEvent, nostr: any) => {
+  const handleSignerEvent = async (event: NostrEvent, nostr: any) => {
     try {
+      addLog('🔍 Processing event...')
+
       if (!localSecretRef.current || !localPubkeyRef.current) {
-        console.error('❌ Keys not initialized')
+        addLog('❌ Keys not initialized!')
         return
       }
 
-      // Verify event is for us
+      // Check tags
       const pTags = event.tags.filter(tag => tag[0] === 'p')
+      addLog('P-tags found: ' + JSON.stringify(pTags))
+      
       const isForUs = pTags.some(tag => tag[1] === localPubkeyRef.current)
+      addLog('Is for us? ' + isForUs)
       
       if (!isForUs) {
-        console.log('⚠️ Event not for us')
+        addLog('⚠️ Event not for us - ignoring')
         return
       }
 
-      console.log('🔓 Decrypting request from signer...')
+      addLog('🔓 Attempting decryption...')
+      addLog('Using local secret (length): ' + localSecretRef.current.length)
+      addLog('Decrypting with signer pubkey: ' + event.pubkey)
 
-      // Decrypt the request
-      const decrypted = await nostr.nip44.decrypt(
-        localSecretRef.current,
-        event.pubkey,
-        event.content
-      )
+      let decrypted: string
+      try {
+        decrypted = await nostr.nip44.decrypt(
+          localSecretRef.current,
+          event.pubkey,
+          event.content
+        )
+        addLog('✅ Decryption successful!')
+        addLog('Decrypted content: ' + decrypted)
+      } catch (decryptErr) {
+        addLog('❌ Decryption failed: ' + decryptErr)
+        addLog('Error stack: ' + (decryptErr instanceof Error ? decryptErr.stack : 'no stack'))
+        return
+      }
 
-      console.log('📋 Decrypted:', decrypted)
+      let payload: any
+      try {
+        payload = JSON.parse(decrypted)
+        addLog('✅ JSON parse successful')
+        addLog('Payload: ' + JSON.stringify(payload, null, 2))
+      } catch (parseErr) {
+        addLog('❌ JSON parse failed: ' + parseErr)
+        return
+      }
 
-      const request = JSON.parse(decrypted)
-      console.log('📦 Request:', request)
+      // Check payload structure
+      addLog('Checking payload structure...')
+      addLog('Has method? ' + ('method' in payload))
+      addLog('Has id? ' + ('id' in payload))
+      addLog('Has result? ' + ('result' in payload))
+      addLog('Has error? ' + ('error' in payload))
 
-      /**
-       * CRITICAL: Check if this is a "connect" REQUEST from the signer
-       */
-      if (request.method === 'connect') {
-        console.log('🎯 This is a CONNECT REQUEST from Nsec.app!')
-        console.log('🔄 Changing to CONNECTING state')
+      if (payload.method === 'connect') {
+        addLog('🎯 This is a CONNECT REQUEST!')
+        addLog('Request ID: ' + payload.id)
+        addLog('Request params: ' + JSON.stringify(payload.params))
+        
+        addLog('🔄 Setting state to CONNECTING')
         setConnectionState('connecting')
 
-        // The signer is asking US for the user's pubkey
-        // We respond with the signer's own pubkey (they're the user!)
         const userPubkey = event.pubkey
+        addLog('👤 User pubkey: ' + userPubkey)
 
-        console.log('✅ User pubkey is the signer pubkey:', userPubkey)
+        // Send response
+        addLog('📤 Sending connect response...')
+        await sendConnectResponse(nostr, event.pubkey, payload.id, userPubkey)
 
-        // Send response with the user's pubkey
-        await sendConnectResponse(nostr, event.pubkey, request.id, userPubkey)
-
-        // Success!
-        console.log('✅ ========================================')
-        console.log('✅ CONNECTION COMPLETE!')
-        console.log('✅ User pubkey:', userPubkey)
-        console.log('✅ ========================================')
-
+        addLog('✅ ========== SUCCESS ==========')
+        addLog('✅ Connection complete!')
         setConnectionState('success')
 
         setTimeout(() => {
+          addLog('🚀 Calling onLoginSuccess callback')
           onLoginSuccess({
             pubkey: userPubkey,
             remotePubkey: event.pubkey,
@@ -314,22 +355,22 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
           cleanup()
         }, 1000)
 
+      } else if (payload.result) {
+        addLog('📨 Received result: ' + payload.result)
+      } else if (payload.error) {
+        addLog('❌ Received error: ' + payload.error)
+        setConnectionState('error')
+        setError(payload.error)
       } else {
-        console.log('⚠️ Unexpected method:', request.method)
+        addLog('⚠️ Unexpected payload structure')
       }
 
     } catch (err) {
-      console.error('❌ Failed to handle signer request:', err)
-      console.error('Stack:', err instanceof Error ? err.stack : '')
-      setConnectionState('error')
-      setError('Failed to process signer request')
-      cleanup()
+      addLog('❌ Event handling error: ' + err)
+      addLog('Stack: ' + (err instanceof Error ? err.stack : 'no stack'))
     }
   }
 
-  /**
-   * CRITICAL: Send RESPONSE to Nsec.app's connect request
-   */
   const sendConnectResponse = async (
     nostr: any,
     signerPubkey: string,
@@ -337,34 +378,31 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
     userPubkey: string
   ) => {
     if (!localSecretRef.current || !localPubkeyRef.current) {
-      console.error('❌ Keys not initialized')
+      addLog('❌ Keys not initialized for response!')
       return
     }
 
     try {
-      console.log('📤 ========================================')
-      console.log('📤 SENDING CONNECT RESPONSE')
-      console.log('To signer:', signerPubkey)
-      console.log('Request ID:', requestId)
-      console.log('User pubkey:', userPubkey)
-      console.log('========================================')
+      addLog('📤 ========== SENDING RESPONSE ==========')
+      addLog('To: ' + signerPubkey)
+      addLog('Request ID: ' + requestId)
+      addLog('User pubkey: ' + userPubkey)
 
-      // Response payload - MUST match request ID
       const response = {
         id: requestId,
         result: userPubkey,
       }
 
-      console.log('📋 Response:', response)
+      addLog('Response payload: ' + JSON.stringify(response))
 
       // Encrypt
+      addLog('🔐 Encrypting response...')
       const encrypted = await nostr.nip44.encrypt(
         localSecretRef.current,
         signerPubkey,
         JSON.stringify(response)
       )
-
-      console.log('🔐 Encrypted')
+      addLog('✅ Encrypted (length): ' + encrypted.length)
 
       // Create event
       const unsignedEvent = {
@@ -375,18 +413,41 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
         pubkey: localPubkeyRef.current,
       }
 
-      const signedEvent = await nostr.finalizeEvent(unsignedEvent, localSecretRef.current)
+      addLog('📝 Created unsigned event')
+      addLog('Event structure: ' + JSON.stringify({
+        kind: unsignedEvent.kind,
+        created_at: unsignedEvent.created_at,
+        tags: unsignedEvent.tags,
+        pubkey: unsignedEvent.pubkey,
+        contentLength: unsignedEvent.content.length
+      }))
 
-      console.log('✍️ Signed')
+      // Sign
+      addLog('✍️ Signing event...')
+      const signedEvent = await nostr.finalizeEvent(unsignedEvent, localSecretRef.current)
+      addLog('✅ Event signed')
+      addLog('Event ID: ' + signedEvent.id)
 
       // Publish
-      if (poolRef.current) {
-        await poolRef.current.publish(RELAYS, signedEvent)
-        console.log('✅ RESPONSE PUBLISHED')
+      if (!poolRef.current) {
+        addLog('❌ Pool not available!')
+        return
       }
 
+      addLog('📡 Publishing to relays...')
+      try {
+        await poolRef.current.publish(RELAYS, signedEvent)
+        addLog('✅ RESPONSE PUBLISHED TO RELAYS')
+      } catch (pubErr) {
+        addLog('⚠️ Publish error: ' + pubErr)
+        // Don't throw - publishing can be flaky
+      }
+
+      addLog('======================================')
+
     } catch (err) {
-      console.error('❌ Failed to send response:', err)
+      addLog('❌ Response sending failed: ' + err)
+      addLog('Stack: ' + (err instanceof Error ? err.stack : 'no stack'))
       throw err
     }
   }
@@ -398,146 +459,106 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
     setError('')
     setConnectUrl('')
     setNsecInput('')
+    setDebugLog([])
   }
 
   return (
     <div style={containerStyle} className="bg-slate-900">
       <div className="min-h-full flex items-center justify-center p-4">
-        <div className="w-full max-w-md">
+        <div className="w-full max-w-4xl">
           
           <div className="text-center mb-8">
-            <h1 className="text-4xl font-bold text-white mb-2">Nostr Journal</h1>
-            <p className="text-slate-400">Private encrypted journaling</p>
+            <h1 className="text-4xl font-bold text-white mb-2">Nostr Journal - DEBUG</h1>
+            <p className="text-slate-400">Watch the logs below</p>
           </div>
 
-          <div className="bg-slate-800 rounded-lg shadow-xl p-6 border border-slate-700">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             
-            {loginMethod === 'idle' && (
-              <div className="space-y-3">
-                <button
-                  onClick={handleExtensionLogin}
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
-                >
-                  <KeyRound className="h-5 w-5" />
-                  Extension Login
-                </button>
+            {/* Login Card */}
+            <div className="bg-slate-800 rounded-lg shadow-xl p-6 border border-slate-700">
+              
+              {loginMethod === 'idle' && (
+                <div className="space-y-3">
+                  <button
+                    onClick={handleExtensionLogin}
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
+                  >
+                    <KeyRound className="h-5 w-5" />
+                    Extension Login
+                  </button>
 
-                <button
-                  onClick={startRemoteSignerLogin}
-                  className="w-full bg-purple-600 hover:bg-purple-700 text-white font-medium py-3 px-4 rounded-lg transition-colors"
-                >
-                  Remote Signer (Nsec.app)
-                </button>
+                  <button
+                    onClick={startRemoteSignerLogin}
+                    className="w-full bg-purple-600 hover:bg-purple-700 text-white font-medium py-3 px-4 rounded-lg transition-colors"
+                  >
+                    Remote Signer (DEBUG)
+                  </button>
 
-                <button
-                  onClick={() => { setLoginMethod('nsec'); setConnectionState('idle'); }}
-                  className="w-full bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 px-4 rounded-lg transition-colors"
-                >
-                  Enter Private Key
-                </button>
+                  <button
+                    onClick={() => { setLoginMethod('nsec'); setConnectionState('idle'); }}
+                    className="w-full bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 px-4 rounded-lg transition-colors"
+                  >
+                    Enter Private Key
+                  </button>
+                </div>
+              )}
 
-                <p className="text-xs text-slate-400 text-center mt-4">
-                  Your keys never leave your device
-                </p>
-              </div>
-            )}
+              {loginMethod === 'extension' && (
+                <div className="text-center py-8">
+                  {connectionState === 'connecting' && (
+                    <>
+                      <Loader2 className="h-12 w-12 animate-spin text-blue-500 mx-auto mb-4" />
+                      <p className="text-slate-300">Connecting to extension...</p>
+                    </>
+                  )}
+                  {connectionState === 'error' && (
+                    <>
+                      <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+                      <p className="text-red-400 mb-4">{error}</p>
+                      <button onClick={handleBack} className="text-slate-400 hover:text-white">
+                        ← Back
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
 
-            {loginMethod === 'extension' && (
-              <div className="text-center py-8">
-                {connectionState === 'connecting' && (
-                  <>
-                    <Loader2 className="h-12 w-12 animate-spin text-blue-500 mx-auto mb-4" />
-                    <p className="text-slate-300">Connecting to extension...</p>
-                  </>
-                )}
-                {connectionState === 'error' && (
-                  <>
-                    <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-                    <p className="text-red-400 mb-4">{error}</p>
-                    <button onClick={handleBack} className="text-slate-400 hover:text-white">
-                      ← Back
-                    </button>
-                  </>
-                )}
-              </div>
-            )}
-
-            {loginMethod === 'nsec' && (
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">
-                    Private Key (nsec or hex)
-                  </label>
+              {loginMethod === 'nsec' && (
+                <div className="space-y-4">
                   <input
                     type="password"
                     value={nsecInput}
                     onChange={(e) => setNsecInput(e.target.value)}
                     placeholder="nsec1... or hex"
-                    className="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-3 text-white"
                   />
-                </div>
-
-                {connectionState === 'error' && (
-                  <div className="bg-red-900/20 border border-red-500/50 rounded-lg p-3">
-                    <p className="text-sm text-red-400">{error}</p>
+                  <div className="flex gap-3">
+                    <button onClick={handleBack} className="flex-1 bg-slate-700 text-white py-3 rounded-lg">
+                      Back
+                    </button>
+                    <button onClick={handleNsecLogin} className="flex-1 bg-blue-600 text-white py-3 rounded-lg">
+                      Login
+                    </button>
                   </div>
-                )}
-
-                <div className="flex gap-3">
-                  <button
-                    onClick={handleBack}
-                    className="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 px-4 rounded-lg transition-colors"
-                  >
-                    Back
-                  </button>
-                  <button
-                    onClick={handleNsecLogin}
-                    disabled={!nsecInput || connectionState === 'connecting'}
-                    className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 text-white font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
-                  >
-                    {connectionState === 'connecting' ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Connecting...
-                      </>
-                    ) : (
-                      'Login'
-                    )}
-                  </button>
                 </div>
-              </div>
-            )}
+              )}
 
-            {loginMethod === 'remote' && (
-              <div className="space-y-6">
-                
-                {connectionState === 'generating' && (
-                  <div className="text-center py-8">
-                    <Loader2 className="h-12 w-12 animate-spin text-purple-500 mx-auto mb-4" />
-                    <p className="text-slate-300">Generating connection...</p>
-                  </div>
-                )}
-
-                {connectionState === 'waiting' && connectUrl && (
-                  <>
-                    <div className="bg-white rounded-lg p-4">
-                      <QRCodeSVG
-                        value={connectUrl}
-                        size={256}
-                        level="M"
-                        className="mx-auto"
-                      />
+              {loginMethod === 'remote' && (
+                <div className="space-y-6">
+                  
+                  {connectionState === 'generating' && (
+                    <div className="text-center py-8">
+                      <Loader2 className="h-12 w-12 animate-spin text-purple-500 mx-auto mb-4" />
+                      <p className="text-slate-300">Generating...</p>
                     </div>
+                  )}
 
-                    <div className="space-y-3">
-                      <p className="text-center text-slate-300 font-medium">
-                        Scan with Nsec.app
-                      </p>
-
-                      <p className="text-center text-sm text-slate-400">
-                        Waiting for approval...
-                      </p>
-
+                  {connectionState === 'waiting' && connectUrl && (
+                    <>
+                      <div className="bg-white rounded-lg p-4">
+                        <QRCodeSVG value={connectUrl} size={200} level="M" className="mx-auto" />
+                      </div>
+                      <p className="text-center text-slate-300">Scan with Nsec.app</p>
                       <div className="flex justify-center">
                         <div className="animate-pulse flex space-x-2">
                           <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
@@ -545,49 +566,57 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
                           <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
                         </div>
                       </div>
+                    </>
+                  )}
+
+                  {connectionState === 'connecting' && (
+                    <div className="text-center py-8">
+                      <Loader2 className="h-12 w-12 animate-spin text-purple-500 mx-auto mb-4" />
+                      <p className="text-slate-300">Completing connection...</p>
                     </div>
-                  </>
-                )}
+                  )}
 
-                {connectionState === 'connecting' && (
-                  <div className="text-center py-8">
-                    <Loader2 className="h-12 w-12 animate-spin text-purple-500 mx-auto mb-4" />
-                    <p className="text-slate-300 text-lg font-medium mb-2">Completing connection...</p>
-                    <p className="text-slate-400 text-sm">Establishing secure link</p>
-                  </div>
-                )}
-
-                {connectionState === 'success' && (
-                  <div className="text-center py-8">
-                    <CheckCircle2 className="h-12 w-12 text-green-500 mx-auto mb-4" />
-                    <p className="text-slate-300">Connected successfully!</p>
-                  </div>
-                )}
-
-                {connectionState === 'error' && (
-                  <div className="space-y-4">
-                    <div className="bg-red-900/20 border border-red-500/50 rounded-lg p-4">
-                      <p className="text-sm text-red-400">{error}</p>
+                  {connectionState === 'success' && (
+                    <div className="text-center py-8">
+                      <CheckCircle2 className="h-12 w-12 text-green-500 mx-auto mb-4" />
+                      <p className="text-slate-300">Success!</p>
                     </div>
-                    <button
-                      onClick={handleBack}
-                      className="w-full bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 px-4 rounded-lg transition-colors"
-                    >
-                      Try Again
+                  )}
+
+                  {connectionState === 'error' && (
+                    <div className="space-y-4">
+                      <div className="bg-red-900/20 border border-red-500/50 rounded-lg p-4">
+                        <p className="text-sm text-red-400">{error}</p>
+                      </div>
+                      <button onClick={handleBack} className="w-full bg-slate-700 text-white py-3 rounded-lg">
+                        Try Again
+                      </button>
+                    </div>
+                  )}
+
+                  {(connectionState === 'waiting' || connectionState === 'connecting') && (
+                    <button onClick={handleBack} className="w-full text-slate-400 hover:text-white text-sm">
+                      ← Cancel
                     </button>
-                  </div>
-                )}
+                  )}
+                </div>
+              )}
 
-                {(connectionState === 'waiting' || connectionState === 'connecting') && (
-                  <button
-                    onClick={handleBack}
-                    className="w-full text-slate-400 hover:text-white text-sm"
-                  >
-                    ← Cancel
-                  </button>
+            </div>
+
+            {/* Debug Log */}
+            <div className="bg-slate-800 rounded-lg shadow-xl p-6 border border-slate-700">
+              <h2 className="text-white font-bold mb-4">Debug Log</h2>
+              <div className="bg-slate-900 rounded-lg p-4 h-[500px] overflow-y-auto font-mono text-xs">
+                {debugLog.length === 0 ? (
+                  <p className="text-slate-500">No logs yet...</p>
+                ) : (
+                  debugLog.map((log, i) => (
+                    <div key={i} className="text-slate-300 mb-1">{log}</div>
+                  ))
                 )}
               </div>
-            )}
+            </div>
 
           </div>
         </div>
