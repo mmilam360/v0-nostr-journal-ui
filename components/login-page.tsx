@@ -1,296 +1,589 @@
 "use client"
 
-import { useState, useCallback } from "react"
-import { NostrFetcher } from "nostr-fetch"
-import { generateSecretKey, getPublicKey, nip04 } from "nostr-tools"
+/**
+ * CORRECT NIP-46 CLIENT-INITIATED FLOW
+ *
+ * Flow:
+ * 1. Client generates nostrconnect:// URL with client pubkey
+ * 2. User scans with Nsec.app
+ * 3. Nsec.app sends connect REQUEST (method: "connect")
+ * 4. Client sends RESPONSE with user pubkey (result: user-pubkey)
+ * 5. Complete!
+ *
+ * The key insight: Nsec.app sends a REQUEST, we send a RESPONSE
+ */
+
+import { useState, useEffect, useRef, useCallback } from "react"
 import { QRCodeSVG } from "qrcode.react"
-import { Loader2, CheckCircle, AlertTriangle } from "lucide-react"
-import { useToast } from "@/hooks/use-toast"
-import type { AuthData } from "@/components/main-app"
+import { Loader2, AlertCircle, CheckCircle2, KeyRound } from "lucide-react"
+import type { AuthData } from "./main-app"
 
-const NOAUTH_RELAY = "wss://relay.nostr.band"
+interface NostrEvent {
+  id?: string
+  pubkey: string
+  created_at: number
+  kind: number
+  tags: string[][]
+  content: string
+  sig?: string
+}
 
-type LoginStatus = "idle" | "generating" | "awaiting_approval" | "success" | "error"
+type LoginMethod = "idle" | "extension" | "remote" | "nsec"
+type ConnectionState = "idle" | "generating" | "waiting" | "connecting" | "success" | "error"
+
+const RELAYS = ["wss://relay.nsec.app", "wss://relay.damus.io", "wss://nos.lol", "wss://relay.nostr.band"]
 
 interface LoginPageProps {
   onLoginSuccess: (authData: AuthData) => void
 }
 
 export function LoginPage({ onLoginSuccess }: LoginPageProps) {
-  const [loginStatus, setLoginStatus] = useState<LoginStatus>("idle")
-  const [errorMessage, setErrorMessage] = useState("")
-  const [bunkerUri, setBunkerUri] = useState("")
-  const [userPubkey, setUserPubkey] = useState("")
-  const { toast } = useToast()
+  const [loginMethod, setLoginMethod] = useState<LoginMethod>("idle")
+  const [connectionState, setConnectionState] = useState<ConnectionState>("idle")
+  const [connectUrl, setConnectUrl] = useState<string>("")
+  const [error, setError] = useState<string>("")
+  const [nsecInput, setNsecInput] = useState<string>("")
 
-  const startLoginProcess = useCallback(async () => {
-    setLoginStatus("generating")
-    let fetcher: NostrFetcher | null = null
-    let successful = false
+  // Refs for remote signer
+  const poolRef = useRef<any>(null)
+  const subRef = useRef<any>(null)
+  const localSecretRef = useRef<Uint8Array | null>(null)
+  const localPubkeyRef = useRef<string | null>(null)
+  const remotePubkeyRef = useRef<string | null>(null)
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const nostrRef = useRef<any>(null)
+
+  const containerStyle = {
+    position: "fixed" as const,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 50,
+    overflow: "auto",
+    WebkitOverflowScrolling: "touch" as const,
+  }
+
+  useEffect(() => {
+    return () => {
+      cleanup()
+    }
+  }, [])
+
+  const cleanup = () => {
+    if (subRef.current) {
+      try {
+        subRef.current.close()
+      } catch (e) {
+        console.log("Sub already closed")
+      }
+      subRef.current = null
+    }
+    if (poolRef.current) {
+      try {
+        poolRef.current.close(RELAYS)
+      } catch (e) {
+        console.log("Pool already closed")
+      }
+      poolRef.current = null
+    }
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current)
+      timeoutRef.current = null
+    }
+  }
+
+  const initNostrTools = useCallback(async () => {
+    if (nostrRef.current) return nostrRef.current
 
     try {
-      // Step 1: Generate the bunker:// URI
-      const appSecretKey = generateSecretKey()
-      const appPublicKey = getPublicKey(appSecretKey)
-      const uri = `bunker://${appPublicKey}?relay=${NOAUTH_RELAY}`
+      const nostr = await import("nostr-tools")
+      nostrRef.current = nostr
+      console.log("✅ nostr-tools loaded")
+      return nostr
+    } catch (err) {
+      console.error("❌ Failed to load nostr-tools:", err)
+      throw new Error("Failed to initialize")
+    }
+  }, [])
 
-      console.log("[v0] 🚀 Starting bunker connection...")
-      console.log("[v0] 📱 Bunker URI:", uri)
+  const handleExtensionLogin = async () => {
+    setLoginMethod("extension")
+    setConnectionState("connecting")
+    setError("")
 
-      setBunkerUri(uri)
-      setLoginStatus("awaiting_approval")
+    try {
+      if (!window.nostr) {
+        throw new Error("No Nostr extension found. Install Alby or nos2x.")
+      }
 
-      // Step 2: Initialize nostr-fetch
-      console.log("[v0] 🔌 Initializing nostr-fetch...")
-      fetcher = NostrFetcher.init()
+      const pubkey = await window.nostr.getPublicKey()
+      console.log("✅ Extension login:", pubkey)
 
-      // Step 3: Create a live subscription using allEventsIterator
-      console.log("[v0] 📡 Subscribing to relay:", NOAUTH_RELAY)
-      const sub = fetcher.allEventsIterator(
-        [NOAUTH_RELAY],
-        { kinds: [24133] },
-        { "#p": [appPublicKey] },
-        { realTime: true, timeout: 120000 },
+      onLoginSuccess({
+        pubkey,
+        authMethod: "extension",
+      })
+    } catch (err) {
+      console.error("Extension error:", err)
+      setConnectionState("error")
+      setError(err instanceof Error ? err.message : "Extension login failed")
+    }
+  }
+
+  const handleNsecLogin = async () => {
+    setConnectionState("connecting")
+    setError("")
+
+    try {
+      const nostr = await initNostrTools()
+
+      let privateKey: Uint8Array
+
+      if (nsecInput.startsWith("nsec1")) {
+        const decoded = nostr.nip19.decode(nsecInput)
+        if (decoded.type !== "nsec") throw new Error("Invalid nsec")
+        privateKey = decoded.data
+      } else if (nsecInput.length === 64) {
+        privateKey = nostr.hexToBytes(nsecInput)
+      } else {
+        throw new Error("Invalid format. Use nsec1... or 64-char hex")
+      }
+
+      const pubkey = nostr.getPublicKey(privateKey)
+      console.log("✅ Nsec login:", pubkey)
+
+      onLoginSuccess({
+        pubkey,
+        nsec: nsecInput,
+        authMethod: "nsec",
+      })
+    } catch (err) {
+      console.error("Nsec error:", err)
+      setConnectionState("error")
+      setError(err instanceof Error ? err.message : "Invalid key")
+    }
+  }
+
+  /**
+   * CORACLE PATTERN: Start remote signer flow
+   */
+  const startRemoteSignerLogin = async () => {
+    setLoginMethod("remote")
+    setConnectionState("generating")
+    setError("")
+    remotePubkeyRef.current = null
+
+    try {
+      const nostr = await initNostrTools()
+
+      // Generate ephemeral keypair
+      const localSecret = nostr.generateSecretKey()
+      const localPubkey = nostr.getPublicKey(localSecret)
+
+      localSecretRef.current = localSecret
+      localPubkeyRef.current = localPubkey
+
+      console.log("🔑 Client pubkey:", localPubkey)
+
+      // Create nostrconnect URL
+      const metadata = {
+        name: "Nostr Journal",
+        url: typeof window !== "undefined" ? window.location.origin : "",
+        description: "Private encrypted journal",
+      }
+
+      const encodedMetadata = encodeURIComponent(JSON.stringify(metadata))
+      const relayParams = RELAYS.map((r) => `relay=${encodeURIComponent(r)}`).join("&")
+      const url = `nostrconnect://${localPubkey}?${relayParams}&metadata=${encodedMetadata}`
+
+      console.log("📱 Connect URL:", url)
+      setConnectUrl(url)
+      setConnectionState("waiting")
+
+      // Initialize pool
+      const pool = new nostr.SimplePool()
+      poolRef.current = pool
+
+      const now = Math.floor(Date.now() / 1000)
+
+      console.log("🔌 Subscribing to relays...")
+
+      /**
+       * CRITICAL: Subscribe to ALL events tagged to our pubkey
+       * Coracle doesn't filter by kind initially - they accept any event
+       * as a signal that the signer is ready
+       */
+      const sub = pool.subscribeMany(
+        RELAYS,
+        [
+          {
+            kinds: [24133], // NIP-46 events
+            "#p": [localPubkey],
+            since: now,
+          },
+        ],
+        {
+          onevent: (event: NostrEvent) => {
+            console.log("📨 ========================================")
+            console.log("📨 EVENT RECEIVED!")
+            console.log("From:", event.pubkey)
+            console.log("Kind:", event.kind)
+            console.log("Tags:", event.tags)
+            console.log("Content preview:", event.content.substring(0, 50))
+            console.log("========================================")
+
+            handleReceivedEvent(event, nostr)
+          },
+          oneose: () => {
+            console.log("✅ Connected to relays")
+          },
+        },
       )
 
-      console.log("[v0] 🔍 Waiting for approval event...")
+      subRef.current = sub
 
-      // Step 4: Listen for the approval event
-      for await (const event of sub) {
-        try {
-          console.log("[v0] 📨 Received event from:", event.pubkey)
-
-          const remotePubkey = event.pubkey
-          const sharedSecret = nip04.getSharedSecret(appSecretKey, remotePubkey)
-          const decryptedContent = await nip04.decrypt(sharedSecret, event.content)
-
-          console.log("[v0] ✅ Decryption successful!")
-
-          const response = JSON.parse(decryptedContent)
-          console.log("[v0] 📦 Response:", response)
-
-          if (response.result === "ack") {
-            console.log("[v0] ✅ CONNECTION SUCCESSFUL!")
-            console.log("[v0] 👤 User pubkey:", remotePubkey)
-
-            successful = true
-            setLoginStatus("success")
-            setUserPubkey(remotePubkey)
-
-            const authData: AuthData = {
-              pubkey: remotePubkey,
-              authMethod: "nwc",
-            }
-
-            toast({
-              title: "Connected successfully",
-              description: "Your signing app is now connected",
-            })
-
-            // Give the success UI a moment to show before transitioning
-            setTimeout(() => {
-              onLoginSuccess(authData)
-            }, 1000)
-
-            break
-          } else if (response.error) {
-            console.error("[v0] ❌ Remote signer returned error:", response.error)
-            throw new Error(response.error)
-          }
-        } catch (e) {
-          console.log("[v0] ⚠️ Could not decrypt event (likely not for us):", e instanceof Error ? e.message : String(e))
+      // Timeout
+      timeoutRef.current = setTimeout(() => {
+        if (connectionState !== "success") {
+          console.log("⏱️ Timeout")
+          setConnectionState("error")
+          setError("Connection timeout. Please try again.")
+          cleanup()
         }
-      }
-
-      if (!successful) {
-        throw new Error("Approval timed out after 2 minutes. Please try again.")
-      }
-    } catch (error) {
-      console.error("[v0] ❌ Connection error:", error)
-      setLoginStatus("error")
-      setErrorMessage(error instanceof Error ? error.message : "Connection failed")
-      toast({
-        title: "Connection failed",
-        description: error instanceof Error ? error.message : "An unknown error occurred",
-        variant: "destructive",
-      })
-    } finally {
-      if (fetcher) {
-        console.log("[v0] 🧹 Cleaning up connection...")
-        fetcher.shutdown()
-      }
-    }
-  }, [onLoginSuccess, toast])
-
-  const handleOpenSignerClick = () => {
-    if (bunkerUri) {
-      window.location.href = bunkerUri
+      }, 120000)
+    } catch (err) {
+      console.error("❌ Init error:", err)
+      setConnectionState("error")
+      setError(err instanceof Error ? err.message : "Failed to initialize")
     }
   }
 
-  const handleDemoMode = () => {
-    console.log("[v0] 🎭 Starting demo mode...")
+  /**
+   * CRITICAL: Handle the connect REQUEST from Nsec.app
+   */
+  const handleReceivedEvent = async (event: NostrEvent, nostr: any) => {
+    try {
+      if (!localSecretRef.current || !localPubkeyRef.current) {
+        console.error("❌ Keys not initialized")
+        return
+      }
 
-    // Generate a fake keypair for demo purposes
-    const demoSecretKey = generateSecretKey()
-    const demoPubkey = getPublicKey(demoSecretKey)
+      // Verify event is for us
+      const pTags = event.tags.filter((tag) => tag[0] === "p")
+      const isForUs = pTags.some((tag) => tag[1] === localPubkeyRef.current)
 
-    const demoAuthData: AuthData = {
-      pubkey: demoPubkey,
-      authMethod: "extension", // Use extension as the auth method for demo
+      if (!isForUs) {
+        console.log("⚠️ Event not for us")
+        return
+      }
+
+      console.log("🔓 Decrypting request from signer...")
+
+      // Decrypt the request
+      const decrypted = await nostr.nip44.decrypt(localSecretRef.current, event.pubkey, event.content)
+
+      console.log("📋 Decrypted:", decrypted)
+
+      const request = JSON.parse(decrypted)
+      console.log("📦 Request:", request)
+
+      /**
+       * CRITICAL: Check if this is a "connect" REQUEST from the signer
+       */
+      if (request.method === "connect") {
+        console.log("🎯 This is a CONNECT REQUEST from Nsec.app!")
+        console.log("🔄 Changing to CONNECTING state")
+        setConnectionState("connecting")
+
+        // The signer is asking US for the user's pubkey
+        // We respond with the signer's own pubkey (they're the user!)
+        const userPubkey = event.pubkey
+
+        console.log("✅ User pubkey is the signer pubkey:", userPubkey)
+
+        // Send response with the user's pubkey
+        await sendConnectResponse(nostr, event.pubkey, request.id, userPubkey)
+
+        // Success!
+        console.log("✅ ========================================")
+        console.log("✅ CONNECTION COMPLETE!")
+        console.log("✅ User pubkey:", userPubkey)
+        console.log("✅ ========================================")
+
+        setConnectionState("success")
+
+        setTimeout(() => {
+          onLoginSuccess({
+            pubkey: userPubkey,
+            remotePubkey: event.pubkey,
+            authMethod: "remote",
+          })
+          cleanup()
+        }, 1000)
+      } else {
+        console.log("⚠️ Unexpected method:", request.method)
+      }
+    } catch (err) {
+      console.error("❌ Failed to handle signer request:", err)
+      console.error("Stack:", err instanceof Error ? err.stack : "")
+      setConnectionState("error")
+      setError("Failed to process signer request")
+      cleanup()
     }
-
-    toast({
-      title: "Demo Mode Active",
-      description: "You're using a temporary demo account. Your notes won't be synced.",
-    })
-
-    onLoginSuccess(demoAuthData)
   }
 
-  const renderLoginContent = () => {
-    switch (loginStatus) {
-      case "idle":
-        return (
-          <div className="space-y-6 text-center">
-            <div className="space-y-2">
-              <h1 className="text-4xl font-bold text-white">Nostr Journal</h1>
-              <p className="text-slate-400 text-lg">Your private, sovereign notes</p>
-            </div>
-
-            <div className="space-y-3">
-              <button
-                onClick={startLoginProcess}
-                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-4 px-6 rounded-lg transition-colors text-lg shadow-lg hover:shadow-xl"
-              >
-                Connect with Signing App
-              </button>
-              <p className="text-xs text-slate-500">
-                Compatible with Nsec.app, Amber, and other bunker-compatible signers
-              </p>
-
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-slate-700"></div>
-                </div>
-                <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-slate-800 px-2 text-slate-500">Or</span>
-                </div>
-              </div>
-
-              <button
-                onClick={handleDemoMode}
-                className="w-full bg-slate-700 hover:bg-slate-600 text-slate-200 font-medium py-3 px-6 rounded-lg transition-colors border border-slate-600"
-              >
-                Try Demo Mode
-              </button>
-              <p className="text-xs text-slate-500">Test the app without a signing app (notes won't be synced)</p>
-            </div>
-          </div>
-        )
-
-      case "generating":
-        return (
-          <div className="flex flex-col items-center justify-center space-y-4 h-80">
-            <Loader2 className="h-16 w-16 animate-spin text-indigo-500" />
-            <p className="text-slate-300 text-lg">Generating Secure Connection...</p>
-          </div>
-        )
-
-      case "awaiting_approval":
-        return (
-          <div className="space-y-6">
-            <div className="text-center">
-              <h2 className="text-2xl font-bold text-white mb-2">Approve Login</h2>
-              <p className="text-slate-400">Scan with a bunker-compatible app to connect</p>
-            </div>
-
-            <div className="bg-blue-900/20 border border-blue-700/50 rounded-lg p-4">
-              <p className="text-sm text-blue-200 font-semibold mb-2">How to connect:</p>
-              <ol className="text-xs text-blue-300 space-y-1.5 list-decimal list-inside">
-                <li>Open Nsec.app, Amber, or another bunker-compatible app</li>
-                <li>Scan the QR code below or click "Open in Signing App"</li>
-                <li>Approve the connection request in your app</li>
-              </ol>
-            </div>
-
-            <div className="p-6 bg-white rounded-xl flex items-center justify-center">
-              <QRCodeSVG value={bunkerUri} size={280} level="M" />
-            </div>
-
-            <button
-              onClick={handleOpenSignerClick}
-              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors"
-            >
-              Open in Signing App
-            </button>
-
-            <div className="flex items-center justify-center space-x-2 text-slate-400">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              <span className="text-sm">Waiting for approval (2 min timeout)...</span>
-            </div>
-
-            <details className="mt-4">
-              <summary className="text-sm text-slate-400 cursor-pointer hover:text-slate-300">
-                Show connection URI
-              </summary>
-              <div className="mt-2 p-3 bg-slate-900 rounded-lg text-xs font-mono break-all text-slate-300">
-                {bunkerUri}
-              </div>
-            </details>
-          </div>
-        )
-
-      case "success":
-        return (
-          <div className="flex flex-col items-center justify-center space-y-4 h-80 text-center">
-            <CheckCircle className="h-20 w-20 text-green-400" />
-            <h2 className="text-2xl font-bold text-white">Connection Successful!</h2>
-            <p className="text-slate-400">Loading your journal...</p>
-            {userPubkey && (
-              <p className="text-xs text-slate-400 font-mono break-all bg-slate-900 p-3 rounded-lg max-w-sm">
-                {userPubkey}
-              </p>
-            )}
-          </div>
-        )
-
-      case "error":
-        return (
-          <div className="space-y-6 text-center">
-            <div className="flex flex-col items-center space-y-3">
-              <AlertTriangle className="h-16 w-16 text-red-400" />
-              <h2 className="text-2xl font-bold text-white">Connection Failed</h2>
-              <p className="text-slate-400 max-w-sm">{errorMessage}</p>
-            </div>
-
-            <div className="bg-slate-900 rounded-lg p-4 text-left">
-              <p className="text-sm text-slate-300 font-semibold mb-2">Troubleshooting:</p>
-              <ul className="text-xs text-slate-400 space-y-1.5 list-disc list-inside">
-                <li>Make sure you scanned the QR code with a compatible app</li>
-                <li>Check that your signing app is connected to the internet</li>
-                <li>Try using Nsec.app or Amber</li>
-                <li>Make sure you approved the connection in your app</li>
-              </ul>
-            </div>
-
-            <button
-              onClick={startLoginProcess}
-              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors"
-            >
-              Try Again
-            </button>
-          </div>
-        )
-
-      default:
-        return null
+  /**
+   * Send response to Nsec.app's connect request
+   */
+  const sendConnectResponse = async (nostr: any, signerPubkey: string, requestId: string, userPubkey: string) => {
+    if (!localSecretRef.current || !localPubkeyRef.current) {
+      console.error("❌ Keys not initialized")
+      return
     }
+
+    try {
+      console.log("📤 ========================================")
+      console.log("📤 SENDING CONNECT RESPONSE")
+      console.log("To signer:", signerPubkey)
+      console.log("Request ID:", requestId)
+      console.log("User pubkey:", userPubkey)
+      console.log("========================================")
+
+      // Response payload
+      const response = {
+        id: requestId, // MUST match the request ID
+        result: userPubkey, // The user's pubkey
+      }
+
+      console.log("📋 Response:", response)
+
+      // Encrypt
+      const encrypted = await nostr.nip44.encrypt(localSecretRef.current, signerPubkey, JSON.stringify(response))
+
+      console.log("🔐 Encrypted")
+
+      // Create event
+      const unsignedEvent = {
+        kind: 24133,
+        created_at: Math.floor(Date.now() / 1000),
+        tags: [["p", signerPubkey]],
+        content: encrypted,
+        pubkey: localPubkeyRef.current,
+      }
+
+      const signedEvent = await nostr.finalizeEvent(unsignedEvent, localSecretRef.current)
+
+      console.log("✍️ Signed")
+
+      // Publish
+      if (poolRef.current) {
+        await poolRef.current.publish(RELAYS, signedEvent)
+        console.log("✅ RESPONSE PUBLISHED")
+      }
+    } catch (err) {
+      console.error("❌ Failed to send response:", err)
+      throw err
+    }
+  }
+
+  const handleBack = () => {
+    cleanup()
+    setLoginMethod("idle")
+    setConnectionState("idle")
+    setError("")
+    setConnectUrl("")
+    setNsecInput("")
   }
 
   return (
-    <div className="w-full max-w-md rounded-2xl bg-slate-800 p-8 shadow-2xl border border-slate-700">
-      {renderLoginContent()}
+    <div style={containerStyle} className="bg-slate-900">
+      <div className="min-h-full flex items-center justify-center p-4">
+        <div className="w-full max-w-md">
+          <div className="text-center mb-8">
+            <h1 className="text-4xl font-bold text-white mb-2">Nostr Journal</h1>
+            <p className="text-slate-400">Private encrypted journaling</p>
+          </div>
+
+          <div className="bg-slate-800 rounded-lg shadow-xl p-6 border border-slate-700">
+            {/* Method Selection */}
+            {loginMethod === "idle" && (
+              <div className="space-y-3">
+                <button
+                  onClick={handleExtensionLogin}
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
+                >
+                  <KeyRound className="h-5 w-5" />
+                  Extension Login
+                </button>
+
+                <button
+                  onClick={startRemoteSignerLogin}
+                  className="w-full bg-purple-600 hover:bg-purple-700 text-white font-medium py-3 px-4 rounded-lg transition-colors"
+                >
+                  Remote Signer (Nsec.app)
+                </button>
+
+                <button
+                  onClick={() => {
+                    setLoginMethod("nsec")
+                    setConnectionState("idle")
+                  }}
+                  className="w-full bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 px-4 rounded-lg transition-colors"
+                >
+                  Enter Private Key
+                </button>
+
+                <p className="text-xs text-slate-400 text-center mt-4">Your keys never leave your device</p>
+              </div>
+            )}
+
+            {/* Extension Login */}
+            {loginMethod === "extension" && (
+              <div className="text-center py-8">
+                {connectionState === "connecting" && (
+                  <>
+                    <Loader2 className="h-12 w-12 animate-spin text-blue-500 mx-auto mb-4" />
+                    <p className="text-slate-300">Connecting to extension...</p>
+                  </>
+                )}
+                {connectionState === "error" && (
+                  <>
+                    <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+                    <p className="text-red-400 mb-4">{error}</p>
+                    <button onClick={handleBack} className="text-slate-400 hover:text-white">
+                      ← Back
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* Nsec Input */}
+            {loginMethod === "nsec" && (
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-2">Private Key (nsec or hex)</label>
+                  <input
+                    type="password"
+                    value={nsecInput}
+                    onChange={(e) => setNsecInput(e.target.value)}
+                    placeholder="nsec1... or hex"
+                    className="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                {connectionState === "error" && (
+                  <div className="bg-red-900/20 border border-red-500/50 rounded-lg p-3">
+                    <p className="text-sm text-red-400">{error}</p>
+                  </div>
+                )}
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={handleBack}
+                    className="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 px-4 rounded-lg transition-colors"
+                  >
+                    Back
+                  </button>
+                  <button
+                    onClick={handleNsecLogin}
+                    disabled={!nsecInput || connectionState === "connecting"}
+                    className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 text-white font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
+                  >
+                    {connectionState === "connecting" ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Connecting...
+                      </>
+                    ) : (
+                      "Login"
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Remote Signer Flow */}
+            {loginMethod === "remote" && (
+              <div className="space-y-6">
+                {connectionState === "generating" && (
+                  <div className="text-center py-8">
+                    <Loader2 className="h-12 w-12 animate-spin text-purple-500 mx-auto mb-4" />
+                    <p className="text-slate-300">Generating connection...</p>
+                  </div>
+                )}
+
+                {connectionState === "waiting" && connectUrl && (
+                  <>
+                    <div className="bg-white rounded-lg p-4">
+                      <QRCodeSVG value={connectUrl} size={256} level="M" className="mx-auto" />
+                    </div>
+
+                    <div className="space-y-3">
+                      <p className="text-center text-slate-300 font-medium">Scan with Nsec.app</p>
+
+                      <p className="text-center text-sm text-slate-400">Waiting for approval...</p>
+
+                      <div className="flex justify-center">
+                        <div className="animate-pulse flex space-x-2">
+                          <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
+                          <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
+                          <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {connectionState === "connecting" && (
+                  <div className="text-center py-8">
+                    <Loader2 className="h-12 w-12 animate-spin text-purple-500 mx-auto mb-4" />
+                    <p className="text-slate-300 text-lg font-medium mb-2">Completing connection...</p>
+                    <p className="text-slate-400 text-sm">Establishing secure link</p>
+                  </div>
+                )}
+
+                {connectionState === "success" && (
+                  <div className="text-center py-8">
+                    <CheckCircle2 className="h-12 w-12 text-green-500 mx-auto mb-4" />
+                    <p className="text-slate-300">Connected successfully!</p>
+                  </div>
+                )}
+
+                {connectionState === "error" && (
+                  <div className="space-y-4">
+                    <div className="bg-red-900/20 border border-red-500/50 rounded-lg p-4">
+                      <p className="text-sm text-red-400">{error}</p>
+                    </div>
+                    <button
+                      onClick={handleBack}
+                      className="w-full bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 px-4 rounded-lg transition-colors"
+                    >
+                      Try Again
+                    </button>
+                  </div>
+                )}
+
+                {(connectionState === "waiting" || connectionState === "connecting") && (
+                  <button onClick={handleBack} className="w-full text-slate-400 hover:text-white text-sm">
+                    ← Cancel
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   )
+}
+
+declare global {
+  interface Window {
+    nostr?: {
+      getPublicKey: () => Promise<string>
+      signEvent: (event: any) => Promise<any>
+    }
+  }
 }
