@@ -1,81 +1,112 @@
-// This file should start with 'use client'; if it uses browser-specific APIs like window.nostr
-'use client';
+"use client"
 
-import * as nostrTools from 'nostr-tools';
+import * as nostrTools from "nostr-tools"
 
-// This function can remain as it is in your current code.
-export const createNostrEvent = async (pubkey, content, tags = []) => {
+export const createNostrEvent = async (pubkey: string, content: string, tags: string[] = []) => {
   const event = {
     kind: 1,
     created_at: Math.floor(Date.now() / 1000),
-    tags: tags.map(tag => ["t", tag]),
+    tags: tags.map((tag) => ["t", tag]),
     content: content,
     pubkey: pubkey,
-  };
-  return event;
-};
+  }
+  return event
+}
 
-// ===================================================================================
-// THIS IS THE CRITICAL, UPGRADED FUNCTION
-// ===================================================================================
-export const publishToNostr = async (unsignedEvent, authData) => {
-  console.log("[v0] Publishing event with auth method:", authData.authMethod);
+export const publishToNostr = async (unsignedEvent: any, authData: any): Promise<string> => {
+  console.log("[v0] Publishing event with auth method:", authData.authMethod)
 
-  let signedEvent;
+  let signedEvent
 
   switch (authData.authMethod) {
-    case 'nsec':
-      // This is your existing, working logic for nsec logins.
+    case "nsec":
       if (!authData.privateKey) {
-        throw new Error("Private key is missing for nsec login method.");
+        throw new Error("Private key is missing for nsec login method.")
       }
-      const privateKeyBytes = new Uint8Array(authData.privateKey.match(/.{1,2}/g)?.map(byte => parseInt(byte, 16)) || []);
-      signedEvent = nostrTools.finalizeEvent(unsignedEvent, privateKeyBytes);
-      break;
+      const privateKeyBytes = new Uint8Array(
+        authData.privateKey.match(/.{1,2}/g)?.map((byte: string) => Number.parseInt(byte, 16)) || [],
+      )
+      signedEvent = nostrTools.finalizeEvent(unsignedEvent, privateKeyBytes)
+      console.log("[v0] Event signed locally using private key.")
+      break
 
-    case 'remote':
-      // THIS IS THE CRITICAL NEW LOGIC FOR REMOTE SIGNERS
-      if (!authData.signer) {
-        throw new Error("Remote signer is not available. Please reconnect.");
+    case "remote":
+      if (!authData.bunkerUri || !authData.clientSecretKey) {
+        throw new Error("Remote signer connection data is missing. Please log in again.")
       }
-      console.log("[v0] Requesting signature from remote signer...");
-      // The remoteSigner object should have a `signEvent` method compliant with NIP-46.
-      // This will trigger the confirmation popup in Nsec.app or Alby.
-      signedEvent = await authData.signer.signEvent(unsignedEvent);
-      console.log("[v0] Received signed event from remote signer.");
-      break;
 
-    case 'extension':
-      // THIS IS THE LOGIC FOR BROWSER EXTENSIONS
-      if (typeof window.nostr === 'undefined') {
-        throw new Error("Nostr browser extension not found.");
+      try {
+        console.log("[v0] Creating fresh remote signer connection...")
+
+        // Import required modules
+        const { SimplePool } = await import("nostr-tools/pool")
+        const { BunkerSigner } = await import("nostr-tools/nip46")
+
+        // Create a new pool for this signing session
+        const pool = new SimplePool()
+
+        // Create a fresh BunkerSigner from the stored URI
+        console.log("[v0] Connecting to remote signer...")
+        const signer = await BunkerSigner.fromURI(authData.clientSecretKey, authData.bunkerUri, {
+          pool,
+          timeout: 60000, // 60 second timeout for signing
+        })
+
+        console.log("[v0] Remote signer connected, requesting signature...")
+        // The BunkerSigner will trigger the approval popup in the user's remote signer app
+        signedEvent = await signer.signEvent(unsignedEvent)
+        console.log("[v0] Received signed event from remote signer.")
+
+        // Clean up the signer connection
+        try {
+          await signer.close()
+          pool.close(authData.relays || [])
+        } catch (cleanupError) {
+          console.log("[v0] Cleanup error (non-critical):", cleanupError)
+        }
+      } catch (signerError: any) {
+        console.error("[v0] Remote signer error:", signerError)
+        if (signerError.message?.includes("timeout")) {
+          throw new Error(
+            "Remote signer connection timeout. Make sure you approved the request in your remote signer app (Nsec.app or Alby).",
+          )
+        } else if (signerError.message?.includes("rejected")) {
+          throw new Error("Signing request was rejected by your remote signer.")
+        }
+        throw new Error(`Failed to sign with remote signer: ${signerError.message || "Unknown error"}`)
       }
-      console.log("[v0] Requesting signature from browser extension...");
-      signedEvent = await window.nostr.signEvent(unsignedEvent);
-      console.log("[v0] Received signed event from browser extension.");
-      break;
+      break
+
+    case "extension":
+      if (typeof window.nostr === "undefined") {
+        throw new Error("Nostr browser extension not found.")
+      }
+      console.log("[v0] Requesting signature from browser extension...")
+      signedEvent = await window.nostr.signEvent(unsignedEvent)
+      console.log("[v0] Received signed event from browser extension.")
+      break
 
     default:
-      throw new Error("Unsupported authentication method for publishing.");
+      throw new Error("Unsupported authentication method for publishing.")
   }
 
   if (!signedEvent) {
-    throw new Error("Event signing failed.");
+    throw new Error("Event signing failed.")
   }
 
-  // Now, publish the universally signed event.
-  const relays = ['wss://relay.damus.io', 'wss://relay.primal.net', 'wss://relay.nostr.band'];
-  const pool = new nostrTools.SimplePool();
+  const relays = ["wss://relay.damus.io", "wss://relay.primal.net", "wss://relay.nostr.band"]
+  const pool = new nostrTools.SimplePool()
 
   try {
-    await Promise.any(pool.publish(relays, signedEvent));
-    console.log("[v0] Event published to at least one relay.");
+    console.log("[v0] Publishing to relays...")
+    await Promise.any(pool.publish(relays, signedEvent))
+    console.log("[v0] Event published to at least one relay.")
   } catch (error) {
-    console.error("[v0] Failed to publish event to any relay:", error);
-    throw new Error("Failed to publish event to the Nostr network.");
+    console.error("[v0] Failed to publish event to any relay:", error)
+    throw new Error("Failed to publish event to the Nostr network.")
   } finally {
-    pool.close(relays);
+    pool.close(relays)
   }
 
-  return signedEvent.id;
-};
+  return signedEvent.id
+}

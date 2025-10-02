@@ -262,7 +262,11 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
         onLoginSuccess({
           pubkey: userPubkey,
           authMethod: "remote",
-          signer: signer, // Pass the signer instance
+          signer: signer,
+          clientSecretKey: localSecretKey,
+          bunkerPubkey: userPubkey,
+          bunkerUri: connectionUri, // Store the full URI for reconnection
+          relays: RELAYS,
         })
       }, 1000)
     } catch (err) {

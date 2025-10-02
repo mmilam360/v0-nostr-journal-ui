@@ -22,7 +22,7 @@ export interface Note {
   tags: string[]
   createdAt: Date
   lastModified: Date
-  lastSynced?: Date // Added lastSynced timestamp
+  lastSynced?: Date
 }
 
 export interface AuthData {
@@ -31,6 +31,10 @@ export interface AuthData {
   nsec?: string
   privateKey?: string
   signer?: any // BunkerSigner instance for remote signing
+  clientSecretKey?: Uint8Array // Local secret key for remote signer session
+  bunkerPubkey?: string // The bunker's public key
+  bunkerUri?: string // The full connection URI for recreating the signer
+  relays?: string[] // Relays used for remote signer connection
 }
 
 interface MainAppProps {
@@ -38,7 +42,7 @@ interface MainAppProps {
   onLogout: () => void
 }
 
-export default function MainApp({ authData, onLogout }: MainAppProps) {
+export function MainApp({ authData, onLogout }: MainAppProps) {
   const [selectedTag, setSelectedTag] = useState<string | null>("all")
   const [selectedNote, setSelectedNote] = useState<Note | null>(null)
   const [notes, setNotes] = useState<Note[]>([])
@@ -271,7 +275,8 @@ export default function MainApp({ authData, onLogout }: MainAppProps) {
       setNoteToPublish(null)
     } catch (error) {
       console.error("[v0] Error publishing to Nostr:", error)
-      alert(`Failed to publish to Nostr: ${error instanceof Error ? error.message : "Unknown error"}`)
+      const errorMessage = error instanceof Error ? error.message : "Unknown error"
+      alert(`Failed to publish to Nostr: ${errorMessage}`)
       setShowPublishConfirmation(false)
       setNoteToPublish(null)
     }
