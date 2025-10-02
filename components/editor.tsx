@@ -24,15 +24,32 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
   const [selectedText, setSelectedText] = useState("")
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const currentNoteIdRef = useRef<string | null>(null)
+  const previousNoteDataRef = useRef<{ id: string; title: string; content: string } | null>(null)
 
-  const debouncedTitle = useDebounce(title, 1500) // 1.5 second delay
-  const debouncedContent = useDebounce(content, 1500) // 1.5 second delay
+  const debouncedTitle = useDebounce(title, 1500)
+  const debouncedContent = useDebounce(content, 1500)
 
   useEffect(() => {
-    if (note) {
+    if (note && note.id !== currentNoteIdRef.current) {
+      // Save previous note if there were unsaved changes
+      if (previousNoteDataRef.current && hasUnsavedChanges) {
+        console.log("[v0] Saving previous note before switching:", previousNoteDataRef.current.id)
+        const noteToSave = {
+          ...note,
+          id: previousNoteDataRef.current.id,
+          title: previousNoteDataRef.current.title,
+          content: previousNoteDataRef.current.content,
+        } as Note
+        onUpdateNote(noteToSave)
+      }
+
+      console.log("[v0] Switching to note:", note.id)
       setTitle(note.title)
       setContent(note.content)
       setHasUnsavedChanges(false)
+      currentNoteIdRef.current = note.id
+      previousNoteDataRef.current = { id: note.id, title: note.title, content: note.content }
     }
   }, [note])
 
@@ -43,10 +60,12 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
         const updatedNote = { ...note, title: debouncedTitle, content: debouncedContent }
         onUpdateNote(updatedNote)
         setHasUnsavedChanges(false)
+        // Update previous note data ref
+        previousNoteDataRef.current = { id: note.id, title: debouncedTitle, content: debouncedContent }
         console.log("[v0] Auto-save completed")
       }
     }
-  }, [debouncedTitle, debouncedContent, note, onUpdateNote])
+  }, [debouncedTitle, debouncedContent])
 
   const handleTitleChange = (newTitle: string) => {
     setTitle(newTitle)
@@ -61,10 +80,13 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
   const handleSave = async () => {
     if (note && hasUnsavedChanges) {
       console.log("[v0] Manual save triggered...")
+
       const updatedNote = { ...note, title, content }
       onUpdateNote(updatedNote)
       setHasUnsavedChanges(false)
-      console.log("[v0] Note saved, sync will be triggered by main-app")
+      // Update previous note data ref
+      previousNoteDataRef.current = { id: note.id, title, content }
+      console.log("[v0] Note saved immediately")
     }
   }
 
@@ -148,11 +170,12 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
     <div className="flex-1 bg-slate-900 flex flex-col w-full h-full">
       {/* Header */}
       <div className="p-4 border-b border-slate-700 flex items-center gap-2 sm:gap-4">
-        <Input
+        <input
+          type="text"
           value={title}
           onChange={(e) => handleTitleChange(e.target.value)}
           placeholder="Note title..."
-          className="flex-1 bg-transparent border-none text-lg sm:text-xl font-semibold text-white placeholder-slate-500 focus:ring-0"
+          className="flex-1 bg-transparent border-none text-lg sm:text-xl font-semibold text-white placeholder-slate-500 focus:outline-none focus:ring-0 px-0"
         />
 
         <div className="flex items-center gap-2">
@@ -216,7 +239,7 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
               onClick={handleDeleteClick}
               variant="ghost"
               size="sm"
-              className="text-red-400 hover:text-red-300 hover:bg-red-900/20 text-xs px-2 no-select"
+              className="text-red-400 hover:text-white text-xs px-2 no-select"
             >
               ✕
             </Button>

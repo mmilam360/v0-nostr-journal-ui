@@ -198,9 +198,16 @@ export default function MainApp({ authData, onLogout }: MainAppProps) {
   const handleCreateNote = () => {
     console.log("[v0] Creating new note...")
     const now = new Date()
+
+    const dateTitle = now.toLocaleDateString("en-US", {
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+    })
+
     const newNote: Note = {
       id: Date.now().toString(),
-      title: "Untitled Note",
+      title: dateTitle,
       content: "",
       tags: [],
       createdAt: now,

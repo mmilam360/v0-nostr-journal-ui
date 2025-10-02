@@ -79,13 +79,14 @@ export default function DonationBubble() {
   return (
     <>
       {/* Floating donation bubble */}
-      <div className="fixed bottom-6 right-6 z-50">
+      <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 z-40">
         <Button
           onClick={() => setIsOpen(true)}
-          className="w-14 h-14 rounded-full bg-orange-500 hover:bg-orange-400 text-white shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center"
+          className="bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-600 shadow-lg hover:shadow-xl transition-all duration-200 flex items-center gap-2 px-4 py-2 rounded-full text-sm"
           title="Support development with Lightning ⚡"
         >
-          <Zap className="w-6 h-6" />
+          <Zap className="w-4 h-4 text-orange-400" />
+          <span>Support Devs</span>
         </Button>
       </div>
 
@@ -93,7 +94,11 @@ export default function DonationBubble() {
       {isOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-slate-800 border border-slate-700 rounded-lg p-6 w-full max-w-md relative">
-            <button onClick={() => setIsOpen(false)} className="absolute top-4 right-4 text-slate-400 hover:text-white">
+            <button
+              onClick={() => setIsOpen(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-white hover:bg-slate-700 rounded-full p-1 transition-colors"
+              aria-label="Close"
+            >
               <X className="w-5 h-5" />
             </button>
 
