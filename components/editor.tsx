@@ -15,17 +15,9 @@ interface EditorProps {
   onPublishNote: (note: Note) => void
   onPublishHighlight: (note: Note, highlightedText: string) => void
   onDeleteNote: (note: Note) => void
-  syncNoteToNostr: (note: Note) => Promise<void>
 }
 
-export default function Editor({
-  note,
-  onUpdateNote,
-  onPublishNote,
-  onPublishHighlight,
-  onDeleteNote,
-  syncNoteToNostr,
-}: EditorProps) {
+export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHighlight, onDeleteNote }: EditorProps) {
   const [title, setTitle] = useState("")
   const [content, setContent] = useState("")
   const [newTag, setNewTag] = useState("")
@@ -68,17 +60,11 @@ export default function Editor({
 
   const handleSave = async () => {
     if (note && hasUnsavedChanges) {
-      console.log("[v0] Manual save triggered - syncing immediately...")
+      console.log("[v0] Manual save triggered...")
       const updatedNote = { ...note, title, content }
       onUpdateNote(updatedNote)
       setHasUnsavedChanges(false)
-
-      try {
-        await syncNoteToNostr(updatedNote)
-        console.log("[v0] Note saved and sync requested")
-      } catch (error) {
-        console.error("[v0] Error during immediate sync:", error)
-      }
+      console.log("[v0] Note saved, sync will be triggered by main-app")
     }
   }
 
@@ -159,7 +145,7 @@ export default function Editor({
   }
 
   return (
-    <div className="flex-1 bg-slate-900 flex flex-col">
+    <div className="flex-1 bg-slate-900 flex flex-col w-full h-full">
       {/* Header */}
       <div className="p-4 border-b border-slate-700 flex items-center gap-2 sm:gap-4">
         <Input

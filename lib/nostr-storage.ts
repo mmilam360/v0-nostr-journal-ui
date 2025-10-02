@@ -339,9 +339,11 @@ export async function syncNotes(
     const syncOperation = async () => {
       try {
         console.log("[v0] Starting sync operation...")
+        console.log("[v0] Local notes:", localNotes.length, "Deleted notes:", localDeletedNotes.length)
 
         // Load notes from Nostr with longer timeout for better reliability
         const { notes: nostrNotes, deletedNotes: nostrDeletedNotes } = await loadNotesFromNostr(privateKey)
+        console.log("[v0] Remote notes:", nostrNotes.length, "Remote deleted:", nostrDeletedNotes.length)
 
         if (nostrNotes.length === 0 && localNotes.length > 0) {
           console.log("[v0] No remote notes found, uploading local notes...")
@@ -355,7 +357,8 @@ export async function syncNotes(
 
         if (nostrNotes.length > 0 && localNotes.length === 0) {
           console.log("[v0] No local notes found, using remote notes...")
-          resolve({ notes: nostrNotes, deletedNotes: nostrDeletedNotes, synced: true })
+          const syncedNotes = nostrNotes.map((note) => ({ ...note, lastSynced: new Date() }))
+          resolve({ notes: syncedNotes, deletedNotes: nostrDeletedNotes, synced: true })
           return
         }
 
@@ -411,6 +414,7 @@ export async function syncNotes(
                 allNotes.set(nostrNote.id, { ...nostrNote, lastSynced: new Date() })
               } else {
                 console.log(`[v0] Keeping newer local version: ${localNote.title}`)
+                // Don't mark as synced if we're keeping local version
               }
             }
           } else {
@@ -424,30 +428,35 @@ export async function syncNotes(
           deletedAt: new Date(deletedAt),
         }))
 
-        // Check if we need to upload changes
-        const unsyncedNotes = finalNotes.filter((note) => !(note as any).lastSynced)
-        const hasDeleteChanges =
-          localDeletedNotes.length !== nostrDeletedNotes.length ||
-          JSON.stringify(localDeletedNotes.sort((a, b) => a.id.localeCompare(b.id))) !==
-            JSON.stringify(nostrDeletedNotes.sort((a, b) => a.id.localeCompare(b.id)))
+        // Improved logic for checking if we need to upload changes
+        const unsyncedNotes = finalNotes.filter((note) => !note.lastSynced)
+        const hasNewLocalNotes = localNotes.some((note) => !nostrNotes.find((n) => n.id === note.id))
+        const hasDeleteChanges = localDeletedNotes.length > 0 || localDeletedNotes.length !== nostrDeletedNotes.length
 
-        if (unsyncedNotes.length > 0 || hasDeleteChanges) {
-          console.log(
-            `[v0] Uploading ${unsyncedNotes.length} unsynced notes and ${finalDeletedNotes.length} deletions...`,
-          )
+        console.log(
+          "[v0] Sync check - Unsynced:",
+          unsyncedNotes.length,
+          "New local:",
+          hasNewLocalNotes,
+          "Delete changes:",
+          hasDeleteChanges,
+        )
 
-          // Wait a bit to ensure any previous operations have propagated
-          await new Promise((resolve) => setTimeout(resolve, 2000))
+        if (unsyncedNotes.length > 0 || hasNewLocalNotes || hasDeleteChanges) {
+          console.log(`[v0] Uploading changes to Nostr...`)
 
           const result = await saveNotesToNostr(finalNotes, finalDeletedNotes, privateKey)
 
           if (result.success) {
             const allSyncedNotes = finalNotes.map((note) => ({ ...note, lastSynced: new Date() }))
+            console.log("[v0] Sync completed successfully")
             resolve({ notes: allSyncedNotes, deletedNotes: finalDeletedNotes, synced: true })
           } else {
+            console.log("[v0] Sync failed to upload")
             resolve({ notes: finalNotes, deletedNotes: finalDeletedNotes, synced: false })
           }
         } else {
+          console.log("[v0] No changes to sync")
           resolve({ notes: finalNotes, deletedNotes: finalDeletedNotes, synced: true })
         }
       } catch (error) {

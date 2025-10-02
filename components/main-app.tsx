@@ -81,17 +81,23 @@ export default function MainApp({ authData, onLogout }: MainAppProps) {
           }
 
           console.log("[v0] Sync completed:", syncResult.synced ? "success" : "failed")
+
+          const allTags = new Set<string>()
+          syncResult.notes.forEach((note) => {
+            note.tags.forEach((tag) => allTags.add(tag))
+          })
+          setTags(Array.from(allTags))
         } else {
           setNotes(localNotes)
           setSyncStatus("offline")
           console.log("[v0] Using local storage only (extension auth)")
-        }
 
-        const allTags = new Set<string>()
-        notes.forEach((note) => {
-          note.tags.forEach((tag) => allTags.add(tag))
-        })
-        setTags(Array.from(allTags))
+          const allTags = new Set<string>()
+          localNotes.forEach((note) => {
+            note.tags.forEach((tag) => allTags.add(tag))
+          })
+          setTags(Array.from(allTags))
+        }
       } catch (error) {
         console.error("[v0] Error loading notes:", error)
         setSyncStatus("error")
@@ -190,6 +196,7 @@ export default function MainApp({ authData, onLogout }: MainAppProps) {
   }, [needsSync, authData.pubkey, authData.authMethod, authData.privateKey, isLoading, syncStatus, deletedNotes])
 
   const handleCreateNote = () => {
+    console.log("[v0] Creating new note...")
     const now = new Date()
     const newNote: Note = {
       id: Date.now().toString(),
@@ -199,9 +206,13 @@ export default function MainApp({ authData, onLogout }: MainAppProps) {
       createdAt: now,
       lastModified: now,
     }
-    setNotes([newNote, ...notes])
+
+    const updatedNotes = [newNote, ...notes]
+    setNotes(updatedNotes)
     setSelectedNote(newNote)
-    setNeedsSync(true) // Trigger immediate sync
+    setNeedsSync(true)
+
+    console.log("[v0] New note created:", newNote.id, "Total notes:", updatedNotes.length)
   }
 
   const handleUpdateNote = (updatedNote: Note) => {
@@ -424,7 +435,7 @@ export default function MainApp({ authData, onLogout }: MainAppProps) {
   }
 
   return (
-    <div className="h-screen bg-slate-900 flex flex-col">
+    <div className="h-screen bg-slate-900 flex flex-col w-full">
       <div className="bg-slate-800 border-b border-slate-700 px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Button
@@ -481,7 +492,7 @@ export default function MainApp({ authData, onLogout }: MainAppProps) {
         </div>
       </div>
 
-      <div className="flex flex-1 relative">
+      <div className="flex flex-1 relative w-full">
         <div className="hidden md:block">
           <TagsPanel
             tags={tags}
@@ -521,7 +532,7 @@ export default function MainApp({ authData, onLogout }: MainAppProps) {
           </div>
         )}
 
-        <div className="flex flex-1 min-w-0">
+        <div className="flex flex-1 min-w-0 w-full">
           <div className="w-full md:w-80 border-r border-slate-700">
             <NoteList
               notes={filteredNotes}
@@ -532,7 +543,7 @@ export default function MainApp({ authData, onLogout }: MainAppProps) {
             />
           </div>
 
-          <div className="hidden lg:block flex-1">
+          <div className="hidden lg:block flex-1 w-full">
             <Editor
               note={selectedNote}
               onUpdateNote={handleUpdateNote}
