@@ -7,7 +7,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import { QRCodeSVG } from "qrcode.react"
-import { Loader2, AlertCircle, CheckCircle2, KeyRound } from "lucide-react"
+import { Loader2, AlertCircle, CheckCircle2, KeyRound, Copy, Check } from "lucide-react"
 import type { AuthData } from "./main-app"
 
 type LoginMethod = "idle" | "extension" | "remote" | "nsec"
@@ -25,6 +25,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
   const [connectUrl, setConnectUrl] = useState<string>("")
   const [error, setError] = useState<string>("")
   const [nsecInput, setNsecInput] = useState<string>("")
+  const [copied, setCopied] = useState(false)
 
   const signerRef = useRef<any>(null)
   const poolRef = useRef<any>(null)
@@ -97,7 +98,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
     setError("")
 
     try {
-      const { generateSecretKey, getPublicKey, nip19, hexToBytes } = await import("nostr-tools/pure")
+      const { getPublicKey, nip19 } = await import("nostr-tools/pure")
 
       let privateKey: Uint8Array
 
@@ -106,7 +107,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
         if (decoded.type !== "nsec") throw new Error("Invalid nsec")
         privateKey = decoded.data as Uint8Array
       } else if (nsecInput.length === 64) {
-        privateKey = hexToBytes(nsecInput)
+        privateKey = new Uint8Array(nsecInput.match(/.{1,2}/g)!.map((byte) => Number.parseInt(byte, 16)))
       } else {
         throw new Error("Invalid format. Use nsec1... or 64-char hex")
       }
@@ -242,6 +243,17 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
     setError("")
     setConnectUrl("")
     setNsecInput("")
+    setCopied(false)
+  }
+
+  const handleCopyUrl = async () => {
+    try {
+      await navigator.clipboard.writeText(connectUrl)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch (err) {
+      console.error("Failed to copy:", err)
+    }
   }
 
   return (
@@ -366,6 +378,35 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
 
                     <div className="space-y-3">
                       <p className="text-center text-slate-300 font-medium">Scan with Nsec.app</p>
+
+                      <div className="space-y-2">
+                        <p className="text-xs text-slate-400 text-center">Or copy and paste this link:</p>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={connectUrl}
+                            readOnly
+                            className="flex-1 bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-xs text-slate-300 font-mono overflow-x-auto"
+                          />
+                          <button
+                            onClick={handleCopyUrl}
+                            className="bg-slate-700 hover:bg-slate-600 text-white px-3 py-2 rounded-lg transition-colors flex items-center gap-1"
+                            title="Copy to clipboard"
+                          >
+                            {copied ? (
+                              <>
+                                <Check className="h-4 w-4" />
+                                <span className="text-xs">Copied!</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="h-4 w-4" />
+                                <span className="text-xs">Copy</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </div>
 
                       <p className="text-center text-sm text-slate-400">Waiting for approval...</p>
 
