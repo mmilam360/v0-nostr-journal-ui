@@ -1,31 +1,16 @@
 "use client"
 
 import { useState } from "react"
-import { Zap, X, Copy, Check, QrCode } from "lucide-react"
+import { Zap, X, Copy, Check } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-
-// WebLN type definitions
-declare global {
-  interface Window {
-    webln?: {
-      enable: () => Promise<void>
-      sendPayment: (paymentRequest: string) => Promise<{ preimage: string }>
-      makeInvoice: (args: { amount: number; defaultMemo?: string }) => Promise<{ paymentRequest: string }>
-    }
-  }
-}
 
 export default function DonationBubble() {
   const [isOpen, setIsOpen] = useState(false)
   const [copied, setCopied] = useState(false)
-  const [showQR, setShowQR] = useState(true)
   const [amount, setAmount] = useState("")
-  const [isProcessing, setIsProcessing] = useState(false)
 
   const lightningAddress = "michaelmilam@getalby.com"
-
-  const lnurl = `lightning:${lightningAddress}`
 
   const handleCopy = async () => {
     try {
@@ -37,48 +22,26 @@ export default function DonationBubble() {
     }
   }
 
-  const handleLightningPayment = async () => {
+  const handleLightningPayment = () => {
     if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) {
       alert("Please enter a valid amount in sats")
       return
     }
 
-    setIsProcessing(true)
+    // Open lightning URL with amount
+    const lightningUrl = `lightning:${lightningAddress}?amount=${Number(amount) * 1000}` // Convert sats to millisats
+    window.open(lightningUrl, "_blank")
+  }
 
-    try {
-      // Check if WebLN is available
-      if (window.webln) {
-        console.log("[v0] WebLN detected, attempting to enable...")
-        await window.webln.enable()
-
-        // Create an invoice for the specified amount
-        const invoice = await window.webln.makeInvoice({
-          amount: Number(amount),
-          defaultMemo: `Donation to Nostr Journal - ${amount} sats`,
-        })
-
-        console.log("[v0] Invoice created, requesting payment...")
-        await window.webln.sendPayment(invoice.paymentRequest)
-
-        alert(`Successfully sent ${amount} sats! Thank you for supporting development! ⚡`)
-        setAmount("")
-        setIsOpen(false)
-      } else {
-        // Fallback to opening lightning URL
-        const lightningUrl = `lightning:${lightningAddress}?amount=${Number(amount) * 1000}` // Convert sats to millisats
-        window.open(lightningUrl, "_blank")
-      }
-    } catch (error) {
-      console.error("[v0] Lightning payment failed:", error)
-      alert(`Payment failed: ${error instanceof Error ? error.message : "Unknown error"}`)
-    } finally {
-      setIsProcessing(false)
+  const getLightningInvoiceQR = () => {
+    if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) {
+      return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(`lightning:${lightningAddress}`)}`
     }
+    return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(`lightning:${lightningAddress}?amount=${Number(amount) * 1000}`)}`
   }
 
   return (
     <>
-      {/* Floating donation bubble */}
       <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 z-40">
         <Button
           onClick={() => setIsOpen(true)}
@@ -90,114 +53,87 @@ export default function DonationBubble() {
         </Button>
       </div>
 
-      {/* Donation modal */}
       {isOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-slate-800 border border-slate-700 rounded-lg p-6 w-full max-w-md relative">
+        <div className="fixed inset-0 flex items-center justify-center p-4 z-50">
+          {/* Backdrop with blur */}
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setIsOpen(false)} />
+
+          {/* Modal content */}
+          <div className="relative bg-slate-800 border border-slate-700 rounded-lg p-6 w-full max-w-sm shadow-2xl">
             <button
               onClick={() => setIsOpen(false)}
-              className="absolute top-4 right-4 text-slate-400 hover:text-white hover:bg-slate-700 rounded-full p-1 transition-colors"
+              className="absolute top-3 right-3 text-slate-400 hover:text-white hover:bg-slate-700 rounded-full p-1.5 transition-colors"
               aria-label="Close"
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4" />
             </button>
 
-            <div className="text-center mb-6">
-              <div className="w-16 h-16 bg-orange-500 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Zap className="w-8 h-8 text-white" />
+            <div className="text-center mb-4">
+              <div className="w-12 h-12 bg-orange-500 rounded-full flex items-center justify-center mx-auto mb-3">
+                <Zap className="w-6 h-6 text-white" />
               </div>
-              <h2 className="text-xl font-semibold text-white mb-2">Support Development</h2>
-              <p className="text-slate-400 text-sm">
-                Help keep Nostr Journal running and improving with a Lightning donation
-              </p>
+              <h2 className="text-lg font-semibold text-white mb-1">Support Development</h2>
+              <p className="text-slate-400 text-xs">Help keep Nostr Journal running</p>
             </div>
 
             <div className="space-y-4">
-              <div className="flex gap-2 mb-4">
-                <Button
-                  onClick={() => setShowQR(false)}
-                  size="sm"
-                  variant={!showQR ? "default" : "outline"}
-                  className={
-                    !showQR
-                      ? "bg-orange-500 hover:bg-orange-400"
-                      : "border-slate-600 text-slate-300 hover:bg-slate-600 bg-transparent"
-                  }
-                >
-                  Address
-                </Button>
-                <Button
-                  onClick={() => setShowQR(true)}
-                  size="sm"
-                  variant={showQR ? "default" : "outline"}
-                  className={
-                    showQR
-                      ? "bg-orange-500 hover:bg-orange-400"
-                      : "border-slate-600 text-slate-300 hover:bg-slate-600 bg-transparent"
-                  }
-                >
-                  <QrCode className="w-4 h-4 mr-1" />
-                  QR Code
-                </Button>
-              </div>
-
-              {showQR ? (
-                <div className="bg-slate-700 rounded-lg p-4 text-center">
-                  <label className="text-sm text-slate-300 mb-3 block">Scan with Lightning Wallet</label>
-                  <div className="bg-white p-4 rounded-lg inline-block">
-                    <img
-                      src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(lnurl)}`}
-                      alt="Lightning Payment QR Code"
-                      className="w-48 h-48"
-                    />
-                  </div>
-                  <p className="text-slate-400 text-xs mt-2">Scan with any Lightning wallet to send a donation</p>
-                </div>
-              ) : (
-                <div className="bg-slate-700 rounded-lg p-4">
-                  <label className="text-sm text-slate-300 mb-2 block">Lightning Address</label>
-                  <div className="flex items-center gap-2">
-                    <code className="flex-1 text-orange-400 text-sm bg-slate-800 px-3 py-2 rounded border">
-                      {lightningAddress}
-                    </code>
-                    <Button
-                      onClick={handleCopy}
-                      size="sm"
-                      variant="outline"
-                      className="border-slate-600 text-slate-300 hover:bg-slate-600 bg-transparent"
-                    >
-                      {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                    </Button>
-                  </div>
-                </div>
-              )}
-
-              <div className="bg-slate-700 rounded-lg p-4">
-                <label className="text-sm text-slate-300 mb-2 block">Amount (sats)</label>
+              <div className="bg-slate-700 rounded-lg p-3">
+                <label className="text-xs text-slate-300 mb-2 block">Amount (sats)</label>
                 <Input
                   type="number"
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
-                  placeholder="Enter amount in sats (e.g., 1000)"
-                  className="bg-slate-800 border-slate-600 text-white placeholder-slate-400"
+                  placeholder="Enter amount (e.g., 1000)"
+                  className="bg-slate-800 border-slate-600 text-white placeholder-slate-400 text-sm"
                   min="1"
                 />
-                <p className="text-slate-400 text-xs mt-1">Minimum: 1 sat</p>
+                <p className="text-slate-400 text-xs mt-1">Optional: Leave empty for any amount</p>
               </div>
 
+              <div className="bg-slate-700 rounded-lg p-3 text-center">
+                <label className="text-xs text-slate-300 mb-2 block">Scan with Lightning Wallet</label>
+                <div className="bg-white p-3 rounded-lg inline-block">
+                  <img
+                    src={getLightningInvoiceQR() || "/placeholder.svg"}
+                    alt="Lightning Payment QR Code"
+                    className="w-40 h-40"
+                  />
+                </div>
+                <p className="text-slate-400 text-xs mt-2">
+                  {amount ? `Invoice for ${amount} sats` : "Scan to send any amount"}
+                </p>
+              </div>
+
+              {/* Lightning address */}
+              <div className="bg-slate-700 rounded-lg p-3">
+                <label className="text-xs text-slate-300 mb-2 block">Lightning Address</label>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 text-orange-400 text-xs bg-slate-800 px-2 py-1.5 rounded border border-slate-600 truncate">
+                    {lightningAddress}
+                  </code>
+                  <Button
+                    onClick={handleCopy}
+                    size="sm"
+                    variant="outline"
+                    className="border-slate-600 text-slate-300 hover:bg-slate-600 bg-transparent p-2"
+                  >
+                    {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                  </Button>
+                </div>
+              </div>
+
+              {/* Pay button */}
               <Button
                 onClick={handleLightningPayment}
-                disabled={!amount || isNaN(Number(amount)) || Number(amount) <= 0 || isProcessing}
-                className="w-full bg-orange-500 hover:bg-orange-400 text-white flex items-center justify-center gap-2 disabled:opacity-50"
+                disabled={!amount || isNaN(Number(amount)) || Number(amount) <= 0}
+                className="w-full bg-orange-500 hover:bg-orange-400 text-white flex items-center justify-center gap-2 disabled:opacity-50 text-sm"
               >
-                <Zap className="w-5 h-5" />
-                {isProcessing ? "Processing..." : "Pay with Lightning Wallet"}
+                <Zap className="w-4 h-4" />
+                {amount ? `Pay ${amount} sats` : "Enter amount to pay"}
               </Button>
 
               <p className="text-slate-400 text-xs text-center">
-                {showQR
-                  ? "Scan the QR code with your Lightning wallet, or enter an amount and click the button above"
-                  : "Enter an amount and click to open in your Lightning wallet app, or copy the address to send manually"}
+                Scan QR or click Pay to open in your Lightning wallet
               </p>
             </div>
           </div>

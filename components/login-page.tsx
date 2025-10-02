@@ -257,12 +257,12 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
 
       setConnectionState("success")
 
-      // Save auth data
       setTimeout(() => {
-        console.log("🚀 Calling onLoginSuccess")
+        console.log("🚀 Calling onLoginSuccess with signer")
         onLoginSuccess({
           pubkey: userPubkey,
           authMethod: "remote",
+          signer: signer, // Pass the signer instance
         })
       }, 1000)
     } catch (err) {

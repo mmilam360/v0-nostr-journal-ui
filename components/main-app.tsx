@@ -30,6 +30,7 @@ export interface AuthData {
   authMethod: "extension" | "nsec" | "remote"
   nsec?: string
   privateKey?: string
+  signer?: any // BunkerSigner instance for remote signing
 }
 
 interface MainAppProps {

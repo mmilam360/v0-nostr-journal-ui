@@ -12,8 +12,9 @@ export interface NostrEvent {
 
 export interface AuthData {
   pubkey: string
-  authMethod: "extension" | "nsec"
+  authMethod: "extension" | "nsec" | "remote"
   privateKey?: string
+  signer?: any // BunkerSigner instance
 }
 
 // Simple SHA-256 implementation for event ID generation
@@ -42,7 +43,7 @@ export async function createNostrEvent(pubkey: string, content: string, tags: st
   return event
 }
 
-// Publish event using browser extension or NWC
+// Publish event using browser extension, nsec, or remote signer
 export async function publishToNostr(event: NostrEvent, authData: AuthData): Promise<string> {
   console.log("[v0] Attempting to publish to Nostr:", event)
   console.log("[v0] Using auth method:", authData.authMethod)
@@ -61,6 +62,31 @@ export async function publishToNostr(event: NostrEvent, authData: AuthData): Pro
       }
     } else {
       throw new Error("No Nostr browser extension available")
+    }
+  } else if (authData.authMethod === "remote") {
+    if (!authData.signer) {
+      throw new Error("Remote signer not available. Please log in again.")
+    }
+
+    try {
+      console.log("[v0] Signing event with remote signer (NWC/Nsec.app)")
+
+      // Request signing permission from remote signer
+      signedEvent = await authData.signer.signEvent(event)
+      console.log("[v0] Event signed by remote signer:", signedEvent)
+    } catch (error) {
+      console.error("[v0] Error signing with remote signer:", error)
+
+      // Provide helpful error message
+      if (error instanceof Error && error.message.includes("rejected")) {
+        throw new Error("Signing rejected by remote signer. Please approve the request in your signer app.")
+      } else if (error instanceof Error && error.message.includes("timeout")) {
+        throw new Error("Signing request timed out. Please try again and approve quickly.")
+      } else {
+        throw new Error(
+          `Failed to sign with remote signer: ${error instanceof Error ? error.message : "Unknown error"}`,
+        )
+      }
     }
   } else if (authData.authMethod === "nsec" && authData.privateKey) {
     // Sign locally using private key
