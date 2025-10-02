@@ -1,0 +1,193 @@
+"use client"
+
+import { useState, useEffect } from "react"
+import { X, Copy, Check, User } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import type { AuthData } from "./main-app"
+
+interface ProfilePageProps {
+  authData: AuthData
+  onClose: () => void
+}
+
+export default function ProfilePage({ authData, onClose }: ProfilePageProps) {
+  const [npub, setNpub] = useState<string>("")
+  const [profilePicture, setProfilePicture] = useState<string>("")
+  const [displayName, setDisplayName] = useState<string>("")
+  const [copiedNpub, setCopiedNpub] = useState(false)
+  const [copiedNsec, setCopiedNsec] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    const loadProfile = async () => {
+      try {
+        const { npubEncode } = await import("nostr-tools/nip19")
+        const encodedNpub = npubEncode(authData.pubkey)
+        setNpub(encodedNpub)
+
+        // Fetch profile metadata from Nostr
+        try {
+          const { SimplePool } = await import("nostr-tools/pool")
+          const pool = new SimplePool()
+
+          const RELAYS = ["wss://relay.damus.io", "wss://nos.lol", "wss://relay.nostr.band"]
+
+          const events = await pool.querySync(RELAYS, {
+            kinds: [0],
+            authors: [authData.pubkey],
+            limit: 1,
+          })
+
+          if (events.length > 0) {
+            const metadata = JSON.parse(events[0].content)
+            if (metadata.picture) {
+              setProfilePicture(metadata.picture)
+            }
+            if (metadata.name || metadata.display_name) {
+              setDisplayName(metadata.display_name || metadata.name)
+            }
+          }
+
+          pool.close(RELAYS)
+        } catch (err) {
+          console.error("Failed to fetch profile metadata:", err)
+        }
+      } catch (err) {
+        console.error("Failed to encode npub:", err)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    loadProfile()
+  }, [authData.pubkey])
+
+  const handleCopyNpub = async () => {
+    try {
+      await navigator.clipboard.writeText(npub)
+      setCopiedNpub(true)
+      setTimeout(() => setCopiedNpub(false), 2000)
+    } catch (err) {
+      console.error("Failed to copy:", err)
+    }
+  }
+
+  const handleCopyNsec = async () => {
+    if (!authData.nsec) return
+    try {
+      await navigator.clipboard.writeText(authData.nsec)
+      setCopiedNsec(true)
+      setTimeout(() => setCopiedNsec(false), 2000)
+    } catch (err) {
+      console.error("Failed to copy:", err)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50">
+      <div className="bg-slate-800 rounded-lg shadow-xl w-full max-w-md border border-slate-700">
+        <div className="flex items-center justify-between p-4 border-b border-slate-700">
+          <h2 className="text-xl font-bold text-white">Account Profile</h2>
+          <Button onClick={onClose} variant="ghost" size="sm" className="text-slate-400 hover:text-white">
+            <X className="h-5 w-5" />
+          </Button>
+        </div>
+
+        <div className="p-6 space-y-6">
+          {isLoading ? (
+            <div className="text-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-4"></div>
+              <p className="text-slate-400">Loading profile...</p>
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center gap-4">
+                <div className="w-16 h-16 rounded-full bg-slate-700 flex items-center justify-center overflow-hidden">
+                  {profilePicture ? (
+                    <img
+                      src={profilePicture || "/placeholder.svg"}
+                      alt="Profile"
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <User className="w-8 h-8 text-slate-400" />
+                  )}
+                </div>
+                <div className="flex-1">
+                  {displayName && <p className="text-white font-medium">{displayName}</p>}
+                  <p className="text-slate-400 text-sm">
+                    {authData.authMethod === "extension"
+                      ? "Extension"
+                      : authData.authMethod === "remote"
+                        ? "Remote Signer"
+                        : "Private Key"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-2">Public Key (npub)</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={npub}
+                      readOnly
+                      className="flex-1 bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-300 font-mono overflow-x-auto"
+                    />
+                    <Button
+                      onClick={handleCopyNpub}
+                      variant="ghost"
+                      size="sm"
+                      className="text-slate-400 hover:text-white"
+                      title="Copy to clipboard"
+                    >
+                      {copiedNpub ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                </div>
+
+                {authData.nsec && (
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-2">
+                      Private Key (nsec) - Keep this secret!
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="password"
+                        value={authData.nsec}
+                        readOnly
+                        className="flex-1 bg-slate-900 border border-red-900/50 rounded-lg px-3 py-2 text-sm text-red-300 font-mono overflow-x-auto"
+                      />
+                      <Button
+                        onClick={handleCopyNsec}
+                        variant="ghost"
+                        size="sm"
+                        className="text-slate-400 hover:text-white"
+                        title="Copy to clipboard"
+                      >
+                        {copiedNsec ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-1">
+                      Click the copy button to reveal and copy your private key
+                    </p>
+                  </div>
+                )}
+
+                {!authData.nsec && authData.authMethod !== "extension" && (
+                  <div className="bg-yellow-900/20 border border-yellow-500/50 rounded-lg p-3">
+                    <p className="text-xs text-yellow-400">
+                      Your private key is not stored in this session. If you used a remote signer, your keys are managed
+                      by that app.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}

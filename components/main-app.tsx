@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { LogOut, Menu, X, Cloud, CloudOff, RefreshCw } from "lucide-react"
+import { LogOut, Menu, X, Cloud, CloudOff, RefreshCw, User } from "lucide-react"
 import TagsPanel from "@/components/tags-panel"
 import NoteList from "@/components/note-list"
 import Editor from "@/components/editor"
@@ -9,6 +9,7 @@ import PublishModal from "@/components/publish-modal"
 import PublishConfirmationModal from "@/components/publish-confirmation-modal"
 import DeleteConfirmationModal from "@/components/delete-confirmation-modal"
 import DonationBubble from "@/components/donation-bubble"
+import ProfilePage from "@/components/profile-page"
 import { Button } from "@/components/ui/button"
 import { saveEncryptedNotes, loadEncryptedNotes } from "@/lib/nostr-crypto"
 import { createNostrEvent, publishToNostr } from "@/lib/nostr-publish"
@@ -26,7 +27,8 @@ export interface Note {
 
 export interface AuthData {
   pubkey: string
-  authMethod: "extension" | "nsec" | "nwc"
+  authMethod: "extension" | "nsec" | "remote"
+  nsec?: string
   privateKey?: string
 }
 
@@ -52,6 +54,7 @@ export default function MainApp({ authData, onLogout }: MainAppProps) {
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false)
   const [noteToDelete, setNoteToDelete] = useState<Note | null>(null)
   const [deletedNotes, setDeletedNotes] = useState<{ id: string; deletedAt: Date }[]>([])
+  const [showProfile, setShowProfile] = useState(false)
 
   useEffect(() => {
     const loadUserNotes = async () => {
@@ -113,7 +116,7 @@ export default function MainApp({ authData, onLogout }: MainAppProps) {
 
       try {
         const privateKeyBytes = new Uint8Array(
-          authData.privateKey!.match(/.{1,2}/g)?.map((byte) => Number.parseInt(byte, 16)) || [],
+          authData.privateKey.match(/.{1,2}/g)?.map((byte) => Number.parseInt(byte, 16)) || [],
         )
 
         const syncResult = await syncNotes(notes, deletedNotes, privateKeyBytes)
@@ -435,7 +438,7 @@ export default function MainApp({ authData, onLogout }: MainAppProps) {
 
           <span className="text-slate-500 text-xs">({notes.length} notes)</span>
           <span className="text-slate-500 text-xs bg-slate-700 px-2 py-1 rounded">
-            {authData.authMethod === "extension" ? "Extension" : authData.authMethod === "nwc" ? "NWC" : "nsec"}
+            {authData.authMethod === "extension" ? "Extension" : authData.authMethod === "remote" ? "Remote" : "nsec"}
           </span>
 
           <div className="flex items-center gap-2">
@@ -455,15 +458,27 @@ export default function MainApp({ authData, onLogout }: MainAppProps) {
           </div>
         </div>
 
-        <Button
-          onClick={onLogout}
-          variant="ghost"
-          size="sm"
-          className="text-slate-400 hover:text-white hover:bg-slate-700"
-        >
-          <LogOut className="w-4 h-4 mr-2" />
-          <span className="hidden sm:inline">Logout</span>
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={() => setShowProfile(true)}
+            variant="ghost"
+            size="sm"
+            className="text-slate-400 hover:text-white hover:bg-slate-700"
+          >
+            <User className="w-4 h-4 mr-2" />
+            <span className="hidden sm:inline">Profile</span>
+          </Button>
+
+          <Button
+            onClick={onLogout}
+            variant="ghost"
+            size="sm"
+            className="text-slate-400 hover:text-white hover:bg-slate-700"
+          >
+            <LogOut className="w-4 h-4 mr-2" />
+            <span className="hidden sm:inline">Logout</span>
+          </Button>
+        </div>
       </div>
 
       <div className="flex flex-1 relative">
@@ -566,6 +581,8 @@ export default function MainApp({ authData, onLogout }: MainAppProps) {
         {showDeleteConfirmation && noteToDelete && (
           <DeleteConfirmationModal note={noteToDelete} onConfirm={handleConfirmDelete} onCancel={handleCancelDelete} />
         )}
+
+        {showProfile && <ProfilePage authData={authData} onClose={() => setShowProfile(false)} />}
       </div>
 
       <DonationBubble />

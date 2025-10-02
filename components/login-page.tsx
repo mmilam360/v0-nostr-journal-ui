@@ -7,10 +7,10 @@
 
 import { useState, useEffect, useRef } from "react"
 import { QRCodeSVG } from "qrcode.react"
-import { Loader2, AlertCircle, CheckCircle2, KeyRound, Copy, Check } from "lucide-react"
+import { Loader2, AlertCircle, CheckCircle2, KeyRound, Copy, Check, UserPlus } from "lucide-react"
 import type { AuthData } from "./main-app"
 
-type LoginMethod = "idle" | "extension" | "remote" | "nsec"
+type LoginMethod = "idle" | "extension" | "remote" | "nsec" | "generate"
 type ConnectionState = "idle" | "generating" | "waiting" | "connecting" | "success" | "error"
 
 const RELAYS = ["wss://relay.nsec.app", "wss://relay.damus.io", "wss://nos.lol", "wss://relay.nostr.band"]
@@ -26,6 +26,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
   const [error, setError] = useState<string>("")
   const [nsecInput, setNsecInput] = useState<string>("")
   const [copied, setCopied] = useState(false)
+  const [generatedKeys, setGeneratedKeys] = useState<{ nsec: string; npub: string } | null>(null)
 
   const signerRef = useRef<any>(null)
   const poolRef = useRef<any>(null)
@@ -98,26 +99,34 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
     setError("")
 
     try {
-      const { getPublicKey, nip19 } = await import("nostr-tools/pure")
+      const { getPublicKey } = await import("nostr-tools/pure")
+      const { decode } = await import("nostr-tools/nip19")
 
-      let privateKey: Uint8Array
+      let privateKeyHex: string
 
       if (nsecInput.startsWith("nsec1")) {
-        const decoded = nip19.decode(nsecInput)
+        const decoded = decode(nsecInput)
         if (decoded.type !== "nsec") throw new Error("Invalid nsec")
-        privateKey = decoded.data as Uint8Array
+        // Convert Uint8Array to hex string
+        privateKeyHex = Array.from(decoded.data as Uint8Array)
+          .map((b) => b.toString(16).padStart(2, "0"))
+          .join("")
       } else if (nsecInput.length === 64) {
-        privateKey = new Uint8Array(nsecInput.match(/.{1,2}/g)!.map((byte) => Number.parseInt(byte, 16)))
+        privateKeyHex = nsecInput
       } else {
         throw new Error("Invalid format. Use nsec1... or 64-char hex")
       }
 
-      const pubkey = getPublicKey(privateKey)
+      // Convert hex to Uint8Array for getPublicKey
+      const privateKeyBytes = new Uint8Array(privateKeyHex.match(/.{1,2}/g)!.map((byte) => Number.parseInt(byte, 16)))
+      const pubkey = getPublicKey(privateKeyBytes)
+
       console.log("✅ Nsec login:", pubkey)
 
       onLoginSuccess({
         pubkey,
-        nsec: nsecInput,
+        nsec: nsecInput.startsWith("nsec1") ? nsecInput : undefined,
+        privateKey: privateKeyHex,
         authMethod: "nsec",
       })
     } catch (err) {
@@ -127,10 +136,50 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
     }
   }
 
-  /**
-   * CORRECT IMPLEMENTATION using official nostr-tools API
-   * Follows: https://github.com/nbd-wtf/nostr-tools#method-2-client-initiated
-   */
+  const handleGenerateAccount = async () => {
+    setLoginMethod("generate")
+    setConnectionState("generating")
+    setError("")
+
+    try {
+      const { generateSecretKey, getPublicKey } = await import("nostr-tools/pure")
+      const { nsecEncode, npubEncode } = await import("nostr-tools/nip19")
+
+      console.log("🔑 Generating new Nostr keypair...")
+
+      const privateKey = generateSecretKey()
+      const pubkey = getPublicKey(privateKey)
+
+      // Convert to bech32 format
+      const nsec = nsecEncode(privateKey)
+      const npub = npubEncode(pubkey)
+
+      // Convert private key to hex
+      const privateKeyHex = Array.from(privateKey)
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join("")
+
+      console.log("✅ Generated new account:", npub)
+
+      setGeneratedKeys({ nsec, npub })
+      setConnectionState("success")
+
+      // Auto-login after 2 seconds
+      setTimeout(() => {
+        onLoginSuccess({
+          pubkey,
+          nsec,
+          privateKey: privateKeyHex,
+          authMethod: "nsec",
+        })
+      }, 2000)
+    } catch (err) {
+      console.error("Generation error:", err)
+      setConnectionState("error")
+      setError(err instanceof Error ? err.message : "Failed to generate account")
+    }
+  }
+
   const startRemoteSignerLogin = async () => {
     setLoginMethod("remote")
     setConnectionState("generating")
@@ -244,6 +293,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
     setConnectUrl("")
     setNsecInput("")
     setCopied(false)
+    setGeneratedKeys(null)
   }
 
   const handleCopyUrl = async () => {
@@ -251,6 +301,14 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
       await navigator.clipboard.writeText(connectUrl)
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
+    } catch (err) {
+      console.error("Failed to copy:", err)
+    }
+  }
+
+  const handleCopyKey = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
     } catch (err) {
       console.error("Failed to copy:", err)
     }
@@ -291,6 +349,14 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
                   className="w-full bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 px-4 rounded-lg transition-colors"
                 >
                   Enter Private Key
+                </button>
+
+                <button
+                  onClick={handleGenerateAccount}
+                  className="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
+                >
+                  <UserPlus className="h-5 w-5" />
+                  Generate New Account
                 </button>
 
                 <p className="text-xs text-slate-400 text-center mt-4">Your keys never leave your device</p>
@@ -358,6 +424,92 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
                     )}
                   </button>
                 </div>
+              </div>
+            )}
+
+            {loginMethod === "generate" && (
+              <div className="space-y-4">
+                {connectionState === "generating" && (
+                  <div className="text-center py-8">
+                    <Loader2 className="h-12 w-12 animate-spin text-green-500 mx-auto mb-4" />
+                    <p className="text-slate-300">Generating your new account...</p>
+                  </div>
+                )}
+
+                {connectionState === "success" && generatedKeys && (
+                  <div className="space-y-4">
+                    <div className="text-center py-4">
+                      <CheckCircle2 className="h-12 w-12 text-green-500 mx-auto mb-4" />
+                      <p className="text-slate-300 font-medium mb-2">Account Created!</p>
+                      <p className="text-slate-400 text-sm">Save your keys securely</p>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-xs font-medium text-slate-400 mb-1">Public Key (npub)</label>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={generatedKeys.npub}
+                            readOnly
+                            className="flex-1 bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-xs text-slate-300 font-mono"
+                          />
+                          <button
+                            onClick={() => handleCopyKey(generatedKeys.npub)}
+                            className="bg-slate-700 hover:bg-slate-600 text-white px-3 py-2 rounded-lg transition-colors"
+                            title="Copy"
+                          >
+                            <Copy className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-medium text-slate-400 mb-1">
+                          Private Key (nsec) - Keep this secret!
+                        </label>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={generatedKeys.nsec}
+                            readOnly
+                            className="flex-1 bg-slate-900 border border-red-900/50 rounded-lg px-3 py-2 text-xs text-red-300 font-mono"
+                          />
+                          <button
+                            onClick={() => handleCopyKey(generatedKeys.nsec)}
+                            className="bg-slate-700 hover:bg-slate-600 text-white px-3 py-2 rounded-lg transition-colors"
+                            title="Copy"
+                          >
+                            <Copy className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-yellow-900/20 border border-yellow-500/50 rounded-lg p-3">
+                      <p className="text-xs text-yellow-400">
+                        ⚠️ Save your private key (nsec) somewhere safe! You'll need it to access your account from other
+                        devices.
+                      </p>
+                    </div>
+
+                    <p className="text-center text-slate-400 text-sm">Logging you in...</p>
+                  </div>
+                )}
+
+                {connectionState === "error" && (
+                  <div className="space-y-4">
+                    <div className="bg-red-900/20 border border-red-500/50 rounded-lg p-4">
+                      <p className="text-sm text-red-400">{error}</p>
+                    </div>
+                    <button
+                      onClick={handleBack}
+                      className="w-full bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 px-4 rounded-lg transition-colors"
+                    >
+                      Try Again
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 
