@@ -15,6 +15,11 @@ export interface DecryptedNote {
   content: string
   tags: string[]
   createdAt: Date
+  lastModified?: Date
+  lastSynced?: Date
+  syncStatus?: "local" | "syncing" | "synced" | "error"
+  syncError?: string
+  eventId?: string // Added to track the Nostr event ID for NIP-09 deletion
 }
 
 // Generate a deterministic key from user's pubkey for local encryption

@@ -310,53 +310,53 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     onLogout()
   }
 
-  const handleDeleteNote = (noteToDelete: Note) => {
-    console.log("[v0] Delete requested for note:", noteToDelete.id, noteToDelete.title)
+  const handleDeleteNote = async (noteToDelete: Note) => {
+    console.log("[v0] Delete requested for note:", noteToDelete.id)
 
+    // Step 1: Optimistically update the UI - remove the note from local state
     const updatedNotes = notes.filter((note) => note.id !== noteToDelete.id)
-    console.log("[v0] Notes before delete:", notes.length, "after delete:", updatedNotes.length)
-
-    const deletedNote = {
-      id: noteToDelete.id,
-      deletedAt: new Date(),
-    }
-    setDeletedNotes([...deletedNotes, deletedNote])
-    console.log("[v0] Added note to deleted list:", deletedNote)
-
     setNotes(updatedNotes)
 
     if (selectedNote?.id === noteToDelete.id) {
-      console.log("[v0] Clearing selected note as it was deleted")
       setSelectedNote(null)
     }
 
+    // Update tags
     const allTags = new Set<string>()
     updatedNotes.forEach((note) => {
       note.tags.forEach((tag) => allTags.add(tag))
     })
     setTags(Array.from(allTags))
 
-    setNeedsSync(true)
-    console.log("[v0] Delete completed, triggering sync")
+    // Step 2: In the background, publish the deletion event to the network
+    try {
+      console.log("[v0] Publishing NIP-09 deletion event to Nostr network...")
+      const { deleteNoteOnNostr } = await import("@/lib/nostr-storage")
+      await deleteNoteOnNostr(noteToDelete, authData)
+      console.log("[v0] Successfully published deletion event to Nostr.")
+    } catch (error) {
+      console.error("[v0] Failed to publish deletion event:", error)
+      // Note: We don't re-add the note to UI even if deletion fails
+      // The note is already removed locally, which is the primary concern
+    }
 
-    setShowDeleteConfirmation(false)
-    setNoteToDelete(null)
+    // Update deleted notes tracking
+    const deletedNote = {
+      id: noteToDelete.id,
+      deletedAt: new Date(),
+    }
+    setDeletedNotes([...deletedNotes, deletedNote])
+    setNeedsSync(true)
   }
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (!noteToDelete) return
 
     console.log("[v0] Deleting note:", noteToDelete.id, noteToDelete.title)
 
+    // Step 1: Optimistically update the UI
     const updatedNotes = notes.filter((note) => note.id !== noteToDelete.id)
     console.log("[v0] Notes before delete:", notes.length, "after delete:", updatedNotes.length)
-
-    const deletedNote = {
-      id: noteToDelete.id,
-      deletedAt: new Date(),
-    }
-    setDeletedNotes([...deletedNotes, deletedNote])
-    console.log("[v0] Added note to deleted list:", deletedNote)
 
     setNotes(updatedNotes)
 
@@ -365,12 +365,29 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       setSelectedNote(null)
     }
 
+    // Update tags
     const allTags = new Set<string>()
     updatedNotes.forEach((note) => {
       note.tags.forEach((tag) => allTags.add(tag))
     })
     setTags(Array.from(allTags))
 
+    // Step 2: Publish deletion event to Nostr
+    try {
+      console.log("[v0] Publishing NIP-09 deletion event to Nostr network...")
+      const { deleteNoteOnNostr } = await import("@/lib/nostr-storage")
+      await deleteNoteOnNostr(noteToDelete, authData)
+      console.log("[v0] Successfully published deletion event to Nostr.")
+    } catch (error) {
+      console.error("[v0] Failed to publish deletion event:", error)
+    }
+
+    // Update deleted notes tracking
+    const deletedNote = {
+      id: noteToDelete.id,
+      deletedAt: new Date(),
+    }
+    setDeletedNotes([...deletedNotes, deletedNote])
     setNeedsSync(true)
     console.log("[v0] Delete completed, triggering sync")
 
