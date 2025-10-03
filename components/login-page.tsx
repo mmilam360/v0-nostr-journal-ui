@@ -300,7 +300,9 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
     try {
       console.log("[Bunker] 🚀 Starting bunker login")
 
-      const { generateSecretKey, getPublicKey, nip04, nip19, SimplePool, finalizeEvent } = await import("nostr-tools/pure")
+      const nostrTools = await import("nostr-tools/pure")
+      const { generateSecretKey, getPublicKey, nip04, nip19, finalizeEvent } = nostrTools
+      const { SimplePool } = await import("nostr-tools/pool")
 
       const appSecretKey = generateSecretKey()
       const appPublicKey = getPublicKey(appSecretKey)
