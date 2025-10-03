@@ -345,18 +345,25 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
 
           console.log("[Bunker] 🔓 Decrypted content:", decryptedContent)
 
-          const response = JSON.parse(decryptedContent)
-          console.log("[Bunker] 📦 Parsed response:", response)
+const response = JSON.parse(decryptedContent)
+console.log("[Bunker] 📦 Parsed response:", response)
+console.log("[Bunker] 📦 Response.result value:", response.result)
+console.log("[Bunker] 📦 Response.method value:", response.method)
 
-          if (response.result && response.result !== "error") {
-            console.log("[Bunker] ✅ Connection successful!")
-            successful = true
+// Check multiple possible success indicators
+if (
+  response.result === "ack" ||
+  response.method === "connect" ||
+  (response.result && response.result !== "error" && response.result !== null)
+) {
+  console.log("[Bunker] ✅ Connection successful!")
+  successful = true
 
-            setConnectionState("success")
-            cleanup()
+  setConnectionState("success")
+  cleanup()
 
-            setTimeout(() => {
-              onLoginSuccess({
+  setTimeout(() => {
+    onLoginSuccess({
                 pubkey: remotePubkey,
                 authMethod: "remote",
                 bunkerUri: bunkerURI,
