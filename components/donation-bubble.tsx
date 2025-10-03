@@ -61,11 +61,6 @@ export default function DonationBubble() {
     try {
       await window.webln.enable()
 
-      // Create a lightning URL with the amount
-      const lightningUrl = `${lightningAddress}?amount=${amount * 1000}&comment=Nostr Journal Support`
-
-      // For WebLN, we need to fetch the invoice from the lightning address
-      // This is a simplified approach - in production you'd want to use a proper LNURL library
       const response = await fetch(`https://getalby.com/.well-known/lnurlp/michaelmilam`)
       const lnurlData = await response.json()
 
@@ -87,21 +82,9 @@ export default function DonationBubble() {
     }
   }
 
-  const handleLightningPayment = () => {
-    if (!amount || amount <= 0) {
-      alert("Please enter a valid amount in sats")
-      return
-    }
-
-    // Open lightning URL with amount
-    const lightningUrl = `lightning:${lightningAddress}?amount=${amount * 1000}` // Convert sats to millisats
-    window.open(lightningUrl, "_blank")
-  }
-
-  const getLightningInvoiceQR = () => {
-    const lightningUrl =
-      amount > 0 ? `lightning:${lightningAddress}?amount=${amount * 1000}` : `lightning:${lightningAddress}`
-    return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(lightningUrl)}`
+  const getLightningAddressQR = () => {
+    // Static Lightning Address QR - works with all wallets
+    return `https://api.qrserver.com/v1/create-qr-code/?size=256x256&data=${encodeURIComponent(lightningAddress)}`
   }
 
   return (
@@ -119,10 +102,9 @@ export default function DonationBubble() {
 
       {isOpen && (
         <div className="fixed inset-0 flex items-center justify-center p-4 z-50">
-          {/* Backdrop with blur */}
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsOpen(false)} />
 
-          <div className="relative bg-slate-800 border border-slate-700 rounded-2xl p-6 w-full max-w-md max-h-[80vh] overflow-y-auto shadow-2xl">
+          <div className="relative bg-slate-800 border border-slate-700 rounded-2xl p-4 sm:p-6 w-full max-w-md max-h-[90vh] overflow-y-auto shadow-2xl">
             <button
               onClick={() => setIsOpen(false)}
               className="absolute top-3 right-3 text-slate-400 hover:text-white hover:bg-slate-700 rounded-full p-1.5 transition-colors"
@@ -147,7 +129,7 @@ export default function DonationBubble() {
                     <button
                       key={amt}
                       onClick={() => setAmount(amt)}
-                      className={`px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
+                      className={`px-2 py-2 rounded-lg text-xs font-medium transition-colors ${
                         amount === amt ? "bg-orange-500 text-white" : "bg-slate-700 text-slate-300 hover:bg-slate-600"
                       }`}
                     >
@@ -157,7 +139,6 @@ export default function DonationBubble() {
                 </div>
               </div>
 
-              {/* Custom amount input */}
               <div>
                 <label className="text-xs text-slate-300 mb-2 block">Custom Amount:</label>
                 <div className="flex gap-2 items-center">
@@ -177,29 +158,28 @@ export default function DonationBubble() {
                 <Button
                   onClick={handleWebLNPayment}
                   disabled={!amount || amount <= 0 || isPayingWithWebLN}
-                  className="w-full bg-orange-500 hover:bg-orange-400 text-white flex items-center justify-center gap-2 disabled:opacity-50 text-sm"
+                  className="w-full bg-orange-500 hover:bg-orange-400 text-white flex items-center justify-center gap-2 disabled:opacity-50 text-sm min-h-[44px]"
                 >
                   <Zap className="w-4 h-4" />
                   {isPayingWithWebLN ? "Processing..." : `Pay ${amount.toLocaleString()} sats with Alby`}
                 </Button>
               )}
 
-              {/* QR Code */}
               <div className="bg-slate-700 rounded-lg p-3 text-center">
                 <label className="text-xs text-slate-300 mb-2 block">Scan with Lightning Wallet</label>
-                <div className="bg-white p-3 rounded-lg inline-block">
+                <div className="bg-white p-2 rounded-lg inline-block">
                   <img
-                    src={getLightningInvoiceQR() || "/placeholder.svg"}
-                    alt="Lightning Payment QR Code"
-                    className="w-40 h-40"
+                    src={getLightningAddressQR() || "/placeholder.svg"}
+                    alt="Lightning Address QR Code"
+                    className="w-48 h-48 sm:w-56 sm:h-56"
                   />
                 </div>
                 <p className="text-slate-400 text-xs mt-2">
-                  {amount > 0 ? `Invoice for ${amount.toLocaleString()} sats` : "Scan to send any amount"}
+                  Scan to pay {amount > 0 ? `${amount.toLocaleString()} sats` : "any amount"}
                 </p>
+                <p className="text-slate-500 text-xs mt-1">(Enter amount in your wallet after scanning)</p>
               </div>
 
-              {/* Lightning address */}
               <div className="bg-slate-700 rounded-lg p-3">
                 <label className="text-xs text-slate-300 mb-2 block">Lightning Address</label>
                 <div className="flex items-center gap-2">
@@ -210,25 +190,13 @@ export default function DonationBubble() {
                     onClick={handleCopy}
                     size="sm"
                     variant="outline"
-                    className="border-slate-600 text-slate-300 hover:bg-slate-600 bg-transparent p-2"
+                    className="border-slate-600 text-slate-300 hover:bg-slate-600 bg-transparent p-2 min-h-[44px] min-w-[44px]"
                   >
-                    {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                    {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                   </Button>
                 </div>
-                <p className="text-slate-400 text-xs mt-2">Amount: {amount.toLocaleString()} sats</p>
+                <p className="text-slate-400 text-xs mt-2">Suggested: {amount.toLocaleString()} sats</p>
               </div>
-
-              {/* Pay button (for non-WebLN users) */}
-              {!hasWebLN && (
-                <Button
-                  onClick={handleLightningPayment}
-                  disabled={!amount || amount <= 0}
-                  className="w-full bg-orange-500 hover:bg-orange-400 text-white flex items-center justify-center gap-2 disabled:opacity-50 text-sm"
-                >
-                  <Zap className="w-4 h-4" />
-                  {amount > 0 ? `Pay ${amount.toLocaleString()} sats` : "Enter amount to pay"}
-                </Button>
-              )}
 
               <p className="text-slate-400 text-xs text-center">Thank you for supporting open source! 💜</p>
             </div>

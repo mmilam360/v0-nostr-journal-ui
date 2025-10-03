@@ -30,8 +30,8 @@ export default function NoteList({ notes, selectedNote, onSelectNote, onCreateNo
   }
 
   return (
-    <div className="w-80 bg-slate-850 flex flex-col">
-      <div className="p-4 border-b border-slate-700">
+    <div className="w-full md:w-80 bg-slate-850 flex flex-col">
+      <div className="p-3 md:p-4 border-b border-slate-700">
         <div className="relative mb-3">
           <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 text-sm">🔍</span>
           <Input
@@ -44,7 +44,7 @@ export default function NoteList({ notes, selectedNote, onSelectNote, onCreateNo
 
         <Button
           onClick={onCreateNote}
-          className="w-full bg-slate-700 hover:bg-slate-600 text-white flex items-center gap-2"
+          className="w-full bg-slate-700 hover:bg-slate-600 text-white flex items-center gap-2 min-h-[44px]"
         >
           ➕ New Note
         </Button>
@@ -61,7 +61,7 @@ export default function NoteList({ notes, selectedNote, onSelectNote, onCreateNo
             </p>
           </div>
         ) : (
-          <div className="p-2">
+          <div className="p-2 md:p-2">
             {filteredNotes.map((note) => (
               <div
                 key={note.id}
@@ -69,7 +69,7 @@ export default function NoteList({ notes, selectedNote, onSelectNote, onCreateNo
                   selectedNote?.id === note.id ? "bg-slate-700" : "hover:bg-slate-800"
                 }`}
               >
-                <button onClick={() => onSelectNote(note)} className="w-full p-4 text-left">
+                <button onClick={() => onSelectNote(note)} className="w-full p-4 text-left min-h-[44px]">
                   <h3 className="font-semibold text-white mb-1 truncate pr-8">{note.title || "Untitled Note"}</h3>
                   <p className="text-slate-400 text-sm line-clamp-2">{note.content || "No content yet..."}</p>
                 </button>
@@ -79,7 +79,7 @@ export default function NoteList({ notes, selectedNote, onSelectNote, onCreateNo
                     onClick={(e) => handleDeleteClick(note, e)}
                     variant="ghost"
                     size="sm"
-                    className="h-6 w-6 p-0 text-red-400 hover:text-red-300 hover:bg-red-900/20 opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="h-8 w-8 p-0 text-red-400 hover:text-red-300 hover:bg-red-900/20 opacity-0 group-hover:opacity-100 transition-opacity min-h-[44px] min-w-[44px] md:h-6 md:w-6 md:min-h-0 md:min-w-0"
                     title="Delete note"
                   >
                     ✕

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { LogOut, Menu, X, Cloud, CloudOff, RefreshCw, User } from "lucide-react"
+import { LogOut, Menu, X, CloudOff, RefreshCw, User, CheckCircle2, Loader2, AlertCircle } from "lucide-react"
 import TagsPanel from "@/components/tags-panel"
 import NoteList from "@/components/note-list"
 import Editor from "@/components/editor"
@@ -23,6 +23,8 @@ export interface Note {
   createdAt: Date
   lastModified: Date
   lastSynced?: Date
+  syncStatus?: "local" | "syncing" | "synced" | "error"
+  syncError?: string
 }
 
 export interface AuthData {
@@ -30,11 +32,11 @@ export interface AuthData {
   authMethod: "extension" | "nsec" | "remote"
   nsec?: string
   privateKey?: string
-  signer?: any // BunkerSigner instance for remote signing
-  clientSecretKey?: Uint8Array // Local secret key for remote signer session
-  bunkerPubkey?: string // The bunker's public key
-  bunkerUri?: string // The full connection URI for recreating the signer
-  relays?: string[] // Relays used for remote signer connection
+  signer?: any
+  clientSecretKey?: Uint8Array
+  bunkerPubkey?: string
+  bunkerUri?: string
+  relays?: string[]
 }
 
 interface MainAppProps {
@@ -71,14 +73,25 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
         const localNotes = await loadEncryptedNotes(authData.pubkey)
         console.log("[v0] Loaded", localNotes.length, "local notes")
 
+        const notesWithStatus = localNotes.map((note) => ({
+          ...note,
+          syncStatus: note.syncStatus || ("local" as const),
+        }))
+
         if (authData.authMethod === "nsec" && authData.privateKey) {
           console.log("[v0] Syncing with Nostr network...")
           const privateKeyBytes = new Uint8Array(
             authData.privateKey.match(/.{1,2}/g)?.map((byte) => Number.parseInt(byte, 16)) || [],
           )
 
-          const syncResult = await syncNotes(localNotes, deletedNotes, privateKeyBytes)
-          setNotes(syncResult.notes)
+          const syncResult = await syncNotes(notesWithStatus, deletedNotes, privateKeyBytes)
+
+          const syncedNotes = syncResult.notes.map((note) => ({
+            ...note,
+            syncStatus: syncResult.synced ? ("synced" as const) : ("error" as const),
+          }))
+
+          setNotes(syncedNotes)
           setDeletedNotes(syncResult.deletedNotes)
           setSyncStatus(syncResult.synced ? "synced" : "error")
           if (syncResult.synced) {
@@ -88,17 +101,17 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
           console.log("[v0] Sync completed:", syncResult.synced ? "success" : "failed")
 
           const allTags = new Set<string>()
-          syncResult.notes.forEach((note) => {
+          syncedNotes.forEach((note) => {
             note.tags.forEach((tag) => allTags.add(tag))
           })
           setTags(Array.from(allTags))
         } else {
-          setNotes(localNotes)
+          setNotes(notesWithStatus)
           setSyncStatus("offline")
           console.log("[v0] Using local storage only (extension auth)")
 
           const allTags = new Set<string>()
-          localNotes.forEach((note) => {
+          notesWithStatus.forEach((note) => {
             note.tags.forEach((tag) => allTags.add(tag))
           })
           setTags(Array.from(allTags))
@@ -120,7 +133,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     if (authData.authMethod !== "nsec" || !authData.privateKey) return
 
     const syncInterval = setInterval(async () => {
-      if (syncStatus === "syncing" || needsSync) return // Don't sync if already syncing or changes pending
+      if (syncStatus === "syncing" || needsSync) return
 
       console.log("[v0] Performing background sync...")
       setSyncStatus("syncing")
@@ -132,13 +145,18 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
 
         const syncResult = await syncNotes(notes, deletedNotes, privateKeyBytes)
 
-        // Only update state if there are actual changes
         if (
           JSON.stringify(syncResult.notes) !== JSON.stringify(notes) ||
           JSON.stringify(syncResult.deletedNotes) !== JSON.stringify(deletedNotes)
         ) {
           console.log("[v0] Background sync found changes")
-          setNotes(syncResult.notes)
+
+          const syncedNotes = syncResult.notes.map((note) => ({
+            ...note,
+            syncStatus: syncResult.synced ? ("synced" as const) : ("error" as const),
+          }))
+
+          setNotes(syncedNotes)
           setDeletedNotes(syncResult.deletedNotes)
         }
 
@@ -150,7 +168,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
         console.error("[v0] Background sync failed:", error)
         setSyncStatus("error")
       }
-    }, 60000) // Reduced frequency to every 60 seconds
+    }, 60000)
 
     return () => clearInterval(syncInterval)
   }, [authData.authMethod, authData.privateKey, syncStatus, needsSync])
@@ -165,6 +183,14 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
         if (authData.authMethod === "nsec" && authData.privateKey && (notes.length > 0 || deletedNotes.length > 0)) {
           try {
             setSyncStatus("syncing")
+
+            setNotes((prev) =>
+              prev.map((note) => ({
+                ...note,
+                syncStatus: "syncing" as const,
+              })),
+            )
+
             const privateKeyBytes = new Uint8Array(
               authData.privateKey.match(/.{1,2}/g)?.map((byte) => Number.parseInt(byte, 16)) || [],
             )
@@ -172,13 +198,18 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
             console.log("[v0] Syncing changes to Nostr...")
             const result = await syncNotes(notes, deletedNotes, privateKeyBytes)
 
-            // Only update state if there are actual changes
             if (
               JSON.stringify(result.notes) !== JSON.stringify(notes) ||
               JSON.stringify(result.deletedNotes) !== JSON.stringify(deletedNotes)
             ) {
               console.log("[v0] Sync returned changes, updating state")
-              setNotes(result.notes)
+
+              const syncedNotes = result.notes.map((note) => ({
+                ...note,
+                syncStatus: result.synced ? ("synced" as const) : ("error" as const),
+              }))
+
+              setNotes(syncedNotes)
               setDeletedNotes(result.deletedNotes)
             }
 
@@ -189,6 +220,13 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
           } catch (error) {
             console.error("[v0] Error syncing to Nostr:", error)
             setSyncStatus("error")
+
+            setNotes((prev) =>
+              prev.map((note) => ({
+                ...note,
+                syncStatus: "error" as const,
+              })),
+            )
           }
         }
 
@@ -217,6 +255,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       tags: [],
       createdAt: now,
       lastModified: now,
+      syncStatus: "local",
     }
 
     const updatedNotes = [newNote, ...notes]
@@ -234,6 +273,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       ...updatedNote,
       lastModified: new Date(),
       lastSynced: undefined,
+      syncStatus: "local" as const,
     }
 
     setNotes(notes.map((note) => (note.id === updatedNote.id ? noteWithTimestamp : note)))
@@ -388,11 +428,11 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   const getSyncStatusIcon = () => {
     switch (syncStatus) {
       case "synced":
-        return <Cloud className="w-4 h-4 text-green-500" />
+        return <CheckCircle2 className="w-4 h-4 text-green-500" />
       case "syncing":
-        return <RefreshCw className="w-4 h-4 text-blue-500 animate-spin" />
+        return <Loader2 className="w-4 h-4 text-blue-500 animate-spin" />
       case "error":
-        return <CloudOff className="w-4 h-4 text-red-500" />
+        return <AlertCircle className="w-4 h-4 text-red-500" />
       default:
         return <CloudOff className="w-4 h-4 text-slate-500" />
     }
@@ -421,7 +461,13 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       )
 
       const syncResult = await syncNotes(notes, deletedNotes, privateKeyBytes)
-      setNotes(syncResult.notes)
+
+      const syncedNotes = syncResult.notes.map((note) => ({
+        ...note,
+        syncStatus: syncResult.synced ? ("synced" as const) : ("error" as const),
+      }))
+
+      setNotes(syncedNotes)
       setDeletedNotes(syncResult.deletedNotes)
       setSyncStatus(syncResult.synced ? "synced" : "error")
       if (syncResult.synced) {
