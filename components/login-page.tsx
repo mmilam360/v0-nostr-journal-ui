@@ -323,14 +323,11 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
         }
       }, 120000)
 
-      const sub = fetcher.allEventsIterator(
-        [BUNKER_RELAY],
-        {
-          kinds: [24133],
-          "#p": [appPublicKey],
-        },
-        { realTime: true, timeout: 120000 },
-      )
+const sub = fetcher.allEventsIterator(
+  [BUNKER_RELAY],
+  { kinds: [24133] },
+  { realTime: true, timeout: 120000 }
+)
 
       console.log("[Bunker] 👂 Listening for events...")
 
