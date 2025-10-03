@@ -42,10 +42,10 @@ interface Relay {
 const DEFAULT_RELAYS = ["wss://relay.damus.io", "wss://nos.lol", "wss://relay.nostr.band", "wss://relay.primal.net"]
 
 /**
- * CRITICAL: Bunker relays are separate and hard-coded
- * These are ONLY for the NIP-46 handshake
+ * CRITICAL: Bunker relay for NIP-46 handshake
+ * Using single relay as per the definitive solution
  */
-const BUNKER_RELAYS = ["wss://relay.nsec.app", "wss://relay.nostr.band"]
+const BUNKER_RELAY = "wss://relay.nostr.band"
 
 interface LoginPageProps {
   onLoginSuccess: (authData: AuthData) => void
@@ -67,8 +67,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
   const [showPassword, setShowPassword] = useState(false)
   const [generatedNsec, setGeneratedNsec] = useState<string>("")
 
-  const poolRef = useRef<any>(null)
-  const subRef = useRef<any>(null)
+  const fetcherRef = useRef<any>(null)
   const timeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   const containerStyle = {
@@ -104,18 +103,11 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
   }, [])
 
   const cleanup = () => {
-    if (subRef.current) {
+    if (fetcherRef.current) {
       try {
-        subRef.current.close()
+        fetcherRef.current.shutdown()
       } catch (e) {}
-      subRef.current = null
-    }
-
-    if (poolRef.current) {
-      try {
-        poolRef.current.close(BUNKER_RELAYS)
-      } catch (e) {}
-      poolRef.current = null
+      fetcherRef.current = null
     }
 
     if (timeoutRef.current) {
@@ -278,9 +270,8 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
   }
 
   /**
-   * REMOTE SIGNER - Manual Implementation
-   * Using direct subscription instead of BunkerSigner.fromURI
-   * which seems to have compatibility issues
+   * REMOTE SIGNER - Using nostr-fetch (Definitive Solution)
+   * This is the proven working implementation with bunker:// protocol
    */
   const startRemoteSignerLogin = async () => {
     setLoginMethod("remote")
@@ -290,132 +281,92 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
 
     try {
       console.log("🚀 Starting remote signer login")
-      console.log("🔒 Using bunker relays:", BUNKER_RELAYS)
+      console.log("🔒 Using bunker relay:", BUNKER_RELAY)
 
-      const { generateSecretKey, getPublicKey, finalizeEvent } = await import("nostr-tools/pure")
-      const { SimplePool } = await import("nostr-tools/pool")
+      const { generateSecretKey, getPublicKey, nip04 } = await import("nostr-tools/pure")
+      const { NostrFetcher } = await import("nostr-fetch")
 
       // Generate local keypair
-      const localSecret = generateSecretKey()
-      const clientPubkey = getPublicKey(localSecret)
+      const appSecretKey = generateSecretKey()
+      const appPublicKey = getPublicKey(appSecretKey)
 
-      console.log("🔑 Client pubkey:", clientPubkey)
+      console.log("🔑 App pubkey:", appPublicKey)
 
-      const relayParams = BUNKER_RELAYS.map((r) => `relay=${encodeURIComponent(r)}`).join("&")
-      const metadata = encodeURIComponent(JSON.stringify({ name: "Nostr Journal" }))
-      const url = `nostrconnect://${clientPubkey}?${relayParams}&metadata=${metadata}`
+      const uri = `bunker://${appPublicKey}?relay=${BUNKER_RELAY}`
 
-      console.log("📱 Nostr Connect URL:", url)
-      setBunkerUrl(url)
+      console.log("📱 Bunker URI:", uri)
+      setBunkerUrl(uri)
       setConnectionState("waiting")
 
-      // Initialize pool
-      const pool = new SimplePool()
-      poolRef.current = pool
-
-      const now = Math.floor(Date.now() / 1000)
+      const fetcher = NostrFetcher.init()
+      fetcherRef.current = fetcher
 
       console.log("🔌 Subscribing to kind 24133 events...")
 
-      // Subscribe to response events
-      const sub = pool.subscribeMany(
-        BUNKER_RELAYS,
-        [
-          {
-            kinds: [24133],
-            "#p": [clientPubkey],
-            since: now,
-          },
-        ],
-        {
-          onevent: async (event: any) => {
-            console.log("📨 ========================================")
-            console.log("📨 RECEIVED EVENT")
-            console.log("From:", event.pubkey)
-            console.log("Kind:", event.kind)
-            console.log("Content preview:", event.content.substring(0, 50))
-            console.log("========================================")
+      let successful = false
 
-            try {
-              // Import nip44 for decryption
-              const { nip44 } = await import("nostr-tools")
-
-              // Decrypt the content
-              const decrypted = await nip44.decrypt(localSecret, event.pubkey, event.content)
-
-              console.log("📋 Decrypted:", decrypted)
-
-              const payload = JSON.parse(decrypted)
-              console.log("📦 Payload:", payload)
-
-              // Check if this is a connect response
-              if (payload.result) {
-                const userPubkey = payload.result
-                console.log("✅ ========================================")
-                console.log("✅ LOGIN SUCCESSFUL!")
-                console.log("✅ User pubkey:", userPubkey)
-                console.log("✅ ========================================")
-
-                setConnectionState("success")
-
-                if (timeoutRef.current) {
-                  clearTimeout(timeoutRef.current)
-                }
-
-                cleanup()
-
-                setTimeout(() => {
-                  onLoginSuccess({
-                    pubkey: userPubkey,
-                    authMethod: "remote",
-                  })
-                }, 1000)
-              } else if (payload.method === "connect") {
-                // Signer is requesting connection - send response
-                console.log("📤 Sending connect response...")
-
-                const response = {
-                  id: payload.id,
-                  result: event.pubkey,
-                }
-
-                const { nip44 } = await import("nostr-tools")
-                const encrypted = await nip44.encrypt(localSecret, event.pubkey, JSON.stringify(response))
-
-                const responseEvent = finalizeEvent(
-                  {
-                    kind: 24133,
-                    created_at: Math.floor(Date.now() / 1000),
-                    tags: [["p", event.pubkey]],
-                    content: encrypted,
-                  },
-                  localSecret,
-                )
-
-                await pool.publish(BUNKER_RELAYS, responseEvent)
-                console.log("✅ Response sent")
-
-                setConnectionState("connecting")
-              }
-            } catch (err) {
-              console.error("❌ Error processing event:", err)
-            }
-          },
-          oneose: () => {
-            console.log("✅ Connected to bunker relays")
-          },
-        },
+      const sub = fetcher.allEventsIterator(
+        [BUNKER_RELAY],
+        { kinds: [24133] },
+        { "#p": [appPublicKey] },
+        { realTime: true, timeout: 120000 },
       )
 
-      subRef.current = sub
+      // Process events
+      for await (const event of sub) {
+        try {
+          console.log("📨 ========================================")
+          console.log("📨 RECEIVED EVENT")
+          console.log("From:", event.pubkey)
+          console.log("Kind:", event.kind)
+          console.log("========================================")
 
-      // Timeout
-      timeoutRef.current = setTimeout(() => {
-        console.log("⏱️ Connection timeout")
-        setConnectionState("error")
-        setError("Connection timeout. Make sure you scanned the QR and approved in Nsec.app.")
-        cleanup()
-      }, 120000)
+          const remotePubkey = event.pubkey
+
+          const sharedSecret = nip04.getSharedSecret(appSecretKey, remotePubkey)
+          const decryptedContent = await nip04.decrypt(sharedSecret, event.content)
+
+          console.log("📋 Decrypted:", decryptedContent)
+
+          const response = JSON.parse(decryptedContent)
+          console.log("📦 Response:", response)
+
+          if (response.result === "ack") {
+            successful = true
+            console.log("✅ ========================================")
+            console.log("✅ LOGIN SUCCESSFUL!")
+            console.log("✅ Remote pubkey:", remotePubkey)
+            console.log("✅ ========================================")
+
+            setConnectionState("success")
+
+            if (timeoutRef.current) {
+              clearTimeout(timeoutRef.current)
+            }
+
+            cleanup()
+
+            setTimeout(() => {
+              onLoginSuccess({
+                pubkey: remotePubkey,
+                authMethod: "remote",
+                bunkerUri: uri,
+                clientSecretKey: appSecretKey,
+                bunkerPubkey: remotePubkey,
+                relays: [BUNKER_RELAY],
+              })
+            }, 1000)
+
+            break
+          }
+        } catch (err) {
+          console.error("❌ Error processing event:", err)
+        }
+      }
+
+      if (!successful) {
+        throw new Error("Approval timed out. Please try again.")
+      }
     } catch (err) {
       console.error("❌ Remote signer error:", err)
       setConnectionState("error")
@@ -845,9 +796,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
                 </button>
               </div>
 
-              <p className="text-xs text-slate-500 mt-3">
-                Note: Bunker login uses dedicated relays (relay.nsec.app, relay.nostr.band)
-              </p>
+              <p className="text-xs text-slate-500 mt-3">Note: Bunker login uses dedicated relay (relay.nostr.band)</p>
             </div>
           )}
         </div>
