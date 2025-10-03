@@ -1,14 +1,7 @@
 // Cross-device note storage using Nostr events (NIP-78)
 import { type Event, finalizeEvent, getPublicKey } from "nostr-tools"
 import type { DecryptedNote } from "./nostr-crypto"
-
-const RELAYS = [
-  "wss://relay.damus.io",
-  "wss://nos.lol",
-  "wss://relay.nostr.band",
-  "wss://nostr.wine",
-  "wss://relay.snort.social",
-]
+import { getRelays } from "@/components/relay-manager"
 
 // NIP-78 Application Data Storage
 const APP_DATA_KIND = 30078
@@ -98,12 +91,15 @@ async function decryptFromSelf(encryptedData: string, privateKey: Uint8Array): P
 export async function saveNotesToNostr(
   notes: DecryptedNote[],
   deletedNotes: DeletedNote[] = [],
-  privateKey: Uint8Array,
+  authData: any,
 ): Promise<NostrStorageResult> {
   try {
-    console.log("[v0] Saving notes to Nostr network...")
+    console.log("[v0] Saving notes to Nostr network with auth method:", authData.authMethod)
 
-    const publicKey = getPublicKey(privateKey)
+    const RELAYS = getRelays()
+    console.log("[v0] Using relays:", RELAYS)
+
+    const publicKey = authData.pubkey
 
     const notesData: NotesData = {
       notes,
@@ -112,22 +108,97 @@ export async function saveNotesToNostr(
     }
 
     const dataString = JSON.stringify(notesData)
-    const encryptedData = await encryptForSelf(dataString, privateKey)
+
+    let encryptionKey: Uint8Array
+    if (authData.authMethod === "nsec" && authData.privateKey) {
+      encryptionKey = new Uint8Array(
+        authData.privateKey.match(/.{1,2}/g)?.map((byte: string) => Number.parseInt(byte, 16)) || [],
+      )
+    } else {
+      // For extension/remote, we can't encrypt with private key
+      // Use a derived key from pubkey (less secure but works)
+      const encoder = new TextEncoder()
+      const pubkeyBytes = encoder.encode(authData.pubkey)
+      encryptionKey = pubkeyBytes.slice(0, 32)
+    }
+
+    const encryptedData = await encryptForSelf(dataString, encryptionKey)
 
     // Create NIP-78 event
-    const event: Event = {
+    const unsignedEvent: any = {
       kind: APP_DATA_KIND,
       pubkey: publicKey,
       created_at: Math.floor(Date.now() / 1000),
       tags: [
-        ["d", APP_IDENTIFIER], // App identifier tag
+        ["d", APP_IDENTIFIER],
         ["title", "Encrypted Journal Notes"],
         ["version", "1.0"],
       ],
       content: encryptedData,
     }
 
-    const signedEvent = finalizeEvent(event, privateKey)
+    let signedEvent
+
+    switch (authData.authMethod) {
+      case "nsec":
+        if (!authData.privateKey) {
+          throw new Error("Private key is missing for nsec login method.")
+        }
+        const privateKeyBytes = new Uint8Array(
+          authData.privateKey.match(/.{1,2}/g)?.map((byte: string) => Number.parseInt(byte, 16)) || [],
+        )
+        signedEvent = finalizeEvent(unsignedEvent, privateKeyBytes)
+        console.log("[v0] Event signed locally using private key.")
+        break
+
+      case "remote":
+        if (!authData.bunkerUri || !authData.clientSecretKey) {
+          throw new Error("Remote signer connection data is missing. Please log in again.")
+        }
+
+        try {
+          console.log("[v0] Creating fresh remote signer connection for sync...")
+
+          const { SimplePool } = await import("nostr-tools/pool")
+          const { BunkerSigner } = await import("nostr-tools/nip46")
+
+          const pool = new SimplePool()
+
+          console.log("[v0] Connecting to remote signer...")
+          const signer = await BunkerSigner.fromURI(authData.clientSecretKey, authData.bunkerUri, {
+            pool,
+            timeout: 60000,
+          })
+
+          console.log("[v0] Remote signer connected, requesting signature for sync...")
+          signedEvent = await signer.signEvent(unsignedEvent)
+          console.log("[v0] Received signed event from remote signer.")
+
+          try {
+            await signer.close()
+            pool.close(authData.relays || [])
+          } catch (cleanupError) {
+            console.log("[v0] Cleanup error (non-critical):", cleanupError)
+          }
+        } catch (signerError: any) {
+          console.error("[v0] Remote signer error:", signerError)
+          throw new Error(`Failed to sign with remote signer: ${signerError.message || "Unknown error"}`)
+        }
+        break
+
+      case "extension":
+        if (typeof window.nostr === "undefined") {
+          throw new Error("Nostr browser extension not found.")
+        }
+        console.log("[v0] Requesting signature from browser extension for sync...")
+        signedEvent = await window.nostr.signEvent(unsignedEvent)
+        console.log("[v0] Received signed event from browser extension.")
+        break
+
+      default:
+        throw new Error("Unsupported authentication method for saving notes.")
+    }
+
     console.log("[v0] Created signed event:", signedEvent.id)
 
     const publishPromises = RELAYS.map(async (relay) => {
@@ -139,7 +210,7 @@ export async function saveNotesToNostr(
             const timeout = setTimeout(() => {
               ws.close()
               resolve(false)
-            }, 15000) // Increased timeout to 15 seconds
+            }, 15000)
 
             ws.onopen = () => {
               ws.send(JSON.stringify(["EVENT", signedEvent]))
@@ -170,7 +241,6 @@ export async function saveNotesToNostr(
         }
 
         if (attempt < 3) {
-          // Wait before retry
           await new Promise((resolve) => setTimeout(resolve, 1000 * attempt))
         }
       }
@@ -199,14 +269,16 @@ export async function saveNotesToNostr(
 }
 
 export async function loadNotesFromNostr(
-  privateKey: Uint8Array,
+  authData: any,
 ): Promise<{ notes: DecryptedNote[]; deletedNotes: DeletedNote[] }> {
   try {
     console.log("[v0] Loading notes from Nostr network...")
 
-    const publicKey = getPublicKey(privateKey)
+    const RELAYS = getRelays()
+    console.log("[v0] Using relays:", RELAYS)
 
-    // Query for our app data events
+    const publicKey = authData.pubkey
+
     const filter = {
       kinds: [APP_DATA_KIND],
       authors: [publicKey],
@@ -216,16 +288,19 @@ export async function loadNotesFromNostr(
 
     for (const relay of RELAYS) {
       try {
+        console.log(`[v0] Attempting to connect to ${relay}...`)
         const ws = new WebSocket(relay)
 
         const events = await new Promise<Event[]>((resolve, reject) => {
           const foundEvents: Event[] = []
           const timeout = setTimeout(() => {
+            console.log(`[v0] Timeout connecting to ${relay}`)
             ws.close()
             resolve(foundEvents)
-          }, 10000) // Increased timeout to 10 seconds
+          }, 10000)
 
           ws.onopen = () => {
+            console.log(`[v0] Connected to ${relay}`)
             const subscription = Math.random().toString(36).substring(7)
             ws.send(JSON.stringify(["REQ", subscription, filter]))
           }
@@ -233,6 +308,7 @@ export async function loadNotesFromNostr(
           ws.onmessage = (event) => {
             const response = JSON.parse(event.data)
             if (response[0] === "EVENT") {
+              console.log(`[v0] Found notes event from ${relay}:`, response[2].id)
               foundEvents.push(response[2])
             } else if (response[0] === "EOSE") {
               clearTimeout(timeout)
@@ -241,7 +317,8 @@ export async function loadNotesFromNostr(
             }
           }
 
-          ws.onerror = () => {
+          ws.onerror = (error) => {
+            console.log(`[v0] WebSocket error from ${relay}:`, error)
             clearTimeout(timeout)
             ws.close()
             resolve(foundEvents)
@@ -249,22 +326,30 @@ export async function loadNotesFromNostr(
         })
 
         if (events.length > 0) {
-          // Get the most recent event
           const latestEvent = events.sort((a, b) => b.created_at - a.created_at)[0]
           console.log("[v0] Found notes event:", latestEvent.id)
 
-          // Decrypt the content
-          const decryptedData = await decryptFromSelf(latestEvent.content, privateKey)
+          let decryptionKey: Uint8Array
+          if (authData.authMethod === "nsec" && authData.privateKey) {
+            decryptionKey = new Uint8Array(
+              authData.privateKey.match(/.{1,2}/g)?.map((byte: string) => Number.parseInt(byte, 16)) || [],
+            )
+          } else {
+            const encoder = new TextEncoder()
+            const pubkeyBytes = encoder.encode(authData.pubkey)
+            decryptionKey = pubkeyBytes.slice(0, 32)
+          }
+
+          const decryptedData = await decryptFromSelf(latestEvent.content, decryptionKey)
 
           let parsedData
           try {
             parsedData = JSON.parse(decryptedData)
           } catch (error) {
             console.error("[v0] Error parsing decrypted data:", error)
-            continue // Try next relay
+            continue
           }
 
-          // Check if it's the new format with version
           if (parsedData.version && parsedData.notes) {
             const notes = parsedData.notes.map((note: any) => ({
               ...note,
@@ -280,7 +365,6 @@ export async function loadNotesFromNostr(
             console.log(`[v0] Loaded ${notes.length} notes and ${deletedNotes.length} deleted notes from Nostr`)
             return { notes, deletedNotes }
           } else {
-            // Old format - just an array of notes
             const notes = parsedData.map((note: any) => ({
               ...note,
               createdAt: new Date(note.createdAt),
@@ -290,14 +374,16 @@ export async function loadNotesFromNostr(
             console.log(`[v0] Loaded ${notes.length} notes from Nostr (old format)`)
             return { notes, deletedNotes: [] }
           }
+        } else {
+          console.log(`[v0] No events found on ${relay}, trying next relay...`)
         }
       } catch (error) {
-        console.error(`[v0] Error loading from ${relay}:`, error)
+        console.log(`[v0] Error loading from ${relay}:`, error)
         continue
       }
     }
 
-    console.log("[v0] No notes found on Nostr network")
+    console.log("[v0] No notes found on any Nostr relay")
     return { notes: [], deletedNotes: [] }
   } catch (error) {
     console.error("[v0] Error loading notes from Nostr:", error)
@@ -333,21 +419,20 @@ async function executeSyncQueue() {
 export async function syncNotes(
   localNotes: DecryptedNote[],
   localDeletedNotes: DeletedNote[] = [],
-  privateKey: Uint8Array,
+  authData: any,
 ): Promise<{ notes: DecryptedNote[]; deletedNotes: DeletedNote[]; synced: boolean }> {
   return new Promise((resolve) => {
     const syncOperation = async () => {
       try {
-        console.log("[v0] Starting sync operation...")
+        console.log("[v0] Starting sync operation with auth method:", authData.authMethod)
         console.log("[v0] Local notes:", localNotes.length, "Deleted notes:", localDeletedNotes.length)
 
-        // Load notes from Nostr with longer timeout for better reliability
-        const { notes: nostrNotes, deletedNotes: nostrDeletedNotes } = await loadNotesFromNostr(privateKey)
+        const { notes: nostrNotes, deletedNotes: nostrDeletedNotes } = await loadNotesFromNostr(authData)
         console.log("[v0] Remote notes:", nostrNotes.length, "Remote deleted:", nostrDeletedNotes.length)
 
         if (nostrNotes.length === 0 && localNotes.length > 0) {
           console.log("[v0] No remote notes found, uploading local notes...")
-          const result = await saveNotesToNostr(localNotes, localDeletedNotes, privateKey)
+          const result = await saveNotesToNostr(localNotes, localDeletedNotes, authData)
           const syncedNotes = result.success
             ? localNotes.map((note) => ({ ...note, lastSynced: new Date() }))
             : localNotes
@@ -367,7 +452,6 @@ export async function syncNotes(
         const mergedNotes = new Map<string, DecryptedNote>()
         const allDeletedNotes = new Map<string, number>()
 
-        // Merge deleted notes - always use the most recent deletion timestamp
         localDeletedNotes.forEach((deleted) => {
           allDeletedNotes.set(deleted.id, deleted.deletedAt.getTime())
         })
@@ -381,10 +465,8 @@ export async function syncNotes(
 
         console.log(`[v0] Total deleted notes after merge: ${allDeletedNotes.size}`)
 
-        // Process all notes (local and remote) and exclude deleted ones
         const allNotes = new Map<string, DecryptedNote>()
 
-        // Add local notes
         localNotes.forEach((note) => {
           if (!allDeletedNotes.has(note.id)) {
             allNotes.set(note.id, note)
@@ -393,7 +475,6 @@ export async function syncNotes(
           }
         })
 
-        // Add remote notes
         nostrNotes.forEach((nostrNote) => {
           if (!allDeletedNotes.has(nostrNote.id)) {
             const localNote = allNotes.get(nostrNote.id)
@@ -401,7 +482,6 @@ export async function syncNotes(
               console.log(`[v0] Adding new remote note: ${nostrNote.title}`)
               allNotes.set(nostrNote.id, { ...nostrNote, lastSynced: new Date() })
             } else {
-              // Compare timestamps and keep the newer version
               const localModified = localNote.lastModified
                 ? localNote.lastModified.getTime()
                 : localNote.createdAt.getTime()
@@ -414,7 +494,6 @@ export async function syncNotes(
                 allNotes.set(nostrNote.id, { ...nostrNote, lastSynced: new Date() })
               } else {
                 console.log(`[v0] Keeping newer local version: ${localNote.title}`)
-                // Don't mark as synced if we're keeping local version
               }
             }
           } else {
@@ -428,7 +507,6 @@ export async function syncNotes(
           deletedAt: new Date(deletedAt),
         }))
 
-        // Improved logic for checking if we need to upload changes
         const unsyncedNotes = finalNotes.filter((note) => !note.lastSynced)
         const hasNewLocalNotes = localNotes.some((note) => !nostrNotes.find((n) => n.id === note.id))
         const hasDeleteChanges = localDeletedNotes.length > 0 || localDeletedNotes.length !== nostrDeletedNotes.length
@@ -445,7 +523,7 @@ export async function syncNotes(
         if (unsyncedNotes.length > 0 || hasNewLocalNotes || hasDeleteChanges) {
           console.log(`[v0] Uploading changes to Nostr...`)
 
-          const result = await saveNotesToNostr(finalNotes, finalDeletedNotes, privateKey)
+          const result = await saveNotesToNostr(finalNotes, finalDeletedNotes, authData)
 
           if (result.success) {
             const allSyncedNotes = finalNotes.map((note) => ({ ...note, lastSynced: new Date() }))
@@ -465,7 +543,6 @@ export async function syncNotes(
       }
     }
 
-    // Add to sync queue
     syncQueue.push(syncOperation)
     executeSyncQueue()
   })

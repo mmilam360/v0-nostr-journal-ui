@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { LogOut, Menu, X, CloudOff, RefreshCw, User, CheckCircle2, Loader2, AlertCircle } from "lucide-react"
+import { LogOut, Menu, X, CloudOff, RefreshCw, User, CheckCircle2, Loader2, AlertCircle, Settings } from "lucide-react"
 import TagsPanel from "@/components/tags-panel"
 import NoteList from "@/components/note-list"
 import Editor from "@/components/editor"
@@ -14,6 +14,8 @@ import { Button } from "@/components/ui/button"
 import { saveEncryptedNotes, loadEncryptedNotes } from "@/lib/nostr-crypto"
 import { createNostrEvent, publishToNostr } from "@/lib/nostr-publish"
 import { syncNotes } from "@/lib/nostr-storage"
+import { RelayManager } from "@/components/relay-manager"
+import { ThemeToggle } from "@/components/theme-toggle"
 
 export interface Note {
   id: string
@@ -62,6 +64,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   const [noteToDelete, setNoteToDelete] = useState<Note | null>(null)
   const [deletedNotes, setDeletedNotes] = useState<{ id: string; deletedAt: Date }[]>([])
   const [showProfile, setShowProfile] = useState(false)
+  const [showRelayManager, setShowRelayManager] = useState(false)
 
   useEffect(() => {
     const loadUserNotes = async () => {
@@ -78,44 +81,29 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
           syncStatus: note.syncStatus || ("local" as const),
         }))
 
-        if (authData.authMethod === "nsec" && authData.privateKey) {
-          console.log("[v0] Syncing with Nostr network...")
-          const privateKeyBytes = new Uint8Array(
-            authData.privateKey.match(/.{1,2}/g)?.map((byte) => Number.parseInt(byte, 16)) || [],
-          )
+        console.log("[v0] Syncing with Nostr network...")
 
-          const syncResult = await syncNotes(notesWithStatus, deletedNotes, privateKeyBytes)
+        const syncResult = await syncNotes(notesWithStatus, deletedNotes, authData)
 
-          const syncedNotes = syncResult.notes.map((note) => ({
-            ...note,
-            syncStatus: syncResult.synced ? ("synced" as const) : ("error" as const),
-          }))
+        const syncedNotes = syncResult.notes.map((note) => ({
+          ...note,
+          syncStatus: syncResult.synced ? ("synced" as const) : ("error" as const),
+        }))
 
-          setNotes(syncedNotes)
-          setDeletedNotes(syncResult.deletedNotes)
-          setSyncStatus(syncResult.synced ? "synced" : "error")
-          if (syncResult.synced) {
-            setLastSyncTime(new Date())
-          }
-
-          console.log("[v0] Sync completed:", syncResult.synced ? "success" : "failed")
-
-          const allTags = new Set<string>()
-          syncedNotes.forEach((note) => {
-            note.tags.forEach((tag) => allTags.add(tag))
-          })
-          setTags(Array.from(allTags))
-        } else {
-          setNotes(notesWithStatus)
-          setSyncStatus("offline")
-          console.log("[v0] Using local storage only (extension auth)")
-
-          const allTags = new Set<string>()
-          notesWithStatus.forEach((note) => {
-            note.tags.forEach((tag) => allTags.add(tag))
-          })
-          setTags(Array.from(allTags))
+        setNotes(syncedNotes)
+        setDeletedNotes(syncResult.deletedNotes)
+        setSyncStatus(syncResult.synced ? "synced" : "error")
+        if (syncResult.synced) {
+          setLastSyncTime(new Date())
         }
+
+        console.log("[v0] Sync completed:", syncResult.synced ? "success" : "failed")
+
+        const allTags = new Set<string>()
+        syncedNotes.forEach((note) => {
+          note.tags.forEach((tag) => allTags.add(tag))
+        })
+        setTags(Array.from(allTags))
       } catch (error) {
         console.error("[v0] Error loading notes:", error)
         setSyncStatus("error")
@@ -127,11 +115,9 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     if (authData.pubkey) {
       loadUserNotes()
     }
-  }, [authData.pubkey])
+  }, [authData]) // Updated to use the entire authData object
 
   useEffect(() => {
-    if (authData.authMethod !== "nsec" || !authData.privateKey) return
-
     const syncInterval = setInterval(async () => {
       if (syncStatus === "syncing" || needsSync) return
 
@@ -139,11 +125,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       setSyncStatus("syncing")
 
       try {
-        const privateKeyBytes = new Uint8Array(
-          authData.privateKey.match(/.{1,2}/g)?.map((byte) => Number.parseInt(byte, 16)) || [],
-        )
-
-        const syncResult = await syncNotes(notes, deletedNotes, privateKeyBytes)
+        const syncResult = await syncNotes(notes, deletedNotes, authData)
 
         if (
           JSON.stringify(syncResult.notes) !== JSON.stringify(notes) ||
@@ -171,7 +153,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     }, 60000)
 
     return () => clearInterval(syncInterval)
-  }, [authData.authMethod, authData.privateKey, syncStatus, needsSync])
+  }, [syncStatus, needsSync, authData, notes, deletedNotes])
 
   useEffect(() => {
     if (!isLoading && needsSync && syncStatus !== "syncing") {
@@ -180,7 +162,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
 
         await saveEncryptedNotes(authData.pubkey, notes)
 
-        if (authData.authMethod === "nsec" && authData.privateKey && (notes.length > 0 || deletedNotes.length > 0)) {
+        if (notes.length > 0 || deletedNotes.length > 0) {
           try {
             setSyncStatus("syncing")
 
@@ -191,12 +173,8 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
               })),
             )
 
-            const privateKeyBytes = new Uint8Array(
-              authData.privateKey.match(/.{1,2}/g)?.map((byte) => Number.parseInt(byte, 16)) || [],
-            )
-
             console.log("[v0] Syncing changes to Nostr...")
-            const result = await syncNotes(notes, deletedNotes, privateKeyBytes)
+            const result = await syncNotes(notes, deletedNotes, authData)
 
             if (
               JSON.stringify(result.notes) !== JSON.stringify(notes) ||
@@ -236,7 +214,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       const timeoutId = setTimeout(saveNotes, 2000)
       return () => clearTimeout(timeoutId)
     }
-  }, [needsSync, authData.pubkey, authData.authMethod, authData.privateKey, isLoading, syncStatus, deletedNotes])
+  }, [needsSync, authData, isLoading, syncStatus, deletedNotes, notes])
 
   const handleCreateNote = () => {
     console.log("[v0] Creating new note...")
@@ -452,15 +430,9 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   }
 
   const handleManualSync = async () => {
-    if (authData.authMethod !== "nsec" || !authData.privateKey) return
-
     setSyncStatus("syncing")
     try {
-      const privateKeyBytes = new Uint8Array(
-        authData.privateKey.match(/.{1,2}/g)?.map((byte) => Number.parseInt(byte, 16)) || [],
-      )
-
-      const syncResult = await syncNotes(notes, deletedNotes, privateKeyBytes)
+      const syncResult = await syncNotes(notes, deletedNotes, authData)
 
       const syncedNotes = syncResult.notes.map((note) => ({
         ...note,
@@ -481,12 +453,12 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
 
   if (isLoading) {
     return (
-      <div className="h-screen bg-slate-900 flex items-center justify-center">
+      <div className="h-screen bg-background flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <p className="text-slate-400">Loading your notes...</p>
+          <p className="text-muted-foreground">Loading your notes...</p>
           {authData.authMethod === "nsec" && (
-            <p className="text-slate-500 text-sm mt-2">Syncing with Nostr network...</p>
+            <p className="text-muted-foreground text-sm mt-2">Syncing with Nostr network...</p>
           )}
         </div>
       </div>
@@ -494,32 +466,32 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   }
 
   return (
-    <div className="h-screen bg-slate-900 flex flex-col w-full">
-      <div className="bg-slate-800 border-b border-slate-700 px-4 py-3 flex items-center justify-between">
+    <div className="h-screen bg-background flex flex-col w-full">
+      <div className="bg-card border-b border-border px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Button
             onClick={() => setIsMobileSidebarOpen(true)}
             variant="ghost"
             size="sm"
-            className="md:hidden text-slate-400 hover:text-white hover:bg-slate-700"
+            className="md:hidden text-muted-foreground hover:text-foreground hover:bg-muted"
           >
             <Menu className="w-4 h-4" />
           </Button>
 
-          <span className="text-slate-500 text-xs">({notes.length} notes)</span>
-          <span className="text-slate-500 text-xs bg-slate-700 px-2 py-1 rounded">
+          <span className="text-muted-foreground text-xs">({notes.length} notes)</span>
+          <span className="text-muted-foreground text-xs bg-muted px-2 py-1 rounded">
             {authData.authMethod === "extension" ? "Extension" : authData.authMethod === "remote" ? "Remote" : "nsec"}
           </span>
 
           <div className="flex items-center gap-2">
             {getSyncStatusIcon()}
-            <span className="text-slate-500 text-xs hidden lg:inline">{getSyncStatusText()}</span>
-            {authData.authMethod === "nsec" && syncStatus !== "syncing" && (
+            <span className="text-muted-foreground text-xs hidden lg:inline">{getSyncStatusText()}</span>
+            {syncStatus !== "syncing" && (
               <Button
                 onClick={handleManualSync}
                 variant="ghost"
                 size="sm"
-                className="text-slate-400 hover:text-white hover:bg-slate-700 p-1"
+                className="text-muted-foreground hover:text-foreground hover:bg-muted p-1"
                 title="Manual sync"
               >
                 <RefreshCw className="w-3 h-3" />
@@ -530,10 +502,23 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
 
         <div className="flex items-center gap-2">
           <Button
+            onClick={() => setShowRelayManager(true)}
+            variant="ghost"
+            size="sm"
+            className="text-muted-foreground hover:text-foreground hover:bg-muted"
+            title="Manage Relays"
+          >
+            <Settings className="w-4 h-4" />
+            <span className="hidden sm:inline ml-2">Relays</span>
+          </Button>
+
+          <ThemeToggle />
+
+          <Button
             onClick={() => setShowProfile(true)}
             variant="ghost"
             size="sm"
-            className="text-slate-400 hover:text-white hover:bg-slate-700"
+            className="text-muted-foreground hover:text-foreground hover:bg-muted"
           >
             <User className="w-4 h-4 mr-2" />
             <span className="hidden sm:inline">Profile</span>
@@ -543,7 +528,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
             onClick={onLogout}
             variant="ghost"
             size="sm"
-            className="text-slate-400 hover:text-white hover:bg-slate-700"
+            className="text-muted-foreground hover:text-foreground hover:bg-muted"
           >
             <LogOut className="w-4 h-4 mr-2" />
             <span className="hidden sm:inline">Logout</span>
@@ -592,7 +577,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
         )}
 
         <div className="flex flex-1 min-w-0 w-full">
-          <div className="w-full md:w-80 border-r border-slate-700">
+          <div className="w-full md:w-80 border-r border-border">
             <NoteList
               notes={filteredNotes}
               selectedNote={selectedNote}
@@ -616,13 +601,13 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
         {selectedNote && (
           <div className="fixed inset-0 z-40 lg:hidden bg-slate-900">
             <div className="h-full">
-              <div className="bg-slate-800 border-b border-slate-700 px-4 py-3 flex items-center justify-between">
-                <h2 className="text-white font-medium truncate">{selectedNote.title}</h2>
+              <div className="bg-card border-b border-border px-4 py-3 flex items-center justify-between">
+                <h2 className="text-foreground font-medium truncate">{selectedNote.title}</h2>
                 <Button
                   onClick={() => setSelectedNote(null)}
                   variant="ghost"
                   size="sm"
-                  className="text-slate-400 hover:text-white"
+                  className="text-muted-foreground hover:text-foreground"
                 >
                   <X className="w-4 h-4" />
                 </Button>
@@ -653,6 +638,8 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
         )}
 
         {showProfile && <ProfilePage authData={authData} onClose={() => setShowProfile(false)} />}
+
+        {showRelayManager && <RelayManager onClose={() => setShowRelayManager(false)} />}
       </div>
 
       <DonationBubble />

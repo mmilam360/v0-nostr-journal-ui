@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { Zap, X, Copy, Check } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { QRCodeSVG } from "qrcode.react"
 
 declare global {
   interface Window {
@@ -25,6 +26,7 @@ export default function DonationBubble() {
   const [amount, setAmount] = useState<number>(1000)
   const [hasWebLN, setHasWebLN] = useState(false)
   const [isPayingWithWebLN, setIsPayingWithWebLN] = useState(false)
+  const [lightningUri, setLightningUri] = useState<string>("")
 
   const lightningAddress = "michaelmilam@getalby.com"
 
@@ -35,6 +37,17 @@ export default function DonationBubble() {
       setHasWebLN(true)
     }
   }, [])
+
+  useEffect(() => {
+    if (amount > 0) {
+      const millisats = amount * 1000
+      const uri = `lightning:${lightningAddress}?amount=${millisats}`
+      setLightningUri(uri)
+      console.log("[v0] Generated Lightning URI:", uri)
+    } else {
+      setLightningUri(`lightning:${lightningAddress}`)
+    }
+  }, [amount])
 
   const handleCopy = async () => {
     try {
@@ -80,11 +93,6 @@ export default function DonationBubble() {
     } finally {
       setIsPayingWithWebLN(false)
     }
-  }
-
-  const getLightningAddressQR = () => {
-    // Static Lightning Address QR - works with all wallets
-    return `https://api.qrserver.com/v1/create-qr-code/?size=256x256&data=${encodeURIComponent(lightningAddress)}`
   }
 
   return (
@@ -168,16 +176,12 @@ export default function DonationBubble() {
               <div className="bg-slate-700 rounded-lg p-3 text-center">
                 <label className="text-xs text-slate-300 mb-2 block">Scan with Lightning Wallet</label>
                 <div className="bg-white p-2 rounded-lg inline-block">
-                  <img
-                    src={getLightningAddressQR() || "/placeholder.svg"}
-                    alt="Lightning Address QR Code"
-                    className="w-48 h-48 sm:w-56 sm:h-56"
-                  />
+                  <QRCodeSVG value={lightningUri} size={224} level="M" className="w-48 h-48 sm:w-56 sm:h-56" />
                 </div>
                 <p className="text-slate-400 text-xs mt-2">
                   Scan to pay {amount > 0 ? `${amount.toLocaleString()} sats` : "any amount"}
                 </p>
-                <p className="text-slate-500 text-xs mt-1">(Enter amount in your wallet after scanning)</p>
+                <p className="text-slate-500 text-xs mt-1">(Amount is pre-filled in your wallet)</p>
               </div>
 
               <div className="bg-slate-700 rounded-lg p-3">

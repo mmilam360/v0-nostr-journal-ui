@@ -7,8 +7,12 @@
 
 import { useState, useEffect, useRef } from "react"
 import { QRCodeSVG } from "qrcode.react"
-import { Loader2, AlertCircle, CheckCircle2, KeyRound, Copy, Check, UserPlus } from "lucide-react"
+import { Loader2, AlertCircle, CheckCircle2, KeyRound, Copy, Check, UserPlus, Settings } from "lucide-react"
 import type { AuthData } from "./main-app"
+import { RelayManager, getRelays } from "./relay-manager"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Eye, EyeOff } from "lucide-react"
 
 type LoginMethod = "idle" | "extension" | "remote" | "nsec" | "generate"
 type ConnectionState = "idle" | "generating" | "waiting" | "connecting" | "success" | "error"
@@ -27,6 +31,13 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
   const [nsecInput, setNsecInput] = useState<string>("")
   const [copied, setCopied] = useState(false)
   const [generatedKeys, setGeneratedKeys] = useState<{ nsec: string; npub: string } | null>(null)
+  const [showRelayManager, setShowRelayManager] = useState(false)
+  const [relays, setRelays] = useState<string[]>(RELAYS)
+  const [showPasswordSetup, setShowPasswordSetup] = useState(false)
+  const [masterPassword, setMasterPassword] = useState("")
+  const [confirmPassword, setConfirmPassword] = useState("")
+  const [showPassword, setShowPassword] = useState(false)
+  const [generatedAuthData, setGeneratedAuthData] = useState<AuthData | null>(null)
 
   const signerRef = useRef<any>(null)
   const poolRef = useRef<any>(null)
@@ -44,6 +55,8 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
   }
 
   useEffect(() => {
+    const savedRelays = getRelays()
+    setRelays(savedRelays)
     return () => {
       cleanup()
     }
@@ -164,15 +177,13 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
       setGeneratedKeys({ nsec, npub })
       setConnectionState("success")
 
-      // Auto-login after 2 seconds
-      setTimeout(() => {
-        onLoginSuccess({
-          pubkey,
-          nsec,
-          privateKey: privateKeyHex,
-          authMethod: "nsec",
-        })
-      }, 2000)
+      setGeneratedAuthData({
+        pubkey,
+        nsec,
+        privateKey: privateKeyHex,
+        authMethod: "nsec",
+      })
+      setShowPasswordSetup(true)
     } catch (err) {
       console.error("Generation error:", err)
       setConnectionState("error")
@@ -188,23 +199,20 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
     try {
       console.log("🚀 Starting remote signer login (official API)")
 
-      // Import required functions
       const { generateSecretKey, getPublicKey } = await import("nostr-tools/pure")
       const { SimplePool } = await import("nostr-tools/pool")
       const { BunkerSigner, createNostrConnectURI } = await import("nostr-tools/nip46")
 
       console.log("✅ Imports loaded")
 
-      // Generate local secret key for this session
       const localSecretKey = generateSecretKey()
       const clientPubkey = getPublicKey(localSecretKey)
 
       console.log("🔑 Client pubkey:", clientPubkey)
 
-      // Create connection URI
       const connectionUri = createNostrConnectURI({
         clientPubkey,
-        relays: RELAYS,
+        relays: relays,
         secret: Math.random().toString(36).substring(7),
         name: "Nostr Journal",
         url: typeof window !== "undefined" ? window.location.origin : "",
@@ -215,13 +223,6 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
       setConnectUrl(connectionUri)
       setConnectionState("waiting")
 
-      // Initialize pool
-      const pool = new SimplePool()
-      poolRef.current = pool
-
-      console.log("⏳ Waiting for signer to connect...")
-
-      // Set timeout
       timeoutRef.current = setTimeout(() => {
         console.log("⏱️ Connection timeout")
         setConnectionState("error")
@@ -229,18 +230,16 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
         cleanup()
       }, 120000)
 
-      // This waits for the bunker to connect and returns a ready-to-use signer
       console.log("🔌 Calling BunkerSigner.fromURI()...")
 
       const signer = await BunkerSigner.fromURI(localSecretKey, connectionUri, {
-        pool,
-        timeout: 110000, // slightly less than our UI timeout
+        pool: poolRef.current,
+        timeout: 110000,
       })
 
       console.log("✅ Signer connected!")
       signerRef.current = signer
 
-      // Clear timeout
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current)
         timeoutRef.current = null
@@ -248,7 +247,6 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
 
       setConnectionState("connecting")
 
-      // Get user's public key
       console.log("👤 Getting user pubkey...")
       const userPubkey = await signer.getPublicKey()
 
@@ -265,8 +263,8 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
           signer: signer,
           clientSecretKey: localSecretKey,
           bunkerPubkey: userPubkey,
-          bunkerUri: connectionUri, // Store the full URI for reconnection
-          relays: RELAYS,
+          bunkerUri: connectionUri,
+          relays: relays,
         })
       }, 1000)
     } catch (err) {
@@ -275,7 +273,6 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
 
       setConnectionState("error")
 
-      // Provide more helpful error messages
       const errorMessage = err instanceof Error ? err.message : "Failed to connect"
       if (errorMessage.includes("timeout")) {
         setError("Connection timeout. Make sure you approved in Nsec.app.")
@@ -298,6 +295,12 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
     setNsecInput("")
     setCopied(false)
     setGeneratedKeys(null)
+    setShowRelayManager(false)
+    setShowPasswordSetup(false)
+    setMasterPassword("")
+    setConfirmPassword("")
+    setShowPassword(false)
+    setGeneratedAuthData(null)
   }
 
   const handleCopyUrl = async () => {
@@ -318,21 +321,50 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
     }
   }
 
+  const handlePasswordSetup = () => {
+    if (masterPassword.length < 8) {
+      setError("Password must be at least 8 characters long")
+      return
+    }
+    if (masterPassword !== confirmPassword) {
+      setError("Passwords do not match")
+      return
+    }
+    if (!generatedAuthData) {
+      setError("No account data found")
+      return
+    }
+
+    localStorage.setItem("nostr-journal-master-password", masterPassword)
+
+    onLoginSuccess(generatedAuthData)
+  }
+
   return (
-    <div style={containerStyle} className="bg-slate-900">
+    <div style={containerStyle} className="bg-background">
       <div className="min-h-full flex items-center justify-center p-4">
         <div className="w-full max-w-md">
           <div className="text-center mb-8">
-            <h1 className="text-4xl font-bold text-white mb-2">Nostr Journal</h1>
-            <p className="text-slate-400">Private encrypted journaling on Nostr</p>
+            <h1 className="text-4xl font-bold text-foreground mb-2">Nostr Journal</h1>
+            <p className="text-muted-foreground">Private encrypted journaling on Nostr</p>
           </div>
 
-          <div className="bg-slate-800 rounded-lg shadow-xl p-6 border border-slate-700">
+          <div className="bg-card rounded-lg shadow-xl p-6 border border-border">
             {loginMethod === "idle" && (
               <div className="space-y-3">
+                <div className="flex justify-end mb-2">
+                  <button
+                    onClick={() => setShowRelayManager(true)}
+                    className="text-muted-foreground hover:text-foreground text-sm flex items-center gap-1"
+                  >
+                    <Settings className="h-4 w-4" />
+                    Relay Settings
+                  </button>
+                </div>
+
                 <button
                   onClick={handleExtensionLogin}
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
+                  className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
                 >
                   <KeyRound className="h-5 w-5" />
                   Extension Login
@@ -340,7 +372,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
 
                 <button
                   onClick={startRemoteSignerLogin}
-                  className="w-full bg-purple-600 hover:bg-purple-700 text-white font-medium py-3 px-4 rounded-lg transition-colors"
+                  className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-medium py-3 px-4 rounded-lg transition-colors"
                 >
                   Remote Signer (Nsec.app)
                 </button>
@@ -350,20 +382,20 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
                     setLoginMethod("nsec")
                     setConnectionState("idle")
                   }}
-                  className="w-full bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 px-4 rounded-lg transition-colors"
+                  className="w-full bg-secondary hover:bg-secondary/90 text-secondary-foreground font-medium py-3 px-4 rounded-lg transition-colors"
                 >
                   Enter Private Key
                 </button>
 
                 <button
                   onClick={handleGenerateAccount}
-                  className="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
+                  className="w-full bg-accent hover:bg-accent/90 text-accent-foreground font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
                 >
                   <UserPlus className="h-5 w-5" />
                   Generate New Account
                 </button>
 
-                <p className="text-xs text-slate-400 text-center mt-4">Your keys never leave your device</p>
+                <p className="text-xs text-muted-foreground text-center mt-4">Your keys never leave your device</p>
               </div>
             )}
 
@@ -371,15 +403,15 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
               <div className="text-center py-8">
                 {connectionState === "connecting" && (
                   <>
-                    <Loader2 className="h-12 w-12 animate-spin text-blue-500 mx-auto mb-4" />
-                    <p className="text-slate-300">Connecting to extension...</p>
+                    <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto mb-4" />
+                    <p className="text-foreground">Connecting to extension...</p>
                   </>
                 )}
                 {connectionState === "error" && (
                   <>
-                    <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-                    <p className="text-red-400 mb-4">{error}</p>
-                    <button onClick={handleBack} className="text-slate-400 hover:text-white">
+                    <AlertCircle className="h-12 w-12 text-destructive mx-auto mb-4" />
+                    <p className="text-destructive mb-4">{error}</p>
+                    <button onClick={handleBack} className="text-muted-foreground hover:text-foreground">
                       ← Back
                     </button>
                   </>
@@ -390,33 +422,35 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
             {loginMethod === "nsec" && (
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">Private Key (nsec or hex)</label>
+                  <label className="block text-sm font-medium text-muted-foreground mb-2">
+                    Private Key (nsec or hex)
+                  </label>
                   <input
                     type="password"
                     value={nsecInput}
                     onChange={(e) => setNsecInput(e.target.value)}
                     placeholder="nsec1... or hex"
-                    className="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full bg-muted border border-border rounded-lg px-4 py-3 text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                   />
                 </div>
 
                 {connectionState === "error" && (
-                  <div className="bg-red-900/20 border border-red-500/50 rounded-lg p-3">
-                    <p className="text-sm text-red-400">{error}</p>
+                  <div className="bg-destructive/10 border border-destructive/50 rounded-lg p-3">
+                    <p className="text-sm text-destructive">{error}</p>
                   </div>
                 )}
 
                 <div className="flex gap-3">
                   <button
                     onClick={handleBack}
-                    className="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 px-4 rounded-lg transition-colors"
+                    className="flex-1 bg-secondary hover:bg-secondary/90 text-secondary-foreground font-medium py-3 px-4 rounded-lg transition-colors"
                   >
                     Back
                   </button>
                   <button
                     onClick={handleNsecLogin}
                     disabled={!nsecInput || connectionState === "connecting"}
-                    className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 text-white font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
+                    className="flex-1 bg-primary hover:bg-primary/90 disabled:bg-muted text-primary-foreground font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
                   >
                     {connectionState === "connecting" ? (
                       <>
@@ -435,32 +469,34 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
               <div className="space-y-4">
                 {connectionState === "generating" && (
                   <div className="text-center py-8">
-                    <Loader2 className="h-12 w-12 animate-spin text-green-500 mx-auto mb-4" />
-                    <p className="text-slate-300">Generating your new account...</p>
+                    <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto mb-4" />
+                    <p className="text-foreground">Generating your new account...</p>
                   </div>
                 )}
 
-                {connectionState === "success" && generatedKeys && (
+                {connectionState === "success" && generatedKeys && !showPasswordSetup && (
                   <div className="space-y-4">
                     <div className="text-center py-4">
-                      <CheckCircle2 className="h-12 w-12 text-green-500 mx-auto mb-4" />
-                      <p className="text-slate-300 font-medium mb-2">Account Created!</p>
-                      <p className="text-slate-400 text-sm">Save your keys securely</p>
+                      <CheckCircle2 className="h-12 w-12 text-accent mx-auto mb-4" />
+                      <p className="text-foreground font-medium mb-2">Account Created!</p>
+                      <p className="text-muted-foreground text-sm">Save your keys securely</p>
                     </div>
 
                     <div className="space-y-3">
                       <div>
-                        <label className="block text-xs font-medium text-slate-400 mb-1">Public Key (npub)</label>
+                        <label className="block text-xs font-medium text-muted-foreground mb-1">
+                          Public Key (npub)
+                        </label>
                         <div className="flex gap-2">
                           <input
                             type="text"
                             value={generatedKeys.npub}
                             readOnly
-                            className="flex-1 bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-xs text-slate-300 font-mono"
+                            className="flex-1 bg-muted border border-border rounded-lg px-3 py-2 text-xs text-foreground font-mono"
                           />
                           <button
                             onClick={() => handleCopyKey(generatedKeys.npub)}
-                            className="bg-slate-700 hover:bg-slate-600 text-white px-3 py-2 rounded-lg transition-colors"
+                            className="bg-secondary hover:bg-secondary/90 text-secondary-foreground px-3 py-2 rounded-lg transition-colors"
                             title="Copy"
                           >
                             <Copy className="h-4 w-4" />
@@ -469,7 +505,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
                       </div>
 
                       <div>
-                        <label className="block text-xs font-medium text-slate-400 mb-1">
+                        <label className="block text-xs font-medium text-muted-foreground mb-1">
                           Private Key (nsec) - Keep this secret!
                         </label>
                         <div className="flex gap-2">
@@ -477,11 +513,11 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
                             type="text"
                             value={generatedKeys.nsec}
                             readOnly
-                            className="flex-1 bg-slate-900 border border-red-900/50 rounded-lg px-3 py-2 text-xs text-red-300 font-mono"
+                            className="flex-1 bg-muted border border-destructive/50 rounded-lg px-3 py-2 text-xs text-destructive font-mono"
                           />
                           <button
                             onClick={() => handleCopyKey(generatedKeys.nsec)}
-                            className="bg-slate-700 hover:bg-slate-600 text-white px-3 py-2 rounded-lg transition-colors"
+                            className="bg-secondary hover:bg-secondary/90 text-secondary-foreground px-3 py-2 rounded-lg transition-colors"
                             title="Copy"
                           >
                             <Copy className="h-4 w-4" />
@@ -490,25 +526,96 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
                       </div>
                     </div>
 
-                    <div className="bg-yellow-900/20 border border-yellow-500/50 rounded-lg p-3">
-                      <p className="text-xs text-yellow-400">
-                        ⚠️ Save your private key (nsec) somewhere safe! You'll need it to access your account from other
-                        devices.
+                    <div className="bg-destructive/10 border border-destructive/50 rounded-lg p-4 space-y-2">
+                      <p className="text-sm font-semibold text-destructive">⚠️ IMPORTANT: Save Your Private Key!</p>
+                      <p className="text-xs text-destructive/90">
+                        Your private key (nsec) is the ONLY way to access your account. If you lose it or get logged
+                        out, you will NOT be able to recover your account. Please save it in a secure password manager
+                        or write it down and store it safely.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {showPasswordSetup && generatedKeys && (
+                  <div className="space-y-4">
+                    <div className="text-center py-4">
+                      <CheckCircle2 className="h-12 w-12 text-accent mx-auto mb-4" />
+                      <p className="text-foreground font-medium mb-2">Set Up Master Password</p>
+                      <p className="text-muted-foreground text-sm">
+                        Create a password to encrypt and protect your account
                       </p>
                     </div>
 
-                    <p className="text-center text-slate-400 text-sm">Logging you in...</p>
+                    <div className="bg-accent/10 border border-accent/50 rounded-lg p-3">
+                      <p className="text-xs text-accent-foreground">
+                        ✓ Your keys have been saved. Now create a master password to secure your account on this device.
+                      </p>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div>
+                        <Label htmlFor="master-password" className="text-foreground">
+                          Master Password
+                        </Label>
+                        <div className="relative">
+                          <Input
+                            id="master-password"
+                            type={showPassword ? "text" : "password"}
+                            value={masterPassword}
+                            onChange={(e) => setMasterPassword(e.target.value)}
+                            className="bg-muted border-border text-foreground pr-10"
+                            placeholder="Enter a strong password"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowPassword(!showPassword)}
+                            className="absolute right-0 top-0 h-full px-3 text-muted-foreground hover:text-foreground"
+                          >
+                            {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                          </button>
+                        </div>
+                      </div>
+
+                      <div>
+                        <Label htmlFor="confirm-password" className="text-foreground">
+                          Confirm Password
+                        </Label>
+                        <Input
+                          id="confirm-password"
+                          type={showPassword ? "text" : "password"}
+                          value={confirmPassword}
+                          onChange={(e) => setConfirmPassword(e.target.value)}
+                          className="bg-muted border-border text-foreground"
+                          placeholder="Confirm your password"
+                        />
+                      </div>
+                    </div>
+
+                    {error && (
+                      <div className="bg-destructive/10 border border-destructive/50 rounded-lg p-3">
+                        <p className="text-sm text-destructive">{error}</p>
+                      </div>
+                    )}
+
+                    <button
+                      onClick={handlePasswordSetup}
+                      disabled={!masterPassword || !confirmPassword}
+                      className="w-full bg-primary hover:bg-primary/90 disabled:bg-muted text-primary-foreground font-medium py-3 px-4 rounded-lg transition-colors"
+                    >
+                      Complete Setup & Login
+                    </button>
                   </div>
                 )}
 
                 {connectionState === "error" && (
                   <div className="space-y-4">
-                    <div className="bg-red-900/20 border border-red-500/50 rounded-lg p-4">
-                      <p className="text-sm text-red-400">{error}</p>
+                    <div className="bg-destructive/10 border border-destructive/50 rounded-lg p-4">
+                      <p className="text-sm text-destructive">{error}</p>
                     </div>
                     <button
                       onClick={handleBack}
-                      className="w-full bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 px-4 rounded-lg transition-colors"
+                      className="w-full bg-secondary hover:bg-secondary/90 text-secondary-foreground font-medium py-3 px-4 rounded-lg transition-colors"
                     >
                       Try Again
                     </button>
@@ -521,8 +628,9 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
               <div className="space-y-6">
                 {connectionState === "generating" && (
                   <div className="text-center py-8">
-                    <Loader2 className="h-12 w-12 animate-spin text-purple-500 mx-auto mb-4" />
-                    <p className="text-slate-300">Generating connection...</p>
+                    <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto mb-4" />
+                    <p className="text-foreground text-lg font-medium mb-2">Generating connection...</p>
+                    <p className="text-muted-foreground text-sm">Getting your public key</p>
                   </div>
                 )}
 
@@ -533,20 +641,20 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
                     </div>
 
                     <div className="space-y-3">
-                      <p className="text-center text-slate-300 font-medium">Scan with Nsec.app</p>
+                      <p className="text-center text-foreground font-medium">Scan with Nsec.app</p>
 
                       <div className="space-y-2">
-                        <p className="text-xs text-slate-400 text-center">Or copy and paste this link:</p>
+                        <p className="text-xs text-muted-foreground text-center">Or copy and paste this link:</p>
                         <div className="flex gap-2">
                           <input
                             type="text"
                             value={connectUrl}
                             readOnly
-                            className="flex-1 bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-xs text-slate-300 font-mono overflow-x-auto"
+                            className="flex-1 bg-muted border border-border rounded-lg px-3 py-2 text-xs text-foreground font-mono overflow-x-auto"
                           />
                           <button
                             onClick={handleCopyUrl}
-                            className="bg-slate-700 hover:bg-slate-600 text-white px-3 py-2 rounded-lg transition-colors flex items-center gap-1"
+                            className="bg-secondary hover:bg-secondary/90 text-secondary-foreground px-3 py-2 rounded-lg transition-colors flex items-center gap-1"
                             title="Copy to clipboard"
                           >
                             {copied ? (
@@ -564,13 +672,13 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
                         </div>
                       </div>
 
-                      <p className="text-center text-sm text-slate-400">Waiting for approval...</p>
+                      <p className="text-center text-sm text-muted-foreground">Waiting for approval...</p>
 
                       <div className="flex justify-center">
                         <div className="animate-pulse flex space-x-2">
-                          <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
-                          <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
-                          <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
+                          <div className="w-2 h-2 bg-primary rounded-full"></div>
+                          <div className="w-2 h-2 bg-primary rounded-full"></div>
+                          <div className="w-2 h-2 bg-primary rounded-full"></div>
                         </div>
                       </div>
                     </div>
@@ -579,27 +687,27 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
 
                 {connectionState === "connecting" && (
                   <div className="text-center py-8">
-                    <Loader2 className="h-12 w-12 animate-spin text-purple-500 mx-auto mb-4" />
-                    <p className="text-slate-300 text-lg font-medium mb-2">Completing connection...</p>
-                    <p className="text-slate-400 text-sm">Getting your public key</p>
+                    <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto mb-4" />
+                    <p className="text-foreground text-lg font-medium mb-2">Completing connection...</p>
+                    <p className="text-muted-foreground text-sm">Getting your public key</p>
                   </div>
                 )}
 
                 {connectionState === "success" && (
                   <div className="text-center py-8">
-                    <CheckCircle2 className="h-12 w-12 text-green-500 mx-auto mb-4" />
-                    <p className="text-slate-300">Connected successfully!</p>
+                    <CheckCircle2 className="h-12 w-12 text-accent mx-auto mb-4" />
+                    <p className="text-foreground">Connected successfully!</p>
                   </div>
                 )}
 
                 {connectionState === "error" && (
                   <div className="space-y-4">
-                    <div className="bg-red-900/20 border border-red-500/50 rounded-lg p-4">
-                      <p className="text-sm text-red-400">{error}</p>
+                    <div className="bg-destructive/10 border border-destructive/50 rounded-lg p-4">
+                      <p className="text-sm text-destructive">{error}</p>
                     </div>
                     <button
                       onClick={handleBack}
-                      className="w-full bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 px-4 rounded-lg transition-colors"
+                      className="w-full bg-secondary hover:bg-secondary/90 text-secondary-foreground font-medium py-3 px-4 rounded-lg transition-colors"
                     >
                       Try Again
                     </button>
@@ -607,7 +715,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
                 )}
 
                 {(connectionState === "waiting" || connectionState === "connecting") && (
-                  <button onClick={handleBack} className="w-full text-slate-400 hover:text-white text-sm">
+                  <button onClick={handleBack} className="w-full text-muted-foreground hover:text-foreground text-sm">
                     ← Cancel
                   </button>
                 )}
@@ -616,6 +724,17 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
           </div>
         </div>
       </div>
+
+      {showRelayManager && (
+        <RelayManager
+          onClose={() => setShowRelayManager(false)}
+          onSave={(newRelays) => {
+            setRelays(newRelays)
+            setShowRelayManager(false)
+          }}
+          initialRelays={relays}
+        />
+      )}
     </div>
   )
 }
