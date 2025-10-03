@@ -47,8 +47,13 @@ const DEFAULT_RELAYS = ["wss://relay.damus.io", "wss://nos.lol", "wss://relay.no
 /**
  * CRITICAL: Relay configuration for remote signer protocols
  */
-const BUNKER_RELAY = "wss://relay.nostr.band" 
-
+// Line 48 - Change this back
+const metadata = {
+  name: "Nostr Journal",
+  url: typeof window !== 'undefined' ? window.location.origin : "https://nostrjournal.app"
+}
+const bunkerURI = `nostrconnect://${appPublicKey}?relay=${encodeURIComponent(BUNKER_RELAY)}&metadata=${encodeURIComponent(JSON.stringify(metadata))}`
+]
 interface LoginPageProps {
   onLoginSuccess: (authData: AuthData) => void
 }
