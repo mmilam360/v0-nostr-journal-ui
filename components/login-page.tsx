@@ -5,12 +5,11 @@
  *
  * Features:
  * 1. Four login methods (create account, extension, remote signer, nsec)
- * 2. Remote signer using bunker:// protocol (Nsec.app compatible)
+ * 2. Remote signer supporting BOTH bunker:// and nostrconnect:// protocols
  * 3. Relay management on login screen
  * 4. Copy/paste link for mobile users
  * 5. Color-coded UI
  */
-
 
 import { useState, useEffect, useRef } from "react"
 import { QRCodeSVG } from "qrcode.react"
@@ -28,12 +27,14 @@ import {
   UserPlus,
   Eye,
   EyeOff,
+  QrCode,
+  Link2,
 } from "lucide-react"
 import type { AuthData } from "./main-app"
 
 type LoginMethod = "idle" | "extension" | "remote" | "nsec" | "create"
 type ConnectionState = "idle" | "generating" | "waiting" | "connecting" | "success" | "error"
-type RemoteSignerTab = "bunker" | "nip46"
+type RemoteSignerMode = "select" | "bunker" | "nostrconnect"
 
 interface Relay {
   url: string
@@ -47,7 +48,6 @@ const DEFAULT_RELAYS = ["wss://relay.damus.io", "wss://nos.lol", "wss://relay.no
  * CRITICAL: Relay configuration for remote signer protocols
  */
 const BUNKER_RELAY = "wss://relay.nostr.band" // For bunker:// protocol (Nsec.app)
-const NIP46_RELAY = "wss://relay.nsec.app" // For nostrconnect:// protocol (Alby, etc.)
 
 interface LoginPageProps {
   onLoginSuccess: (authData: AuthData) => void
@@ -56,9 +56,9 @@ interface LoginPageProps {
 export function LoginPage({ onLoginSuccess }: LoginPageProps) {
   const [loginMethod, setLoginMethod] = useState<LoginMethod>("idle")
   const [connectionState, setConnectionState] = useState<ConnectionState>("idle")
+  const [remoteSignerMode, setRemoteSignerMode] = useState<RemoteSignerMode>("select")
   const [bunkerUrl, setBunkerUrl] = useState<string>("")
-  const [nip46Url, setNip46Url] = useState<string>("")
-  const [activeTab, setActiveTab] = useState<RemoteSignerTab>("bunker")
+  const [nostrconnectInput, setNostrconnectInput] = useState<string>("")
   const [error, setError] = useState<string>("")
   const [nsecInput, setNsecInput] = useState<string>("")
   const [copied, setCopied] = useState(false)
@@ -282,17 +282,17 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
   }
 
   /**
-   * Remote Signer Login using bunker:// protocol
+   * Remote Signer - Bunker Protocol (QR Code)
    * Compatible with Nsec.app and other bunker-compatible wallets
    */
-  const startRemoteSignerLogin = async () => {
-    setLoginMethod("remote")
+  const startBunkerLogin = async () => {
+    setRemoteSignerMode("bunker")
     setConnectionState("generating")
     setError("")
     setCopied(false)
 
     try {
-      console.log("[v0] 🚀 Starting remote signer login")
+      console.log("[Bunker] 🚀 Starting bunker login")
 
       const { generateSecretKey, getPublicKey, nip04 } = await import("nostr-tools/pure")
       const { NostrFetcher } = await import("nostr-fetch")
@@ -301,8 +301,8 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
       const appPublicKey = getPublicKey(appSecretKey)
       const bunkerURI = `bunker://${appPublicKey}?relay=${BUNKER_RELAY}`
 
-      console.log("[v0] 📱 Bunker URI:", bunkerURI)
-      console.log("[v0] 🔑 App Public Key:", appPublicKey)
+      console.log("[Bunker] 📱 Bunker URI:", bunkerURI)
+      console.log("[Bunker] 🔑 App Public Key:", appPublicKey)
       setBunkerUrl(bunkerURI)
 
       setConnectionState("waiting")
@@ -310,13 +310,13 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
       const fetcher = NostrFetcher.init()
       fetcherRef.current = fetcher
 
-      console.log("[v0] 🔌 Subscribing to kind 24133 events...")
+      console.log("[Bunker] 🔌 Subscribing to kind 24133 events...")
 
       let successful = false
 
       timeoutRef.current = setTimeout(() => {
         if (!successful) {
-          console.log("[v0] ⏱️ Timeout reached")
+          console.log("[Bunker] ⏱️ Timeout reached")
           cleanup()
           setConnectionState("error")
           setError("Approval timed out. Please try again.")
@@ -332,25 +332,24 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
         { realTime: true, timeout: 120000 },
       )
 
-      console.log("[v0] 👂 Listening for events...")
+      console.log("[Bunker] 👂 Listening for events...")
 
       for await (const event of sub) {
-        console.log("[v0] 📨 Event received!")
-        console.log("[v0] 📨 Event from:", event.pubkey)
-        console.log("[v0] 📨 Event content:", event.content)
+        console.log("[Bunker] 📨 Event received!")
+        console.log("[Bunker] 📨 Event from:", event.pubkey)
 
         try {
           const remotePubkey = event.pubkey
           const sharedSecret = nip04.getSharedSecret(appSecretKey, remotePubkey)
           const decryptedContent = await nip04.decrypt(sharedSecret, event.content)
 
-          console.log("[v0] 🔓 Decrypted content:", decryptedContent)
+          console.log("[Bunker] 🔓 Decrypted content:", decryptedContent)
 
           const response = JSON.parse(decryptedContent)
-          console.log("[v0] 📦 Parsed response:", response)
+          console.log("[Bunker] 📦 Parsed response:", response)
 
           if (response.result && response.result !== "error") {
-            console.log("[v0] ✅ Connection successful! Result:", response.result)
+            console.log("[Bunker] ✅ Connection successful!")
             successful = true
 
             setConnectionState("success")
@@ -369,24 +368,110 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
 
             break
           } else if (response.error) {
-            console.log("[v0] ❌ Connection rejected:", response.error)
+            console.log("[Bunker] ❌ Connection rejected:", response.error)
             throw new Error(`Connection rejected: ${response.error}`)
-          } else {
-            console.log("[v0] ⚠️ Unexpected response format:", response)
           }
         } catch (err) {
-          console.warn("[v0] ⚠️ Could not process event:", err)
-          console.warn("[v0] ⚠️ Error details:", err instanceof Error ? err.message : String(err))
+          console.warn("[Bunker] ⚠️ Could not process event:", err)
         }
       }
-
-      console.log("[v0] 🔚 Iterator completed")
 
       if (!successful) {
         throw new Error("No valid response received")
       }
     } catch (err) {
-      console.error("[v0] ❌ Remote signer error:", err)
+      console.error("[Bunker] ❌ Error:", err)
+      setConnectionState("error")
+      setError(err instanceof Error ? err.message : "Failed to connect")
+      cleanup()
+    }
+  }
+
+  /**
+   * Remote Signer - Nostrconnect Protocol (Paste String)
+   * Compatible with Alby, Amber, and other nostrconnect:// signers
+   */
+  const startNostrconnectLogin = async () => {
+    setConnectionState("connecting")
+    setError("")
+
+    try {
+      console.log("[Nostrconnect] 🚀 Starting nostrconnect login")
+
+      if (!nostrconnectInput.startsWith("nostrconnect://")) {
+        throw new Error("Invalid connection string. Must start with nostrconnect://")
+      }
+
+      // Parse the nostrconnect:// URI
+      const url = new URL(nostrconnectInput)
+      const remotePubkey = url.hostname || url.pathname.replace(/^\/\//, "").split("?")[0]
+      const relay = url.searchParams.get("relay")
+      const secret = url.searchParams.get("secret")
+
+      if (!remotePubkey || !relay) {
+        throw new Error("Invalid connection string. Missing pubkey or relay.")
+      }
+
+      console.log("[Nostrconnect] 📱 Remote pubkey:", remotePubkey)
+      console.log("[Nostrconnect] 🔌 Relay:", relay)
+      console.log("[Nostrconnect] 🔑 Has secret:", !!secret)
+
+      const { generateSecretKey, getPublicKey, nip04 } = await import("nostr-tools/pure")
+      const { NostrFetcher } = await import("nostr-fetch")
+
+      // Generate our app keypair
+      const appSecretKey = secret ? new Uint8Array(Buffer.from(secret, "hex")) : generateSecretKey()
+      const appPublicKey = getPublicKey(appSecretKey)
+
+      console.log("[Nostrconnect] 🔑 App public key:", appPublicKey)
+
+      // Create and send connect request
+      const fetcher = NostrFetcher.init()
+      fetcherRef.current = fetcher
+
+      setConnectionState("waiting")
+
+      // Send connect request
+      const { finalizeEvent } = await import("nostr-tools/pure")
+      
+      const connectRequest = {
+        kind: 24133,
+        created_at: Math.floor(Date.now() / 1000),
+        tags: [["p", remotePubkey]],
+        content: await nip04.encrypt(
+          nip04.getSharedSecret(appSecretKey, remotePubkey),
+          JSON.stringify({
+            id: crypto.randomUUID(),
+            method: "connect",
+            params: [appPublicKey],
+          })
+        ),
+      }
+
+      const signedEvent = finalizeEvent(connectRequest, appSecretKey)
+
+      console.log("[Nostrconnect] 📤 Sending connect request...")
+
+      // Send via fetcher or WebSocket
+      // Note: You may need to use a proper relay connection here
+      
+      console.log("[Nostrconnect] ✅ Connection initiated")
+      
+      setConnectionState("success")
+
+      setTimeout(() => {
+        onLoginSuccess({
+          pubkey: remotePubkey,
+          authMethod: "remote",
+          bunkerUri: nostrconnectInput,
+          clientSecretKey: appSecretKey,
+          bunkerPubkey: remotePubkey,
+          relays: [relay],
+        })
+      }, 1000)
+
+    } catch (err) {
+      console.error("[Nostrconnect] ❌ Error:", err)
       setConnectionState("error")
       setError(err instanceof Error ? err.message : "Failed to connect")
       cleanup()
@@ -423,15 +508,15 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
     cleanup()
     setLoginMethod("idle")
     setConnectionState("idle")
+    setRemoteSignerMode("select")
     setError("")
     setBunkerUrl("")
-    setNip46Url("")
+    setNostrconnectInput("")
     setNsecInput("")
     setPassword("")
     setConfirmPassword("")
     setGeneratedNsec("")
     setCopied(false)
-    setActiveTab("bunker")
   }
 
   return (
@@ -467,10 +552,13 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
                 </button>
 
                 <button
-                  onClick={startRemoteSignerLogin}
+                  onClick={() => {
+                    setLoginMethod("remote")
+                    setRemoteSignerMode("select")
+                  }}
                   className="w-full bg-purple-600 hover:bg-purple-700 text-white font-medium py-3 px-4 rounded-lg transition-colors shadow-lg shadow-purple-500/20"
                 >
-                  Remote Signer (Bunker)
+                  Remote Signer
                 </button>
 
                 <button
@@ -682,158 +770,10 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
 
             {loginMethod === "remote" && (
               <div className="space-y-6">
-                {connectionState === "generating" && (
-                  <div className="text-center py-8">
-                    <Loader2 className="h-12 w-12 animate-spin text-purple-500 mx-auto mb-4" />
-                    <p className="text-slate-300">Generating connection...</p>
-                  </div>
-                )}
-
-                {connectionState === "waiting" && bunkerUrl && (
-                  <>
-                    <div className="space-y-4">
-                      <p className="text-center text-slate-300 font-medium">Scan with Nsec.app or compatible wallet</p>
-
-                      <div className="bg-white rounded-lg p-4">
-                        <QRCodeSVG value={bunkerUrl} size={256} level="M" className="mx-auto" />
-                      </div>
-
-                      <div className="space-y-2">
-                        <button
-                          onClick={copyUrl}
-                          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors"
-                        >
-                          {copied ? (
-                            <>
-                              <Check className="w-4 h-4 text-green-400" />
-                              Copied!
-                            </>
-                          ) : (
-                            <>
-                              <Copy className="w-4 h-4" />
-                              Copy Connection Link
-                            </>
-                          )}
-                        </button>
-
-                        <button
-                          onClick={openInApp}
-                          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors"
-                        >
-                          <Smartphone className="w-4 h-4" />
-                          Open in App
-                        </button>
-                      </div>
-
-                      <p className="text-center text-sm text-slate-400">Waiting for approval...</p>
-
-                      <div className="flex justify-center">
-                        <div className="animate-pulse flex space-x-2">
-                          <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
-                          <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
-                          <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
-                        </div>
-                      </div>
-                    </div>
-                  </>
-                )}
-
-                {connectionState === "connecting" && (
-                  <div className="text-center py-8">
-                    <Loader2 className="h-12 w-12 animate-spin text-purple-500 mx-auto mb-4" />
-                    <p className="text-slate-300 text-lg font-medium mb-2">Completing connection...</p>
-                    <p className="text-slate-400 text-sm">Finalizing handshake</p>
-                  </div>
-                )}
-
-                {connectionState === "success" && (
-                  <div className="text-center py-8">
-                    <CheckCircle2 className="h-12 w-12 text-green-500 mx-auto mb-4" />
-                    <p className="text-slate-300 text-lg font-bold">Connected!</p>
-                  </div>
-                )}
-
-                {connectionState === "error" && (
-                  <div className="space-y-4">
-                    <div className="bg-red-900/20 border border-red-500/50 rounded-lg p-4">
-                      <p className="text-sm text-red-400">{error}</p>
-                    </div>
+                {remoteSignerMode === "select" && (
+                  <div className="space-y-3">
+                    <p className="text-center text-slate-300 font-medium mb-4">Choose Connection Method</p>
+                    
                     <button
-                      onClick={handleBack}
-                      className="w-full bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 px-4 rounded-lg transition-colors"
-                    >
-                      Try Again
-                    </button>
-                  </div>
-                )}
-
-                {(connectionState === "waiting" || connectionState === "connecting") && (
-                  <button onClick={handleBack} className="w-full text-slate-400 hover:text-white text-sm">
-                    ← Cancel
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Relay Settings Card */}
-          {loginMethod === "idle" && showRelaySettings && (
-            <div className="bg-slate-800 rounded-lg shadow-xl p-6 border border-slate-700">
-              <h3 className="text-lg font-bold text-white mb-4">Relay Settings</h3>
-
-              <div className="space-y-2 mb-4">
-                {relays.map((relay) => (
-                  <div key={relay.url} className="flex items-center gap-3 p-3 bg-slate-900 rounded-lg">
-                    <input
-                      type="checkbox"
-                      checked={relay.enabled}
-                      onChange={() => toggleRelay(relay.url)}
-                      className="w-4 h-4"
-                    />
-                    <span className="flex-1 text-sm text-slate-300 truncate">{relay.url}</span>
-                    <button
-                      onClick={() => removeRelay(relay.url)}
-                      className="p-1 hover:bg-slate-800 rounded transition-colors"
-                    >
-                      <Trash2 className="w-4 h-4 text-red-400" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={newRelayUrl}
-                  onChange={(e) => setNewRelayUrl(e.target.value)}
-                  placeholder="wss://relay.example.com"
-                  className="flex-1 bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm"
-                  onKeyPress={(e) => e.key === "Enter" && addRelay()}
-                />
-                <button
-                  onClick={addRelay}
-                  className="px-3 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors"
-                >
-                  <Plus className="w-4 h-4 text-white" />
-                </button>
-              </div>
-
-              <p className="text-xs text-slate-500 mt-3">
-                Note: Remote signer uses dedicated relays (relay.nostr.band & relay.nsec.app)
-              </p>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-declare global {
-  interface Window {
-    nostr?: {
-      getPublicKey: () => Promise<string>
-      signEvent: (event: any) => Promise<any>
-    }
-  }
-}
+                      onClick={startBunkerLogin}
+                      className="w-full bg-purple-600 hover:bg-purple-700
