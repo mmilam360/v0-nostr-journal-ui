@@ -776,4 +776,264 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
                     
                     <button
                       onClick={startBunkerLogin}
-                      className="w-full bg-purple-600 hover:bg-purple-700
+                      className="w-full bg-purple-600 hover:bg-purple-700 text-white font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 shadow-lg shadow-purple-500/20"
+                    >
+                      <QrCode className="h-5 w-5" />
+                      <div className="text-left">
+                        <div>Scan QR Code</div>
+                        <div className="text-xs text-purple-200 opacity-80">Nsec.app, Amber</div>
+                      </div>
+                    </button>
+
+                    <button
+                      onClick={() => setRemoteSignerMode("nostrconnect")}
+                      className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20"
+                    >
+                      <Link2 className="h-5 w-5" />
+                      <div className="text-left">
+                        <div>Paste Connection String</div>
+                        <div className="text-xs text-indigo-200 opacity-80">Alby, other signers</div>
+                      </div>
+                    </button>
+
+                    <button
+                      onClick={handleBack}
+                      className="w-full text-slate-400 hover:text-white text-sm mt-2"
+                    >
+                      ← Back
+                    </button>
+                  </div>
+                )}
+
+                {remoteSignerMode === "nostrconnect" && (
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-300 mb-2">
+                        Connection String
+                      </label>
+                      <input
+                        type="text"
+                        value={nostrconnectInput}
+                        onChange={(e) => setNostrconnectInput(e.target.value)}
+                        placeholder="nostrconnect://..."
+                        className="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                      <p className="text-xs text-slate-400 mt-2">
+                        Get this from your signer app (Alby, etc.)
+                      </p>
+                    </div>
+
+                    {connectionState === "error" && (
+                      <div className="bg-red-900/20 border border-red-500/50 rounded-lg p-3">
+                        <p className="text-sm text-red-400">{error}</p>
+                      </div>
+                    )}
+
+                    {connectionState === "connecting" && (
+                      <div className="text-center py-4">
+                        <Loader2 className="h-8 w-8 animate-spin text-indigo-500 mx-auto mb-2" />
+                        <p className="text-slate-300 text-sm">Connecting...</p>
+                      </div>
+                    )}
+
+                    {connectionState === "success" && (
+                      <div className="text-center py-4">
+                        <CheckCircle2 className="h-12 w-12 text-green-500 mx-auto mb-4" />
+                        <p className="text-slate-300 text-lg font-bold">Connected!</p>
+                      </div>
+                    )}
+
+                    <div className="flex gap-3">
+                      <button
+                        onClick={() => {
+                          setRemoteSignerMode("select")
+                          setNostrconnectInput("")
+                          setError("")
+                        }}
+                        className="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 px-4 rounded-lg transition-colors"
+                      >
+                        Back
+                      </button>
+                      <button
+                        onClick={startNostrconnectLogin}
+                        disabled={!nostrconnectInput || connectionState === "connecting"}
+                        className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-600 text-white font-medium py-3 px-4 rounded-lg transition-colors"
+                      >
+                        Connect
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {remoteSignerMode === "bunker" && (
+                  <>
+                    {connectionState === "generating" && (
+                      <div className="text-center py-8">
+                        <Loader2 className="h-12 w-12 animate-spin text-purple-500 mx-auto mb-4" />
+                        <p className="text-slate-300">Generating connection...</p>
+                      </div>
+                    )}
+
+                    {connectionState === "waiting" && bunkerUrl && (
+                      <>
+                        <div className="space-y-4">
+                          <p className="text-center text-slate-300 font-medium">Scan with Nsec.app or compatible wallet</p>
+
+                          <div className="bg-white rounded-lg p-4">
+                            <QRCodeSVG value={bunkerUrl} size={256} level="M" className="mx-auto" />
+                          </div>
+
+                          <div className="space-y-2">
+                            <button
+                              onClick={copyUrl}
+                              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors"
+                            >
+                              {copied ? (
+                                <>
+                                  <Check className="w-4 h-4 text-green-400" />
+                                  Copied!
+                                </>
+                              ) : (
+                                <>
+                                  <Copy className="w-4 h-4" />
+                                  Copy Connection Link
+                                </>
+                              )}
+                            </button>
+
+                            <button
+                              onClick={openInApp}
+                              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors"
+                            >
+                              <Smartphone className="w-4 h-4" />
+                              Open in App
+                            </button>
+                          </div>
+
+                          <p className="text-center text-sm text-slate-400">Waiting for approval...</p>
+
+                          <div className="flex justify-center">
+                            <div className="animate-pulse flex space-x-2">
+                              <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
+                              <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
+                              <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
+                            </div>
+                          </div>
+                        </div>
+                      </>
+                    )}
+
+                    {connectionState === "connecting" && (
+                      <div className="text-center py-8">
+                        <Loader2 className="h-12 w-12 animate-spin text-purple-500 mx-auto mb-4" />
+                        <p className="text-slate-300 text-lg font-medium mb-2">Completing connection...</p>
+                        <p className="text-slate-400 text-sm">Finalizing handshake</p>
+                      </div>
+                    )}
+
+                    {connectionState === "success" && (
+                      <div className="text-center py-8">
+                        <CheckCircle2 className="h-12 w-12 text-green-500 mx-auto mb-4" />
+                        <p className="text-slate-300 text-lg font-bold">Connected!</p>
+                      </div>
+                    )}
+
+                    {connectionState === "error" && (
+                      <div className="space-y-4">
+                        <div className="bg-red-900/20 border border-red-500/50 rounded-lg p-4">
+                          <p className="text-sm text-red-400">{error}</p>
+                        </div>
+                        <button
+                          onClick={() => {
+                            setRemoteSignerMode("select")
+                            setConnectionState("idle")
+                            setError("")
+                            setBunkerUrl("")
+                          }}
+                          className="w-full bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 px-4 rounded-lg transition-colors"
+                        >
+                          Try Again
+                        </button>
+                      </div>
+                    )}
+
+                    {(connectionState === "waiting" || connectionState === "connecting") && (
+                      <button
+                        onClick={() => {
+                          setRemoteSignerMode("select")
+                          setConnectionState("idle")
+                          setBunkerUrl("")
+                          cleanup()
+                        }}
+                        className="w-full text-slate-400 hover:text-white text-sm"
+                      >
+                        ← Cancel
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Relay Settings Card */}
+          {loginMethod === "idle" && showRelaySettings && (
+            <div className="bg-slate-800 rounded-lg shadow-xl p-6 border border-slate-700">
+              <h3 className="text-lg font-bold text-white mb-4">Relay Settings</h3>
+
+              <div className="space-y-2 mb-4">
+                {relays.map((relay) => (
+                  <div key={relay.url} className="flex items-center gap-3 p-3 bg-slate-900 rounded-lg">
+                    <input
+                      type="checkbox"
+                      checked={relay.enabled}
+                      onChange={() => toggleRelay(relay.url)}
+                      className="w-4 h-4"
+                    />
+                    <span className="flex-1 text-sm text-slate-300 truncate">{relay.url}</span>
+                    <button
+                      onClick={() => removeRelay(relay.url)}
+                      className="p-1 hover:bg-slate-800 rounded transition-colors"
+                    >
+                      <Trash2 className="w-4 h-4 text-red-400" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={newRelayUrl}
+                  onChange={(e) => setNewRelayUrl(e.target.value)}
+                  placeholder="wss://relay.example.com"
+                  className="flex-1 bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm"
+                  onKeyPress={(e) => e.key === "Enter" && addRelay()}
+                />
+                <button
+                  onClick={addRelay}
+                  className="px-3 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors"
+                >
+                  <Plus className="w-4 h-4 text-white" />
+                </button>
+              </div>
+
+              <p className="text-xs text-slate-500 mt-3">
+                Note: Remote signer uses dedicated relays (relay.nostr.band for bunker)
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+declare global {
+  interface Window {
+    nostr?: {
+      getPublicKey: () => Promise<string>
+      signEvent: (event: any) => Promise<any>
+    }
+  }
+}
