@@ -72,6 +72,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
   const fetcherRef = useRef<any>(null)
   const nip46SignerRef = useRef<any>(null)
   const timeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const poolRef = useRef<any>(null)
 
   const containerStyle = {
     position: "fixed" as const,
@@ -111,6 +112,13 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
         fetcherRef.current.shutdown()
       } catch (e) {}
       fetcherRef.current = null
+    }
+
+    if (poolRef.current) {
+      try {
+        poolRef.current.close([BUNKER_RELAY])
+      } catch (e) {}
+      poolRef.current = null
     }
 
     if (nip46SignerRef.current) {
@@ -292,8 +300,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
     try {
       console.log("[Bunker] 🚀 Starting bunker login")
 
-      const { generateSecretKey, getPublicKey, nip04 } = await import("nostr-tools/pure")
-      const { NostrFetcher } = await import("nostr-fetch")
+      const { generateSecretKey, getPublicKey, nip04, nip19, SimplePool, finalizeEvent } = await import("nostr-tools/pure")
 
       const appSecretKey = generateSecretKey()
       const appPublicKey = getPublicKey(appSecretKey)
@@ -308,89 +315,139 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
 
       console.log("[Bunker] 📱 Bunker URI:", bunkerURI)
       console.log("[Bunker] 🔑 App Public Key:", appPublicKey)
+      console.log("[Bunker] 🔑 App Secret Key (hex):", Buffer.from(appSecretKey).toString('hex'))
       setBunkerUrl(bunkerURI)
 
       setConnectionState("waiting")
 
-      const fetcher = NostrFetcher.init()
-      fetcherRef.current = fetcher
-
-      console.log("[Bunker] 🔌 Subscribing to kind 24133 events...")
-
+      // Use SimplePool for better WebSocket handling
+      const pool = new SimplePool()
+      poolRef.current = pool
+      
       let successful = false
+      let remotePubkey: string | null = null
 
+      // Set up timeout
       timeoutRef.current = setTimeout(() => {
         if (!successful) {
           console.log("[Bunker] ⏱️ Timeout reached")
-          cleanup()
+          pool.close([BUNKER_RELAY])
           setConnectionState("error")
           setError("Approval timed out. Please try again.")
         }
       }, 120000)
 
-      const sub = fetcher.allEventsIterator(
+      console.log("[Bunker] 🔌 Subscribing to events on relay:", BUNKER_RELAY)
+
+      // Subscribe to both the response events and connect events
+      const sub = pool.subscribeMany(
         [BUNKER_RELAY],
+        [
+          {
+            kinds: [24133],
+            "#p": [appPublicKey],
+            since: Math.floor(Date.now() / 1000) - 10
+          }
+        ],
         {
-          kinds: [24133],
-          "#p": [appPublicKey],
-        },
-        { realTime: true, timeout: 120000 }
+          onevent: async (event) => {
+            console.log("[Bunker] 📨 Event received!", event)
+            console.log("[Bunker] 📨 Event kind:", event.kind)
+            console.log("[Bunker] 📨 Event from pubkey:", event.pubkey)
+            console.log("[Bunker] 📨 Event tags:", event.tags)
+            
+            if (successful) return // Already handled
+            
+            try {
+              remotePubkey = event.pubkey
+              
+              // Try to decrypt the content
+              const sharedSecret = nip04.getSharedSecret(appSecretKey, remotePubkey)
+              const decryptedContent = await nip04.decrypt(sharedSecret, event.content)
+              
+              console.log("[Bunker] 🔓 Decrypted content:", decryptedContent)
+              
+              let response: any
+              try {
+                response = JSON.parse(decryptedContent)
+              } catch (e) {
+                // If it's not JSON, it might be a simple string response
+                response = { result: decryptedContent }
+              }
+              
+              console.log("[Bunker] 📦 Parsed response:", response)
+              
+              // More flexible success detection
+              if (
+                response.result === "ack" ||
+                response.result === "auth_url" ||
+                response.method === "connect" ||
+                response.id ||
+                (typeof response.result === 'string' && response.result.length > 0 && !response.error)
+              ) {
+                console.log("[Bunker] ✅ Connection approved!")
+                successful = true
+                
+                if (timeoutRef.current) {
+                  clearTimeout(timeoutRef.current)
+                  timeoutRef.current = null
+                }
+                
+                setConnectionState("success")
+                sub.close()
+                pool.close([BUNKER_RELAY])
+                
+                setTimeout(() => {
+                  onLoginSuccess({
+                    pubkey: remotePubkey!,
+                    authMethod: "remote",
+                    bunkerUri: bunkerURI,
+                    clientSecretKey: appSecretKey,
+                    bunkerPubkey: remotePubkey!,
+                    relays: [BUNKER_RELAY],
+                  })
+                }, 1000)
+              } else if (response.error) {
+                console.log("[Bunker] ❌ Connection rejected:", response.error)
+                throw new Error(`Connection rejected: ${response.error}`)
+              }
+            } catch (err) {
+              console.warn("[Bunker] ⚠️ Could not process event:", err)
+            }
+          },
+          oneose: () => {
+            console.log("[Bunker] 📭 End of stored events")
+          }
+        }
       )
 
-      console.log("[Bunker] 👂 Listening for events...")
-
-      for await (const event of sub) {
-        console.log("[Bunker] 📨 Event received!")
-        console.log("[Bunker] 📨 Event from:", event.pubkey)
-
-        try {
-          const remotePubkey = event.pubkey
-          const sharedSecret = nip04.getSharedSecret(appSecretKey, remotePubkey)
-          const decryptedContent = await nip04.decrypt(sharedSecret, event.content)
-
-          console.log("[Bunker] 🔓 Decrypted content:", decryptedContent)
-
-          const response = JSON.parse(decryptedContent)
-          console.log("[Bunker] 📦 Parsed response:", response)
-          console.log("[Bunker] 📦 Response.result value:", response.result)
-          console.log("[Bunker] 📦 Response.method value:", response.method)
-
-          // Check multiple possible success indicators
-          if (
-            response.result === "ack" ||
-            response.method === "connect" ||
-            (response.result && response.result !== "error" && response.result !== null)
-          ) {
-            console.log("[Bunker] ✅ Connection successful!")
-            successful = true
-
-            setConnectionState("success")
-            cleanup()
-
-            setTimeout(() => {
-              onLoginSuccess({
-                pubkey: remotePubkey,
-                authMethod: "remote",
-                bunkerUri: bunkerURI,
-                clientSecretKey: appSecretKey,
-                bunkerPubkey: remotePubkey,
-                relays: [BUNKER_RELAY],
-              })
-            }, 1000)
-
-            break
-          } else if (response.error) {
-            console.log("[Bunker] ❌ Connection rejected:", response.error)
-            throw new Error(`Connection rejected: ${response.error}`)
-          }
-        } catch (err) {
-          console.warn("[Bunker] ⚠️ Could not process event:", err)
-        }
+      // Also send a connect request to the relay to initiate the connection
+      console.log("[Bunker] 📤 Sending initial connect request...")
+      
+      const connectEvent = {
+        kind: 24133,
+        created_at: Math.floor(Date.now() / 1000),
+        tags: [
+          ["p", appPublicKey],
+          ["relay", BUNKER_RELAY]
+        ],
+        content: JSON.stringify({
+          id: crypto.randomUUID(),
+          method: "connect",
+          params: [appPublicKey, metadata]
+        }),
       }
+      
+      const signedConnectEvent = finalizeEvent(connectEvent, appSecretKey)
+      
+      // Publish the connect event
+      await Promise.race([
+        pool.publish([BUNKER_RELAY], signedConnectEvent),
+        new Promise(resolve => setTimeout(resolve, 5000)) // 5 second timeout for initial publish
+      ])
+      
+      console.log("[Bunker] 📤 Connect request sent")
 
-      if (!successful) {
-        throw new Error("No valid response received")
-      }
     } catch (err) {
       console.error("[Bunker] ❌ Error:", err)
       setConnectionState("error")
