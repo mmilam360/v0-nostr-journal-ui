@@ -280,8 +280,8 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
     setCopied(false)
 
     try {
-      console.log("🚀 Starting remote signer login")
-      console.log("🔒 Using bunker relay:", BUNKER_RELAY)
+      console.log("[v0] 🚀 Starting remote signer login")
+      console.log("[v0] 🔒 Using bunker relay:", BUNKER_RELAY)
 
       const { generateSecretKey, getPublicKey, nip04 } = await import("nostr-tools/pure")
       const { NostrFetcher } = await import("nostr-fetch")
@@ -290,20 +290,22 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
       const appSecretKey = generateSecretKey()
       const appPublicKey = getPublicKey(appSecretKey)
 
-      console.log("🔑 App pubkey:", appPublicKey)
+      console.log("[v0] 🔑 App pubkey:", appPublicKey)
 
       const uri = `bunker://${appPublicKey}?relay=${BUNKER_RELAY}`
 
-      console.log("📱 Bunker URI:", uri)
+      console.log("[v0] 📱 Bunker URI:", uri)
       setBunkerUrl(uri)
       setConnectionState("waiting")
 
       const fetcher = NostrFetcher.init()
       fetcherRef.current = fetcher
 
-      console.log("🔌 Subscribing to kind 24133 events...")
+      console.log("[v0] 🔌 Subscribing to kind 24133 events...")
+      console.log("[v0] 🎯 Listening for events with #p tag:", appPublicKey)
 
       let successful = false
+      let eventCount = 0
 
       const sub = fetcher.allEventsIterator(
         [BUNKER_RELAY],
@@ -312,31 +314,38 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
         { realTime: true, timeout: 120000 },
       )
 
+      console.log("[v0] ⏳ Subscription active, waiting for events...")
+
       // Process events
       for await (const event of sub) {
-        try {
-          console.log("📨 ========================================")
-          console.log("📨 RECEIVED EVENT")
-          console.log("From:", event.pubkey)
-          console.log("Kind:", event.kind)
-          console.log("========================================")
+        eventCount++
+        console.log(`[v0] 📨 Event #${eventCount} received from:`, event.pubkey)
+        console.log("[v0] 📋 Event kind:", event.kind)
+        console.log("[v0] 📋 Event tags:", JSON.stringify(event.tags))
+        console.log("[v0] 📋 Event content (encrypted):", event.content.substring(0, 50) + "...")
 
+        try {
           const remotePubkey = event.pubkey
+
+          console.log("[v0] 🔓 Attempting to decrypt with remote pubkey:", remotePubkey)
 
           const sharedSecret = nip04.getSharedSecret(appSecretKey, remotePubkey)
           const decryptedContent = await nip04.decrypt(sharedSecret, event.content)
 
-          console.log("📋 Decrypted:", decryptedContent)
+          console.log("[v0] ✅ Decryption successful!")
+          console.log("[v0] 📋 Decrypted content:", decryptedContent)
 
           const response = JSON.parse(decryptedContent)
-          console.log("📦 Response:", response)
+          console.log("[v0] 📦 Parsed response:", JSON.stringify(response, null, 2))
 
-          if (response.result === "ack") {
+          console.log("[v0] 🔍 Checking success condition...")
+          console.log("[v0] 🔍 response.result:", response.result)
+          console.log("[v0] 🔍 response.result !== 'error':", response.result !== "error")
+          console.log("[v0] 🔍 Success condition met:", !!(response.result && response.result !== "error"))
+
+          if (response.result && response.result !== "error") {
             successful = true
-            console.log("✅ ========================================")
-            console.log("✅ LOGIN SUCCESSFUL!")
-            console.log("✅ Remote pubkey:", remotePubkey)
-            console.log("✅ ========================================")
+            console.log("[v0] ✅ LOGIN SUCCESSFUL! Response result:", response.result)
 
             setConnectionState("success")
 
@@ -358,17 +367,27 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
             }, 1000)
 
             break
+          } else if (response.error) {
+            console.log("[v0] ❌ Response contains error:", response.error)
+            throw new Error(`Connection rejected by wallet: ${response.error}`)
+          } else {
+            console.log("[v0] ⚠️ Response doesn't meet success condition, continuing to listen...")
           }
         } catch (err) {
-          console.error("❌ Error processing event:", err)
+          console.warn("[v0] ⚠️ Could not process event, still listening...")
+          console.warn("[v0] ⚠️ Error details:", err)
         }
       }
+
+      console.log("[v0] 🔚 Event iterator completed")
+      console.log("[v0] 📊 Total events processed:", eventCount)
+      console.log("[v0] 📊 Successful:", successful)
 
       if (!successful) {
         throw new Error("Approval timed out. Please try again.")
       }
     } catch (err) {
-      console.error("❌ Remote signer error:", err)
+      console.error("[v0] ❌ Remote signer error:", err)
       setConnectionState("error")
       setError(err instanceof Error ? err.message : "Failed to connect")
       cleanup()
