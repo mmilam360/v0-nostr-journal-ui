@@ -1,12 +1,12 @@
 "use client"
 
 /**
- * COMPLETE NOSTR LOGIN WITH RELAY MANAGEMENT
+ * COMPLETE NOSTR LOGIN
  *
  * Features:
  * 1. Four login methods (create account, extension, remote signer, nsec)
- * 2. Relay management on login screen
- * 3. Fixed bunker:// protocol implementation
+ * 2. Remote signer using bunker:// protocol (Nsec.app compatible)
+ * 3. Relay management on login screen
  * 4. Copy/paste link for mobile users
  * 5. Color-coded UI
  */
@@ -32,6 +32,7 @@ import type { AuthData } from "./main-app"
 
 type LoginMethod = "idle" | "extension" | "remote" | "nsec" | "create"
 type ConnectionState = "idle" | "generating" | "waiting" | "connecting" | "success" | "error"
+type RemoteSignerTab = "bunker" | "nip46"
 
 interface Relay {
   url: string
@@ -42,10 +43,10 @@ interface Relay {
 const DEFAULT_RELAYS = ["wss://relay.damus.io", "wss://nos.lol", "wss://relay.nostr.band", "wss://relay.primal.net"]
 
 /**
- * CRITICAL: Bunker relay for NIP-46 handshake
- * Using single relay as per the definitive solution
+ * CRITICAL: Relay configuration for remote signer protocols
  */
-const BUNKER_RELAY = "wss://relay.nostr.band"
+const BUNKER_RELAY = "wss://relay.nostr.band" // For bunker:// protocol (Nsec.app)
+const NIP46_RELAY = "wss://relay.nsec.app" // For nostrconnect:// protocol (Alby, etc.)
 
 interface LoginPageProps {
   onLoginSuccess: (authData: AuthData) => void
@@ -55,6 +56,8 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
   const [loginMethod, setLoginMethod] = useState<LoginMethod>("idle")
   const [connectionState, setConnectionState] = useState<ConnectionState>("idle")
   const [bunkerUrl, setBunkerUrl] = useState<string>("")
+  const [nip46Url, setNip46Url] = useState<string>("")
+  const [activeTab, setActiveTab] = useState<RemoteSignerTab>("bunker")
   const [error, setError] = useState<string>("")
   const [nsecInput, setNsecInput] = useState<string>("")
   const [copied, setCopied] = useState(false)
@@ -68,6 +71,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
   const [generatedNsec, setGeneratedNsec] = useState<string>("")
 
   const fetcherRef = useRef<any>(null)
+  const nip46SignerRef = useRef<any>(null)
   const timeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   const containerStyle = {
@@ -108,6 +112,13 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
         fetcherRef.current.shutdown()
       } catch (e) {}
       fetcherRef.current = null
+    }
+
+    if (nip46SignerRef.current) {
+      try {
+        nip46SignerRef.current.disconnect?.()
+      } catch (e) {}
+      nip46SignerRef.current = null
     }
 
     if (timeoutRef.current) {
@@ -270,8 +281,8 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
   }
 
   /**
-   * REMOTE SIGNER - Using nostr-fetch (Definitive Solution)
-   * This is the proven working implementation with bunker:// protocol
+   * Remote Signer Login using bunker:// protocol
+   * Compatible with Nsec.app and other bunker-compatible wallets
    */
   const startRemoteSignerLogin = async () => {
     setLoginMethod("remote")
@@ -281,85 +292,74 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
 
     try {
       console.log("[v0] 🚀 Starting remote signer login")
-      console.log("[v0] 🔒 Using bunker relay:", BUNKER_RELAY)
 
       const { generateSecretKey, getPublicKey, nip04 } = await import("nostr-tools/pure")
       const { NostrFetcher } = await import("nostr-fetch")
 
-      // Generate local keypair
       const appSecretKey = generateSecretKey()
       const appPublicKey = getPublicKey(appSecretKey)
+      const bunkerURI = `bunker://${appPublicKey}?relay=${BUNKER_RELAY}`
 
-      console.log("[v0] 🔑 App pubkey:", appPublicKey)
+      console.log("[v0] 📱 Bunker URI:", bunkerURI)
+      console.log("[v0] 🔑 App Public Key:", appPublicKey)
+      setBunkerUrl(bunkerURI)
 
-      const uri = `bunker://${appPublicKey}?relay=${BUNKER_RELAY}`
-
-      console.log("[v0] 📱 Bunker URI:", uri)
-      setBunkerUrl(uri)
       setConnectionState("waiting")
 
       const fetcher = NostrFetcher.init()
       fetcherRef.current = fetcher
 
       console.log("[v0] 🔌 Subscribing to kind 24133 events...")
-      console.log("[v0] 🎯 Listening for events with #p tag:", appPublicKey)
 
       let successful = false
-      let eventCount = 0
+
+      timeoutRef.current = setTimeout(() => {
+        if (!successful) {
+          console.log("[v0] ⏱️ Timeout reached")
+          cleanup()
+          setConnectionState("error")
+          setError("Approval timed out. Please try again.")
+        }
+      }, 120000)
 
       const sub = fetcher.allEventsIterator(
         [BUNKER_RELAY],
-        { kinds: [24133] },
-        { "#p": [appPublicKey] },
+        {
+          kinds: [24133],
+          "#p": [appPublicKey],
+        },
         { realTime: true, timeout: 120000 },
       )
 
-      console.log("[v0] ⏳ Subscription active, waiting for events...")
+      console.log("[v0] 👂 Listening for events...")
 
-      // Process events
       for await (const event of sub) {
-        eventCount++
-        console.log(`[v0] 📨 Event #${eventCount} received from:`, event.pubkey)
-        console.log("[v0] 📋 Event kind:", event.kind)
-        console.log("[v0] 📋 Event tags:", JSON.stringify(event.tags))
-        console.log("[v0] 📋 Event content (encrypted):", event.content.substring(0, 50) + "...")
+        console.log("[v0] 📨 Event received!")
+        console.log("[v0] 📨 Event from:", event.pubkey)
+        console.log("[v0] 📨 Event content:", event.content)
 
         try {
           const remotePubkey = event.pubkey
-
-          console.log("[v0] 🔓 Attempting to decrypt with remote pubkey:", remotePubkey)
-
           const sharedSecret = nip04.getSharedSecret(appSecretKey, remotePubkey)
           const decryptedContent = await nip04.decrypt(sharedSecret, event.content)
 
-          console.log("[v0] ✅ Decryption successful!")
-          console.log("[v0] 📋 Decrypted content:", decryptedContent)
+          console.log("[v0] 🔓 Decrypted content:", decryptedContent)
 
           const response = JSON.parse(decryptedContent)
-          console.log("[v0] 📦 Parsed response:", JSON.stringify(response, null, 2))
-
-          console.log("[v0] 🔍 Checking success condition...")
-          console.log("[v0] 🔍 response.result:", response.result)
-          console.log("[v0] 🔍 response.result !== 'error':", response.result !== "error")
-          console.log("[v0] 🔍 Success condition met:", !!(response.result && response.result !== "error"))
+          console.log("[v0] 📦 Parsed response:", response)
 
           if (response.result && response.result !== "error") {
+            console.log("[v0] ✅ Connection successful! Result:", response.result)
             successful = true
-            console.log("[v0] ✅ LOGIN SUCCESSFUL! Response result:", response.result)
 
             setConnectionState("success")
-
-            if (timeoutRef.current) {
-              clearTimeout(timeoutRef.current)
-            }
-
             cleanup()
 
             setTimeout(() => {
               onLoginSuccess({
                 pubkey: remotePubkey,
                 authMethod: "remote",
-                bunkerUri: uri,
+                bunkerUri: bunkerURI,
                 clientSecretKey: appSecretKey,
                 bunkerPubkey: remotePubkey,
                 relays: [BUNKER_RELAY],
@@ -368,23 +368,21 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
 
             break
           } else if (response.error) {
-            console.log("[v0] ❌ Response contains error:", response.error)
-            throw new Error(`Connection rejected by wallet: ${response.error}`)
+            console.log("[v0] ❌ Connection rejected:", response.error)
+            throw new Error(`Connection rejected: ${response.error}`)
           } else {
-            console.log("[v0] ⚠️ Response doesn't meet success condition, continuing to listen...")
+            console.log("[v0] ⚠️ Unexpected response format:", response)
           }
         } catch (err) {
-          console.warn("[v0] ⚠️ Could not process event, still listening...")
-          console.warn("[v0] ⚠️ Error details:", err)
+          console.warn("[v0] ⚠️ Could not process event:", err)
+          console.warn("[v0] ⚠️ Error details:", err instanceof Error ? err.message : String(err))
         }
       }
 
-      console.log("[v0] 🔚 Event iterator completed")
-      console.log("[v0] 📊 Total events processed:", eventCount)
-      console.log("[v0] 📊 Successful:", successful)
+      console.log("[v0] 🔚 Iterator completed")
 
       if (!successful) {
-        throw new Error("Approval timed out. Please try again.")
+        throw new Error("No valid response received")
       }
     } catch (err) {
       console.error("[v0] ❌ Remote signer error:", err)
@@ -394,9 +392,10 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
     }
   }
 
-  const copyBunkerUrl = async () => {
+  const copyUrl = async () => {
     try {
-      await navigator.clipboard.writeText(bunkerUrl)
+      const urlToCopy = bunkerUrl
+      await navigator.clipboard.writeText(urlToCopy)
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     } catch (err) {
@@ -415,7 +414,8 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
   }
 
   const openInApp = () => {
-    window.location.href = bunkerUrl
+    const urlToOpen = bunkerUrl
+    window.location.href = urlToOpen
   }
 
   const handleBack = () => {
@@ -424,11 +424,13 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
     setConnectionState("idle")
     setError("")
     setBunkerUrl("")
+    setNip46Url("")
     setNsecInput("")
     setPassword("")
     setConfirmPassword("")
     setGeneratedNsec("")
     setCopied(false)
+    setActiveTab("bunker")
   }
 
   return (
@@ -467,7 +469,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
                   onClick={startRemoteSignerLogin}
                   className="w-full bg-purple-600 hover:bg-purple-700 text-white font-medium py-3 px-4 rounded-lg transition-colors shadow-lg shadow-purple-500/20"
                 >
-                  Remote Signer (Nsec.app)
+                  Remote Signer (Bunker)
                 </button>
 
                 <button
@@ -688,16 +690,16 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
 
                 {connectionState === "waiting" && bunkerUrl && (
                   <>
-                    <div className="bg-white rounded-lg p-4">
-                      <QRCodeSVG value={bunkerUrl} size={256} level="M" className="mx-auto" />
-                    </div>
+                    <div className="space-y-4">
+                      <p className="text-center text-slate-300 font-medium">Scan with Nsec.app or compatible wallet</p>
 
-                    <div className="space-y-3">
-                      <p className="text-center text-slate-300 font-medium">Scan with Nsec.app</p>
+                      <div className="bg-white rounded-lg p-4">
+                        <QRCodeSVG value={bunkerUrl} size={256} level="M" className="mx-auto" />
+                      </div>
 
                       <div className="space-y-2">
                         <button
-                          onClick={copyBunkerUrl}
+                          onClick={copyUrl}
                           className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors"
                         >
                           {copied ? (
@@ -718,7 +720,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
                           className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors"
                         >
                           <Smartphone className="w-4 h-4" />
-                          Open in Nsec.app
+                          Open in App
                         </button>
                       </div>
 
@@ -815,7 +817,9 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
                 </button>
               </div>
 
-              <p className="text-xs text-slate-500 mt-3">Note: Bunker login uses dedicated relay (relay.nostr.band)</p>
+              <p className="text-xs text-slate-500 mt-3">
+                Note: Remote signer uses dedicated relays (relay.nostr.band & relay.nsec.app)
+              </p>
             </div>
           )}
         </div>
