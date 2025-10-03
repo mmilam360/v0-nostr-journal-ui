@@ -44,16 +44,9 @@ interface Relay {
 
 const DEFAULT_RELAYS = ["wss://relay.damus.io", "wss://nos.lol", "wss://relay.nostr.band", "wss://relay.primal.net"]
 
-/**
- * CRITICAL: Relay configuration for remote signer protocols
- */
-// Line 48 - Change this back
-const metadata = {
-  name: "Nostr Journal",
-  url: typeof window !== 'undefined' ? window.location.origin : "https://nostrjournal.app"
-}
-const bunkerURI = `nostrconnect://${appPublicKey}?relay=${encodeURIComponent(BUNKER_RELAY)}&metadata=${encodeURIComponent(JSON.stringify(metadata))}`
-]
+// Define the BUNKER_RELAY constant
+const BUNKER_RELAY = "wss://relay.nostr.band"
+
 interface LoginPageProps {
   onLoginSuccess: (authData: AuthData) => void
 }
@@ -304,7 +297,14 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
 
       const appSecretKey = generateSecretKey()
       const appPublicKey = getPublicKey(appSecretKey)
-      const bunkerURI = `nostrconnect://${appPublicKey}?relay=${encodeURIComponent(BUNKER_RELAY)}&metadata=${encodeURIComponent(JSON.stringify({ name: "Nostr Journal", url: window.location.origin }))}`
+      
+      // Fixed metadata and bunkerURI construction
+      const metadata = {
+        name: "Nostr Journal",
+        url: typeof window !== 'undefined' ? window.location.origin : "https://nostrjournal.app"
+      }
+      
+      const bunkerURI = `nostrconnect://${appPublicKey}?relay=${encodeURIComponent(BUNKER_RELAY)}&metadata=${encodeURIComponent(JSON.stringify(metadata))}`
 
       console.log("[Bunker] 📱 Bunker URI:", bunkerURI)
       console.log("[Bunker] 🔑 App Public Key:", appPublicKey)
@@ -328,14 +328,14 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
         }
       }, 120000)
 
-const sub = fetcher.allEventsIterator(
-  [BUNKER_RELAY],
-  {
-    kinds: [24133],
-    "#p": [appPublicKey],
-  },
-  { realTime: true, timeout: 120000 }
-)
+      const sub = fetcher.allEventsIterator(
+        [BUNKER_RELAY],
+        {
+          kinds: [24133],
+          "#p": [appPublicKey],
+        },
+        { realTime: true, timeout: 120000 }
+      )
 
       console.log("[Bunker] 👂 Listening for events...")
 
@@ -350,25 +350,25 @@ const sub = fetcher.allEventsIterator(
 
           console.log("[Bunker] 🔓 Decrypted content:", decryptedContent)
 
-const response = JSON.parse(decryptedContent)
-console.log("[Bunker] 📦 Parsed response:", response)
-console.log("[Bunker] 📦 Response.result value:", response.result)
-console.log("[Bunker] 📦 Response.method value:", response.method)
+          const response = JSON.parse(decryptedContent)
+          console.log("[Bunker] 📦 Parsed response:", response)
+          console.log("[Bunker] 📦 Response.result value:", response.result)
+          console.log("[Bunker] 📦 Response.method value:", response.method)
 
-// Check multiple possible success indicators
-if (
-  response.result === "ack" ||
-  response.method === "connect" ||
-  (response.result && response.result !== "error" && response.result !== null)
-) {
-  console.log("[Bunker] ✅ Connection successful!")
-  successful = true
+          // Check multiple possible success indicators
+          if (
+            response.result === "ack" ||
+            response.method === "connect" ||
+            (response.result && response.result !== "error" && response.result !== null)
+          ) {
+            console.log("[Bunker] ✅ Connection successful!")
+            successful = true
 
-  setConnectionState("success")
-  cleanup()
+            setConnectionState("success")
+            cleanup()
 
-  setTimeout(() => {
-    onLoginSuccess({
+            setTimeout(() => {
+              onLoginSuccess({
                 pubkey: remotePubkey,
                 authMethod: "remote",
                 bunkerUri: bunkerURI,
