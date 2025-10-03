@@ -299,7 +299,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
 
       const appSecretKey = generateSecretKey()
       const appPublicKey = getPublicKey(appSecretKey)
-      const bunkerURI = `bunker://${appPublicKey}?relay=${BUNKER_RELAY}`
+      const bunkerURI = `nostrconnect://${appPublicKey}?relay=${encodeURIComponent(BUNKER_RELAY)}&metadata=${encodeURIComponent(JSON.stringify({ name: "Nostr Journal", url: window.location.origin }))}`
 
       console.log("[Bunker] 📱 Bunker URI:", bunkerURI)
       console.log("[Bunker] 🔑 App Public Key:", appPublicKey)
