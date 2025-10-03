@@ -47,7 +47,7 @@ const DEFAULT_RELAYS = ["wss://relay.damus.io", "wss://nos.lol", "wss://relay.no
 /**
  * CRITICAL: Relay configuration for remote signer protocols
  */
-const BUNKER_RELAY = "wss://relay.nsec.app" // Change from relay.nostr.band
+const BUNKER_RELAY = "wss://relay.damus.io" // Change from relay.nostr.band
 
 interface LoginPageProps {
   onLoginSuccess: (authData: AuthData) => void
@@ -325,7 +325,10 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
 
 const sub = fetcher.allEventsIterator(
   [BUNKER_RELAY],
-  { kinds: [24133] },
+  {
+    kinds: [24133],
+    "#p": [appPublicKey],
+  },
   { realTime: true, timeout: 120000 }
 )
 
