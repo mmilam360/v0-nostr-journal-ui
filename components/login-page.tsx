@@ -1,18 +1,17 @@
 "use client"
 
 /**
- * NOSTR JOURNAL LOGIN PAGE - PRODUCTION READY
+ * COMPLETE NOSTR LOGIN WITH RELAY MANAGEMENT
  *
- * FIXES:
- * 1. Remote Signer - Uses nostr-fetch with manual subscription (proven working approach)
- * 2. Isolated Bunker Relays - relay.nsec.app + relay.nostr.band (never mixed with app relays)
- * 3. Create New Account - Generate keypair with password encryption
- * 4. Color-coded buttons for visual clarity
- *
- * CRITICAL: Uses ISOLATED bunker-specific relays for remote signer
+ * Features:
+ * 1. Four login methods (create account, extension, remote signer, nsec)
+ * 2. Relay management on login screen
+ * 3. Fixed bunker:// protocol implementation
+ * 4. Copy/paste link for mobile users
+ * 5. Color-coded UI
  */
 
-import { useState, useEffect, useRef, useCallback } from "react"
+import { useState, useEffect, useRef } from "react"
 import { QRCodeSVG } from "qrcode.react"
 import {
   Loader2,
@@ -22,6 +21,9 @@ import {
   Copy,
   Check,
   Smartphone,
+  Settings,
+  Plus,
+  Trash2,
   UserPlus,
   Eye,
   EyeOff,
@@ -31,11 +33,19 @@ import type { AuthData } from "./main-app"
 type LoginMethod = "idle" | "extension" | "remote" | "nsec" | "create"
 type ConnectionState = "idle" | "generating" | "waiting" | "connecting" | "success" | "error"
 
+interface Relay {
+  url: string
+  enabled: boolean
+  status: "unknown" | "connected" | "failed"
+}
+
+const DEFAULT_RELAYS = ["wss://relay.damus.io", "wss://nos.lol", "wss://relay.nostr.band", "wss://relay.primal.net"]
+
 /**
- * CRITICAL: Bunker-only relays (isolated from app relays)
- * These are NEVER changed and NEVER mixed with general app relays
+ * CRITICAL: Bunker relays are separate and hard-coded
+ * These are ONLY for the NIP-46 handshake
  */
-const BUNKER_ONLY_RELAYS = ["wss://relay.nsec.app", "wss://relay.nostr.band"]
+const BUNKER_RELAYS = ["wss://relay.nsec.app", "wss://relay.nostr.band"]
 
 interface LoginPageProps {
   onLoginSuccess: (authData: AuthData) => void
@@ -48,16 +58,18 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
   const [error, setError] = useState<string>("")
   const [nsecInput, setNsecInput] = useState<string>("")
   const [copied, setCopied] = useState(false)
+  const [showRelaySettings, setShowRelaySettings] = useState(false)
+  const [relays, setRelays] = useState<Relay[]>([])
+  const [newRelayUrl, setNewRelayUrl] = useState("")
 
-  // Create account state
   const [password, setPassword] = useState<string>("")
   const [confirmPassword, setConfirmPassword] = useState<string>("")
   const [showPassword, setShowPassword] = useState(false)
   const [generatedNsec, setGeneratedNsec] = useState<string>("")
 
-  const fetcherRef = useRef<any>(null)
+  const poolRef = useRef<any>(null)
+  const subRef = useRef<any>(null)
   const timeoutRef = useRef<NodeJS.Timeout | null>(null)
-  const appSecretKeyRef = useRef<Uint8Array | null>(null)
 
   const containerStyle = {
     position: "fixed" as const,
@@ -71,25 +83,94 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
   }
 
   useEffect(() => {
+    const stored = localStorage.getItem("nostr_user_relays")
+    if (stored) {
+      setRelays(JSON.parse(stored))
+    } else {
+      const defaultRelays = DEFAULT_RELAYS.map((url) => ({
+        url,
+        enabled: true,
+        status: "unknown" as const,
+      }))
+      setRelays(defaultRelays)
+      localStorage.setItem("nostr_user_relays", JSON.stringify(defaultRelays))
+    }
+  }, [])
+
+  useEffect(() => {
     return () => {
       cleanup()
     }
   }, [])
 
   const cleanup = () => {
-    console.log("[v0] 🧹 Cleaning up...")
-
-    if (fetcherRef.current) {
+    if (subRef.current) {
       try {
-        fetcherRef.current.shutdown()
+        subRef.current.close()
       } catch (e) {}
-      fetcherRef.current = null
+      subRef.current = null
+    }
+
+    if (poolRef.current) {
+      try {
+        poolRef.current.close(BUNKER_RELAYS)
+      } catch (e) {}
+      poolRef.current = null
     }
 
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current)
       timeoutRef.current = null
     }
+  }
+
+  const saveRelays = (updated: Relay[]) => {
+    setRelays(updated)
+    localStorage.setItem("nostr_user_relays", JSON.stringify(updated))
+  }
+
+  const addRelay = () => {
+    if (!newRelayUrl) return
+
+    if (!newRelayUrl.startsWith("wss://") && !newRelayUrl.startsWith("ws://")) {
+      alert("Relay URL must start with wss:// or ws://")
+      return
+    }
+
+    if (relays.some((r) => r.url === newRelayUrl)) {
+      alert("This relay is already in your list")
+      return
+    }
+
+    const newRelay: Relay = {
+      url: newRelayUrl,
+      enabled: true,
+      status: "unknown",
+    }
+
+    saveRelays([...relays, newRelay])
+    setNewRelayUrl("")
+  }
+
+  const removeRelay = (url: string) => {
+    if (relays.filter((r) => r.enabled).length <= 1) {
+      alert("You must have at least one relay enabled")
+      return
+    }
+
+    saveRelays(relays.filter((r) => r.url !== url))
+  }
+
+  const toggleRelay = (url: string) => {
+    const enabledCount = relays.filter((r) => r.enabled).length
+    const relay = relays.find((r) => r.url === url)
+
+    if (relay?.enabled && enabledCount <= 1) {
+      alert("You must have at least one relay enabled")
+      return
+    }
+
+    saveRelays(relays.map((r) => (r.url === url ? { ...r, enabled: !r.enabled } : r)))
   }
 
   const handleExtensionLogin = async () => {
@@ -103,14 +184,14 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
       }
 
       const pubkey = await window.nostr.getPublicKey()
-      console.log("[v0] ✅ Extension login:", pubkey)
+      console.log("✅ Extension login:", pubkey)
 
       onLoginSuccess({
         pubkey,
         authMethod: "extension",
       })
     } catch (err) {
-      console.error("[v0] ❌ Extension error:", err)
+      console.error("❌ Extension error:", err)
       setConnectionState("error")
       setError(err instanceof Error ? err.message : "Extension login failed")
     }
@@ -133,11 +214,11 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
         const { hexToBytes } = await import("@noble/hashes/utils")
         privateKey = hexToBytes(nsecInput)
       } else {
-        throw new Error("Invalid format. Use nsec1... or 64-char hex")
+        throw new Error("Invalid format")
       }
 
       const pubkey = getPublicKey(privateKey)
-      console.log("[v0] ✅ Nsec login:", pubkey)
+      console.log("✅ Nsec login:", pubkey)
 
       onLoginSuccess({
         pubkey,
@@ -145,139 +226,12 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
         authMethod: "nsec",
       })
     } catch (err) {
-      console.error("[v0] ❌ Nsec error:", err)
+      console.error("❌ Nsec error:", err)
       setConnectionState("error")
       setError(err instanceof Error ? err.message : "Invalid key")
     }
   }
 
-  /**
-   * REMOTE SIGNER LOGIN - WORKING IMPLEMENTATION
-   *
-   * Uses nostr-fetch with manual subscription (proven approach from bunker-login-page.tsx)
-   * CRITICAL: Uses isolated bunker relays, never mixed with app relays
-   */
-  const startRemoteSignerLogin = useCallback(async () => {
-    setLoginMethod("remote")
-    setConnectionState("generating")
-    setError("")
-    setCopied(false)
-
-    try {
-      console.log("[v0] 🚀 Starting remote signer login")
-      console.log("[v0] 🔒 Using ISOLATED bunker relays:", BUNKER_ONLY_RELAYS)
-
-      const { NostrFetcher } = await import("nostr-fetch")
-      const nostrTools = await import("nostr-tools")
-
-      // Generate ephemeral keypair for this session
-      const sk = nostrTools.generateSecretKey()
-      const pk = nostrTools.getPublicKey(sk)
-
-      appSecretKeyRef.current = sk
-
-      console.log("[v0] 🔑 Client pubkey:", pk)
-
-      const relayParams = BUNKER_ONLY_RELAYS.map((r) => `relay=${encodeURIComponent(r)}`).join("&")
-      const uri = `bunker://${pk}?${relayParams}`
-
-      console.log("[v0] 📱 Bunker URI:", uri)
-      setBunkerUrl(uri)
-      setConnectionState("waiting")
-
-      const fetcher = NostrFetcher.init()
-      fetcherRef.current = fetcher
-
-      console.log("[v0] 📡 Subscribing to bunker relays:", BUNKER_ONLY_RELAYS)
-      console.log("[v0] 📡 Listening for events tagged with:", pk)
-
-      // Set timeout
-      timeoutRef.current = setTimeout(() => {
-        console.log("[v0] ⏱️ Connection timeout")
-        setConnectionState("error")
-        setError("Connection timeout. Make sure you approved in Nsec.app.")
-        cleanup()
-      }, 120000)
-
-      const sub = fetcher.allEventsIterator(
-        BUNKER_ONLY_RELAYS,
-        { kinds: [24133] },
-        { "#p": [pk] },
-        { realTime: true, timeout: 120000 },
-      )
-
-      console.log("[v0] 🔍 Waiting for approval event...")
-
-      for await (const event of sub) {
-        try {
-          console.log("[v0] 📨 RECEIVED EVENT")
-          console.log("[v0] Event pubkey:", event.pubkey)
-          console.log("[v0] Event kind:", event.kind)
-
-          const remotePubkey = event.pubkey
-          console.log("[v0] 🔓 Decrypting event content...")
-
-          const sharedSecret = nostrTools.nip04.getSharedSecret(sk, remotePubkey)
-          const decryptedContent = await nostrTools.nip04.decrypt(sharedSecret, event.content)
-
-          console.log("[v0] ✅ Decryption successful!")
-          console.log("[v0] 📋 Decrypted content:", decryptedContent)
-
-          const response = JSON.parse(decryptedContent)
-          console.log("[v0] 📦 Parsed response:", JSON.stringify(response, null, 2))
-
-          if (response.result === "ack") {
-            console.log("[v0] ✅ ========================================")
-            console.log("[v0] ✅ CONNECTION SUCCESSFUL!")
-            console.log("[v0] ✅ User pubkey:", remotePubkey)
-            console.log("[v0] ✅ ========================================")
-
-            if (timeoutRef.current) {
-              clearTimeout(timeoutRef.current)
-              timeoutRef.current = null
-            }
-
-            setConnectionState("success")
-
-            setTimeout(() => {
-              onLoginSuccess({
-                pubkey: remotePubkey,
-                authMethod: "remote",
-              })
-            }, 1000)
-
-            return // Exit the loop
-          } else if (response.error) {
-            console.error("[v0] ❌ Remote signer returned error:", response.error)
-            throw new Error(response.error)
-          }
-        } catch (e) {
-          console.log("[v0] ⚠️ Could not decrypt event (likely not for us):", e instanceof Error ? e.message : String(e))
-        }
-      }
-
-      // If we exit the loop, it means timeout
-      throw new Error("Approval timed out. Please try again.")
-    } catch (err) {
-      console.error("[v0] ❌ Remote signer error:", err)
-      setConnectionState("error")
-
-      const errorMessage = err instanceof Error ? err.message : "Failed to connect"
-      if (errorMessage.includes("timeout")) {
-        setError("Connection timeout. Make sure you approved in Nsec.app.")
-      } else {
-        setError(errorMessage)
-      }
-
-      cleanup()
-    }
-  }, [onLoginSuccess])
-
-  /**
-   * CREATE NEW ACCOUNT
-   *
-   * Generates a new keypair and encrypts it with a password
-   */
   const handleCreateAccount = async () => {
     setConnectionState("connecting")
     setError("")
@@ -295,24 +249,20 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
         throw new Error("Password must be at least 8 characters")
       }
 
-      console.log("[v0] 🔑 Generating new keypair...")
+      console.log("🔑 Generating new keypair...")
 
       const { generateSecretKey, getPublicKey, nip19 } = await import("nostr-tools/pure")
 
-      // Generate new keypair
       const privateKey = generateSecretKey()
       const pubkey = getPublicKey(privateKey)
-
-      // Encode as nsec for display
       const nsec = nip19.nsecEncode(privateKey)
 
-      console.log("[v0] ✅ New account created!")
-      console.log("[v0] 👤 Pubkey:", pubkey)
+      console.log("✅ New account created!")
+      console.log("👤 Pubkey:", pubkey)
 
       setGeneratedNsec(nsec)
       setConnectionState("success")
 
-      // Auto-login after a moment
       setTimeout(() => {
         onLoginSuccess({
           pubkey,
@@ -321,41 +271,179 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
         })
       }, 3000)
     } catch (err) {
-      console.error("[v0] ❌ Create account error:", err)
+      console.error("❌ Create account error:", err)
       setConnectionState("error")
       setError(err instanceof Error ? err.message : "Failed to create account")
     }
   }
 
   /**
-   * Copy bunker URL to clipboard
+   * REMOTE SIGNER - Manual Implementation
+   * Using direct subscription instead of BunkerSigner.fromURI
+   * which seems to have compatibility issues
    */
+  const startRemoteSignerLogin = async () => {
+    setLoginMethod("remote")
+    setConnectionState("generating")
+    setError("")
+    setCopied(false)
+
+    try {
+      console.log("🚀 Starting remote signer login")
+      console.log("🔒 Using bunker relays:", BUNKER_RELAYS)
+
+      const { generateSecretKey, getPublicKey, finalizeEvent } = await import("nostr-tools/pure")
+      const { SimplePool } = await import("nostr-tools/pool")
+
+      // Generate local keypair
+      const localSecret = generateSecretKey()
+      const clientPubkey = getPublicKey(localSecret)
+
+      console.log("🔑 Client pubkey:", clientPubkey)
+
+      const relayParams = BUNKER_RELAYS.map((r) => `relay=${encodeURIComponent(r)}`).join("&")
+      const metadata = encodeURIComponent(JSON.stringify({ name: "Nostr Journal" }))
+      const url = `nostrconnect://${clientPubkey}?${relayParams}&metadata=${metadata}`
+
+      console.log("📱 Nostr Connect URL:", url)
+      setBunkerUrl(url)
+      setConnectionState("waiting")
+
+      // Initialize pool
+      const pool = new SimplePool()
+      poolRef.current = pool
+
+      const now = Math.floor(Date.now() / 1000)
+
+      console.log("🔌 Subscribing to kind 24133 events...")
+
+      // Subscribe to response events
+      const sub = pool.subscribeMany(
+        BUNKER_RELAYS,
+        [
+          {
+            kinds: [24133],
+            "#p": [clientPubkey],
+            since: now,
+          },
+        ],
+        {
+          onevent: async (event: any) => {
+            console.log("📨 ========================================")
+            console.log("📨 RECEIVED EVENT")
+            console.log("From:", event.pubkey)
+            console.log("Kind:", event.kind)
+            console.log("Content preview:", event.content.substring(0, 50))
+            console.log("========================================")
+
+            try {
+              // Import nip44 for decryption
+              const { nip44 } = await import("nostr-tools")
+
+              // Decrypt the content
+              const decrypted = await nip44.decrypt(localSecret, event.pubkey, event.content)
+
+              console.log("📋 Decrypted:", decrypted)
+
+              const payload = JSON.parse(decrypted)
+              console.log("📦 Payload:", payload)
+
+              // Check if this is a connect response
+              if (payload.result) {
+                const userPubkey = payload.result
+                console.log("✅ ========================================")
+                console.log("✅ LOGIN SUCCESSFUL!")
+                console.log("✅ User pubkey:", userPubkey)
+                console.log("✅ ========================================")
+
+                setConnectionState("success")
+
+                if (timeoutRef.current) {
+                  clearTimeout(timeoutRef.current)
+                }
+
+                cleanup()
+
+                setTimeout(() => {
+                  onLoginSuccess({
+                    pubkey: userPubkey,
+                    authMethod: "remote",
+                  })
+                }, 1000)
+              } else if (payload.method === "connect") {
+                // Signer is requesting connection - send response
+                console.log("📤 Sending connect response...")
+
+                const response = {
+                  id: payload.id,
+                  result: event.pubkey,
+                }
+
+                const { nip44 } = await import("nostr-tools")
+                const encrypted = await nip44.encrypt(localSecret, event.pubkey, JSON.stringify(response))
+
+                const responseEvent = finalizeEvent(
+                  {
+                    kind: 24133,
+                    created_at: Math.floor(Date.now() / 1000),
+                    tags: [["p", event.pubkey]],
+                    content: encrypted,
+                  },
+                  localSecret,
+                )
+
+                await pool.publish(BUNKER_RELAYS, responseEvent)
+                console.log("✅ Response sent")
+
+                setConnectionState("connecting")
+              }
+            } catch (err) {
+              console.error("❌ Error processing event:", err)
+            }
+          },
+          oneose: () => {
+            console.log("✅ Connected to bunker relays")
+          },
+        },
+      )
+
+      subRef.current = sub
+
+      // Timeout
+      timeoutRef.current = setTimeout(() => {
+        console.log("⏱️ Connection timeout")
+        setConnectionState("error")
+        setError("Connection timeout. Make sure you scanned the QR and approved in Nsec.app.")
+        cleanup()
+      }, 120000)
+    } catch (err) {
+      console.error("❌ Remote signer error:", err)
+      setConnectionState("error")
+      setError(err instanceof Error ? err.message : "Failed to connect")
+      cleanup()
+    }
+  }
+
   const copyBunkerUrl = async () => {
     try {
       await navigator.clipboard.writeText(bunkerUrl)
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     } catch (err) {
-      console.error("[v0] Failed to copy:", err)
+      console.error("Failed to copy:", err)
     }
   }
 
-  /**
-   * Copy generated nsec to clipboard
-   */
   const copyNsec = async () => {
     try {
       await navigator.clipboard.writeText(generatedNsec)
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     } catch (err) {
-      console.error("[v0] Failed to copy:", err)
+      console.error("Failed to copy:", err)
     }
   }
 
-  /**
-   * Open bunker URL directly (for mobile)
-   */
   const openInApp = () => {
     window.location.href = bunkerUrl
   }
@@ -376,14 +464,14 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
   return (
     <div style={containerStyle} className="bg-slate-900">
       <div className="min-h-full flex items-center justify-center p-4">
-        <div className="w-full max-w-md">
-          <div className="text-center mb-8">
+        <div className="w-full max-w-md space-y-4">
+          <div className="text-center">
             <h1 className="text-4xl font-bold text-white mb-2">Nostr Journal</h1>
             <p className="text-slate-400">Private encrypted journaling on Nostr</p>
           </div>
 
+          {/* Main Login Card */}
           <div className="bg-slate-800 rounded-lg shadow-xl p-6 border border-slate-700">
-            {/* Method Selection - Color-coded buttons */}
             {loginMethod === "idle" && (
               <div className="space-y-3">
                 <button
@@ -397,7 +485,6 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
                   Create New Account
                 </button>
 
-                {/* Extension Login - Blue (Trust/Reliability) */}
                 <button
                   onClick={handleExtensionLogin}
                   className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 shadow-lg shadow-blue-500/20"
@@ -406,7 +493,6 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
                   Browser Extension
                 </button>
 
-                {/* Remote Signer - Purple (Premium/Secure) */}
                 <button
                   onClick={startRemoteSignerLogin}
                   className="w-full bg-purple-600 hover:bg-purple-700 text-white font-medium py-3 px-4 rounded-lg transition-colors shadow-lg shadow-purple-500/20"
@@ -414,7 +500,6 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
                   Remote Signer (Nsec.app)
                 </button>
 
-                {/* Private Key - Amber/Orange (Advanced/Caution) */}
                 <button
                   onClick={() => {
                     setLoginMethod("nsec")
@@ -423,6 +508,14 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
                   className="w-full bg-amber-600 hover:bg-amber-700 text-white font-medium py-3 px-4 rounded-lg transition-colors shadow-lg shadow-amber-500/20"
                 >
                   Enter Private Key
+                </button>
+
+                <button
+                  onClick={() => setShowRelaySettings(!showRelaySettings)}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 text-sm rounded-lg transition-colors"
+                >
+                  <Settings className="w-4 h-4" />
+                  {showRelaySettings ? "Hide" : "Configure"} Relays
                 </button>
 
                 <p className="text-xs text-slate-400 text-center mt-4">Your keys never leave your device</p>
@@ -469,6 +562,22 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
                         Your private key will be encrypted with this password and stored securely in your browser.
                       </p>
                     </div>
+
+                    <div className="flex gap-3">
+                      <button
+                        onClick={handleBack}
+                        className="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 px-4 rounded-lg transition-colors"
+                      >
+                        Back
+                      </button>
+                      <button
+                        onClick={handleCreateAccount}
+                        disabled={!password || !confirmPassword}
+                        className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-slate-600 text-white font-medium py-3 px-4 rounded-lg transition-colors"
+                      >
+                        Create Account
+                      </button>
+                    </div>
                   </>
                 )}
 
@@ -503,12 +612,12 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
                         {copied ? (
                           <>
                             <Check className="w-4 h-4 text-green-400" />
-                            <span>Copied!</span>
+                            Copied!
                           </>
                         ) : (
                           <>
                             <Copy className="w-4 h-4" />
-                            <span>Copy Private Key</span>
+                            Copy Private Key
                           </>
                         )}
                       </button>
@@ -519,41 +628,21 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
                 )}
 
                 {connectionState === "error" && (
-                  <div className="bg-red-900/20 border border-red-500/50 rounded-lg p-3">
-                    <p className="text-sm text-red-400">{error}</p>
-                  </div>
-                )}
-
-                {connectionState === "idle" && (
-                  <div className="flex gap-3">
+                  <>
+                    <div className="bg-red-900/20 border border-red-500/50 rounded-lg p-3">
+                      <p className="text-sm text-red-400">{error}</p>
+                    </div>
                     <button
                       onClick={handleBack}
-                      className="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 px-4 rounded-lg transition-colors"
+                      className="w-full bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 px-4 rounded-lg transition-colors"
                     >
                       Back
                     </button>
-                    <button
-                      onClick={handleCreateAccount}
-                      disabled={!password || !confirmPassword}
-                      className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-slate-600 text-white font-medium py-3 px-4 rounded-lg transition-colors"
-                    >
-                      Create Account
-                    </button>
-                  </div>
-                )}
-
-                {connectionState === "error" && (
-                  <button
-                    onClick={handleBack}
-                    className="w-full bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 px-4 rounded-lg transition-colors"
-                  >
-                    Back
-                  </button>
+                  </>
                 )}
               </div>
             )}
 
-            {/* Extension Login */}
             {loginMethod === "extension" && (
               <div className="text-center py-8">
                 {connectionState === "connecting" && (
@@ -574,7 +663,6 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
               </div>
             )}
 
-            {/* Nsec Input */}
             {loginMethod === "nsec" && (
               <div className="space-y-4">
                 <div>
@@ -619,7 +707,6 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
               </div>
             )}
 
-            {/* Remote Signer Flow */}
             {loginMethod === "remote" && (
               <div className="space-y-6">
                 {connectionState === "generating" && (
@@ -631,7 +718,6 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
 
                 {connectionState === "waiting" && bunkerUrl && (
                   <>
-                    {/* QR Code */}
                     <div className="bg-white rounded-lg p-4">
                       <QRCodeSVG value={bunkerUrl} size={256} level="M" className="mx-auto" />
                     </div>
@@ -639,9 +725,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
                     <div className="space-y-3">
                       <p className="text-center text-slate-300 font-medium">Scan with Nsec.app</p>
 
-                      {/* Mobile Actions */}
                       <div className="space-y-2">
-                        {/* Copy Link Button */}
                         <button
                           onClick={copyBunkerUrl}
                           className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors"
@@ -649,23 +733,22 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
                           {copied ? (
                             <>
                               <Check className="w-4 h-4 text-green-400" />
-                              <span>Copied!</span>
+                              Copied!
                             </>
                           ) : (
                             <>
                               <Copy className="w-4 h-4" />
-                              <span>Copy Connection Link</span>
+                              Copy Connection Link
                             </>
                           )}
                         </button>
 
-                        {/* Open in App Button (Mobile) */}
                         <button
                           onClick={openInApp}
                           className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors"
                         >
                           <Smartphone className="w-4 h-4" />
-                          <span>Open in Nsec.app</span>
+                          Open in Nsec.app
                         </button>
                       </div>
 
@@ -678,16 +761,6 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
                           <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
                         </div>
                       </div>
-
-                      {/* Connection String (for manual paste) */}
-                      <details className="mt-4">
-                        <summary className="text-xs text-slate-500 cursor-pointer hover:text-slate-400">
-                          Show connection string
-                        </summary>
-                        <div className="mt-2 p-3 bg-slate-900 rounded">
-                          <code className="text-xs text-slate-400 break-all block">{bunkerUrl}</code>
-                        </div>
-                      </details>
                     </div>
                   </>
                 )}
@@ -696,15 +769,14 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
                   <div className="text-center py-8">
                     <Loader2 className="h-12 w-12 animate-spin text-purple-500 mx-auto mb-4" />
                     <p className="text-slate-300 text-lg font-medium mb-2">Completing connection...</p>
-                    <p className="text-slate-400 text-sm">Getting your public key</p>
+                    <p className="text-slate-400 text-sm">Finalizing handshake</p>
                   </div>
                 )}
 
                 {connectionState === "success" && (
                   <div className="text-center py-8">
                     <CheckCircle2 className="h-12 w-12 text-green-500 mx-auto mb-4" />
-                    <p className="text-slate-300 text-lg font-bold">Connected successfully!</p>
-                    <p className="text-slate-400 text-sm mt-2">Redirecting...</p>
+                    <p className="text-slate-300 text-lg font-bold">Connected!</p>
                   </div>
                 )}
 
@@ -730,6 +802,54 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
               </div>
             )}
           </div>
+
+          {/* Relay Settings Card */}
+          {loginMethod === "idle" && showRelaySettings && (
+            <div className="bg-slate-800 rounded-lg shadow-xl p-6 border border-slate-700">
+              <h3 className="text-lg font-bold text-white mb-4">Relay Settings</h3>
+
+              <div className="space-y-2 mb-4">
+                {relays.map((relay) => (
+                  <div key={relay.url} className="flex items-center gap-3 p-3 bg-slate-900 rounded-lg">
+                    <input
+                      type="checkbox"
+                      checked={relay.enabled}
+                      onChange={() => toggleRelay(relay.url)}
+                      className="w-4 h-4"
+                    />
+                    <span className="flex-1 text-sm text-slate-300 truncate">{relay.url}</span>
+                    <button
+                      onClick={() => removeRelay(relay.url)}
+                      className="p-1 hover:bg-slate-800 rounded transition-colors"
+                    >
+                      <Trash2 className="w-4 h-4 text-red-400" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={newRelayUrl}
+                  onChange={(e) => setNewRelayUrl(e.target.value)}
+                  placeholder="wss://relay.example.com"
+                  className="flex-1 bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm"
+                  onKeyPress={(e) => e.key === "Enter" && addRelay()}
+                />
+                <button
+                  onClick={addRelay}
+                  className="px-3 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors"
+                >
+                  <Plus className="w-4 h-4 text-white" />
+                </button>
+              </div>
+
+              <p className="text-xs text-slate-500 mt-3">
+                Note: Bunker login uses dedicated relays (relay.nsec.app, relay.nostr.band)
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </div>
