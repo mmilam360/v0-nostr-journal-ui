@@ -11,6 +11,14 @@
  * 5. Color-coded UI
  */
 
+
+pnpm remove @noble/hashes
+pnpm add @noble/hashes@1.3.3
+
+
+
+
+
 import { useState, useEffect, useRef } from "react"
 import { QRCodeSVG } from "qrcode.react"
 import {
