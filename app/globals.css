@@ -53,77 +53,77 @@ button {
   overflow-x: hidden;
 }
 
-/* Updated color scheme to "Daylight Scribe" for light mode */
+/* Updated color scheme to "Crisp Paper" theme for light mode - high contrast and clarity */
 :root {
-  --background: 248 247 244; /* Parchment #F8F7F4 */
-  --foreground: 30 41 59; /* Charcoal Ink #1E293B */
-  --card: 248 247 244;
-  --card-foreground: 30 41 59;
-  --popover: 248 247 244;
-  --popover-foreground: 30 41 59;
-  --primary: 79 109 122; /* Dusted Indigo #4F6D7A */
-  --primary-foreground: 248 247 244;
-  --secondary: 229 231 235; /* Soft Gray #E5E7EB */
-  --secondary-foreground: 30 41 59;
-  --muted: 229 231 235;
-  --muted-foreground: 79 109 122;
-  --accent: 192 160 96; /* Antique Gold #C0A060 */
-  --accent-foreground: 30 41 59;
+  --background: 252 252 253; /* Cool, almost white background */
+  --foreground: 36 38 41; /* Very dark, near-black text for max readability */
+  --card: 255 255 255; /* Pure white cards for separation */
+  --card-foreground: 36 38 41;
+  --popover: 255 255 255;
+  --popover-foreground: 36 38 41;
+  --primary: 99 102 241; /* A strong, clear, accessible blue */
+  --primary-foreground: 252 252 253;
+  --secondary: 241 242 243;
+  --secondary-foreground: 36 38 41;
+  --muted: 241 242 243;
+  --muted-foreground: 100 108 120; /* Darker muted text for better contrast */
+  --accent: 245 243 255; /* A very light, subtle blue accent */
+  --accent-foreground: 55 48 163;
   --destructive: 239 68 68;
-  --destructive-foreground: 248 247 244;
-  --border: 229 231 235;
-  --input: 229 231 235;
-  --ring: 79 109 122;
-  --chart-1: 79 109 122;
-  --chart-2: 192 160 96;
-  --chart-3: 30 41 59;
-  --chart-4: 229 231 235;
-  --chart-5: 248 247 244;
-  --radius: 0.625rem;
-  --sidebar: 248 247 244;
-  --sidebar-foreground: 30 41 59;
-  --sidebar-primary: 79 109 122;
-  --sidebar-primary-foreground: 248 247 244;
-  --sidebar-accent: 229 231 235;
-  --sidebar-accent-foreground: 30 41 59;
-  --sidebar-border: 229 231 235;
-  --sidebar-ring: 79 109 122;
-}
-
-/* Updated color scheme to "Midnight Ink" for dark mode */
-.dark {
-  --background: 26 32 44; /* Deep Navy #1A202C */
-  --foreground: 229 231 235; /* Light Slate #E5E7EB */
-  --card: 26 32 44;
-  --card-foreground: 229 231 235;
-  --popover: 26 32 44;
-  --popover-foreground: 229 231 235;
-  --primary: 99 102 241; /* Vibrant Indigo #6366F1 */
-  --primary-foreground: 229 231 235;
-  --secondary: 55 65 81; /* Graphite #374151 */
-  --secondary-foreground: 229 231 235;
-  --muted: 55 65 81;
-  --muted-foreground: 156 163 175;
-  --accent: 192 160 96; /* Antique Gold #C0A060 */
-  --accent-foreground: 229 231 235;
-  --destructive: 239 68 68;
-  --destructive-foreground: 229 231 235;
-  --border: 55 65 81;
-  --input: 55 65 81;
+  --destructive-foreground: 252 252 253;
+  --border: 220 222 224; /* Darker borders for clear separation */
+  --input: 220 222 224;
   --ring: 99 102 241;
   --chart-1: 99 102 241;
   --chart-2: 192 160 96;
-  --chart-3: 229 231 235;
-  --chart-4: 55 65 81;
-  --chart-5: 26 32 44;
-  --sidebar: 26 32 44;
-  --sidebar-foreground: 229 231 235;
+  --chart-3: 36 38 41;
+  --chart-4: 220 222 224;
+  --chart-5: 252 252 253;
+  --radius: 0.625rem;
+  --sidebar: 252 252 253;
+  --sidebar-foreground: 36 38 41;
   --sidebar-primary: 99 102 241;
-  --sidebar-primary-foreground: 229 231 235;
-  --sidebar-accent: 55 65 81;
-  --sidebar-accent-foreground: 229 231 235;
-  --sidebar-border: 55 65 81;
+  --sidebar-primary-foreground: 252 252 253;
+  --sidebar-accent: 241 242 243;
+  --sidebar-accent-foreground: 36 38 41;
+  --sidebar-border: 220 222 224;
   --sidebar-ring: 99 102 241;
+}
+
+/* Updated color scheme to "Focused Ink" theme for dark mode - soft, comfortable, and consistent */
+.dark {
+  --background: 36 38 41; /* A very dark, soft slate-blue */
+  --foreground: 238 239 240; /* Soft, light gray text (not pure white) */
+  --card: 43 46 50; /* Slightly lighter cards for depth */
+  --card-foreground: 238 239 240;
+  --popover: 43 46 50;
+  --popover-foreground: 238 239 240;
+  --primary: 147 149 255; /* A vibrant but not overly bright blue */
+  --primary-foreground: 36 38 41;
+  --secondary: 60 64 70;
+  --secondary-foreground: 238 239 240;
+  --muted: 60 64 70;
+  --muted-foreground: 148 153 160;
+  --accent: 60 64 70;
+  --accent-foreground: 238 239 240;
+  --destructive: 239 68 68;
+  --destructive-foreground: 238 239 240;
+  --border: 72 76 82; /* Clearly visible but soft borders */
+  --input: 72 76 82;
+  --ring: 147 149 255;
+  --chart-1: 147 149 255;
+  --chart-2: 192 160 96;
+  --chart-3: 238 239 240;
+  --chart-4: 72 76 82;
+  --chart-5: 36 38 41;
+  --sidebar: 36 38 41;
+  --sidebar-foreground: 238 239 240;
+  --sidebar-primary: 147 149 255;
+  --sidebar-primary-foreground: 36 38 41;
+  --sidebar-accent: 60 64 70;
+  --sidebar-accent-foreground: 238 239 240;
+  --sidebar-border: 72 76 82;
+  --sidebar-ring: 147 149 255;
 }
 
 @theme inline {
