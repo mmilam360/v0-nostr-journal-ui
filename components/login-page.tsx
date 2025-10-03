@@ -47,7 +47,7 @@ const DEFAULT_RELAYS = ["wss://relay.damus.io", "wss://nos.lol", "wss://relay.no
 /**
  * CRITICAL: Relay configuration for remote signer protocols
  */
-const BUNKER_RELAY = "wss://relay.nostr.band" // For bunker:// protocol (Nsec.app)
+const BUNKER_RELAY = "wss://relay.nsec.app" // Change from relay.nostr.band
 
 interface LoginPageProps {
   onLoginSuccess: (authData: AuthData) => void
