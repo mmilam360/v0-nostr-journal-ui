@@ -321,7 +321,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
           setConnectionState("error")
           setError("Approval timed out. Please try again.")
         }
-      }, 120000)
+      }, 180000)
 
 const sub = fetcher.allEventsIterator(
   [BUNKER_RELAY],
@@ -329,7 +329,7 @@ const sub = fetcher.allEventsIterator(
     kinds: [24133],
     "#p": [appPublicKey],
   },
-  { realTime: true, timeout: 120000 }
+  { realTime: true, timeout: 180000 }
 )
 
       console.log("[Bunker] 👂 Listening for events...")
@@ -349,12 +349,13 @@ const response = JSON.parse(decryptedContent)
 console.log("[Bunker] 📦 Parsed response:", response)
 console.log("[Bunker] 📦 Response.result value:", response.result)
 console.log("[Bunker] 📦 Response.method value:", response.method)
+console.log("[Bunker] 📦 Response.result_type value:", response.result_type)
 
-// Check multiple possible success indicators
 if (
   response.result === "ack" ||
+  response.result_type === "connect" ||
   response.method === "connect" ||
-  (response.result && response.result !== "error" && response.result !== null)
+  (response.result && typeof response.result === "string" && response.result !== "error")
 ) {
   console.log("[Bunker] ✅ Connection successful!")
   successful = true
@@ -364,16 +365,17 @@ if (
 
   setTimeout(() => {
     onLoginSuccess({
-                pubkey: remotePubkey,
-                authMethod: "remote",
-                bunkerUri: bunkerURI,
-                clientSecretKey: appSecretKey,
-                bunkerPubkey: remotePubkey,
-                relays: [BUNKER_RELAY],
-              })
-            }, 1000)
+      pubkey: remotePubkey,
+      authMethod: "remote",
+      bunkerUri: bunkerURI,
+      clientSecretKey: appSecretKey,
+      bunkerPubkey: remotePubkey,
+      relays: [BUNKER_RELAY],
+    })
+  }, 1000)
 
-            break
+  break
+}
           } else if (response.error) {
             console.log("[Bunker] ❌ Connection rejected:", response.error)
             throw new Error(`Connection rejected: ${response.error}`)
