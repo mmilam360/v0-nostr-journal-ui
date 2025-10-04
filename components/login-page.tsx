@@ -576,10 +576,42 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
 
       console.log("[Nostrconnect] 📤 Sending connect request...")
 
-      // Send via fetcher or WebSocket
-      // Note: You may need to use a proper relay connection here
+      // Publish the connect request to the relay
+      await fetcher.publish([relay], signedEvent)
+      console.log("[Nostrconnect] 📡 Connect request published to relay")
+
+      // Listen for the response
+      console.log("[Nostrconnect] 👂 Listening for response...")
       
-      console.log("[Nostrconnect] ✅ Connection initiated")
+      const sub = fetcher.allEventsIterator(
+        [relay],
+        { kinds: [24133] },
+        { "#p": [appPublicKey] },
+        { realTime: true, timeout: 120000 }
+      )
+
+      for await (const responseEvent of sub) {
+        try {
+          console.log("[Nostrconnect] 📨 Received response event")
+          
+          const sharedSecret = nip04.getSharedSecret(appSecretKey, responseEvent.pubkey)
+          const decryptedContent = await nip04.decrypt(sharedSecret, responseEvent.content)
+          const response = JSON.parse(decryptedContent)
+          
+          console.log("[Nostrconnect] 📦 Response:", response)
+          
+          if (response.result === "ack" || response.result_type === "connect") {
+            console.log("[Nostrconnect] ✅ Connection approved!")
+            break
+          } else if (response.error) {
+            throw new Error(response.error.message || "Connection rejected")
+          }
+        } catch (e) {
+          console.log("[Nostrconnect] ⚠️ Could not decrypt response:", e)
+        }
+      }
+      
+      console.log("[Nostrconnect] ✅ Connection established")
       
       setConnectionState("success")
 
