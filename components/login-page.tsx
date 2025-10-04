@@ -332,7 +332,6 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
       
       let successful = false
       let remotePubkey: string | null = null
-      let connectionSecret: string | null = null
 
       // Set up timeout
       timeoutRef.current = setTimeout(() => {
@@ -348,60 +347,32 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
 
       console.log("[Bunker] 🔌 Connecting to relay:", BUNKER_RELAY)
 
-      // First, ensure we're connected to the relay
-      const connectToRelay = new Promise((resolve) => {
-        const checkConnection = async () => {
-          try {
-            // Try to subscribe to test connection
-            const testSub = pool.subscribeMany(
-              [BUNKER_RELAY],
-              [{ kinds: [1], limit: 1 }],
-              {
-                onevent: () => {
-                  console.log("[Bunker] ✅ Relay connection confirmed")
-                  testSub.close()
-                  resolve(true)
-                },
-                oneose: () => {
-                  console.log("[Bunker] ✅ Relay connected (EOSE)")
-                  testSub.close()
-                  resolve(true)
-                }
-              }
-            )
-            
-            // Timeout for connection test
-            setTimeout(() => {
-              testSub.close()
-              resolve(true) // Proceed anyway
-            }, 3000)
-          } catch (err) {
-            console.warn("[Bunker] ⚠️ Relay connection test failed:", err)
-            resolve(false)
-          }
-        }
-        checkConnection()
-      })
-
-      await connectToRelay
-      console.log("[Bunker] 🔌 Ready to receive events")
-
-      // Subscribe to NIP-46 events
+      // Subscribe to NIP-46 events - we need to listen for ALL kind 24133 events
+      // because we don't know the remote signer's pubkey yet
       const sub = pool.subscribeMany(
         [BUNKER_RELAY],
         [
           {
             kinds: [24133], // NIP-46 response kind
-            "#p": [appPublicKey], // Tagged to our pubkey
-            since: Math.floor(Date.now() / 1000) - 30 // Events from last 30 seconds
+            since: Math.floor(Date.now() / 1000) - 60, // Events from last 60 seconds
+            limit: 100 // Limit to prevent too many events
           }
         ],
         {
           onevent: async (event) => {
-            console.log("[Bunker] 📨 Event received!")
-            console.log("[Bunker] 📨 Event:", JSON.stringify(event, null, 2))
-            
             if (successful) return // Already handled
+            
+            // Check if this event is for us by looking at the tags
+            const pTags = event.tags.filter(tag => tag[0] === 'p')
+            const isForUs = pTags.some(tag => tag[1] === appPublicKey)
+            
+            if (!isForUs) {
+              // This event is not for us, skip it
+              return
+            }
+            
+            console.log("[Bunker] 📨 Event received for us!")
+            console.log("[Bunker] 📨 Event:", JSON.stringify(event, null, 2))
             
             try {
               // Verify the event signature
@@ -411,17 +382,18 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
               }
 
               remotePubkey = event.pubkey
-              console.log("[Bunker] 👤 Remote pubkey:", remotePubkey)
+              console.log("[Bunker] 👤 Remote signer pubkey:", remotePubkey)
               
-              // Decrypt the content using NIP-04
-              const sharedSecret = nip04.getSharedSecret(appSecretKey, remotePubkey)
+              // Try to decrypt the content using NIP-04
               let decryptedContent: string
               
               try {
+                const sharedSecret = nip04.getSharedSecret(appSecretKey, remotePubkey)
                 decryptedContent = await nip04.decrypt(sharedSecret, event.content)
                 console.log("[Bunker] 🔓 Decrypted content:", decryptedContent)
               } catch (decryptErr) {
-                console.warn("[Bunker] ⚠️ Failed to decrypt, might be plaintext:", decryptErr)
+                console.warn("[Bunker] ⚠️ Failed to decrypt with NIP-04:", decryptErr)
+                // Some signers might send unencrypted responses
                 decryptedContent = event.content
               }
               
@@ -429,75 +401,66 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
               try {
                 response = JSON.parse(decryptedContent)
               } catch (e) {
-                // If it's not JSON, treat it as a connection approval
-                console.log("[Bunker] 📝 Non-JSON response, treating as approval")
-                response = { result: "connect", params: [remotePubkey] }
+                // If it's not JSON, create a response object
+                console.log("[Bunker] 📝 Non-JSON response:", decryptedContent)
+                response = { result: decryptedContent }
               }
               
               console.log("[Bunker] 📦 Response object:", response)
               
-              // Handle different response types according to NIP-46
-              if (response.id && response.result === "auth_url") {
-                // Some signers send an auth URL first
-                console.log("[Bunker] 🔗 Auth URL received:", response.result)
-                // Continue waiting for the actual connection
-                return
-              }
-              
-              // Check for successful connection
-              // Different signers send different responses, so we need to be flexible
+              // Check for successful connection - be very flexible here
+              // Different signers send different responses
               const isSuccess = 
                 response.result === "ack" ||
                 response.result === "connect" ||
                 response.method === "connect" ||
-                (response.result && typeof response.result === 'string' && response.result.includes(remotePubkey)) ||
                 (response.id && !response.error) ||
-                (response.result && !response.error)
+                (response.result && !response.error) ||
+                (decryptedContent === remotePubkey) // Some signers just send their pubkey
               
               if (isSuccess) {
                 console.log("[Bunker] ✅ Connection approved by remote signer!")
                 successful = true
-                
-                // Extract connection secret if provided
-                if (response.result && typeof response.result === 'string' && response.result.length === 64) {
-                  connectionSecret = response.result
-                  console.log("[Bunker] 🔑 Connection secret received")
-                }
                 
                 if (timeoutRef.current) {
                   clearTimeout(timeoutRef.current)
                   timeoutRef.current = null
                 }
                 
-                // Send acknowledgment back
-                const ackEvent = {
-                  kind: 24133,
-                  created_at: Math.floor(Date.now() / 1000),
-                  tags: [
-                    ["p", remotePubkey],
-                    ["e", event.id]
-                  ],
-                  content: await nip04.encrypt(
-                    sharedSecret,
-                    JSON.stringify({
-                      id: response.id || crypto.randomUUID(),
-                      result: "ack"
-                    })
-                  ),
+                // Send acknowledgment back if we have a response ID
+                if (response.id) {
+                  try {
+                    const sharedSecret = nip04.getSharedSecret(appSecretKey, remotePubkey)
+                    const ackEvent = {
+                      kind: 24133,
+                      created_at: Math.floor(Date.now() / 1000),
+                      tags: [
+                        ["p", remotePubkey],
+                        ["e", event.id]
+                      ],
+                      content: await nip04.encrypt(
+                        sharedSecret,
+                        JSON.stringify({
+                          id: response.id,
+                          result: "connected"
+                        })
+                      ),
+                    }
+                    
+                    const signedAck = finalizeEvent(ackEvent, appSecretKey)
+                    await pool.publish([BUNKER_RELAY], signedAck)
+                    console.log("[Bunker] 📤 Acknowledgment sent")
+                  } catch (ackErr) {
+                    console.warn("[Bunker] ⚠️ Failed to send ack:", ackErr)
+                  }
                 }
-                
-                const signedAck = finalizeEvent(ackEvent, appSecretKey)
-                
-                // Send acknowledgment
-                await pool.publish([BUNKER_RELAY], signedAck)
-                console.log("[Bunker] 📤 Acknowledgment sent")
                 
                 setConnectionState("success")
                 
                 // Close subscription
                 sub.close()
                 
-                // Wait a bit before proceeding to ensure everything is settled
+                // Wait a bit before proceeding
                 setTimeout(() => {
                   if (poolRef.current) {
                     poolRef.current.close([BUNKER_RELAY])
@@ -506,19 +469,25 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
                   
                   console.log("[Bunker] 🎉 Proceeding to login with remote signer")
                   
+                  // Use the remote signer's pubkey as the user's pubkey
                   onLoginSuccess({
                     pubkey: remotePubkey!,
                     authMethod: "remote",
                     bunkerUri: bunkerURI,
                     clientSecretKey: appSecretKey,
                     bunkerPubkey: remotePubkey!,
-                    relays: [BUNKER_RELAY],
-                    connectionSecret: connectionSecret || undefined
+                    relays: [BUNKER_RELAY]
                   })
                 }, 1500)
               } else if (response.error) {
                 console.log("[Bunker] ❌ Connection rejected:", response.error)
-                throw new Error(response.error.message || response.error || "Connection rejected")
+                successful = true // Stop processing more events
+                setConnectionState("error")
+                setError(response.error.message || response.error || "Connection rejected by remote signer")
+                sub.close()
+                if (poolRef.current) {
+                  poolRef.current.close([BUNKER_RELAY])
+                }
               }
             } catch (err) {
               console.warn("[Bunker] ⚠️ Error processing event:", err)
@@ -526,44 +495,13 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
             }
           },
           oneose: () => {
-            console.log("[Bunker] 📭 End of stored events")
-            // Send a connection request after receiving stored events
-            if (!successful) {
-              sendConnectRequest()
-            }
+            console.log("[Bunker] 📭 End of stored events - subscription active")
           }
         }
       )
 
-      // Send initial connect request
-      const sendConnectRequest = async () => {
-        try {
-          console.log("[Bunker] 📤 Sending connect request...")
-          
-          const connectEvent = {
-            kind: 24133,
-            created_at: Math.floor(Date.now() / 1000),
-            tags: [
-              ["p", appPublicKey] // Tag ourselves so we can receive responses
-            ],
-            content: JSON.stringify({
-              id: crypto.randomUUID(),
-              method: "connect",
-              params: [appPublicKey, JSON.stringify(metadata)]
-            }),
-          }
-          
-          const signedConnectEvent = finalizeEvent(connectEvent, appSecretKey)
-          
-          const publishResult = await pool.publish([BUNKER_RELAY], signedConnectEvent)
-          console.log("[Bunker] 📤 Connect request published:", publishResult)
-        } catch (err) {
-          console.error("[Bunker] ❌ Failed to send connect request:", err)
-        }
-      }
-
-      // Wait a bit for the subscription to be established, then send connect request
-      setTimeout(sendConnectRequest, 1000)
+      console.log("[Bunker] 👂 Waiting for approval from remote signer...")
+      console.log("[Bunker] 📱 Please scan the QR code and approve the connection in your signer app")
 
     } catch (err) {
       console.error("[Bunker] ❌ Fatal error:", err)
