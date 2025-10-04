@@ -45,7 +45,7 @@ interface Relay {
 const DEFAULT_RELAYS = ["wss://relay.damus.io", "wss://nos.lol", "wss://relay.nostr.band", "wss://relay.primal.net"]
 
 // Define the BUNKER_RELAY constant
-const BUNKER_RELAY = "wss://relay.nostr.band"
+const BUNKER_RELAY = "wss://relay.nsec.app"
 
 interface LoginPageProps {
   onLoginSuccess: (authData: AuthData) => void
@@ -350,20 +350,37 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
       console.log("[Bunker] 👂 Waiting for approval from remote signer...")
       console.log("[Bunker] 📱 Please scan the QR code and approve the connection in your signer app")
 
-      // Subscribe to NIP-46 events using NostrFetcher to avoid relay filter issues
+      // Subscribe to NIP-46 events using NostrFetcher
+      // Listen for all kind 24133 events and filter manually
       const sub = fetcher.allEventsIterator(
         [BUNKER_RELAY],
-        { kinds: [24133] },
-        { "#p": [appPublicKey] },
+        { 
+          kinds: [24133],
+          since: Math.floor(Date.now() / 1000) - 10 // Only events from last 10 seconds
+        },
+        {},
         { realTime: true, timeout: 120000 }
       )
 
       for await (const event of sub) {
         if (successful) return // Already handled
         
-        console.log("[Bunker] 📨 Event received for us!")
+        console.log("[Bunker] 📨 Event received!")
         console.log("[Bunker] Event pubkey:", event.pubkey)
         console.log("[Bunker] Event kind:", event.kind)
+        console.log("[Bunker] Event tags:", event.tags)
+        console.log("[Bunker] Event content:", event.content)
+        
+        // Check if this event is for us by looking at the p tags
+        const pTags = event.tags.filter(tag => tag[0] === 'p')
+        const isForUs = pTags.some(tag => tag[1] === appPublicKey)
+        
+        if (!isForUs) {
+          console.log("[Bunker] ⚠️ Event not for us, skipping")
+          continue
+        }
+        
+        console.log("[Bunker] ✅ Event is for us, processing...")
         
         try {
           // Verify the event signature
