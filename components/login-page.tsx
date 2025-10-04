@@ -317,7 +317,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
       }
       
       // Create the bunker URI that will be encoded in the QR code
-      const bunkerURI = `nostrconnect://${appPublicKey}?relay=${encodeURIComponent(BUNKER_RELAY)}&metadata=${encodeURIComponent(JSON.stringify(metadata))}`
+      const bunkerURI = `bunker://${appPublicKey}?relay=${encodeURIComponent(BUNKER_RELAY)}`
 
       console.log("[Bunker] 📱 Bunker URI:", bunkerURI)
       console.log("[Bunker] 🔑 App Public Key:", appPublicKey)
@@ -354,22 +354,14 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
         [
           {
             kinds: [24133], // NIP-46 response kind
-            since: Math.floor(Date.now() / 1000) - 60, // Events from last 60 seconds
-            limit: 100 // Limit to prevent too many events
+            "#p": [appPublicKey] // Filter for events tagged with our public key
           }
         ],
         {
           onevent: async (event) => {
             if (successful) return // Already handled
             
-            // Check if this event is for us by looking at the tags
-            const pTags = event.tags.filter(tag => tag[0] === 'p')
-            const isForUs = pTags.some(tag => tag[1] === appPublicKey)
-            
-            if (!isForUs) {
-              // This event is not for us, skip it
-              return
-            }
+            // Event is already filtered by our public key in the subscription
             
             console.log("[Bunker] 📨 Event received for us!")
             console.log("[Bunker] 📨 Event:", JSON.stringify(event, null, 2))
