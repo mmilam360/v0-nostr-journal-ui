@@ -320,16 +320,18 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
       console.log("[Bunker] 🔑 Generated temp keypair")
       console.log("[Bunker] 📱 App Public Key:", tempPublicKey)
 
-      // Get the best available relay for bunker connections
-      let bunkerRelay: string
+      // Get the best available relays for bunker connections
+      let bunkerRelays: string[]
       try {
         const smartRelays = await getSmartRelayList()
-        bunkerRelay = smartRelays[0] || BUNKER_RELAY
-        console.log("[Bunker] 📡 Using smart relay:", bunkerRelay)
+        bunkerRelays = smartRelays.slice(0, 3) // Use top 3 relays for redundancy
+        console.log("[Bunker] 📡 Using smart relays:", bunkerRelays)
       } catch (error) {
         console.warn("[Bunker] ⚠️ Failed to get smart relays, using fallback:", error)
-        bunkerRelay = BUNKER_RELAY
+        bunkerRelays = [BUNKER_RELAY]
       }
+      
+      const bunkerRelay = bunkerRelays[0] // Primary relay
 
       // Create bunker connection string (NOT nostrconnect://)
       const bunkerUrl = `bunker://${tempPublicKey}?relay=${encodeURIComponent(bunkerRelay)}`
@@ -363,20 +365,37 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
       }, 120000) // 2 minute timeout
 
       // Use nostr-fetch's allEventsIterator (the proven method)
+      // Listen for ALL NIP-46 events and filter manually for better debugging
       const sub = fetcher.allEventsIterator(
-        [bunkerRelay],
+        bunkerRelays, // Use multiple relays for better coverage
         { kinds: [24133] }, // NIP-46 events
-        { "#p": [tempPublicKey] }, // Filter for events tagged with our public key
+        {}, // No initial filters - we'll filter manually
         { realTime: true, timeout: 120000 }
       )
 
+      console.log("[Bunker] 🔍 Listening for NIP-46 events on relays:", bunkerRelays)
+      console.log("[Bunker] 🎯 Looking for events tagged with our pubkey:", tempPublicKey)
+      console.log("[Bunker] ⏰ Timeout set for 2 minutes")
+
+      let eventCount = 0
       // Process events as they arrive
       for await (const event of sub) {
-        if (successful) break // Already handled
-        
-        console.log("[Bunker] 📨 Received event from:", event.pubkey)
+        eventCount++
+        console.log(`[Bunker] 📨 Event #${eventCount} received from:`, event.pubkey)
         console.log("[Bunker] Event kind:", event.kind)
         console.log("[Bunker] Event tags:", event.tags)
+        console.log("[Bunker] Event content length:", event.content.length)
+        
+        if (successful) break // Already handled
+        
+        // Check if this event is for us by looking at the tags
+        const pTag = event.tags.find(tag => tag[0] === "p")
+        if (!pTag || pTag[1] !== tempPublicKey) {
+          console.log("[Bunker] ⏭️ Event not for us, skipping")
+          continue
+        }
+        
+        console.log("[Bunker] ✅ Event is for us, processing...")
         
         try {
           // Verify the event signature
@@ -417,8 +436,8 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
             }
             
             const signedResponse = finalizeEvent(connectResponse, tempSecretKey)
-            await fetcher.publish([bunkerRelay], signedResponse)
-            console.log("[Bunker] 📤 Connect response sent")
+            await fetcher.publish(bunkerRelays, signedResponse)
+            console.log("[Bunker] 📤 Connect response sent to relays:", bunkerRelays)
             
             // Connection successful!
             successful = true
@@ -444,7 +463,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
                 bunkerUri: bunkerUrl,
                 clientSecretKey: tempSecretKey,
                 bunkerPubkey: remotePubkey!,
-                relays: [bunkerRelay],
+                relays: bunkerRelays,
               })
             }, 1000)
             
@@ -460,9 +479,13 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
 
       // If we exit the loop without success, it means timeout or error
       if (!successful) {
-        console.log("[Bunker] ❌ Connection failed or timed out")
+        console.log(`[Bunker] ❌ Connection failed or timed out after receiving ${eventCount} events`)
         setConnectionState("error")
-        setError("Connection failed. Please try again.")
+        if (eventCount === 0) {
+          setError("No events received. Please check that your signer app is running and try again.")
+        } else {
+          setError("Connection failed. Please try again.")
+        }
       }
 
     } catch (err) {
