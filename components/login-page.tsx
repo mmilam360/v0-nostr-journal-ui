@@ -225,16 +225,20 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
 
     try {
       const { getPublicKey, nip19 } = await import("nostr-tools/pure")
+      const { bytesToHex } = await import("@noble/hashes/utils")
 
       let privateKey: Uint8Array
+      let privateKeyHex: string
 
       if (nsecInput.startsWith("nsec1")) {
         const decoded = nip19.decode(nsecInput)
         if (decoded.type !== "nsec") throw new Error("Invalid nsec")
         privateKey = decoded.data as Uint8Array
+        privateKeyHex = bytesToHex(privateKey)
       } else if (nsecInput.length === 64) {
         const { hexToBytes } = await import("@noble/hashes/utils")
         privateKey = hexToBytes(nsecInput)
+        privateKeyHex = nsecInput
       } else {
         throw new Error("Invalid format")
       }
@@ -242,9 +246,11 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
       const pubkey = getPublicKey(privateKey)
       console.log("✅ Nsec login:", pubkey)
 
+      // CRITICAL FIX: Pass BOTH nsec and privateKey (hex format)
       onLoginSuccess({
         pubkey,
         nsec: nsecInput,
+        privateKey: privateKeyHex, // ← THIS IS CRITICAL
         authMethod: "nsec",
       })
     } catch (err) {
@@ -274,10 +280,12 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
       console.log("🔑 Generating new keypair...")
 
       const { generateSecretKey, getPublicKey, nip19 } = await import("nostr-tools/pure")
+      const { bytesToHex } = await import("@noble/hashes/utils")
 
       const privateKey = generateSecretKey()
       const pubkey = getPublicKey(privateKey)
       const nsec = nip19.nsecEncode(privateKey)
+      const privateKeyHex = bytesToHex(privateKey)
 
       console.log("✅ New account created!")
       console.log("👤 Pubkey:", pubkey)
@@ -289,6 +297,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
         onLoginSuccess({
           pubkey,
           nsec,
+          privateKey: privateKeyHex, // ← THIS IS CRITICAL
           authMethod: "nsec",
         })
       }, 3000)

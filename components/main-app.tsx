@@ -35,12 +35,12 @@ export interface AuthData {
   pubkey: string
   authMethod: "extension" | "nsec" | "remote"
   nsec?: string
-  privateKey?: string
+  privateKey?: string  // Hex string of private key (for nsec method)
   signer?: any
-  clientSecretKey?: Uint8Array
-  bunkerPubkey?: string
-  bunkerUri?: string
-  relays?: string[]
+  clientSecretKey?: Uint8Array  // For remote signer
+  bunkerPubkey?: string  // For remote signer
+  bunkerUri?: string  // For remote signer
+  relays?: string[]  // For remote signer
 }
 
 interface MainAppProps {

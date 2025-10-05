@@ -84,6 +84,7 @@ export default function Home() {
     console.log("[v0] 📦 Auth data received:", {
       pubkey: data.pubkey,
       authMethod: data.authMethod,
+      hasPrivateKey: !!data.privateKey,
       hasBunkerUri: !!data.bunkerUri,
       hasClientSecretKey: !!data.clientSecretKey,
       hasBunkerPubkey: !!data.bunkerPubkey,
@@ -103,7 +104,16 @@ export default function Home() {
       return
     }
 
-    // For remote signer, ensure we have the necessary data
+    // Validate based on auth method
+    if (data.authMethod === "nsec") {
+      if (!data.privateKey) {
+        console.error("[v0] ❌ ERROR: Nsec login missing privateKey!")
+        alert("Login failed: Private key missing.")
+        return
+      }
+      console.log("[v0] ✅ Nsec login data validated")
+    }
+
     if (data.authMethod === "remote") {
       if (!data.bunkerUri) {
         console.error("[v0] ❌ ERROR: Remote signer missing bunkerUri!")
