@@ -317,6 +317,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
    * 3. Validate the secret in the response
    * 4. Better error handling
    */
+
   const startBunkerLogin = async () => {
     setRemoteSignerMode("bunker")
     setConnectionState("generating")
@@ -327,8 +328,9 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
       console.log("[NostrConnect] 🚀 Starting NIP-46 bunker login")
 
       const { generateSecretKey, getPublicKey, nip04, finalizeEvent, verifyEvent } = await import("nostr-tools/pure")
-      const { bytesToHex } = await import("@noble/hashes/utils")
+      // Import nip44 separately - it's in a different module
       const nip44 = await import("nostr-tools/nip44")
+      const { bytesToHex } = await import("@noble/hashes/utils")
 
       // Generate keypair for this connection
       const appSecretKey = generateSecretKey()
@@ -426,12 +428,16 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
             try {
               // Try NIP-44 decryption first (modern standard)
               let decryptedContent: string
+              let usedNip44 = false
+              
               try {
-                const sharedSecret = nip44.v2.utils.getConversationKey(appSecretKey, remotePubkey)
-                decryptedContent = nip44.v2.decrypt(event.content, sharedSecret)
+                const conversationKey = nip44.v2.utils.getConversationKey(appSecretKey, remotePubkey)
+                decryptedContent = nip44.v2.decrypt(event.content, conversationKey)
+                usedNip44 = true
                 console.log("[NostrConnect] 🔓 Decrypted with NIP-44")
               } catch (nip44Error) {
                 // Fallback to NIP-04 for older signers
+                console.log("[NostrConnect] ⚠️ NIP-44 failed, trying NIP-04:", nip44Error)
                 const sharedSecret = nip04.getSharedSecret(appSecretKey, remotePubkey)
                 decryptedContent = await nip04.decrypt(sharedSecret, event.content)
                 console.log("[NostrConnect] 🔓 Decrypted with NIP-04 (legacy)")
@@ -495,20 +501,55 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
               } else if (response.error) {
                 console.error("[NostrConnect] ❌ Connection error:", response.error)
                 
-                // Check if this is an auth challenge
-                if (response.error.includes('auth_url')) {
-                  console.log("[NostrConnect] 🔐 Auth challenge received - opening auth URL")
-                  // Extract and open the auth URL
-                  const authUrlMatch = response.error.match(/https?:\/\/[^\s]+/)
-                  if (authUrlMatch) {
-                    window.open(authUrlMatch[0], '_blank')
-                    console.log("[NostrConnect] 👀 Waiting for user to complete auth...")
+                // Check if this is an auth challenge (URL in the error)
+                if (typeof response.error === 'string' && response.error.includes('http')) {
+                  console.log("[NostrConnect] 🔐 Auth challenge received - extracting URL")
+                  // Extract the URL from the error message
+                  const urlMatch = response.error.match(/(https?:\/\/[^\s]+)/)
+                  if (urlMatch) {
+                    const authUrl = urlMatch[1]
+                    console.log("[NostrConnect] 🌐 Opening auth URL:", authUrl)
+                    
+                    // Open in popup
+                    const width = 600
+                    const height = 700
+                    const left = window.screen.width / 2 - width / 2
+                    const top = window.screen.height / 2 - height / 2
+                    
+                    window.open(
+                      authUrl,
+                      'nostr-connect-auth',
+                      `width=${width},height=${height},left=${left},top=${top},popup=yes`
+                    )
+                    
+                    console.log("[NostrConnect] 👀 Waiting for user to complete auth in popup...")
+                    // Keep waiting for the next response after auth
+                    return
                   }
-                } else {
-                  setConnectionState("error")
-                  setError(response.error.message || response.error || "Connection rejected")
-                  cleanup()
+                } else if (response.error && typeof response.error === 'object' && response.error.auth_url) {
+                  // Handle structured error with auth_url
+                  console.log("[NostrConnect] 🔐 Structured auth challenge")
+                  console.log("[NostrConnect] 🌐 Opening auth URL:", response.error.auth_url)
+                  
+                  const width = 600
+                  const height = 700
+                  const left = window.screen.width / 2 - width / 2
+                  const top = window.screen.height / 2 - height / 2
+                  
+                  window.open(
+                    response.error.auth_url,
+                    'nostr-connect-auth',
+                    `width=${width},height=${height},left=${left},top=${top},popup=yes`
+                  )
+                  
+                  console.log("[NostrConnect] 👀 Waiting for user to complete auth in popup...")
+                  return
                 }
+                
+                // If it's a different error, show it
+                setConnectionState("error")
+                setError(typeof response.error === 'string' ? response.error : (response.error.message || "Connection rejected"))
+                cleanup()
               } else {
                 console.warn("[NostrConnect] ⚠️ Unexpected response format - no secret validation or error")
                 // Still try to proceed if it looks like a connect response
