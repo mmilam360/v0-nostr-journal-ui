@@ -352,13 +352,14 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
 
       // Subscribe to NIP-46 events using NostrFetcher
       // Listen for connect requests from the signing app
+      // We need to specify authors or #p tags, so we'll listen for events tagged with our public key
       const sub = fetcher.allEventsIterator(
         [BUNKER_RELAY],
         { 
           kinds: [24133],
           since: Math.floor(Date.now() / 1000) - 10 // Only events from last 10 seconds
         },
-        {},
+        { "#p": [appPublicKey] }, // Filter for events tagged with our public key
         { realTime: true, timeout: 120000 }
       )
 
@@ -371,15 +372,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
         console.log("[Bunker] Event tags:", event.tags)
         console.log("[Bunker] Event content:", event.content)
         
-        // Check if this event is for us by looking at the p tags
-        const pTags = event.tags.filter(tag => tag[0] === 'p')
-        const isForUs = pTags.some(tag => tag[1] === appPublicKey)
-        
-        if (!isForUs) {
-          console.log("[Bunker] ⚠️ Event not for us, skipping")
-          continue
-        }
-        
+        // Event is already filtered by the relay to only include events tagged with our public key
         console.log("[Bunker] ✅ Event is for us, processing...")
         
         try {
