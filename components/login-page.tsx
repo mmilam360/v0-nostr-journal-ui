@@ -351,7 +351,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
       console.log("[Bunker] 📱 Please scan the QR code and approve the connection in your signer app")
 
       // Subscribe to NIP-46 events using NostrFetcher
-      // Listen for all kind 24133 events and filter manually
+      // Listen for connect requests from the signing app
       const sub = fetcher.allEventsIterator(
         [BUNKER_RELAY],
         { 
@@ -405,25 +405,41 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
             decryptedContent = event.content
           }
           
-          // Parse the response
-          let response: any
+          // Parse the request
+          let request: any
           try {
-            response = JSON.parse(decryptedContent)
-            console.log("[Bunker] 📦 Parsed response:", response)
+            request = JSON.parse(decryptedContent)
+            console.log("[Bunker] 📦 Parsed request:", request)
           } catch (parseErr) {
-            console.warn("[Bunker] ⚠️ Failed to parse response as JSON:", parseErr)
-            // Some signers might send just their pubkey as plain text
-            response = { result: "ack", params: [decryptedContent] }
+            console.warn("[Bunker] ⚠️ Failed to parse request as JSON:", parseErr)
+            continue
           }
 
-          // Check if this is a successful connection
-          const isSuccess = 
-            (response.result === "ack") || // Standard NIP-46 response
-            (response.result_type === "connect") || // Some signers use this format
-            (decryptedContent === remotePubkey) // Some signers just send their pubkey
-          
-          if (isSuccess) {
-            console.log("[Bunker] ✅ Connection approved by remote signer!")
+          // Check if this is a connect request
+          if (request.method === "connect") {
+            console.log("[Bunker] 📨 Received connect request from remote signer!")
+            
+            // Send back a connect response
+            const connectResponse = {
+              kind: 24133,
+              created_at: Math.floor(Date.now() / 1000),
+              tags: [["p", remotePubkey]],
+              content: await nip04.encrypt(
+                nip04.getSharedSecret(appSecretKey, remotePubkey),
+                JSON.stringify({
+                  id: request.id,
+                  result: "ack",
+                  params: [appPublicKey] // Our app's public key
+                })
+              )
+            }
+            
+            const signedResponse = finalizeEvent(connectResponse, appSecretKey)
+            await fetcher.publish([BUNKER_RELAY], signedResponse)
+            console.log("[Bunker] 📤 Connect response sent")
+            
+            // Connection successful!
+            console.log("[Bunker] ✅ Connection established with remote signer!")
             successful = true
             
             if (timeoutRef.current) {
@@ -445,12 +461,8 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
               })
             }, 1000)
             break
-          } else if (response.error) {
-            console.error("[Bunker] ❌ Remote signer returned error:", response.error)
-            setConnectionState("error")
-            setError(response.error.message || "Connection rejected")
-            cleanup()
-            break
+          } else {
+            console.log("[Bunker] ⚠️ Received non-connect request:", request.method)
           }
         } catch (err) {
           console.warn("[Bunker] ⚠️ Error processing event:", err)
