@@ -326,8 +326,9 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
     try {
       console.log("[NostrConnect] 🚀 Starting NIP-46 bunker login")
 
-      const { generateSecretKey, getPublicKey, nip04, nip44, finalizeEvent, verifyEvent } = await import("nostr-tools/pure")
+      const { generateSecretKey, getPublicKey, nip04, finalizeEvent, verifyEvent } = await import("nostr-tools/pure")
       const { bytesToHex } = await import("@noble/hashes/utils")
+      const nip44 = await import("nostr-tools/nip44")
 
       // Generate keypair for this connection
       const appSecretKey = generateSecretKey()
@@ -426,8 +427,8 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
               // Try NIP-44 decryption first (modern standard)
               let decryptedContent: string
               try {
-                const sharedSecret = nip44.getConversationKey(appSecretKey, remotePubkey)
-                decryptedContent = nip44.decrypt(event.content, sharedSecret)
+                const sharedSecret = nip44.v2.utils.getConversationKey(appSecretKey, remotePubkey)
+                decryptedContent = nip44.v2.decrypt(event.content, sharedSecret)
                 console.log("[NostrConnect] 🔓 Decrypted with NIP-44")
               } catch (nip44Error) {
                 // Fallback to NIP-04 for older signers
