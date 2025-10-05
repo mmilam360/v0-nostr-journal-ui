@@ -74,6 +74,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
   const nip46SignerRef = useRef<any>(null)
   const timeoutRef = useRef<NodeJS.Timeout | null>(null)
   const poolRef = useRef<any>(null)
+  const wsRef = useRef<WebSocket | null>(null)
 
   const containerStyle = {
     position: "fixed" as const,
@@ -120,6 +121,13 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
         poolRef.current.close([BUNKER_RELAY])
       } catch (e) {}
       poolRef.current = null
+    }
+
+    if (wsRef.current) {
+      try {
+        wsRef.current.close()
+      } catch (e) {}
+      wsRef.current = null
     }
 
     if (nip46SignerRef.current) {
