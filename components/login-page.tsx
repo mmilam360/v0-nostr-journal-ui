@@ -355,6 +355,20 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
       
       console.log("[NostrConnect] ✅ NostrFetcher initialized successfully")
       console.log("[NostrConnect] 📡 Listening for approval on relay:", bunkerRelay)
+      
+      // Test relay connectivity first
+      console.log("[NostrConnect] 🔍 Testing relay connectivity...")
+      try {
+        const testEvents = await fetcher.fetchAllEvents(
+          bunkerRelays.slice(0, 1), // Test just the first relay
+          { kinds: [24133], since: Math.floor(Date.now() / 1000) - 60 },
+          {},
+          { timeout: 5000 }
+        )
+        console.log("[NostrConnect] ✅ Relay test successful, found", testEvents.length, "recent NIP-46 events")
+      } catch (testError) {
+        console.warn("[NostrConnect] ⚠️ Relay test failed:", testError)
+      }
 
       let successful = false
       let remotePubkey: string | null = null
@@ -374,21 +388,24 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
 
       // Use nostr-fetch's allEventsIterator with proper Nostr Connect protocol
       // According to nostrconnect.org, we need to add 'since' filter to avoid old events
+      // But we also need to listen more broadly to catch the initial connection
       const sub = fetcher.allEventsIterator(
         bunkerRelays,
         { 
           kinds: [24133], // NIP-46 events
-          since: Math.floor(Date.now() / 1000) - 10 // Only events from last 10 seconds
+          since: Math.floor(Date.now() / 1000) - 30 // Extended to 30 seconds for initial connection
         },
-        { "#p": [tempPublicKey] }, // Filter for events tagged with our public key
+        {}, // No tag filters initially - we'll filter manually
         { realTime: true, timeout: 120000 }
       )
 
       console.log("[NostrConnect] 🔍 Listening for NIP-46 events on relays:", bunkerRelays)
       console.log("[NostrConnect] 🎯 Looking for events tagged with our pubkey:", tempPublicKey)
       console.log("[NostrConnect] ⏰ Timeout set for 2 minutes")
+      console.log("[NostrConnect] 📊 Will show ALL events received for debugging")
 
       let eventCount = 0
+      let ourEventCount = 0
       // Process events as they arrive
       for await (const event of sub) {
         eventCount++
@@ -398,6 +415,16 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
         console.log("[NostrConnect] Event content length:", event.content.length)
         
         if (successful) break // Already handled
+        
+        // Check if this event is for us by looking at the tags
+        const pTag = event.tags.find(tag => tag[0] === "p")
+        if (!pTag || pTag[1] !== tempPublicKey) {
+          console.log("[NostrConnect] ⏭️ Event not for us (p tag:", pTag?.[1], "vs our pubkey:", tempPublicKey, "), skipping")
+          continue
+        }
+        
+        ourEventCount++
+        console.log("[NostrConnect] ✅ Event is for us, processing... (#", ourEventCount, "for us)")
         
         try {
           // Verify the event signature
@@ -487,10 +514,12 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
 
       // If we exit the loop without success, it means timeout or error
       if (!successful) {
-        console.log(`[NostrConnect] ❌ Connection failed or timed out after receiving ${eventCount} events`)
+        console.log(`[NostrConnect] ❌ Connection failed or timed out after receiving ${eventCount} total events (${ourEventCount} for us)`)
         setConnectionState("error")
         if (eventCount === 0) {
-          setError("No events received. Please check that your signer app is running and try again.")
+          setError("No events received from relays. Check your internet connection and try again.")
+        } else if (ourEventCount === 0) {
+          setError(`Received ${eventCount} events but none were for us. Please scan the QR code again.`)
         } else {
           setError("Connection failed. Please try again.")
         }
