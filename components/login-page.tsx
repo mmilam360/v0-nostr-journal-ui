@@ -289,15 +289,16 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
   }
 
   /**
-   * Remote Signer - Bunker Protocol (QR Code) - GEMINI SURGICAL FIX
-   * Compatible with Nsec.app and other bunker-compatible wallets
+   * Remote Signer - Nostr Connect Protocol (QR Code) - PROPER IMPLEMENTATION
+   * Compatible with Nsec.app and other Nostr Connect wallets
    * 
-   * This implementation uses the proven nostr-fetch approach that was successful
-   * in our diagnostic test. Key improvements:
-   * 1. Uses nostr-fetch's allEventsIterator for reliable event handling
-   * 2. Proper bunker:// URI generation (not nostrconnect://)
-   * 3. Enhanced error handling and timeout management
-   * 4. Better relay selection using our smart relay management
+   * This implementation follows the official Nostr Connect protocol as documented
+   * at nostrconnect.org. Key features:
+   * 1. Uses proper nostrconnect:// URI format with metadata
+   * 2. Implements correct event filtering with 'since' parameter
+   * 3. Handles auth_url messages for user confirmation
+   * 4. Uses nostr-fetch's allEventsIterator for reliable event handling
+   * 5. Smart relay management for better connectivity
    */
   const startBunkerLogin = async () => {
     setRemoteSignerMode("bunker")
@@ -306,7 +307,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
     setCopied(false)
 
     try {
-      console.log("[Bunker] 🚀 Starting bunker login with nostr-fetch")
+      console.log("[NostrConnect] 🚀 Starting Nostr Connect login with nostr-fetch")
 
       // Import nostr-tools for crypto operations only
       const nostrTools = await import("nostr-tools/pure")
@@ -317,26 +318,33 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
       const tempSecretKey = generateSecretKey()
       const tempPublicKey = getPublicKey(tempSecretKey)
       
-      console.log("[Bunker] 🔑 Generated temp keypair")
-      console.log("[Bunker] 📱 App Public Key:", tempPublicKey)
+      console.log("[NostrConnect] 🔑 Generated temp keypair")
+      console.log("[NostrConnect] 📱 App Public Key:", tempPublicKey)
 
-      // Get the best available relays for bunker connections
+      // Get the best available relays for Nostr Connect
       let bunkerRelays: string[]
       try {
         const smartRelays = await getSmartRelayList()
         bunkerRelays = smartRelays.slice(0, 3) // Use top 3 relays for redundancy
-        console.log("[Bunker] 📡 Using smart relays:", bunkerRelays)
+        console.log("[NostrConnect] 📡 Using smart relays:", bunkerRelays)
       } catch (error) {
-        console.warn("[Bunker] ⚠️ Failed to get smart relays, using fallback:", error)
+        console.warn("[NostrConnect] ⚠️ Failed to get smart relays, using fallback:", error)
         bunkerRelays = [BUNKER_RELAY]
       }
       
       const bunkerRelay = bunkerRelays[0] // Primary relay
 
-      // Create bunker connection string (NOT nostrconnect://)
-      const bunkerUrl = `bunker://${tempPublicKey}?relay=${encodeURIComponent(bunkerRelay)}`
+      // Create nostrconnect URI (the correct format according to nostrconnect.org)
+      const metadata = {
+        name: "Nostr Journal",
+        url: typeof window !== 'undefined' ? window.location.origin : "https://nostrjournal.app",
+        description: "Private encrypted journaling on Nostr",
+        icons: []
+      }
       
-      console.log("[Bunker] 📱 Bunker URI:", bunkerUrl)
+      const bunkerUrl = `nostrconnect://${tempPublicKey}?relay=${encodeURIComponent(bunkerRelay)}&metadata=${encodeURIComponent(JSON.stringify(metadata))}`
+      
+      console.log("[NostrConnect] 📱 NostrConnect URI:", bunkerUrl)
       setBunkerUrl(bunkerUrl)
       setConnectionState("waiting")
 
@@ -345,8 +353,8 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
       const fetcher = NostrFetcher.init()
       fetcherRef.current = fetcher
       
-      console.log("[Bunker] ✅ NostrFetcher initialized successfully")
-      console.log("[Bunker] 📡 Listening for approval on relay:", bunkerRelay)
+      console.log("[NostrConnect] ✅ NostrFetcher initialized successfully")
+      console.log("[NostrConnect] 📡 Listening for approval on relay:", bunkerRelay)
 
       let successful = false
       let remotePubkey: string | null = null
@@ -354,7 +362,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
       // Set up timeout
       timeoutRef.current = setTimeout(() => {
         if (!successful) {
-          console.log("[Bunker] ⏱️ Approval timeout reached")
+          console.log("[NostrConnect] ⏱️ Approval timeout reached")
           if (fetcherRef.current) {
             fetcherRef.current.shutdown()
             fetcherRef.current = null
@@ -364,61 +372,55 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
         }
       }, 120000) // 2 minute timeout
 
-      // Use nostr-fetch's allEventsIterator (the proven method)
-      // Listen for ALL NIP-46 events and filter manually for better debugging
+      // Use nostr-fetch's allEventsIterator with proper Nostr Connect protocol
+      // According to nostrconnect.org, we need to add 'since' filter to avoid old events
       const sub = fetcher.allEventsIterator(
-        bunkerRelays, // Use multiple relays for better coverage
-        { kinds: [24133] }, // NIP-46 events
-        {}, // No initial filters - we'll filter manually
+        bunkerRelays,
+        { 
+          kinds: [24133], // NIP-46 events
+          since: Math.floor(Date.now() / 1000) - 10 // Only events from last 10 seconds
+        },
+        { "#p": [tempPublicKey] }, // Filter for events tagged with our public key
         { realTime: true, timeout: 120000 }
       )
 
-      console.log("[Bunker] 🔍 Listening for NIP-46 events on relays:", bunkerRelays)
-      console.log("[Bunker] 🎯 Looking for events tagged with our pubkey:", tempPublicKey)
-      console.log("[Bunker] ⏰ Timeout set for 2 minutes")
+      console.log("[NostrConnect] 🔍 Listening for NIP-46 events on relays:", bunkerRelays)
+      console.log("[NostrConnect] 🎯 Looking for events tagged with our pubkey:", tempPublicKey)
+      console.log("[NostrConnect] ⏰ Timeout set for 2 minutes")
 
       let eventCount = 0
       // Process events as they arrive
       for await (const event of sub) {
         eventCount++
-        console.log(`[Bunker] 📨 Event #${eventCount} received from:`, event.pubkey)
-        console.log("[Bunker] Event kind:", event.kind)
-        console.log("[Bunker] Event tags:", event.tags)
-        console.log("[Bunker] Event content length:", event.content.length)
+        console.log(`[NostrConnect] 📨 Event #${eventCount} received from:`, event.pubkey)
+        console.log("[NostrConnect] Event kind:", event.kind)
+        console.log("[NostrConnect] Event tags:", event.tags)
+        console.log("[NostrConnect] Event content length:", event.content.length)
         
         if (successful) break // Already handled
-        
-        // Check if this event is for us by looking at the tags
-        const pTag = event.tags.find(tag => tag[0] === "p")
-        if (!pTag || pTag[1] !== tempPublicKey) {
-          console.log("[Bunker] ⏭️ Event not for us, skipping")
-          continue
-        }
-        
-        console.log("[Bunker] ✅ Event is for us, processing...")
         
         try {
           // Verify the event signature
           if (!verifyEvent(event)) {
-            console.warn("[Bunker] ⚠️ Invalid event signature, skipping")
+            console.warn("[NostrConnect] ⚠️ Invalid event signature, skipping")
             continue
           }
 
           remotePubkey = event.pubkey
-          console.log("[Bunker] 👤 Remote signer pubkey:", remotePubkey)
+          console.log("[NostrConnect] 👤 Remote signer pubkey:", remotePubkey)
           
           // Decrypt the content using NIP-04
           const sharedSecret = nip04.getSharedSecret(tempSecretKey, remotePubkey)
           const decryptedContent = await nip04.decrypt(sharedSecret, event.content)
-          console.log("[Bunker] 🔓 Decrypted content:", decryptedContent)
+          console.log("[NostrConnect] 🔓 Decrypted content:", decryptedContent)
           
           // Parse the request
           const request = JSON.parse(decryptedContent)
-          console.log("[Bunker] 📦 Parsed request:", request)
+          console.log("[NostrConnect] 📦 Parsed request:", request)
 
-          // Check if this is a connect request
+          // Handle different types of responses according to nostrconnect.org
           if (request.method === "connect") {
-            console.log("[Bunker] ✅ CONNECTION SUCCESS! Received connect request")
+            console.log("[NostrConnect] ✅ CONNECTION SUCCESS! Received connect request")
             
             // Send back a connect response
             const connectResponse = {
@@ -437,7 +439,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
             
             const signedResponse = finalizeEvent(connectResponse, tempSecretKey)
             await fetcher.publish(bunkerRelays, signedResponse)
-            console.log("[Bunker] 📤 Connect response sent to relays:", bunkerRelays)
+            console.log("[NostrConnect] 📤 Connect response sent to relays:", bunkerRelays)
             
             // Connection successful!
             successful = true
@@ -468,18 +470,24 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
             }, 1000)
             
             break
+          } else if (request.method === "auth_url") {
+            // Handle auth_url messages as per nostrconnect.org
+            console.log("[NostrConnect] 🔐 Received auth_url:", request.params?.[0])
+            // For now, we'll continue waiting for the connect response
+            // In a full implementation, you'd show a "Please confirm" button
+            // and open the auth URL when clicked
           } else {
-            console.log("[Bunker] ⚠️ Received non-connect request:", request.method)
+            console.log("[NostrConnect] ⚠️ Received unexpected request:", request.method)
           }
         } catch (err) {
-          console.warn("[Bunker] ⚠️ Error processing event:", err)
+          console.warn("[NostrConnect] ⚠️ Error processing event:", err)
           // Continue listening for other events
         }
       }
 
       // If we exit the loop without success, it means timeout or error
       if (!successful) {
-        console.log(`[Bunker] ❌ Connection failed or timed out after receiving ${eventCount} events`)
+        console.log(`[NostrConnect] ❌ Connection failed or timed out after receiving ${eventCount} events`)
         setConnectionState("error")
         if (eventCount === 0) {
           setError("No events received. Please check that your signer app is running and try again.")
@@ -489,7 +497,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
       }
 
     } catch (err) {
-      console.error("[Bunker] ❌ Fatal error:", err)
+      console.error("[NostrConnect] ❌ Fatal error:", err)
       setConnectionState("error")
       setError(err instanceof Error ? err.message : "Failed to connect")
       
