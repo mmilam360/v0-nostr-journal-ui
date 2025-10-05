@@ -46,7 +46,7 @@ interface Relay {
 const DEFAULT_RELAYS = ["wss://relay.damus.io", "wss://nos.lol", "wss://relay.nostr.band", "wss://relay.primal.net"]
 
 // Use smart relay management for bunker connections
-let BUNKER_RELAY = "wss://relay.nostr.band" // Default fallback
+let BUNKER_RELAY = "wss://relay.nsec.app" // Nsec.app's dedicated relay
 
 interface LoginPageProps {
   onLoginSuccess: (authData: AuthData) => void
