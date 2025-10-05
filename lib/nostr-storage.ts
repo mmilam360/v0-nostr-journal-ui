@@ -3,11 +3,14 @@
 import { NostrFetcher } from "nostr-fetch"
 import * as nostrTools from "nostr-tools"
 import type { DecryptedNote } from "./nostr-crypto"
+import { getSmartRelayList, getRelays } from "./relay-manager"
 
 // ===================================================================================
-// THE "PRIMAL SPEED" SECRET: We prioritize a known, fast caching relay.
+// SMART RELAY MANAGEMENT: Dynamic relay selection with health checking
 // ===================================================================================
-const HIGH_SPEED_RELAYS = ["wss://relay.primal.net", "wss://relay.damus.io"]
+let cachedRelays: string[] = []
+let lastRelayCheck = 0
+const RELAY_CACHE_DURATION = 5 * 60 * 1000 // 5 minutes
 const APP_D_TAG_PREFIX = "nostrjournal_note_"
 
 export interface NostrStorageResult {
@@ -95,16 +98,37 @@ async function decryptNote(encryptedData: string, encryptionKey: Uint8Array): Pr
   }
 }
 
-// Fetches all individual note events
+// Get current relay list with caching
+async function getCurrentRelays(): Promise<string[]> {
+  const now = Date.now()
+  
+  if (cachedRelays.length > 0 && (now - lastRelayCheck) < RELAY_CACHE_DURATION) {
+    return cachedRelays
+  }
+  
+  try {
+    cachedRelays = await getSmartRelayList()
+    lastRelayCheck = now
+    console.log("[v0] 🔄 Updated relay list:", cachedRelays)
+  } catch (error) {
+    console.warn("[v0] ⚠️ Failed to get smart relay list, using fallback:", error)
+    cachedRelays = getRelays()
+  }
+  
+  return cachedRelays
+}
+
+// Fetches all individual note events with smart relay management
 export const fetchAllNotesFromNostr = async (pubkey: string, encryptionKey: Uint8Array): Promise<DecryptedNote[]> => {
   if (!pubkey || !encryptionKey) return []
 
   const fetcher = NostrFetcher.init()
   try {
-    console.log("[v0] Fetching all notes from high-speed relays...")
+    const relays = await getCurrentRelays()
+    console.log("[v0] 📡 Fetching notes from relays:", relays)
 
     const events = await fetcher.fetchAllEvents(
-      HIGH_SPEED_RELAYS,
+      relays,
       { kinds: [30078], authors: [pubkey] },
       { sort: true }, // Sort by created_at descending
     )
@@ -135,7 +159,48 @@ export const fetchAllNotesFromNostr = async (pubkey: string, encryptionKey: Uint
 
     return notes.filter((note): note is DecryptedNote => note !== null)
   } catch (error) {
-    console.error("[v0] Error fetching notes from Nostr:", error)
+    console.error("[v0] ❌ Error fetching notes from Nostr:", error)
+    
+    // If this is a network error, try with fallback relays
+    if (error instanceof Error && (
+      error.message.includes('timeout') || 
+      error.message.includes('connection') ||
+      error.message.includes('network')
+    )) {
+      console.log("[v0] 🔄 Network error detected, trying fallback relays...")
+      try {
+        const fallbackRelays = getRelays()
+        const fallbackEvents = await fetcher.fetchAllEvents(
+          fallbackRelays,
+          { kinds: [30078], authors: [pubkey] },
+          { sort: true }
+        )
+        
+        const fallbackAppEvents = fallbackEvents.filter((event) => {
+          const dTag = event.tags.find((tag) => tag[0] === "d")
+          return dTag && dTag[1]?.startsWith(APP_D_TAG_PREFIX)
+        })
+        
+        const fallbackNotes = await Promise.all(
+          fallbackAppEvents.map(async (event) => {
+            try {
+              const note = await decryptNote(event.content, encryptionKey)
+              note.eventId = event.id
+              return note
+            } catch (error) {
+              console.error("[v0] Error decrypting fallback note:", error)
+              return null
+            }
+          }),
+        )
+        
+        console.log(`[v0] ✅ Fallback fetch successful: ${fallbackNotes.filter(n => n !== null).length} notes`)
+        return fallbackNotes.filter((note): note is DecryptedNote => note !== null)
+      } catch (fallbackError) {
+        console.error("[v0] ❌ Fallback fetch also failed:", fallbackError)
+      }
+    }
+    
     return []
   } finally {
     fetcher.shutdown()
@@ -219,12 +284,13 @@ export const saveNoteToNostr = async (
         throw new Error("Unsupported authentication method.")
     }
 
-    // Publish using NostrFetcher
+    // Publish using NostrFetcher with smart relay management
     const fetcher = NostrFetcher.init()
     try {
-      console.log("[v0] Publishing note event to high-speed relays...")
-      await fetcher.publish(HIGH_SPEED_RELAYS, signedEvent)
-      console.log("[v0] Successfully published note:", signedEvent.id)
+      const relays = await getCurrentRelays()
+      console.log("[v0] 📤 Publishing note event to relays:", relays)
+      await fetcher.publish(relays, signedEvent)
+      console.log("[v0] ✅ Successfully published note:", signedEvent.id)
 
       return {
         success: true,
@@ -315,12 +381,13 @@ export const deleteNoteOnNostr = async (noteToDelete: DecryptedNote, authData: a
         throw new Error("Unsupported authentication method.")
     }
 
-    // Publish the deletion event
+    // Publish the deletion event with smart relay management
     const fetcher = NostrFetcher.init()
     try {
-      console.log(`[v0] Publishing kind:5 deletion for event ${noteToDelete.eventId}`)
-      await fetcher.publish(HIGH_SPEED_RELAYS, signedEvent)
-      console.log("[v0] Successfully published deletion event")
+      const relays = await getCurrentRelays()
+      console.log(`[v0] 📤 Publishing kind:5 deletion for event ${noteToDelete.eventId} to relays:`, relays)
+      await fetcher.publish(relays, signedEvent)
+      console.log("[v0] ✅ Successfully published deletion event")
     } finally {
       fetcher.shutdown()
     }

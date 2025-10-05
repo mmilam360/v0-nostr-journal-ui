@@ -1,6 +1,7 @@
 "use client"
 
 import * as nostrTools from "nostr-tools"
+import { getSmartRelayList, getRelays } from "./relay-manager"
 
 export const createNostrEvent = async (pubkey: string, content: string, tags: string[] = []) => {
   const event = {
@@ -94,16 +95,39 @@ export const publishToNostr = async (unsignedEvent: any, authData: any): Promise
     throw new Error("Event signing failed.")
   }
 
-  const relays = ["wss://relay.damus.io", "wss://relay.primal.net", "wss://relay.nostr.band"]
+  // Get smart relay list with fallback
+  let relays: string[]
+  try {
+    relays = await getSmartRelayList()
+    console.log("[v0] 📡 Using smart relay list:", relays)
+  } catch (error) {
+    console.warn("[v0] ⚠️ Failed to get smart relays, using fallback:", error)
+    relays = getRelays()
+  }
+  
   const pool = new nostrTools.SimplePool()
 
   try {
-    console.log("[v0] Publishing to relays...")
+    console.log("[v0] 📤 Publishing to relays:", relays)
     await Promise.any(pool.publish(relays, signedEvent))
-    console.log("[v0] Event published to at least one relay.")
+    console.log("[v0] ✅ Event published to at least one relay.")
   } catch (error) {
-    console.error("[v0] Failed to publish event to any relay:", error)
-    throw new Error("Failed to publish event to the Nostr network.")
+    console.error("[v0] ❌ Failed to publish event to any relay:", error)
+    
+    // Try with fallback relays if primary attempt failed
+    if (relays.length > 3) {
+      console.log("[v0] 🔄 Trying with fallback relays...")
+      const fallbackRelays = relays.slice(3) // Use remaining relays
+      try {
+        await Promise.any(pool.publish(fallbackRelays, signedEvent))
+        console.log("[v0] ✅ Event published to fallback relay.")
+      } catch (fallbackError) {
+        console.error("[v0] ❌ Fallback publish also failed:", fallbackError)
+        throw new Error("Failed to publish event to the Nostr network.")
+      }
+    } else {
+      throw new Error("Failed to publish event to the Nostr network.")
+    }
   } finally {
     pool.close(relays)
   }

@@ -16,6 +16,8 @@ import { createNostrEvent, publishToNostr } from "@/lib/nostr-publish"
 import { syncNotes } from "@/lib/nostr-storage"
 import { RelayManager } from "@/components/relay-manager"
 import { ThemeToggle } from "@/components/theme-toggle"
+import { ConnectionStatus } from "@/components/connection-status"
+import { DiagnosticPage } from "@/components/diagnostic-page"
 
 export interface Note {
   id: string
@@ -65,6 +67,36 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   const [deletedNotes, setDeletedNotes] = useState<{ id: string; deletedAt: Date }[]>([])
   const [showProfile, setShowProfile] = useState(false)
   const [showRelayManager, setShowRelayManager] = useState(false)
+  const [showDiagnostics, setShowDiagnostics] = useState(false)
+  const [connectionError, setConnectionError] = useState<string | null>(null)
+
+  const retryConnection = async () => {
+    console.log("[v0] 🔄 Retrying connection...")
+    setConnectionError(null)
+    setSyncStatus("syncing")
+    
+    try {
+      const syncResult = await syncNotes(notes, deletedNotes, authData)
+      
+      const syncedNotes = syncResult.notes.map((note) => ({
+        ...note,
+        syncStatus: syncResult.synced ? ("synced" as const) : ("error" as const),
+      }))
+      
+      setNotes(syncedNotes)
+      setDeletedNotes(syncResult.deletedNotes)
+      setSyncStatus(syncResult.synced ? "synced" : "error")
+      setConnectionError(syncResult.synced ? null : "Failed to sync with Nostr network")
+      
+      if (syncResult.synced) {
+        setLastSyncTime(new Date())
+      }
+    } catch (error) {
+      console.error("[v0] Retry failed:", error)
+      setSyncStatus("error")
+      setConnectionError(error instanceof Error ? error.message : "Retry failed")
+    }
+  }
 
   useEffect(() => {
     const loadUserNotes = async () => {
@@ -93,6 +125,8 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
         setNotes(syncedNotes)
         setDeletedNotes(syncResult.deletedNotes)
         setSyncStatus(syncResult.synced ? "synced" : "error")
+        setConnectionError(syncResult.synced ? null : "Failed to sync with Nostr network")
+        
         if (syncResult.synced) {
           setLastSyncTime(new Date())
         }
@@ -107,6 +141,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       } catch (error) {
         console.error("[v0] Error loading notes:", error)
         setSyncStatus("error")
+        setConnectionError(error instanceof Error ? error.message : "Unknown error occurred")
       } finally {
         setIsLoading(false)
       }
@@ -515,6 +550,28 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
               </Button>
             )}
           </div>
+          
+          {/* Connection Status */}
+          <ConnectionStatus 
+            onRetry={retryConnection}
+            className="text-xs"
+          />
+          
+          {/* Connection Error Display */}
+          {connectionError && (
+            <div className="flex items-center gap-1 text-red-500 text-xs">
+              <AlertCircle className="w-3 h-3" />
+              <span className="truncate">{connectionError}</span>
+              <Button
+                onClick={() => setShowDiagnostics(true)}
+                variant="ghost"
+                size="sm"
+                className="h-4 px-1 text-xs text-red-500 hover:text-red-700"
+              >
+                Diagnose
+              </Button>
+            </div>
+          )}
         </div>
 
         <div className="flex items-center gap-2">
@@ -657,6 +714,22 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
         {showProfile && <ProfilePage authData={authData} onClose={() => setShowProfile(false)} />}
 
         {showRelayManager && <RelayManager onClose={() => setShowRelayManager(false)} />}
+
+        {showDiagnostics && (
+          <div className="fixed inset-0 z-50 bg-background">
+            <div className="flex items-center justify-between p-4 border-b">
+              <h2 className="text-lg font-semibold">Connection Diagnostics</h2>
+              <Button
+                onClick={() => setShowDiagnostics(false)}
+                variant="ghost"
+                size="sm"
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+            <DiagnosticPage />
+          </div>
+        )}
       </div>
 
       <DonationBubble />

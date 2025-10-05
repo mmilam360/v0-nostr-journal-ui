@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { Plus, Trash2, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { getRelays as getRelaysFromManager, getDefaultRelays, saveRelays } from "@/lib/relay-manager"
 
 const DEFAULT_RELAYS = ["wss://relay.nsec.app", "wss://relay.damus.io", "wss://nos.lol", "wss://relay.nostr.band"]
 
@@ -23,9 +24,13 @@ export function RelayManager({ onClose, onSave, initialRelays }: RelayManagerPro
     } else {
       const savedRelays = localStorage.getItem("nostr-journal-relays")
       if (savedRelays) {
-        setRelays(JSON.parse(savedRelays))
+        try {
+          setRelays(JSON.parse(savedRelays))
+        } catch {
+          setRelays(getDefaultRelays())
+        }
       } else {
-        setRelays(DEFAULT_RELAYS)
+        setRelays(getDefaultRelays())
       }
     }
   }, [initialRelays])
@@ -49,7 +54,7 @@ export function RelayManager({ onClose, onSave, initialRelays }: RelayManagerPro
   }
 
   const handleSave = () => {
-    localStorage.setItem("nostr-journal-relays", JSON.stringify(relays))
+    saveRelays(relays)
     if (onSave) {
       onSave(relays)
     }
@@ -59,7 +64,7 @@ export function RelayManager({ onClose, onSave, initialRelays }: RelayManagerPro
   }
 
   const handleReset = () => {
-    setRelays(DEFAULT_RELAYS)
+    setRelays(getDefaultRelays())
   }
 
   return (
@@ -133,11 +138,5 @@ export function RelayManager({ onClose, onSave, initialRelays }: RelayManagerPro
   )
 }
 
-export function getRelays(): string[] {
-  if (typeof window === "undefined") return DEFAULT_RELAYS
-  const savedRelays = localStorage.getItem("nostr-journal-relays")
-  if (savedRelays) {
-    return JSON.parse(savedRelays)
-  }
-  return DEFAULT_RELAYS
-}
+// Re-export for backward compatibility
+export { getRelaysFromManager as getRelays }
