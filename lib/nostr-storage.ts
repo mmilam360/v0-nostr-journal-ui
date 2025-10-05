@@ -4,6 +4,7 @@ import { NostrFetcher } from "nostr-fetch"
 import * as nostrTools from "nostr-tools"
 import type { DecryptedNote } from "./nostr-crypto"
 import { getSmartRelayList, getRelays } from "./relay-manager"
+import { encryptWithRemote, decryptWithRemote, signEventWithRemote } from "./signer-manager"
 
 // ===================================================================================
 // SMART RELAY MANAGEMENT: Dynamic relay selection with health checking
@@ -30,10 +31,27 @@ export interface NotesData {
   version: number
 }
 
-// Simple encryption for individual notes
-async function encryptNote(note: DecryptedNote, encryptionKey: Uint8Array): Promise<string> {
-  const encoder = new TextEncoder()
+// Enhanced encryption for individual notes with remote signer support
+async function encryptNote(note: DecryptedNote, authData: any): Promise<string> {
   const noteData = JSON.stringify(note)
+
+  // For remote signer, use remote encryption (user's actual key encrypting to themselves)
+  if (authData.authMethod === "remote") {
+    console.log("[v0] 🔐 Encrypting note with remote signer (NIP-04 to self)")
+    return await encryptWithRemote(noteData, authData.pubkey, authData)
+  }
+
+  // For nsec/extension, use local encryption (existing code)
+  const encoder = new TextEncoder()
+  let encryptionKey: Uint8Array
+
+  if (authData.authMethod === "nsec" && authData.privateKey) {
+    encryptionKey = new Uint8Array(
+      authData.privateKey.match(/.{1,2}/g)?.map((byte: string) => Number.parseInt(byte, 16)) || []
+    )
+  } else {
+    encryptionKey = encoder.encode(authData.pubkey).slice(0, 32)
+  }
 
   const keyMaterial = await crypto.subtle.importKey("raw", encryptionKey.slice(0, 32), { name: "PBKDF2" }, false, [
     "deriveKey",
@@ -62,13 +80,37 @@ async function encryptNote(note: DecryptedNote, encryptionKey: Uint8Array): Prom
   return btoa(String.fromCharCode(...combined))
 }
 
-async function decryptNote(encryptedData: string, encryptionKey: Uint8Array): Promise<DecryptedNote> {
+async function decryptNote(encryptedData: string, authData: any): Promise<DecryptedNote> {
+  // For remote signer, use remote decryption
+  if (authData.authMethod === "remote") {
+    console.log("[v0] 🔓 Decrypting note with remote signer (NIP-04 from self)")
+    const decryptedData = await decryptWithRemote(encryptedData, authData.pubkey, authData)
+    const noteData = JSON.parse(decryptedData)
+
+    return {
+      ...noteData,
+      createdAt: new Date(noteData.createdAt),
+      lastModified: noteData.lastModified ? new Date(noteData.lastModified) : new Date(noteData.createdAt),
+    }
+  }
+
+  // For nsec/extension, use local decryption (existing code)
   const decoder = new TextDecoder()
   const encoder = new TextEncoder()
 
   const combined = Uint8Array.from(atob(encryptedData), (c) => c.charCodeAt(0))
   const iv = combined.slice(0, 12)
   const encrypted = combined.slice(12)
+
+  let encryptionKey: Uint8Array
+
+  if (authData.authMethod === "nsec" && authData.privateKey) {
+    encryptionKey = new Uint8Array(
+      authData.privateKey.match(/.{1,2}/g)?.map((byte: string) => Number.parseInt(byte, 16)) || []
+    )
+  } else {
+    encryptionKey = encoder.encode(authData.pubkey).slice(0, 32)
+  }
 
   const keyMaterial = await crypto.subtle.importKey("raw", encryptionKey.slice(0, 32), { name: "PBKDF2" }, false, [
     "deriveKey",
@@ -90,7 +132,6 @@ async function decryptNote(encryptedData: string, encryptionKey: Uint8Array): Pr
   const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, encrypted)
   const noteData = JSON.parse(decoder.decode(decrypted))
 
-  // Convert date strings back to Date objects
   return {
     ...noteData,
     createdAt: new Date(noteData.createdAt),
@@ -119,8 +160,8 @@ async function getCurrentRelays(): Promise<string[]> {
 }
 
 // Fetches all individual note events with smart relay management
-export const fetchAllNotesFromNostr = async (pubkey: string, encryptionKey: Uint8Array): Promise<DecryptedNote[]> => {
-  if (!pubkey || !encryptionKey) return []
+export const fetchAllNotesFromNostr = async (authData: any): Promise<DecryptedNote[]> => {
+  if (!authData?.pubkey) return []
 
   const fetcher = NostrFetcher.init()
   try {
@@ -129,7 +170,7 @@ export const fetchAllNotesFromNostr = async (pubkey: string, encryptionKey: Uint
 
     const events = await fetcher.fetchAllEvents(
       relays,
-      { kinds: [30078], authors: [pubkey] },
+      { kinds: [30078], authors: [authData.pubkey] },
       { sort: true }, // Sort by created_at descending
     )
 
@@ -146,7 +187,7 @@ export const fetchAllNotesFromNostr = async (pubkey: string, encryptionKey: Uint
     const notes = await Promise.all(
       appEvents.map(async (event) => {
         try {
-          const note = await decryptNote(event.content, encryptionKey)
+          const note = await decryptNote(event.content, authData)
           // Store the event ID on the note object to enable deletion later
           note.eventId = event.id
           return note
@@ -172,7 +213,7 @@ export const fetchAllNotesFromNostr = async (pubkey: string, encryptionKey: Uint
         const fallbackRelays = getRelays()
         const fallbackEvents = await fetcher.fetchAllEvents(
           fallbackRelays,
-          { kinds: [30078], authors: [pubkey] },
+          { kinds: [30078], authors: [authData.pubkey] },
           { sort: true }
         )
         
@@ -184,7 +225,7 @@ export const fetchAllNotesFromNostr = async (pubkey: string, encryptionKey: Uint
         const fallbackNotes = await Promise.all(
           fallbackAppEvents.map(async (event) => {
             try {
-              const note = await decryptNote(event.content, encryptionKey)
+              const note = await decryptNote(event.content, authData)
               note.eventId = event.id
               return note
             } catch (error) {
@@ -211,27 +252,27 @@ export const fetchAllNotesFromNostr = async (pubkey: string, encryptionKey: Uint
 export const saveNoteToNostr = async (
   note: DecryptedNote,
   authData: any,
-  encryptionKey: Uint8Array,
 ): Promise<NostrStorageResult> => {
-  if (!authData || !encryptionKey) {
-    return { success: false, error: "Auth/Encryption failed" }
+  if (!authData) {
+    return { success: false, error: "Auth failed" }
   }
 
   try {
     console.log("[v0] Saving individual note to Nostr:", note.title)
 
-    const encryptedContent = await encryptNote(note, encryptionKey)
+    // Encrypt with the appropriate method
+    const encryptedContent = await encryptNote(note, authData)
     const dTag = `${APP_D_TAG_PREFIX}${note.id}`
 
     const unsignedEvent: any = {
-      kind: 30078, // Replaceable event
+      kind: 30078,
       created_at: Math.floor(Date.now() / 1000),
-      tags: [["d", dTag]], // Each note gets a unique, stable identifier
+      tags: [["d", dTag]],
       content: encryptedContent,
       pubkey: authData.pubkey,
     }
 
-    // Sign the event based on auth method
+    // Sign the event
     let signedEvent
 
     switch (authData.authMethod) {
@@ -251,25 +292,9 @@ export const saveNoteToNostr = async (
           throw new Error("Remote signer connection data is missing.")
         }
 
-        try {
-          const { SimplePool } = await import("nostr-tools/pool")
-          const { BunkerSigner } = await import("nostr-tools/nip46")
-
-          const pool = new SimplePool()
-          const signer = await BunkerSigner.fromURI(authData.clientSecretKey, authData.bunkerUri, {
-            pool,
-            timeout: 60000,
-          })
-
-          signedEvent = await signer.signEvent(unsignedEvent)
-          console.log("[v0] Received signed event from remote signer.")
-
-          await signer.close()
-          pool.close(authData.relays || [])
-        } catch (signerError: any) {
-          console.error("[v0] Remote signer error:", signerError)
-          throw new Error(`Failed to sign with remote signer: ${signerError.message || "Unknown error"}`)
-        }
+        // Use the signer manager - NO popup required!
+        signedEvent = await signEventWithRemote(unsignedEvent, authData)
+        console.log("[v0] Event signed by remote signer.")
         break
 
       case "extension":
@@ -284,7 +309,7 @@ export const saveNoteToNostr = async (
         throw new Error("Unsupported authentication method.")
     }
 
-    // Publish using NostrFetcher with smart relay management
+    // Publish
     const fetcher = NostrFetcher.init()
     try {
       const relays = await getCurrentRelays()
@@ -321,14 +346,13 @@ export const deleteNoteOnNostr = async (noteToDelete: DecryptedNote, authData: a
     console.log("[v0] Creating NIP-09 deletion event for:", noteToDelete.title)
 
     const unsignedEvent: any = {
-      kind: 5, // Event Deletion
+      kind: 5,
       created_at: Math.floor(Date.now() / 1000),
-      tags: [["e", noteToDelete.eventId]], // Tag the event ID of the note we are deleting
+      tags: [["e", noteToDelete.eventId]],
       content: "Deleted a note from Nostr Journal.",
       pubkey: authData.pubkey,
     }
 
-    // Sign the deletion event based on auth method
     let signedEvent
 
     switch (authData.authMethod) {
@@ -348,25 +372,9 @@ export const deleteNoteOnNostr = async (noteToDelete: DecryptedNote, authData: a
           throw new Error("Remote signer connection data is missing.")
         }
 
-        try {
-          const { SimplePool } = await import("nostr-tools/pool")
-          const { BunkerSigner } = await import("nostr-tools/nip46")
-
-          const pool = new SimplePool()
-          const signer = await BunkerSigner.fromURI(authData.clientSecretKey, authData.bunkerUri, {
-            pool,
-            timeout: 60000,
-          })
-
-          signedEvent = await signer.signEvent(unsignedEvent)
-          console.log("[v0] Deletion event signed by remote signer.")
-
-          await signer.close()
-          pool.close(authData.relays || [])
-        } catch (signerError: any) {
-          console.error("[v0] Remote signer error:", signerError)
-          throw new Error(`Failed to sign deletion with remote signer: ${signerError.message || "Unknown error"}`)
-        }
+        // Use signer manager
+        signedEvent = await signEventWithRemote(unsignedEvent, authData)
+        console.log("[v0] Deletion event signed by remote signer.")
         break
 
       case "extension":
@@ -381,11 +389,10 @@ export const deleteNoteOnNostr = async (noteToDelete: DecryptedNote, authData: a
         throw new Error("Unsupported authentication method.")
     }
 
-    // Publish the deletion event with smart relay management
     const fetcher = NostrFetcher.init()
     try {
       const relays = await getCurrentRelays()
-      console.log(`[v0] 📤 Publishing kind:5 deletion for event ${noteToDelete.eventId} to relays:`, relays)
+      console.log(`[v0] 📤 Publishing kind:5 deletion for event ${noteToDelete.eventId}`)
       await fetcher.publish(relays, signedEvent)
       console.log("[v0] ✅ Successfully published deletion event")
     } finally {
@@ -406,20 +413,8 @@ export async function syncNotes(
   console.log("[v0] Legacy syncNotes called - this will be replaced with individual note syncing")
 
   try {
-    // Get encryption key
-    let encryptionKey: Uint8Array
-    if (authData.authMethod === "nsec" && authData.privateKey) {
-      encryptionKey = new Uint8Array(
-        authData.privateKey.match(/.{1,2}/g)?.map((byte: string) => Number.parseInt(byte, 16)) || [],
-      )
-    } else {
-      const encoder = new TextEncoder()
-      const pubkeyBytes = encoder.encode(authData.pubkey)
-      encryptionKey = pubkeyBytes.slice(0, 32)
-    }
-
     // Fetch all notes from Nostr
-    const nostrNotes = await fetchAllNotesFromNostr(authData.pubkey, encryptionKey)
+    const nostrNotes = await fetchAllNotesFromNostr(authData)
 
     // For now, just return the fetched notes
     // TODO: Implement proper merging logic
@@ -447,19 +442,8 @@ export async function saveNotesToNostr(
   console.log("[v0] Legacy saveNotesToNostr called - migrating to individual note saves")
 
   try {
-    let encryptionKey: Uint8Array
-    if (authData.authMethod === "nsec" && authData.privateKey) {
-      encryptionKey = new Uint8Array(
-        authData.privateKey.match(/.{1,2}/g)?.map((byte: string) => Number.parseInt(byte, 16)) || [],
-      )
-    } else {
-      const encoder = new TextEncoder()
-      const pubkeyBytes = encoder.encode(authData.pubkey)
-      encryptionKey = pubkeyBytes.slice(0, 32)
-    }
-
     // Save each note individually
-    const results = await Promise.all(notes.map((note) => saveNoteToNostr(note, authData, encryptionKey)))
+    const results = await Promise.all(notes.map((note) => saveNoteToNostr(note, authData)))
 
     const successCount = results.filter((r) => r.success).length
 
@@ -482,18 +466,7 @@ export async function loadNotesFromNostr(
   console.log("[v0] Legacy loadNotesFromNostr called - using new fetch method")
 
   try {
-    let encryptionKey: Uint8Array
-    if (authData.authMethod === "nsec" && authData.privateKey) {
-      encryptionKey = new Uint8Array(
-        authData.privateKey.match(/.{1,2}/g)?.map((byte: string) => Number.parseInt(byte, 16)) || [],
-      )
-    } else {
-      const encoder = new TextEncoder()
-      const pubkeyBytes = encoder.encode(authData.pubkey)
-      encryptionKey = pubkeyBytes.slice(0, 32)
-    }
-
-    const notes = await fetchAllNotesFromNostr(authData.pubkey, encryptionKey)
+    const notes = await fetchAllNotesFromNostr(authData)
 
     return {
       notes,

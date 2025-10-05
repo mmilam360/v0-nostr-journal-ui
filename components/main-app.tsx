@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button"
 import { saveEncryptedNotes, loadEncryptedNotes } from "@/lib/nostr-crypto"
 import { createNostrEvent, publishToNostr } from "@/lib/nostr-publish"
 import { syncNotes } from "@/lib/nostr-storage"
+import { cleanupSigner } from "@/lib/signer-manager"
 import { RelayManager } from "@/components/relay-manager"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { ConnectionStatus } from "@/components/connection-status"
@@ -340,8 +341,13 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     setNoteToPublish(null)
   }
 
-  const handleLogout = () => {
-    console.log("[v0] User logging out, notes will remain encrypted in storage")
+  const handleLogout = async () => {
+    console.log("[v0] User logging out, cleaning up signer connection...")
+    
+    // Clean up the remote signer connection
+    await cleanupSigner()
+    
+    console.log("[v0] Notes will remain encrypted in storage")
     onLogout()
   }
 

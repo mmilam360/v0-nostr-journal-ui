@@ -2,6 +2,7 @@
 
 import * as nostrTools from "nostr-tools"
 import { getSmartRelayList, getRelays } from "./relay-manager"
+import { signEventWithRemote } from "./signer-manager"
 
 export const createNostrEvent = async (pubkey: string, content: string, tags: string[] = []) => {
   const event = {
@@ -36,46 +37,9 @@ export const publishToNostr = async (unsignedEvent: any, authData: any): Promise
         throw new Error("Remote signer connection data is missing. Please log in again.")
       }
 
-      try {
-        console.log("[v0] Creating fresh remote signer connection...")
-
-        // Import required modules
-        const { SimplePool } = await import("nostr-tools/pool")
-        const { BunkerSigner } = await import("nostr-tools/nip46")
-
-        // Create a new pool for this signing session
-        const pool = new SimplePool()
-
-        // Create a fresh BunkerSigner from the stored URI
-        console.log("[v0] Connecting to remote signer...")
-        const signer = await BunkerSigner.fromURI(authData.clientSecretKey, authData.bunkerUri, {
-          pool,
-          timeout: 60000, // 60 second timeout for signing
-        })
-
-        console.log("[v0] Remote signer connected, requesting signature...")
-        // The BunkerSigner will trigger the approval popup in the user's remote signer app
-        signedEvent = await signer.signEvent(unsignedEvent)
-        console.log("[v0] Received signed event from remote signer.")
-
-        // Clean up the signer connection
-        try {
-          await signer.close()
-          pool.close(authData.relays || [])
-        } catch (cleanupError) {
-          console.log("[v0] Cleanup error (non-critical):", cleanupError)
-        }
-      } catch (signerError: any) {
-        console.error("[v0] Remote signer error:", signerError)
-        if (signerError.message?.includes("timeout")) {
-          throw new Error(
-            "Remote signer connection timeout. Make sure you approved the request in your remote signer app (Nsec.app or Alby).",
-          )
-        } else if (signerError.message?.includes("rejected")) {
-          throw new Error("Signing request was rejected by your remote signer.")
-        }
-        throw new Error(`Failed to sign with remote signer: ${signerError.message || "Unknown error"}`)
-      }
+      // Use signer manager - persistent connection, no popup!
+      signedEvent = await signEventWithRemote(unsignedEvent, authData)
+      console.log("[v0] Event signed by remote signer.")
       break
 
     case "extension":
