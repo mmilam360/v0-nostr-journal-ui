@@ -80,7 +80,48 @@ export default function Home() {
   }, [])
 
   const handleLoginSuccess = (data: AuthData) => {
-    console.log("[v0] Login successful:", data)
+    console.log("[v0] 🎉 Login success handler called!")
+    console.log("[v0] 📦 Auth data received:", {
+      pubkey: data.pubkey,
+      authMethod: data.authMethod,
+      hasBunkerUri: !!data.bunkerUri,
+      hasClientSecretKey: !!data.clientSecretKey,
+      hasBunkerPubkey: !!data.bunkerPubkey,
+      relays: data.relays
+    })
+
+    // Validate the data before storing
+    if (!data.pubkey) {
+      console.error("[v0] ❌ ERROR: No pubkey in auth data!")
+      alert("Login failed: No pubkey received. Please try again.")
+      return
+    }
+
+    if (data.pubkey.length !== 64) {
+      console.error("[v0] ❌ ERROR: Invalid pubkey length:", data.pubkey.length)
+      alert("Login failed: Invalid pubkey format. Please try again.")
+      return
+    }
+
+    // For remote signer, ensure we have the necessary data
+    if (data.authMethod === "remote") {
+      if (!data.bunkerUri) {
+        console.error("[v0] ❌ ERROR: Remote signer missing bunkerUri!")
+        alert("Login failed: Remote signer configuration incomplete.")
+        return
+      }
+      if (!data.clientSecretKey) {
+        console.error("[v0] ❌ ERROR: Remote signer missing clientSecretKey!")
+        alert("Login failed: Remote signer configuration incomplete.")
+        return
+      }
+      if (!data.bunkerPubkey) {
+        console.error("[v0] ❌ ERROR: Remote signer missing bunkerPubkey!")
+        alert("Login failed: Remote signer configuration incomplete.")
+        return
+      }
+      console.log("[v0] ✅ Remote signer data validated")
+    }
 
     try {
       const session: StoredSession = {
@@ -103,13 +144,16 @@ export default function Home() {
       }
 
       localStorage.setItem(SESSION_KEY, JSON.stringify(session))
-      console.log("[v0] Session saved to localStorage")
-    } catch (error) {
-      console.error("[v0] Error saving session:", error)
-    }
+      console.log("[v0] 💾 Session saved to localStorage")
 
-    setAuthData(data)
-    setIsLoggedIn(true)
+      // CRITICAL: Update state to trigger re-render and show main app
+      setAuthData(data)
+      setIsLoggedIn(true)
+      console.log("[v0] ✅ State updated, app should now show main content")
+    } catch (error) {
+      console.error("[v0] ❌ Error saving session:", error)
+      alert("Login failed: Could not save session. Please try again.")
+    }
   }
 
   const handleLogout = () => {
@@ -142,7 +186,24 @@ export default function Home() {
       {isLoggedIn && authData ? (
         <MainApp authData={authData} onLogout={handleLogout} />
       ) : (
-        <LoginPage onLoginSuccess={handleLoginSuccess} />
+        <div>
+          <LoginPage onLoginSuccess={handleLoginSuccess} />
+          {/* Debug button - remove this after testing */}
+          <div className="fixed bottom-4 right-4 z-50">
+            <button
+              onClick={() => {
+                console.log("=== DEBUG STATE ===")
+                console.log("isLoggedIn:", isLoggedIn)
+                console.log("authData:", authData)
+                console.log("localStorage session:", localStorage.getItem(SESSION_KEY))
+                console.log("==================")
+              }}
+              className="bg-red-600 hover:bg-red-700 text-white text-xs px-2 py-1 rounded"
+            >
+              Debug State
+            </button>
+          </div>
+        </div>
       )}
     </main>
   )
