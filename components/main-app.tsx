@@ -16,6 +16,8 @@ import {
   Check,
   Plus,
   Trash2,
+  Sun,
+  Moon,
 } from "lucide-react"
 import TagsPanel from "@/components/tags-panel"
 import NoteList from "@/components/note-list"

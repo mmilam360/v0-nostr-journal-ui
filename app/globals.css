@@ -62,20 +62,20 @@ button {
   --card-foreground: 0 0% 0%;
   --popover: 0 0% 100%;              /* White for dropdowns */
   --popover-foreground: 0 0% 0%;
-  --primary: 217 91% 60%;            /* #3B82F6 - logo blue */
+  --primary: 214 95% 50%;            /* Softer blue - easier on eyes */
   --primary-foreground: 0 0% 100%;
   --secondary: 220 14% 96%;          /* Very light gray */
   --secondary-foreground: 0 0% 0%;
   --muted: 220 14% 96%;
   --muted-foreground: 220 9% 46%;    /* Medium gray */
-  --accent: 217 91% 60%;             /* Same as primary */
+  --accent: 214 95% 50%;             /* Same as primary */
   --accent-foreground: 0 0% 100%;
   --destructive: 0 84% 60%;          /* Red for delete */
   --destructive-foreground: 0 0% 100%;
   --border: 220 13% 91%;             /* Light gray borders */
   --input: 220 13% 91%;
-  --ring: 217 91% 60%;               /* Blue focus ring */
-  --chart-1: 217 91% 60%;
+  --ring: 214 95% 50%;               /* Softer blue focus ring */
+  --chart-1: 214 95% 50%;
   --chart-2: 142 71% 45%;
   --chart-3: 38 92% 50%;
   --chart-4: 220 13% 91%;
@@ -83,12 +83,12 @@ button {
   --radius: 0.5rem;
   --sidebar: 0 0% 100%;
   --sidebar-foreground: 0 0% 0%;
-  --sidebar-primary: 217 91% 60%;
+  --sidebar-primary: 214 95% 50%;
   --sidebar-primary-foreground: 0 0% 100%;
   --sidebar-accent: 220 14% 96%;
   --sidebar-accent-foreground: 0 0% 0%;
   --sidebar-border: 220 13% 91%;
-  --sidebar-ring: 217 91% 60%;
+  --sidebar-ring: 214 95% 50%;
 }
 
 /* Dark mode - Elegant, not harsh */
@@ -99,32 +99,32 @@ button {
   --card-foreground: 210 40% 98%;
   --popover: 217 33% 17%;
   --popover-foreground: 210 40% 98%;
-  --primary: 217 91% 60%;            /* Keep logo blue */
+  --primary: 214 95% 50%;            /* Softer blue for dark mode too */
   --primary-foreground: 0 0% 100%;
   --secondary: 217 33% 17%;
   --secondary-foreground: 210 40% 98%;
   --muted: 217 33% 17%;
   --muted-foreground: 215 20% 65%;
-  --accent: 217 91% 60%;
+  --accent: 214 95% 50%;
   --accent-foreground: 0 0% 100%;
   --destructive: 0 84% 60%;
   --destructive-foreground: 210 40% 98%;
   --border: 217 33% 24%;             /* Subtle borders */
   --input: 217 33% 24%;
-  --ring: 217 91% 60%;
-  --chart-1: 217 91% 60%;
+  --ring: 214 95% 50%;
+  --chart-1: 214 95% 50%;
   --chart-2: 142 71% 45%;
   --chart-3: 38 92% 50%;
   --chart-4: 217 33% 24%;
   --chart-5: 217 33% 17%;
   --sidebar: 222 47% 11%;
   --sidebar-foreground: 210 40% 98%;
-  --sidebar-primary: 217 91% 60%;
+  --sidebar-primary: 214 95% 50%;
   --sidebar-primary-foreground: 0 0% 100%;
   --sidebar-accent: 217 33% 17%;
   --sidebar-accent-foreground: 210 40% 98%;
   --sidebar-border: 217 33% 24%;
-  --sidebar-ring: 217 91% 60%;
+  --sidebar-ring: 214 95% 50%;
 }
 
 @theme inline {
@@ -220,7 +220,7 @@ button {
 }
 
 .status-syncing {
-  color: rgb(59, 130, 246);
+  color: rgb(99, 102, 241); /* Softer blue */
 }
 
 .status-error {
