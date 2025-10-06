@@ -647,6 +647,23 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
             <Menu className="w-4 h-4" />
           </Button>
 
+          {/* Nostr Journal Logo */}
+          <div className="flex items-center gap-2">
+            <img 
+              src="/nostr-journal-logo.svg" 
+              alt="Nostr Journal" 
+              className="h-8 w-8 rounded-lg"
+              onError={(e) => {
+                // Fallback to placeholder if logo not found
+                e.currentTarget.src = "/placeholder-logo.png"
+              }}
+            />
+            <div className="hidden sm:block">
+              <h1 className="text-lg font-semibold text-foreground">Nostr Journal</h1>
+              <p className="text-xs text-muted-foreground">Your decentralized notes</p>
+            </div>
+          </div>
+
           <span className="text-muted-foreground text-xs">({notes.length} notes)</span>
           <span className="text-muted-foreground text-xs bg-muted px-2 py-1 rounded">
             {authData.authMethod === "extension" ? "Extension" : authData.authMethod === "remote" ? "Remote" : "nsec"}
