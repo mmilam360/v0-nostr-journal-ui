@@ -44,6 +44,7 @@ import { ErrorBoundary } from "@/components/error-boundary"
 import { RelayManager } from "@/components/relay-manager"
 import { ConnectionStatus } from "@/components/connection-status"
 import { DiagnosticPage } from "@/components/diagnostic-page"
+import { ThemeToggle } from "@/components/theme-toggle"
 import { getDefaultRelays } from "@/lib/relay-manager"
 
 export interface Note {
