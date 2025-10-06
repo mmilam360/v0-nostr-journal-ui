@@ -736,11 +736,32 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
   const copyUrl = async () => {
     try {
       const urlToCopy = bunkerUrl
-      await navigator.clipboard.writeText(urlToCopy)
+      
+      // Try modern clipboard API first
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(urlToCopy)
+      } else {
+        // Fallback for older browsers/mobile
+        const textArea = document.createElement('textarea')
+        textArea.value = urlToCopy
+        textArea.style.position = 'fixed'
+        textArea.style.left = '-999999px'
+        textArea.style.top = '-999999px'
+        document.body.appendChild(textArea)
+        textArea.focus()
+        textArea.select()
+        document.execCommand('copy')
+        textArea.remove()
+      }
+      
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
+      
+      console.log("[Mobile] 📋 Copied to clipboard:", urlToCopy)
     } catch (err) {
-      console.error("Failed to copy:", err)
+      console.error("[Mobile] ❌ Failed to copy:", err)
+      // Show fallback message for mobile users
+      alert("Please manually copy this connection string:\n\n" + bunkerUrl)
     }
   }
 
@@ -1136,7 +1157,12 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
                           <p className="text-center text-slate-300 font-medium">Scan with Nsec.app or compatible wallet</p>
 
                           <div className="bg-white rounded-lg p-4">
-                            <QRCodeSVG value={bunkerUrl} size={256} level="M" className="mx-auto" />
+                            <QRCodeSVG 
+                              value={bunkerUrl} 
+                              size={Math.min(256, window.innerWidth * 0.6)} 
+                              level="M" 
+                              className="mx-auto max-w-full h-auto" 
+                            />
                           </div>
 
                           <div className="space-y-2">
@@ -1166,6 +1192,14 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
                             </button>
                           </div>
 
+                          <div className="bg-slate-800 rounded-lg p-3 text-center">
+                            <p className="text-slate-300 text-sm font-medium mb-2">How to connect:</p>
+                            <div className="text-xs text-slate-400 space-y-1">
+                              <p>📱 <strong>Mobile:</strong> Copy link → Open Nsec.app → Paste in connection field</p>
+                              <p>💻 <strong>Desktop:</strong> Scan QR code with Nsec.app</p>
+                            </div>
+                          </div>
+                          
                           <p className="text-center text-sm text-slate-400">Waiting for approval...</p>
 
                           <div className="flex justify-center">
