@@ -13,9 +13,9 @@ interface TagsPanelProps {
 
 export default function TagsPanel({ tags, selectedTag, onSelectTag, pubkey, onLogout }: TagsPanelProps) {
   return (
-    <div className="w-64 bg-card/50 backdrop-blur-sm border-r border-cyan-500/30 flex flex-col h-full cyber-grid">
+    <div className="w-64 bg-white dark:bg-card border-r border-border flex flex-col h-full">
       {pubkey && onLogout && (
-        <div className="border-b border-cyan-500/30">
+        <div className="border-b border-border">
           <UserMenu pubkey={pubkey} onLogout={onLogout} />
         </div>
       )}
@@ -23,10 +23,10 @@ export default function TagsPanel({ tags, selectedTag, onSelectTag, pubkey, onLo
       <div className="p-4 space-y-2">
         <button
           onClick={() => onSelectTag("all")}
-          className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-all duration-300 hover-glow ${
+          className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors hover:bg-secondary ${
             selectedTag === "all"
-              ? "bg-cyan-500/20 text-cyan-400 border border-cyan-500/50 neon-glow"
-              : "text-muted-foreground hover:text-cyan-400 hover:bg-cyan-500/10 border border-transparent"
+              ? "bg-primary/10 text-primary font-medium"
+              : "text-muted-foreground hover:text-foreground"
           }`}
         >
           <Inbox className="w-4 h-4" />
@@ -35,10 +35,10 @@ export default function TagsPanel({ tags, selectedTag, onSelectTag, pubkey, onLo
 
         <button
           onClick={() => onSelectTag("trash")}
-          className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-all duration-300 hover-glow ${
+          className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors hover:bg-secondary ${
             selectedTag === "trash"
-              ? "bg-red-500/20 text-red-400 border border-red-500/50 neon-border-red"
-              : "text-muted-foreground hover:text-red-400 hover:bg-red-500/10 border border-transparent"
+              ? "bg-red-500/10 text-red-500 font-medium"
+              : "text-muted-foreground hover:text-foreground"
           }`}
         >
           <Trash2 className="w-4 h-4" />
@@ -47,7 +47,7 @@ export default function TagsPanel({ tags, selectedTag, onSelectTag, pubkey, onLo
       </div>
 
       <div className="px-4 py-2">
-        <h3 className="text-xs font-semibold cyber-text uppercase tracking-wider mb-2">TAGS</h3>
+        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">TAGS</h3>
 
         <div className="space-y-1">
           {tags.length === 0 ? (
@@ -57,10 +57,10 @@ export default function TagsPanel({ tags, selectedTag, onSelectTag, pubkey, onLo
               <button
                 key={tag}
                 onClick={() => onSelectTag(tag)}
-                className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-all duration-300 hover-glow ${
+                className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors hover:bg-secondary ${
                   selectedTag === tag
-                    ? "bg-cyan-500/20 text-cyan-400 border border-cyan-500/50 neon-glow"
-                    : "text-muted-foreground hover:text-cyan-400 hover:bg-cyan-500/10 border border-transparent"
+                    ? "bg-primary/10 text-primary font-medium"
+                    : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 <Hash className="w-4 h-4" />

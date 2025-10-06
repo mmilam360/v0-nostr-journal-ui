@@ -169,15 +169,15 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
   }
 
   return (
-    <div className="flex-1 bg-background cyber-grid flex flex-col w-full h-full">
-      {/* Cyberpunk Header */}
-      <div className="p-4 border-b border-cyan-500/30 flex items-center gap-2 sm:gap-4 bg-card/50 backdrop-blur-sm">
+    <div className="flex-1 bg-white dark:bg-background flex flex-col w-full h-full">
+      {/* Clean Header */}
+      <div className="border-b border-border px-8 py-6">
         <input
           type="text"
           value={title}
           onChange={(e) => handleTitleChange(e.target.value)}
           placeholder="Note title..."
-          className="flex-1 bg-transparent border-none text-lg sm:text-xl font-semibold text-cyan-400 placeholder-muted-foreground focus:outline-none focus:ring-0 px-0 cyber-text"
+          className="w-full bg-transparent border-none outline-none text-3xl font-bold placeholder:text-muted-foreground focus:outline-none"
         />
 
         <div className="flex items-center gap-2">
@@ -190,7 +190,7 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
               size="sm"
               className={
                 hasUnsavedChanges
-                  ? "border-cyan-500 text-cyan-400 hover:bg-cyan-500/10 hover-glow"
+                  ? "border-primary text-primary hover:bg-primary/10"
                   : "border-border text-muted-foreground opacity-50"
               }
             >
@@ -201,7 +201,7 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
               onClick={handleDeleteClick}
               variant="ghost"
               size="sm"
-              className="text-red-400 hover:text-red-300 hover-glow"
+              className="text-red-500 hover:text-red-700"
             >
               ✕ Delete
             </Button>
@@ -209,7 +209,7 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
             <Button
               onClick={handlePublishClick}
               disabled={!content.trim()}
-              className="btn-cyber-secondary disabled:opacity-50 flex items-center gap-2 hover-glow"
+              className="bg-primary hover:bg-primary/90 disabled:opacity-50 flex items-center gap-2"
             >
               📤 {getPublishButtonText()}
             </Button>
@@ -223,7 +223,7 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
               size="sm"
               className={
                 hasUnsavedChanges
-                  ? "bg-cyan-500 hover:bg-cyan-600 text-white text-xs px-2 no-select hover-glow"
+                  ? "bg-primary hover:bg-primary/90 text-white text-xs px-2 no-select"
                   : "bg-muted opacity-50 text-xs px-2 no-select"
               }
             >
@@ -233,7 +233,7 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
               onClick={handlePublishClick}
               disabled={!content.trim()}
               size="sm"
-              className="btn-cyber-secondary disabled:opacity-50 text-xs px-2 no-select hover-glow"
+              className="bg-primary hover:bg-primary/90 disabled:opacity-50 text-xs px-2 no-select"
             >
               📤 {selectedText ? "Highlight" : "Publish"}
             </Button>
@@ -241,7 +241,7 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
               onClick={handleDeleteClick}
               variant="ghost"
               size="sm"
-              className="text-red-400 hover:text-red-300 text-xs px-2 no-select hover-glow"
+              className="text-red-500 hover:text-red-700 text-xs px-2 no-select"
             >
               ✕
             </Button>
@@ -249,8 +249,8 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
         </div>
       </div>
 
-      {/* Cyberpunk Editor */}
-      <div className="flex-1 p-6">
+      {/* Clean Editor */}
+      <div className="flex-1 px-8 py-6">
         <Textarea
           ref={textareaRef}
           value={content}
@@ -260,20 +260,20 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
           onKeyUp={handleTextSelection}
           onFocus={handleTextSelection}
           placeholder="Start writing..."
-          className="w-full h-full bg-transparent border-none text-foreground placeholder-muted-foreground resize-none focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500/50 text-base sm:text-lg leading-relaxed neon-border rounded-lg p-4"
+          className="w-full h-full bg-transparent border-none text-foreground placeholder-muted-foreground resize-none text-base leading-relaxed focus:outline-none"
         />
       </div>
 
-      {/* Cyberpunk Footer - Tags and Sync Status */}
-      <div className="p-4 border-t border-cyan-500/30 bg-card/50 backdrop-blur-sm">
+      {/* Clean Footer - Tags and Sync Status */}
+      <div className="border-t border-border px-8 py-4 bg-secondary/30">
         <div className="flex flex-wrap gap-2 mb-3">
           {note.tags.map((tag) => (
             <span
               key={tag}
-              className="inline-flex items-center gap-1 px-3 py-1 bg-cyan-500/10 text-cyan-400 rounded-full text-sm border border-cyan-500/30 neon-border"
+              className="inline-flex items-center gap-1 px-3 py-1 bg-primary/10 text-primary rounded-full text-sm border border-primary/20"
             >
               #{tag}
-              <button onClick={() => handleRemoveTag(tag)} className="text-cyan-400/70 hover:text-cyan-300 hover-glow">
+              <button onClick={() => handleRemoveTag(tag)} className="text-primary/70 hover:text-primary">
                 ×
               </button>
             </span>
@@ -286,24 +286,24 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
             onChange={(e) => setNewTag(e.target.value)}
             onKeyPress={handleKeyPress}
             placeholder="Add a tag..."
-            className="flex-1 bg-background/50 border-cyan-500/30 text-foreground placeholder-muted-foreground focus:border-cyan-500/50 focus:ring-cyan-500/20"
+            className="flex-1"
           />
           <Button
             onClick={handleAddTag}
             disabled={!newTag.trim()}
             variant="outline"
-            className="border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10 bg-transparent hover-glow"
+            className="border-border"
           >
             Add
           </Button>
         </div>
 
-        <div className="text-xs cyber-text-muted flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+        <div className="text-xs text-muted-foreground flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
           <span className="mono">
             Created: {note.createdAt.toLocaleDateString()} {note.createdAt.toLocaleTimeString()}
           </span>
           <div className="flex items-center gap-2">
-            {hasUnsavedChanges && <span className="text-cyan-400 text-xs pulse-neon">● Auto-saving...</span>}
+            {hasUnsavedChanges && <span className="text-primary text-xs">● Auto-saving...</span>}
             <span>
               {note.lastSynced ? (
                 <span className="status-synced">

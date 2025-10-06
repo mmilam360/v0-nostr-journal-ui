@@ -4,7 +4,7 @@ import type React from "react"
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { CheckCircle, Loader2, AlertCircle, CloudOff, AlertTriangle } from "lucide-react"
+import { CheckCircle, Loader2, AlertCircle, CloudOff, AlertTriangle, Calendar, Plus } from "lucide-react"
 import type { Note } from "@/components/main-app"
 
 interface NoteListProps {
@@ -60,23 +60,24 @@ export default function NoteList({ notes, selectedNote, onSelectNote, onCreateNo
   }
 
   return (
-    <div className="w-full md:w-80 bg-card/50 backdrop-blur-sm flex flex-col h-full cyber-grid">
-      <div className="p-3 md:p-4 border-b border-cyan-500/30">
-        <div className="relative mb-3">
-          <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-cyan-400 text-sm">🔍</span>
+    <div className="w-full md:w-80 bg-white dark:bg-card flex flex-col h-full border-r border-border">
+      <div className="p-4 border-b border-border">
+        <div className="relative mb-4">
+          <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground text-sm">🔍</span>
           <Input
             placeholder="Search all notes..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10 bg-background/50 border-cyan-500/30 text-foreground placeholder-muted-foreground focus:border-cyan-500/50 focus:ring-cyan-500/20"
+            className="pl-10"
           />
         </div>
 
         <Button
           onClick={onCreateNote}
-          className="w-full btn-cyber-primary flex items-center gap-2 min-h-[44px] hover-glow"
+          className="w-full bg-primary hover:bg-primary/90 text-primary-foreground flex items-center gap-2 min-h-[44px]"
         >
-          ➕ New Note
+          <Plus className="w-4 h-4" />
+          New Note
         </Button>
       </div>
 
@@ -91,34 +92,36 @@ export default function NoteList({ notes, selectedNote, onSelectNote, onCreateNo
             </p>
           </div>
         ) : (
-          <div className="p-2 md:p-2">
+          <div className="p-2">
             {filteredNotes.map((note) => (
               <div
                 key={note.id}
-                className={`relative group rounded-lg mb-2 transition-all duration-300 card-hover ${
+                className={`relative group rounded-lg mb-2 transition-all hover-lift ${
                   selectedNote?.id === note.id
-                    ? "bg-card/80 border-cyan-500 neon-glow"
-                    : "bg-card/30 border-border hover:border-cyan-500/50 hover:neon-glow"
+                    ? "bg-primary/5 border-primary"
+                    : "bg-card border border-transparent hover:border-border"
                 }`}
               >
-                <button onClick={() => handleNoteClick(note)} className="w-full p-4 text-left min-h-[44px]">
-                  <div className="flex items-center gap-2 mb-1">
-                    <h3 className={`font-semibold truncate flex-1 ${
-                      selectedNote?.id === note.id ? "text-cyan-400" : "text-foreground"
+                <button onClick={() => handleNoteClick(note)} className="w-full p-4 text-left">
+                  <div className="flex items-start justify-between mb-2">
+                    <h3 className={`font-medium text-base ${
+                      selectedNote?.id === note.id ? "text-primary" : "text-foreground"
                     }`}>
                       {note.title || "Untitled Note"}
                     </h3>
                     {getSyncIcon(note)}
                   </div>
-                  <p className="text-muted-foreground text-sm line-clamp-2">{note.content || "No content yet..."}</p>
-                  <div className="flex items-center justify-between mt-2">
-                    <span className="text-xs text-cyan-400/70 mono">
-                      {new Date(note.lastModified).toLocaleDateString()}
-                    </span>
+                  <p className="text-sm text-muted-foreground line-clamp-2 mb-3">
+                    {note.content || "No content yet..."}
+                  </p>
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Calendar className="w-3 h-3" />
+                    <time>{new Date(note.lastModified).toLocaleDateString()}</time>
                     {note.tags.length > 0 && (
-                      <span className="text-xs text-muted-foreground">
-                        {note.tags.length} tags
-                      </span>
+                      <>
+                        <span>•</span>
+                        <span>{note.tags.length} tags</span>
+                      </>
                     )}
                   </div>
                 </button>
@@ -130,11 +133,11 @@ export default function NoteList({ notes, selectedNote, onSelectNote, onCreateNo
 
       {/* Sync Warning Popup */}
       {showSyncWarning && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-card/95 backdrop-blur-sm rounded-lg p-6 max-w-sm mx-4 border border-cyan-500/50 neon-glow shadow-xl animate-slide-in">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-card rounded-lg p-6 max-w-sm mx-4 border border-border shadow-xl">
             <div className="flex items-center gap-3 mb-4">
-              <AlertTriangle className="w-6 h-6 text-yellow-400 pulse-neon" />
-              <h3 className="text-lg font-semibold cyber-text">Note Syncing</h3>
+              <AlertTriangle className="w-6 h-6 text-yellow-500" />
+              <h3 className="text-lg font-semibold text-foreground">Note Syncing</h3>
             </div>
             <p className="text-muted-foreground mb-6">
               This note is currently syncing to the network. Please wait for the sync to complete before opening it.
@@ -142,7 +145,7 @@ export default function NoteList({ notes, selectedNote, onSelectNote, onCreateNo
             <div className="flex justify-end">
               <Button
                 onClick={() => setShowSyncWarning(null)}
-                className="btn-cyber-primary hover-glow"
+                className="bg-primary hover:bg-primary/90"
               >
                 OK
               </Button>
