@@ -55,35 +55,59 @@ export async function smartSyncNotes(
     
     console.log("[SmartSync] 📤 Need to sync to Nostr:", notesToSync.length)
 
-    // Step 4: Upload local-only/changed notes to Nostr
+    // Step 4: Upload local-only/changed notes to Nostr (parallel for speed)
     if (notesToSync.length > 0) {
-      for (const note of notesToSync) {
-        try {
-          console.log("[SmartSync] ⬆️ Syncing note:", note.title)
-          const result = await saveNoteToNostr(note, authData)
-          
-          if (result.success) {
-            // Update the note with sync info
-            note.eventId = result.eventId
-            note.lastSynced = new Date()
-            note.syncStatus = 'synced'
-            syncedCount++
-            console.log("[SmartSync] ✅ Synced:", note.title)
-          } else {
-            note.syncStatus = 'error'
-            note.syncError = result.error
-            failedCount++
-            errors.push(`Failed to sync "${note.title}": ${result.error}`)
-            console.error("[SmartSync] ❌ Failed:", note.title, result.error)
+      console.log("[SmartSync] ⬆️ Syncing", notesToSync.length, "notes in parallel...")
+      
+      // Process notes in parallel with concurrency limit for speed
+      const concurrencyLimit = 3 // Sync up to 3 notes at once
+      const results = await Promise.allSettled(
+        notesToSync.map(async (note, index) => {
+          // Stagger requests slightly to avoid overwhelming relays
+          if (index > 0) {
+            await new Promise(resolve => setTimeout(resolve, index * 100))
           }
-        } catch (error) {
-          note.syncStatus = 'error'
-          note.syncError = error instanceof Error ? error.message : "Unknown error"
+          
+          try {
+            console.log("[SmartSync] ⬆️ Syncing note:", note.title)
+            const result = await saveNoteToNostr(note, authData)
+            
+            if (result.success) {
+              // Update the note with sync info
+              note.eventId = result.eventId
+              note.lastSynced = new Date()
+              note.syncStatus = 'synced'
+              console.log("[SmartSync] ✅ Synced:", note.title)
+              return { success: true, note }
+            } else {
+              note.syncStatus = 'error'
+              note.syncError = result.error
+              console.error("[SmartSync] ❌ Failed:", note.title, result.error)
+              return { success: false, note, error: result.error }
+            }
+          } catch (error) {
+            note.syncStatus = 'error'
+            note.syncError = error instanceof Error ? error.message : "Unknown error"
+            console.error("[SmartSync] ❌ Error syncing:", note.title, error)
+            return { success: false, note, error: note.syncError }
+          }
+        })
+      )
+      
+      // Count results
+      results.forEach((result, index) => {
+        if (result.status === 'fulfilled') {
+          if (result.value.success) {
+            syncedCount++
+          } else {
+            failedCount++
+            errors.push(`Failed to sync "${result.value.note.title}": ${result.value.error}`)
+          }
+        } else {
           failedCount++
-          errors.push(`Failed to sync "${note.title}": ${note.syncError}`)
-          console.error("[SmartSync] ❌ Error syncing:", note.title, error)
+          errors.push(`Failed to sync note: ${result.reason}`)
         }
-      }
+      })
     }
 
     // Step 5: Process deletions

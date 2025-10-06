@@ -4,7 +4,7 @@ import type React from "react"
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { CheckCircle, Loader2, AlertCircle, CloudOff } from "lucide-react"
+import { CheckCircle, Loader2, AlertCircle, CloudOff, AlertTriangle } from "lucide-react"
 import type { Note } from "@/components/main-app"
 
 interface NoteListProps {
@@ -17,6 +17,7 @@ interface NoteListProps {
 
 export default function NoteList({ notes, selectedNote, onSelectNote, onCreateNote, onDeleteNote }: NoteListProps) {
   const [searchQuery, setSearchQuery] = useState("")
+  const [showSyncWarning, setShowSyncWarning] = useState<string | null>(null)
 
   const filteredNotes = notes.filter(
     (note) =>
@@ -35,6 +36,17 @@ export default function NoteList({ notes, selectedNote, onSelectNote, onCreateNo
       default:
         return <CloudOff className="w-3 h-3 text-yellow-500" title="Local only" />
     }
+  }
+
+  const handleNoteClick = (note: Note) => {
+    // Check if note is currently syncing
+    if (note.syncStatus === 'syncing') {
+      setShowSyncWarning(note.id)
+      return
+    }
+    
+    // Otherwise, select the note normally
+    onSelectNote(note)
   }
 
   const handleDeleteClick = (note: Note, e: React.MouseEvent) => {
@@ -83,7 +95,7 @@ export default function NoteList({ notes, selectedNote, onSelectNote, onCreateNo
                   selectedNote?.id === note.id ? "bg-slate-700" : "hover:bg-slate-800"
                 }`}
               >
-                <button onClick={() => onSelectNote(note)} className="w-full p-4 text-left min-h-[44px]">
+                <button onClick={() => handleNoteClick(note)} className="w-full p-4 text-left min-h-[44px]">
                   <div className="flex items-center gap-2 mb-1">
                     <h3 className="font-semibold text-white truncate flex-1">{note.title || "Untitled Note"}</h3>
                     {getSyncIcon(note)}
@@ -91,22 +103,34 @@ export default function NoteList({ notes, selectedNote, onSelectNote, onCreateNo
                   <p className="text-slate-400 text-sm line-clamp-2">{note.content || "No content yet..."}</p>
                 </button>
 
-                <div className="absolute top-2 right-2">
-                  <Button
-                    onClick={(e) => handleDeleteClick(note, e)}
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 w-8 p-0 text-red-400 hover:text-red-300 hover:bg-red-900/20 opacity-0 group-hover:opacity-100 transition-opacity min-h-[44px] min-w-[44px] md:h-6 md:w-6 md:min-h-0 md:min-w-0"
-                    title="Delete note"
-                  >
-                    ✕
-                  </Button>
-                </div>
               </div>
             ))}
           </div>
         )}
       </div>
+
+      {/* Sync Warning Popup */}
+      {showSyncWarning && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-slate-800 rounded-lg p-6 max-w-sm mx-4">
+            <div className="flex items-center gap-3 mb-4">
+              <AlertTriangle className="w-6 h-6 text-yellow-500" />
+              <h3 className="text-lg font-semibold text-white">Note Syncing</h3>
+            </div>
+            <p className="text-slate-300 mb-6">
+              This note is currently syncing to the network. Please wait for the sync to complete before opening it.
+            </p>
+            <div className="flex justify-end">
+              <Button
+                onClick={() => setShowSyncWarning(null)}
+                className="bg-slate-700 hover:bg-slate-600 text-white"
+              >
+                OK
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
