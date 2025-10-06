@@ -1,7 +1,22 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { LogOut, Menu, X, CloudOff, RefreshCw, User, CheckCircle2, Loader2, AlertCircle, Settings } from "lucide-react"
+import {
+  Menu,
+  X,
+  CloudOff,
+  RefreshCw,
+  CheckCircle2,
+  Loader2,
+  AlertCircle,
+  Settings,
+  LogOut,
+  User,
+  Copy,
+  Check,
+  Plus,
+  Trash2,
+} from "lucide-react"
 import TagsPanel from "@/components/tags-panel"
 import NoteList from "@/components/note-list"
 import Editor from "@/components/editor"
@@ -11,6 +26,15 @@ import DeleteConfirmationModal from "@/components/delete-confirmation-modal"
 import DonationBubble from "@/components/donation-bubble"
 import ProfilePage from "@/components/profile-page"
 import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { Input } from "@/components/ui/input"
 import { saveEncryptedNotes, loadEncryptedNotes } from "@/lib/nostr-crypto"
 import { createNostrEvent, publishToNostr } from "@/lib/nostr-publish"
 import { cleanupSigner } from "@/lib/signer-manager"
@@ -73,6 +97,10 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   const [showRelayManager, setShowRelayManager] = useState(false)
   const [showDiagnostics, setShowDiagnostics] = useState(false)
   const [connectionError, setConnectionError] = useState<string | null>(null)
+  const [copiedNpub, setCopiedNpub] = useState(false)
+  const [npub, setNpub] = useState<string>("")
+  const [relays, setRelays] = useState<string[]>([])
+  const [newRelay, setNewRelay] = useState("")
 
   const retryConnection = async () => {
     console.log("[v0] 🔄 Retrying connection...")
@@ -632,6 +660,80 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     }
   }
 
+  const handleCopyNpub = async () => {
+    try {
+      await navigator.clipboard.writeText(npub)
+      setCopiedNpub(true)
+      setTimeout(() => setCopiedNpub(false), 2000)
+    } catch (err) {
+      console.error("Failed to copy:", err)
+    }
+  }
+
+  const handleAddRelay = () => {
+    if (!newRelay.trim()) return
+    if (!newRelay.startsWith("wss://") && !newRelay.startsWith("ws://")) {
+      alert("Relay URL must start with wss:// or ws://")
+      return
+    }
+    if (relays.includes(newRelay)) {
+      alert("This relay is already in your list")
+      return
+    }
+    const updatedRelays = [...relays, newRelay]
+    setRelays(updatedRelays)
+
+    const relayObjects = updatedRelays.map((url) => ({
+      url,
+      enabled: true,
+      status: "unknown" as const,
+    }))
+    localStorage.setItem("nostr_user_relays", JSON.stringify(relayObjects))
+    setNewRelay("")
+  }
+
+  const handleRemoveRelay = (relay: string) => {
+    const updatedRelays = relays.filter((r) => r !== relay)
+    setRelays(updatedRelays)
+
+    const relayObjects = updatedRelays.map((url) => ({
+      url,
+      enabled: true,
+      status: "unknown" as const,
+    }))
+    localStorage.setItem("nostr_user_relays", JSON.stringify(relayObjects))
+  }
+
+  useEffect(() => {
+    const loadNpub = async () => {
+      try {
+        const { npubEncode } = await import("nostr-tools/nip19")
+        const encodedNpub = npubEncode(authData.pubkey)
+        setNpub(encodedNpub)
+      } catch (err) {
+        console.error("Failed to encode npub:", err)
+      }
+    }
+
+    const loadRelays = () => {
+      const savedRelays = localStorage.getItem("nostr_user_relays")
+      if (savedRelays) {
+        try {
+          const userRelays = JSON.parse(savedRelays)
+          const relayUrls = userRelays.map((relay: any) => (typeof relay === "string" ? relay : relay.url))
+          setRelays(relayUrls)
+        } catch {
+          setRelays(["wss://relay.damus.io", "wss://nos.lol", "wss://relay.nostr.band"])
+        }
+      } else {
+        setRelays(["wss://relay.damus.io", "wss://nos.lol", "wss://relay.nostr.band"])
+      }
+    }
+
+    loadNpub()
+    loadRelays()
+  }, [authData.pubkey])
+
   if (isLoading) {
     return (
       <div className="h-screen bg-background flex items-center justify-center">
@@ -733,26 +835,128 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
           )}
         </div>
 
-        <div className="flex items-center gap-2">
-          <Button
-            onClick={() => setShowRelayManager(true)}
-            variant="ghost"
-            size="sm"
-            className="text-muted-foreground hover:text-foreground hover:bg-muted"
-            title="Manage Relays"
-          >
-            <Settings className="w-4 h-4" />
-            <span className="hidden sm:inline ml-2">Relays</span>
-          </Button>
+          {/* Right side buttons */}
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
 
-          <ThemeToggle />
+            {/* Dropdown for relays */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-muted-foreground hover:text-foreground hover:bg-muted"
+                  title="Edit Relays"
+                >
+                  <Settings className="w-4 h-4" />
+                  <span className="hidden md:inline ml-2 text-xs">Relays</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-80">
+                <DropdownMenuLabel>Nostr Relays ({relays.length})</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <div className="max-h-48 overflow-y-auto px-2 py-1">
+                  {relays.map((relay) => (
+                    <div key={relay} className="flex items-center gap-2 py-1.5 px-2 hover:bg-muted rounded-md group">
+                      <span className="flex-1 text-xs font-mono truncate">{relay}</span>
+                      <Button
+                        onClick={() => handleRemoveRelay(relay)}
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 text-destructive hover:text-destructive hover:bg-destructive/10"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+                <DropdownMenuSeparator />
+                <div className="px-2 py-2">
+                  <div className="flex gap-2">
+                    <Input
+                      type="text"
+                      value={newRelay}
+                      onChange={(e) => setNewRelay(e.target.value)}
+                      placeholder="wss://relay.example.com"
+                      className="h-8 text-xs"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          handleAddRelay()
+                        }
+                      }}
+                    />
+                    <Button onClick={handleAddRelay} size="sm" className="h-8 w-8 p-0">
+                      <Plus className="h-3 w-3" />
+                    </Button>
+                  </div>
+                </div>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => setShowRelayManager(true)}>
+                  <Settings className="w-3 h-3 mr-2" />
+                  Advanced Settings
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
 
-          <UserMenu 
-            pubkey={authData.pubkey} 
-            onLogout={onLogout} 
-            onShowProfile={() => setShowProfile(true)} 
-          />
-        </div>
+            {/* Dropdown for profile */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-muted-foreground hover:text-foreground hover:bg-muted"
+                  title="Profile"
+                >
+                  <User className="w-4 h-4" />
+                  <span className="hidden md:inline ml-2 text-xs">Profile</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-72">
+                <DropdownMenuLabel>Account</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <div className="px-2 py-2 space-y-2">
+                  <div className="text-xs text-muted-foreground">
+                    Auth Method:{" "}
+                    <span className="text-foreground font-medium">
+                      {authData.authMethod === "extension"
+                        ? "Extension"
+                        : authData.authMethod === "remote"
+                          ? "Remote Signer"
+                          : "Private Key"}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Input type="text" value={npub} readOnly className="h-8 text-xs font-mono" />
+                    <Button
+                      onClick={handleCopyNpub}
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 p-0"
+                      title="Copy npub"
+                    >
+                      {copiedNpub ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
+                    </Button>
+                  </div>
+                </div>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => setShowProfile(true)}>
+                  <User className="w-3 h-3 mr-2" />
+                  View Full Profile
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <Button
+              onClick={handleLogout}
+              variant="ghost"
+              size="sm"
+              className="text-muted-foreground hover:text-foreground hover:bg-muted"
+              title="Logout"
+            >
+              <LogOut className="w-4 h-4" />
+              <span className="hidden md:inline ml-2 text-xs">Logout</span>
+            </Button>
+          </div>
       </div>
 
       <div className="flex flex-1 relative w-full">
