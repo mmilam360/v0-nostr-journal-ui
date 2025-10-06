@@ -1,15 +1,16 @@
 "use client"
 
 import { useState } from "react"
-import { Circle, LogOut, ChevronDown } from "lucide-react"
+import { Circle, LogOut, ChevronDown, User, Settings } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
 interface UserMenuProps {
   pubkey: string
   onLogout: () => void
+  onShowProfile?: () => void
 }
 
-export default function UserMenu({ pubkey, onLogout }: UserMenuProps) {
+export default function UserMenu({ pubkey, onLogout, onShowProfile }: UserMenuProps) {
   const [isOpen, setIsOpen] = useState(false)
 
   const getTruncatedNpub = (pubkey: string) => {
@@ -33,11 +34,12 @@ export default function UserMenu({ pubkey, onLogout }: UserMenuProps) {
       <Button
         onClick={() => setIsOpen(!isOpen)}
         variant="ghost"
-        className="w-full justify-start text-slate-300 hover:text-white hover:bg-slate-700 p-3"
+        size="sm"
+        className="text-muted-foreground hover:text-foreground hover:bg-muted"
       >
         <Circle className="w-3 h-3 text-green-500 fill-current mr-2" />
-        <span className="text-sm font-mono truncate mr-2">{getTruncatedNpub(pubkey)}</span>
-        <ChevronDown className="w-3 h-3 ml-auto" />
+        <span className="text-sm font-mono truncate mr-2 hidden sm:inline">{getTruncatedNpub(pubkey)}</span>
+        <ChevronDown className="w-3 h-3" />
       </Button>
 
       {isOpen && (
@@ -46,15 +48,35 @@ export default function UserMenu({ pubkey, onLogout }: UserMenuProps) {
           <div className="fixed inset-0 z-10" onClick={() => setIsOpen(false)} />
 
           {/* Dropdown Menu */}
-          <div className="absolute top-full left-0 right-0 mt-1 bg-slate-700 rounded-lg shadow-lg border border-slate-600 z-20">
-            <Button
-              onClick={handleLogout}
-              variant="ghost"
-              className="w-full justify-start text-slate-300 hover:text-red-400 hover:bg-slate-600 p-3 rounded-lg"
-            >
-              <LogOut className="w-4 h-4 mr-2" />
-              Logout
-            </Button>
+          <div className="absolute top-full right-0 mt-1 bg-card rounded-lg shadow-lg border border-border z-20 min-w-[200px]">
+            <div className="p-2">
+              <div className="px-3 py-2 text-xs text-muted-foreground border-b border-border mb-1">
+                {getTruncatedNpub(pubkey)}
+              </div>
+              
+              {onShowProfile && (
+                <Button
+                  onClick={() => {
+                    onShowProfile()
+                    setIsOpen(false)
+                  }}
+                  variant="ghost"
+                  className="w-full justify-start text-foreground hover:bg-muted p-2 rounded-md"
+                >
+                  <User className="w-4 h-4 mr-2" />
+                  Profile
+                </Button>
+              )}
+              
+              <Button
+                onClick={handleLogout}
+                variant="ghost"
+                className="w-full justify-start text-destructive hover:bg-destructive/10 p-2 rounded-md"
+              >
+                <LogOut className="w-4 h-4 mr-2" />
+                Logout
+              </Button>
+            </div>
           </div>
         </>
       )}

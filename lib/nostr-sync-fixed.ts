@@ -31,6 +31,7 @@ export async function smartSyncNotes(
 ): Promise<SyncResult> {
   console.log("[SmartSync] 🔄 Starting smart sync...")
   console.log("[SmartSync] 📊 Local notes:", localNotes.length)
+  console.log("[SmartSync] 🗑️ Deleted notes:", localDeletedNotes.length)
   
   const errors: string[] = []
   let syncedCount = 0
@@ -42,11 +43,16 @@ export async function smartSyncNotes(
     const remoteNotes = await fetchAllNotesFromNostr(authData)
     console.log("[SmartSync] 📊 Remote notes:", remoteNotes.length)
 
-    // Step 2: Merge local and remote (keep most recent version)
-    const mergedNotes = mergeNotes(localNotes, remoteNotes)
+    // Step 2: Filter out deleted notes from local notes BEFORE merging
+    const deletedNoteIds = new Set(localDeletedNotes.map(d => d.id))
+    const filteredLocalNotes = localNotes.filter(note => !deletedNoteIds.has(note.id))
+    console.log("[SmartSync] 🗑️ Filtered local notes (removed deleted):", filteredLocalNotes.length)
+
+    // Step 3: Merge local and remote (keep most recent version)
+    const mergedNotes = mergeNotes(filteredLocalNotes, remoteNotes)
     console.log("[SmartSync] 🔀 Merged to:", mergedNotes.length, "notes")
 
-    // Step 3: Sync any local-only notes TO Nostr
+    // Step 4: Sync any local-only notes TO Nostr
     const notesToSync = mergedNotes.filter(note => 
       note.syncStatus === 'local' || 
       !note.eventId ||
@@ -55,7 +61,7 @@ export async function smartSyncNotes(
     
     console.log("[SmartSync] 📤 Need to sync to Nostr:", notesToSync.length)
 
-    // Step 4: Upload local-only/changed notes to Nostr (parallel for speed)
+    // Step 5: Upload local-only/changed notes to Nostr (parallel for speed)
     if (notesToSync.length > 0) {
       console.log("[SmartSync] ⬆️ Syncing", notesToSync.length, "notes in parallel...")
       
@@ -110,7 +116,33 @@ export async function smartSyncNotes(
       })
     }
 
-    // Step 5: Process deletions
+    // Step 6: Sync deletions to Nostr
+    const deletionsToSync = localDeletedNotes.filter(deletedNote => {
+      // Only sync deletions that haven't been synced yet
+      return !remoteNotes.find(remoteNote => remoteNote.id === deletedNote.id)
+    })
+    
+    if (deletionsToSync.length > 0) {
+      console.log("[SmartSync] 🗑️ Syncing", deletionsToSync.length, "deletions to Nostr...")
+      
+      // Find the notes that need to be deleted
+      const notesToDelete = mergedNotes.filter(note => 
+        deletionsToSync.some(deleted => deleted.id === note.id)
+      )
+      
+      // Publish deletion events
+      for (const noteToDelete of notesToDelete) {
+        try {
+          await deleteNoteOnNostr(noteToDelete, authData)
+          console.log("[SmartSync] ✅ Deleted note on Nostr:", noteToDelete.title)
+        } catch (error) {
+          console.error("[SmartSync] ❌ Failed to delete note on Nostr:", noteToDelete.title, error)
+          errors.push(`Failed to delete "${noteToDelete.title}": ${error instanceof Error ? error.message : 'Unknown error'}`)
+        }
+      }
+    }
+
+    // Step 7: Process deletions
     const remoteNoteIds = new Set(remoteNotes.map(n => n.id))
     const newDeletedNotes = [...localDeletedNotes]
 

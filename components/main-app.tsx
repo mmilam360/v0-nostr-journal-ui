@@ -21,6 +21,7 @@ import { RelayManager } from "@/components/relay-manager"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { ConnectionStatus } from "@/components/connection-status"
 import { DiagnosticPage } from "@/components/diagnostic-page"
+import UserMenu from "@/components/user-menu"
 
 export interface Note {
   id: string
@@ -491,7 +492,15 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
 
     console.log("[v0] Deleting note:", noteToDelete.id, noteToDelete.title)
 
-    // Step 1: Optimistically update the UI
+    // Step 1: Add to deleted notes FIRST (before UI update)
+    const deletedNote = {
+      id: noteToDelete.id,
+      deletedAt: new Date(),
+    }
+    const newDeletedNotes = [...deletedNotes, deletedNote]
+    setDeletedNotes(newDeletedNotes)
+
+    // Step 2: Optimistically update the UI
     const updatedNotes = notes.filter((note) => note.id !== noteToDelete.id)
     console.log("[v0] Notes before delete:", notes.length, "after delete:", updatedNotes.length)
 
@@ -509,7 +518,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     })
     setTags(Array.from(allTags))
 
-    // Step 2: Publish deletion event to Nostr
+    // Step 3: Publish deletion event to Nostr
     try {
       console.log("[v0] Publishing NIP-09 deletion event to Nostr network...")
       const { deleteNoteOnNostr } = await import("@/lib/nostr-storage")
@@ -519,12 +528,6 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       console.error("[v0] Failed to publish deletion event:", error)
     }
 
-    // Update deleted notes tracking
-    const deletedNote = {
-      id: noteToDelete.id,
-      deletedAt: new Date(),
-    }
-    setDeletedNotes([...deletedNotes, deletedNote])
     setNeedsSync(true)
     console.log("[v0] Delete completed, triggering sync")
 
@@ -734,25 +737,11 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
 
           <ThemeToggle />
 
-          <Button
-            onClick={() => setShowProfile(true)}
-            variant="ghost"
-            size="sm"
-            className="text-muted-foreground hover:text-foreground hover:bg-muted"
-          >
-            <User className="w-4 h-4 mr-2" />
-            <span className="hidden sm:inline">Profile</span>
-          </Button>
-
-          <Button
-            onClick={onLogout}
-            variant="ghost"
-            size="sm"
-            className="text-muted-foreground hover:text-foreground hover:bg-muted"
-          >
-            <LogOut className="w-4 h-4 mr-2" />
-            <span className="hidden sm:inline">Logout</span>
-          </Button>
+          <UserMenu 
+            pubkey={authData.pubkey} 
+            onLogout={onLogout} 
+            onShowProfile={() => setShowProfile(true)} 
+          />
         </div>
       </div>
 

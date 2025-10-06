@@ -61,7 +61,7 @@ button {
   --card-foreground: 36 38 41;
   --popover: 255 255 255;
   --popover-foreground: 36 38 41;
-  --primary: 99 102 241; /* A strong, clear, accessible blue */
+  --primary: 99 102 241; /* Indigo from logo - strong, clear, accessible */
   --primary-foreground: 252 252 253;
   --secondary: 241 242 243;
   --secondary-foreground: 36 38 41;
@@ -98,7 +98,7 @@ button {
   --card-foreground: 238 239 240;
   --popover: 43 46 50;
   --popover-foreground: 238 239 240;
-  --primary: 147 149 255; /* A vibrant but not overly bright blue */
+  --primary: 147 149 255; /* Indigo from logo - vibrant but not overly bright */
   --primary-foreground: 36 38 41;
   --secondary: 60 64 70;
   --secondary-foreground: 238 239 240;
