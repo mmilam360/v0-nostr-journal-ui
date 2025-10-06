@@ -15,6 +15,7 @@ import { saveEncryptedNotes, loadEncryptedNotes } from "@/lib/nostr-crypto"
 import { createNostrEvent, publishToNostr } from "@/lib/nostr-publish"
 import { syncNotes } from "@/lib/nostr-storage"
 import { cleanupSigner } from "@/lib/signer-manager"
+import { smartSyncNotes, saveAndSyncNote } from "@/lib/nostr-sync-fixed"
 import { RelayManager } from "@/components/relay-manager"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { ConnectionStatus } from "@/components/connection-status"
@@ -77,17 +78,12 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     setSyncStatus("syncing")
     
     try {
-      const syncResult = await syncNotes(notes, deletedNotes, authData)
+      const syncResult = await smartSyncNotes(notes, deletedNotes, authData)
       
-      const syncedNotes = syncResult.notes.map((note) => ({
-        ...note,
-        syncStatus: syncResult.synced ? ("synced" as const) : ("error" as const),
-      }))
-      
-      setNotes(syncedNotes)
+      setNotes(syncResult.notes)
       setDeletedNotes(syncResult.deletedNotes)
       setSyncStatus(syncResult.synced ? "synced" : "error")
-      setConnectionError(syncResult.synced ? null : "Failed to sync with Nostr network")
+      setConnectionError(syncResult.errors.length > 0 ? syncResult.errors[0] : null)
       
       if (syncResult.synced) {
         setLastSyncTime(new Date())
@@ -99,6 +95,33 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     }
   }
 
+  const retrySyncFailedNotes = async () => {
+    const failedNotes = notes.filter(n => n.syncStatus === 'error')
+    
+    if (failedNotes.length === 0) {
+      return
+    }
+
+    console.log("[v0] Retrying", failedNotes.length, "failed syncs")
+    setSyncStatus("syncing")
+
+    for (const note of failedNotes) {
+      try {
+        const result = await saveAndSyncNote(note, authData)
+        setNotes(notes.map(n => n.id === note.id ? result.note : n))
+        
+        if (result.success) {
+          await saveEncryptedNotes(authData.pubkey, notes.map(n => n.id === note.id ? result.note : n))
+        }
+      } catch (error) {
+        console.error("[v0] Retry failed for:", note.title, error)
+      }
+    }
+
+    setSyncStatus("synced")
+    setLastSyncTime(new Date())
+  }
+
   useEffect(() => {
     const loadUserNotes = async () => {
       console.log("[v0] Loading notes for user:", authData.pubkey)
@@ -106,6 +129,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       setSyncStatus("syncing")
 
       try {
+        // Load from local storage first
         const localNotes = await loadEncryptedNotes(authData.pubkey)
         console.log("[v0] Loaded", localNotes.length, "local notes")
 
@@ -114,36 +138,51 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
           syncStatus: note.syncStatus || ("local" as const),
         }))
 
-        console.log("[v0] Syncing with Nostr network...")
+        // CRITICAL: Show local notes immediately (don't wait for sync)
+        setNotes(notesWithStatus)
+        setIsLoading(false)
 
-        const syncResult = await syncNotes(notesWithStatus, deletedNotes, authData)
+        // Extract tags
+        const allTags = new Set<string>()
+        notesWithStatus.forEach((note) => {
+          note.tags.forEach((tag) => allTags.add(tag))
+        })
+        setTags(Array.from(allTags))
 
-        const syncedNotes = syncResult.notes.map((note) => ({
-          ...note,
-          syncStatus: syncResult.synced ? ("synced" as const) : ("error" as const),
-        }))
+        // Now sync in background
+        console.log("[v0] Starting background sync...")
+        const syncResult = await smartSyncNotes(notesWithStatus, deletedNotes, authData)
 
-        setNotes(syncedNotes)
+        // Update with synced notes
+        setNotes(syncResult.notes)
         setDeletedNotes(syncResult.deletedNotes)
         setSyncStatus(syncResult.synced ? "synced" : "error")
-        setConnectionError(syncResult.synced ? null : "Failed to sync with Nostr network")
+        setConnectionError(syncResult.errors.length > 0 ? syncResult.errors[0] : null)
         
         if (syncResult.synced) {
           setLastSyncTime(new Date())
         }
 
-        console.log("[v0] Sync completed:", syncResult.synced ? "success" : "failed")
+        // Save synced state to local storage
+        await saveEncryptedNotes(authData.pubkey, syncResult.notes)
 
-        const allTags = new Set<string>()
-        syncedNotes.forEach((note) => {
-          note.tags.forEach((tag) => allTags.add(tag))
+        // Update tags again (in case sync brought new tags)
+        const finalTags = new Set<string>()
+        syncResult.notes.forEach((note) => {
+          note.tags.forEach((tag) => finalTags.add(tag))
         })
-        setTags(Array.from(allTags))
+        setTags(Array.from(finalTags))
+
+        console.log("[v0] Initial load complete:", {
+          total: syncResult.notes.length,
+          synced: syncResult.syncedCount,
+          failed: syncResult.failedCount
+        })
+
       } catch (error) {
         console.error("[v0] Error loading notes:", error)
         setSyncStatus("error")
         setConnectionError(error instanceof Error ? error.message : "Unknown error occurred")
-      } finally {
         setIsLoading(false)
       }
     }
@@ -252,7 +291,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     }
   }, [needsSync, authData, isLoading, syncStatus, deletedNotes, notes])
 
-  const handleCreateNote = () => {
+  const handleCreateNote = async () => {
     console.log("[v0] Creating new note...")
     const now = new Date()
 
@@ -269,35 +308,95 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       tags: [],
       createdAt: now,
       lastModified: now,
-      syncStatus: "local",
+      syncStatus: "syncing",
     }
 
+    // Add to UI immediately
     const updatedNotes = [newNote, ...notes]
     setNotes(updatedNotes)
     setSelectedNote(newNote)
-    setNeedsSync(true)
 
-    console.log("[v0] New note created:", newNote.id, "Total notes:", updatedNotes.length)
-  }
+    // Save locally immediately
+    await saveEncryptedNotes(authData.pubkey, updatedNotes)
 
-  const handleUpdateNote = (updatedNote: Note) => {
-    console.log("[v0] Updating note:", updatedNote.id)
-
-    const noteWithTimestamp = {
-      ...updatedNote,
-      lastModified: new Date(),
-      lastSynced: undefined,
-      syncStatus: "local" as const,
+    // Sync to Nostr in background
+    try {
+      const result = await saveAndSyncNote(newNote, authData)
+      
+      setNotes([result.note, ...notes])
+      setSelectedNote(result.note)
+      
+      if (result.success) {
+        const syncedNotes = [result.note, ...notes]
+        await saveEncryptedNotes(authData.pubkey, syncedNotes)
+        setLastSyncTime(new Date())
+      } else {
+        setConnectionError(result.error || "Failed to sync new note")
+      }
+    } catch (error) {
+      console.error("[v0] Error syncing new note:", error)
+      const errorNote = {
+        ...newNote,
+        syncStatus: "error" as const,
+        syncError: error instanceof Error ? error.message : "Sync failed"
+      }
+      setNotes([errorNote, ...notes])
+      setSelectedNote(errorNote)
     }
 
-    setNotes(notes.map((note) => (note.id === updatedNote.id ? noteWithTimestamp : note)))
-    setSelectedNote(noteWithTimestamp)
-    setNeedsSync(true)
+    console.log("[v0] New note created:", newNote.id)
+  }
 
+  const handleUpdateNote = async (updatedNote: Note) => {
+    console.log("[v0] Updating note:", updatedNote.id)
+
+    // Optimistic update - show changes immediately
+    const optimisticNote = {
+      ...updatedNote,
+      lastModified: new Date(),
+      syncStatus: "syncing" as const,
+    }
+
+    setNotes(notes.map((note) => (note.id === updatedNote.id ? optimisticNote : note)))
+    setSelectedNote(optimisticNote)
+
+    // Save to local storage immediately
+    const updatedNotes = notes.map((note) => (note.id === updatedNote.id ? optimisticNote : note))
+    await saveEncryptedNotes(authData.pubkey, updatedNotes)
+
+    // Sync to Nostr in background
+    try {
+      const result = await saveAndSyncNote(optimisticNote, authData)
+      
+      // Update with final sync status
+      setNotes(notes.map((note) => (note.id === updatedNote.id ? result.note : note)))
+      setSelectedNote(result.note)
+      
+      if (result.success) {
+        // Save successful sync to local storage
+        const syncedNotes = notes.map((note) => (note.id === updatedNote.id ? result.note : note))
+        await saveEncryptedNotes(authData.pubkey, syncedNotes)
+        setLastSyncTime(new Date())
+      } else {
+        console.error("[v0] Sync failed:", result.error)
+        setConnectionError(result.error || "Failed to sync note")
+      }
+    } catch (error) {
+      console.error("[v0] Error syncing note:", error)
+      const errorNote = {
+        ...optimisticNote,
+        syncStatus: "error" as const,
+        syncError: error instanceof Error ? error.message : "Sync failed"
+      }
+      setNotes(notes.map((note) => (note.id === updatedNote.id ? errorNote : note)))
+      setSelectedNote(errorNote)
+    }
+
+    // Update tags
     const allTags = new Set<string>()
     notes.forEach((note) => {
       if (note.id === updatedNote.id) {
-        noteWithTimestamp.tags.forEach((tag) => allTags.add(tag))
+        optimisticNote.tags.forEach((tag) => allTags.add(tag))
       } else {
         note.tags.forEach((tag) => allTags.add(tag))
       }
@@ -553,6 +652,18 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                 title="Manual sync"
               >
                 <RefreshCw className="w-3 h-3" />
+              </Button>
+            )}
+            {notes.some(n => n.syncStatus === 'error') && (
+              <Button
+                onClick={retrySyncFailedNotes}
+                variant="ghost"
+                size="sm"
+                className="text-red-500 hover:text-red-700 hover:bg-red-50 p-1"
+                title={`Retry ${notes.filter(n => n.syncStatus === 'error').length} failed syncs`}
+              >
+                <RefreshCw className="w-3 h-3" />
+                <span className="text-xs ml-1">{notes.filter(n => n.syncStatus === 'error').length}</span>
               </Button>
             )}
           </div>

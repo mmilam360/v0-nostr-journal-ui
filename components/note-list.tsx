@@ -4,6 +4,7 @@ import type React from "react"
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { CheckCircle, Loader2, AlertCircle, CloudOff } from "lucide-react"
 import type { Note } from "@/components/main-app"
 
 interface NoteListProps {
@@ -22,6 +23,19 @@ export default function NoteList({ notes, selectedNote, onSelectNote, onCreateNo
       note.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       note.content.toLowerCase().includes(searchQuery.toLowerCase()),
   )
+
+  const getSyncIcon = (note: Note) => {
+    switch (note.syncStatus) {
+      case 'synced':
+        return <CheckCircle className="w-3 h-3 text-green-500" title="Synced to Nostr" />
+      case 'syncing':
+        return <Loader2 className="w-3 h-3 text-blue-500 animate-spin" title="Syncing..." />
+      case 'error':
+        return <AlertCircle className="w-3 h-3 text-red-500" title={note.syncError || "Sync failed"} />
+      default:
+        return <CloudOff className="w-3 h-3 text-yellow-500" title="Local only" />
+    }
+  }
 
   const handleDeleteClick = (note: Note, e: React.MouseEvent) => {
     e.stopPropagation()
@@ -70,7 +84,10 @@ export default function NoteList({ notes, selectedNote, onSelectNote, onCreateNo
                 }`}
               >
                 <button onClick={() => onSelectNote(note)} className="w-full p-4 text-left min-h-[44px]">
-                  <h3 className="font-semibold text-white mb-1 truncate pr-8">{note.title || "Untitled Note"}</h3>
+                  <div className="flex items-center gap-2 mb-1">
+                    <h3 className="font-semibold text-white truncate flex-1">{note.title || "Untitled Note"}</h3>
+                    {getSyncIcon(note)}
+                  </div>
                   <p className="text-slate-400 text-sm line-clamp-2">{note.content || "No content yet..."}</p>
                 </button>
 
