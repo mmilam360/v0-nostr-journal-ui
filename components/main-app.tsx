@@ -33,6 +33,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog"
+import { useTheme } from "@/lib/theme-provider"
 import { Input } from "@/components/ui/input"
 import DonationBubble from "@/components/donation-bubble"
 import { saveEncryptedNotes, loadEncryptedNotes } from "@/lib/nostr-crypto"
@@ -77,6 +79,7 @@ interface MainAppProps {
 }
 
 export function MainApp({ authData, onLogout }: MainAppProps) {
+  const { theme, setTheme } = useTheme()
   const [selectedTag, setSelectedTag] = useState<string | null>("all")
   const [selectedNote, setSelectedNote] = useState<Note | null>(null)
   const [notes, setNotes] = useState<Note[]>([])
@@ -760,195 +763,137 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   return (
     <ErrorBoundary>
       <div className="h-screen bg-background flex flex-col w-full">
-        <div className="bg-card border-b border-border px-4 py-3 flex items-center justify-between shadow-sm">
-          <div className="flex items-center gap-3">
-            <Button
-              onClick={() => setIsMobileSidebarOpen(true)}
-              variant="ghost"
-              size="sm"
-              className="md:hidden text-muted-foreground hover:text-foreground hover:bg-muted"
-            >
-              <Menu className="w-4 h-4" />
-            </Button>
+        {/* Cyberpunk Header */}
+        <div className="bg-card/95 backdrop-blur-sm border-b border-cyan-500/30 px-4 py-3 cyber-grid">
+          <div className="flex items-center justify-between">
+            {/* Left side - Logo and status */}
+            <div className="flex items-center gap-4">
+              <Button
+                onClick={() => setIsMobileSidebarOpen(true)}
+                variant="ghost"
+                size="sm"
+                className="md:hidden hover-glow"
+              >
+                <Menu className="w-4 h-4 text-cyan-400" />
+              </Button>
+              
+              <h1 className="text-lg font-bold cyber-text">Nostr Journal</h1>
+              <span className="text-xs cyber-text-muted">({notes.length} notes)</span>
+              
+              <div className="flex items-center gap-2">
+                {getSyncStatusIcon()}
+                <span className="text-xs cyber-text-muted hidden lg:inline">{getSyncStatusText()}</span>
+                {syncStatus !== "syncing" && (
+                  <Button
+                    onClick={handleManualSync}
+                    variant="ghost"
+                    size="sm"
+                    className="hover-glow p-1"
+                    title="Manual sync"
+                  >
+                    <RefreshCw className="w-3 h-3 text-cyan-400" />
+                  </Button>
+                )}
+                {notes.some((n) => n.syncStatus === "error") && (
+                  <Button
+                    onClick={retrySyncFailedNotes}
+                    variant="ghost"
+                    size="sm"
+                    className="text-red-400 hover:text-red-300 hover-glow p-1"
+                    title={`Retry ${notes.filter((n) => n.syncStatus === "error").length} failed syncs`}
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                    <span className="text-xs ml-1">{notes.filter((n) => n.syncStatus === "error").length}</span>
+                  </Button>
+                )}
+              </div>
 
-            <span className="text-muted-foreground text-xs">({notes.length} notes)</span>
-            <span className="text-muted-foreground text-xs bg-muted px-2 py-1 rounded">
-              {authData.authMethod === "extension"
-                ? "Extension"
-                : authData.authMethod === "remote"
-                  ? "Remote Signer"
-                  : "Private Key"}
-            </span>
+              {/* Connection Status */}
+              <ConnectionStatus onRetry={retryConnection} className="text-xs" />
 
-            <div className="flex items-center gap-2">
-              {getSyncStatusIcon()}
-              <span className="text-muted-foreground text-xs hidden lg:inline">{getSyncStatusText()}</span>
-              {syncStatus !== "syncing" && (
-                <Button
-                  onClick={handleManualSync}
-                  variant="ghost"
-                  size="sm"
-                  className="text-muted-foreground hover:text-foreground hover:bg-muted p-1"
-                  title="Manual sync"
-                >
-                  <RefreshCw className="w-3 h-3" />
-                </Button>
-              )}
-              {notes.some((n) => n.syncStatus === "error") && (
-                <Button
-                  onClick={retrySyncFailedNotes}
-                  variant="ghost"
-                  size="sm"
-                  className="text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30 p-1"
-                  title={`Retry ${notes.filter((n) => n.syncStatus === "error").length} failed syncs`}
-                >
-                  <RefreshCw className="w-3 h-3" />
-                  <span className="text-xs ml-1">{notes.filter((n) => n.syncStatus === "error").length}</span>
-                </Button>
+              {/* Connection Error Display */}
+              {connectionError && (
+                <div className="flex items-center gap-1 text-red-400 text-xs">
+                  <AlertCircle className="w-3 h-3" />
+                  <span className="truncate max-w-xs">{connectionError}</span>
+                  <Button
+                    onClick={() => setShowDiagnostics(true)}
+                    variant="ghost"
+                    size="sm"
+                    className="h-4 px-1 text-xs text-red-400 hover:text-red-300 hover-glow"
+                  >
+                    Diagnose
+                  </Button>
+                </div>
               )}
             </div>
 
-            {/* Connection Status */}
-            <ConnectionStatus onRetry={retryConnection} className="text-xs" />
+            {/* Right side buttons */}
+            <div className="flex items-center gap-2">
+              {/* Theme Toggle */}
+              <Button
+                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                variant="ghost"
+                size="sm"
+                className="hover-glow"
+                title="Toggle theme"
+              >
+                {theme === 'dark' ? (
+                  <Sun className="w-4 h-4 text-cyan-400" />
+                ) : (
+                  <Moon className="w-4 h-4 text-cyan-400" />
+                )}
+                <span className="hidden sm:inline ml-2 text-xs">Theme</span>
+              </Button>
 
-            {/* Connection Error Display */}
-            {connectionError && (
-              <div className="flex items-center gap-1 text-red-500 text-xs">
-                <AlertCircle className="w-3 h-3" />
-                <span className="truncate max-w-xs">{connectionError}</span>
-                <Button
-                  onClick={() => setShowDiagnostics(true)}
-                  variant="ghost"
-                  size="sm"
-                  className="h-4 px-1 text-xs text-red-500 hover:text-red-700"
-                >
-                  Diagnose
-                </Button>
-              </div>
-            )}
-          </div>
+              {/* Relay Manager Dialog */}
+              <Dialog open={showRelayManager} onOpenChange={setShowRelayManager}>
+                <DialogTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="hover-glow"
+                    title="Edit Relays"
+                  >
+                    <Settings className="w-4 h-4 text-cyan-400" />
+                    <span className="hidden sm:inline ml-2 text-xs">Relays</span>
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="neon-border cyber-grid animate-slide-in max-w-2xl">
+                  <RelayManager onClose={() => setShowRelayManager(false)} />
+                </DialogContent>
+              </Dialog>
 
-          {/* Right side buttons */}
-          <div className="flex items-center gap-2">
-            <ThemeToggle />
+              {/* Profile Dialog */}
+              <Dialog open={showProfile} onOpenChange={setShowProfile}>
+                <DialogTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="hover-glow"
+                    title="Profile"
+                  >
+                    <User className="w-4 h-4 text-cyan-400" />
+                    <span className="hidden sm:inline ml-2 text-xs">Profile</span>
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="neon-border cyber-grid animate-slide-in max-w-md">
+                  <ProfilePage authData={authData} onClose={() => setShowProfile(false)} />
+                </DialogContent>
+              </Dialog>
 
-            {/* Dropdown for relays */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-muted-foreground hover:text-foreground hover:bg-muted"
-                  title="Edit Relays"
-                >
-                  <Settings className="w-4 h-4" />
-                  <span className="hidden md:inline ml-2 text-xs">Relays</span>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-80">
-                <DropdownMenuLabel>Nostr Relays ({relays.length})</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <div className="max-h-48 overflow-y-auto px-2 py-1">
-                  {relays.map((relay) => (
-                    <div key={relay} className="flex items-center gap-2 py-1.5 px-2 hover:bg-muted rounded-md group">
-                      <span className="flex-1 text-xs font-mono truncate">{relay}</span>
-                      <Button
-                        onClick={() => handleRemoveRelay(relay)}
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 text-destructive hover:text-destructive hover:bg-destructive/10"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-                <DropdownMenuSeparator />
-                <div className="px-2 py-2">
-                  <div className="flex gap-2">
-                    <Input
-                      type="text"
-                      value={newRelay}
-                      onChange={(e) => setNewRelay(e.target.value)}
-                      placeholder="wss://relay.example.com"
-                      className="h-8 text-xs"
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          handleAddRelay()
-                        }
-                      }}
-                    />
-                    <Button onClick={handleAddRelay} size="sm" className="h-8 w-8 p-0">
-                      <Plus className="h-3 w-3" />
-                    </Button>
-                  </div>
-                </div>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => setShowRelayManager(true)}>
-                  <Settings className="w-3 h-3 mr-2" />
-                  Advanced Settings
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-
-            {/* Dropdown for profile */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-muted-foreground hover:text-foreground hover:bg-muted"
-                  title="Profile"
-                >
-                  <User className="w-4 h-4" />
-                  <span className="hidden md:inline ml-2 text-xs">Profile</span>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-72">
-                <DropdownMenuLabel>Account</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <div className="px-2 py-2 space-y-2">
-                  <div className="text-xs text-muted-foreground">
-                    Auth Method:{" "}
-                    <span className="text-foreground font-medium">
-                      {authData.authMethod === "extension"
-                        ? "Extension"
-                        : authData.authMethod === "remote"
-                          ? "Remote Signer"
-                          : "Private Key"}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Input type="text" value={npub} readOnly className="h-8 text-xs font-mono" />
-                    <Button
-                      onClick={handleCopyNpub}
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 w-8 p-0"
-                      title="Copy npub"
-                    >
-                      {copiedNpub ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
-                    </Button>
-                  </div>
-                </div>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => setShowProfile(true)}>
-                  <User className="w-3 h-3 mr-2" />
-                  View Full Profile
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-
-            <Button
-              onClick={handleLogout}
-              variant="ghost"
-              size="sm"
-              className="text-muted-foreground hover:text-foreground hover:bg-muted"
-              title="Logout"
-            >
-              <LogOut className="w-4 h-4" />
-              <span className="hidden md:inline ml-2 text-xs">Logout</span>
-            </Button>
+              {/* Logout */}
+              <Button
+                onClick={handleLogout}
+                variant="ghost"
+                size="sm"
+                className="hover:text-red-400 hover-glow"
+                title="Logout"
+              >
+                <LogOut className="w-4 h-4" />
+                <span className="hidden sm:inline ml-2 text-xs">Logout</span>
+              </Button>
+            </div>
           </div>
         </div>
 

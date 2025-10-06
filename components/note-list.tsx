@@ -28,13 +28,13 @@ export default function NoteList({ notes, selectedNote, onSelectNote, onCreateNo
   const getSyncIcon = (note: Note) => {
     switch (note.syncStatus) {
       case "synced":
-        return <CheckCircle className="w-3 h-3 text-green-500" title="Synced to Nostr" />
+        return <CheckCircle className="w-3 h-3 status-synced" title="Synced to Nostr" />
       case "syncing":
-        return <Loader2 className="w-3 h-3 text-blue-500 animate-spin" title="Syncing..." />
+        return <Loader2 className="w-3 h-3 status-syncing animate-spin" title="Syncing..." />
       case "error":
-        return <AlertCircle className="w-3 h-3 text-red-500" title={note.syncError || "Sync failed"} />
+        return <AlertCircle className="w-3 h-3 status-error" title={note.syncError || "Sync failed"} />
       default:
-        return <CloudOff className="w-3 h-3 text-yellow-500" title="Local only" />
+        return <CloudOff className="w-3 h-3 status-local" title="Local only" />
     }
   }
 
@@ -60,21 +60,21 @@ export default function NoteList({ notes, selectedNote, onSelectNote, onCreateNo
   }
 
   return (
-    <div className="w-full md:w-80 bg-card flex flex-col h-full">
-      <div className="p-3 md:p-4 border-b border-border">
+    <div className="w-full md:w-80 bg-card/50 backdrop-blur-sm flex flex-col h-full cyber-grid">
+      <div className="p-3 md:p-4 border-b border-cyan-500/30">
         <div className="relative mb-3">
-          <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground text-sm">🔍</span>
+          <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-cyan-400 text-sm">🔍</span>
           <Input
             placeholder="Search all notes..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10 bg-background border-input text-foreground placeholder-muted-foreground"
+            className="pl-10 bg-background/50 border-cyan-500/30 text-foreground placeholder-muted-foreground focus:border-cyan-500/50 focus:ring-cyan-500/20"
           />
         </div>
 
         <Button
           onClick={onCreateNote}
-          className="w-full bg-primary hover:bg-primary/90 text-primary-foreground flex items-center gap-2 min-h-[44px] shadow-sm"
+          className="w-full btn-cyber-primary flex items-center gap-2 min-h-[44px] hover-glow"
         >
           ➕ New Note
         </Button>
@@ -95,18 +95,32 @@ export default function NoteList({ notes, selectedNote, onSelectNote, onCreateNo
             {filteredNotes.map((note) => (
               <div
                 key={note.id}
-                className={`relative group rounded-lg mb-2 transition-colors border ${
+                className={`relative group rounded-lg mb-2 transition-all duration-300 card-hover ${
                   selectedNote?.id === note.id
-                    ? "bg-accent border-accent-foreground/20"
-                    : "hover:bg-muted border-transparent"
+                    ? "bg-card/80 border-cyan-500 neon-glow"
+                    : "bg-card/30 border-border hover:border-cyan-500/50 hover:neon-glow"
                 }`}
               >
                 <button onClick={() => handleNoteClick(note)} className="w-full p-4 text-left min-h-[44px]">
                   <div className="flex items-center gap-2 mb-1">
-                    <h3 className="font-semibold text-foreground truncate flex-1">{note.title || "Untitled Note"}</h3>
+                    <h3 className={`font-semibold truncate flex-1 ${
+                      selectedNote?.id === note.id ? "text-cyan-400" : "text-foreground"
+                    }`}>
+                      {note.title || "Untitled Note"}
+                    </h3>
                     {getSyncIcon(note)}
                   </div>
                   <p className="text-muted-foreground text-sm line-clamp-2">{note.content || "No content yet..."}</p>
+                  <div className="flex items-center justify-between mt-2">
+                    <span className="text-xs text-cyan-400/70 mono">
+                      {new Date(note.lastModified).toLocaleDateString()}
+                    </span>
+                    {note.tags.length > 0 && (
+                      <span className="text-xs text-muted-foreground">
+                        {note.tags.length} tags
+                      </span>
+                    )}
+                  </div>
                 </button>
               </div>
             ))}
@@ -116,11 +130,11 @@ export default function NoteList({ notes, selectedNote, onSelectNote, onCreateNo
 
       {/* Sync Warning Popup */}
       {showSyncWarning && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-card rounded-lg p-6 max-w-sm mx-4 border border-border shadow-xl">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-card/95 backdrop-blur-sm rounded-lg p-6 max-w-sm mx-4 border border-cyan-500/50 neon-glow shadow-xl animate-slide-in">
             <div className="flex items-center gap-3 mb-4">
-              <AlertTriangle className="w-6 h-6 text-yellow-500" />
-              <h3 className="text-lg font-semibold text-foreground">Note Syncing</h3>
+              <AlertTriangle className="w-6 h-6 text-yellow-400 pulse-neon" />
+              <h3 className="text-lg font-semibold cyber-text">Note Syncing</h3>
             </div>
             <p className="text-muted-foreground mb-6">
               This note is currently syncing to the network. Please wait for the sync to complete before opening it.
@@ -128,7 +142,7 @@ export default function NoteList({ notes, selectedNote, onSelectNote, onCreateNo
             <div className="flex justify-end">
               <Button
                 onClick={() => setShowSyncWarning(null)}
-                className="bg-primary hover:bg-primary/90 text-primary-foreground"
+                className="btn-cyber-primary hover-glow"
               >
                 OK
               </Button>

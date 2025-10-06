@@ -53,7 +53,7 @@ button {
   overflow-x: hidden;
 }
 
-/* Updated color scheme to match Nostr Journal logo - blue primary with clean neutrals */
+/* Cyberpunk Dark Theme - Primary */
 :root {
   /* Light mode - Clean and crisp with blue accents from logo */
   --background: 250 251 252; /* Very light blue-gray background */
@@ -91,40 +91,52 @@ button {
   --sidebar-ring: 37 99 235;
 }
 
-/* Dark mode - Sophisticated dark with blue accents */
+/* Cyberpunk Dark Theme */
 .dark {
-  --background: 15 23 42; /* Deep slate background */
-  --foreground: 241 245 249; /* Light text */
-  --card: 30 41 59; /* Slightly lighter cards */
-  --card-foreground: 241 245 249;
-  --popover: 30 41 59;
-  --popover-foreground: 241 245 249;
-  --primary: 59 130 246; /* Bright blue for dark mode */
-  --primary-foreground: 255 255 255;
-  --secondary: 51 65 85;
-  --secondary-foreground: 241 245 249;
-  --muted: 51 65 85;
-  --muted-foreground: 148 163 184;
-  --accent: 30 58 138; /* Deep blue accent */
-  --accent-foreground: 191 219 254;
-  --destructive: 239 68 68;
-  --destructive-foreground: 241 245 249;
-  --border: 51 65 85;
-  --input: 51 65 85;
-  --ring: 59 130 246;
-  --chart-1: 59 130 246;
-  --chart-2: 96 165 250;
-  --chart-3: 147 197 253;
-  --chart-4: 51 65 85;
-  --chart-5: 30 41 59;
-  --sidebar: 15 23 42;
-  --sidebar-foreground: 241 245 249;
-  --sidebar-primary: 59 130 246;
-  --sidebar-primary-foreground: 255 255 255;
-  --sidebar-accent: 51 65 85;
-  --sidebar-accent-foreground: 241 245 249;
-  --sidebar-border: 51 65 85;
-  --sidebar-ring: 59 130 246;
+  /* Backgrounds */
+  --background: 220 15% 8%;           /* Deep dark blue-black */
+  --card: 220 15% 12%;                /* Slightly lighter cards */
+  --popover: 220 15% 10%;             /* Dropdown backgrounds */
+  
+  /* Text */
+  --foreground: 210 40% 98%;          /* Bright white text */
+  --card-foreground: 210 40% 98%;
+  --popover-foreground: 210 40% 98%;
+  --muted-foreground: 215 20% 65%;    /* Muted text */
+  
+  /* Accents */
+  --primary: 189 94% 43%;             /* Neon cyan */
+  --primary-foreground: 220 15% 8%;
+  --secondary: 322 84% 55%;           /* Neon magenta */
+  --secondary-foreground: 220 15% 8%;
+  --accent: 189 94% 43%;              /* Neon cyan for accents */
+  --accent-foreground: 220 15% 8%;
+  
+  /* Borders */
+  --border: 215 20% 20%;              /* Subtle borders */
+  --input: 215 20% 20%;
+  
+  /* Special effects */
+  --ring: 189 94% 43%;                /* Focus rings in cyan */
+  --destructive: 0 84% 60%;           /* Neon red for delete */
+  --destructive-foreground: 220 15% 8%;
+  
+  /* Charts */
+  --chart-1: 189 94% 43%;
+  --chart-2: 322 84% 55%;
+  --chart-3: 189 94% 43%;
+  --chart-4: 215 20% 20%;
+  --chart-5: 220 15% 12%;
+  
+  /* Sidebar */
+  --sidebar: 220 15% 8%;
+  --sidebar-foreground: 210 40% 98%;
+  --sidebar-primary: 189 94% 43%;
+  --sidebar-primary-foreground: 220 15% 8%;
+  --sidebar-accent: 215 20% 20%;
+  --sidebar-accent-foreground: 210 40% 98%;
+  --sidebar-border: 215 20% 20%;
+  --sidebar-ring: 189 94% 43%;
 }
 
 @theme inline {
@@ -187,4 +199,195 @@ button {
   -moz-user-select: none;
   -ms-user-select: none;
   user-select: none;
+}
+
+/* ========================================
+   CYBERPUNK UTILITY CLASSES
+   ======================================== */
+
+/* Neon glow effects */
+.neon-glow {
+  box-shadow: 
+    0 0 5px rgba(34, 211, 238, 0.3),
+    0 0 10px rgba(34, 211, 238, 0.2),
+    0 0 20px rgba(34, 211, 238, 0.1);
+}
+
+.neon-border {
+  border: 1px solid rgba(34, 211, 238, 0.5);
+}
+
+.neon-border-magenta {
+  border: 1px solid rgba(236, 72, 153, 0.5);
+}
+
+.neon-border-red {
+  border: 1px solid rgba(239, 68, 68, 0.5);
+}
+
+/* Grid pattern overlay */
+.cyber-grid {
+  background-image: 
+    linear-gradient(rgba(34, 211, 238, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(34, 211, 238, 0.03) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+/* Glow on hover */
+.hover-glow:hover {
+  box-shadow: 
+    0 0 10px rgba(34, 211, 238, 0.4),
+    0 0 20px rgba(34, 211, 238, 0.3),
+    0 0 30px rgba(34, 211, 238, 0.2);
+}
+
+/* Neon pulse animation */
+@keyframes neon-pulse {
+  0%, 100% { 
+    opacity: 1; 
+    box-shadow: 0 0 5px rgba(34, 211, 238, 0.5);
+  }
+  50% { 
+    opacity: 0.7; 
+    box-shadow: 0 0 20px rgba(34, 211, 238, 0.8);
+  }
+}
+
+.pulse-neon {
+  animation: neon-pulse 2s ease-in-out infinite;
+}
+
+/* Slide in animation for modals */
+@keyframes slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-slide-in {
+  animation: slide-in 0.3s ease-out;
+}
+
+/* Fade in animation */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.2s ease-out;
+}
+
+/* Smooth transitions */
+* {
+  transition: all 0.2s ease;
+}
+
+/* Cyberpunk typography */
+.cyber-text {
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: rgb(34, 211, 238); /* Neon cyan */
+}
+
+.cyber-text-muted {
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  color: rgb(148, 163, 184);
+}
+
+.mono {
+  font-family: 'Courier New', monospace;
+  font-size: 0.9em;
+}
+
+/* Backdrop blur effects */
+.backdrop-blur-cyber {
+  backdrop-filter: blur(8px);
+  background: rgba(15, 23, 42, 0.8);
+}
+
+/* Card hover effects */
+.card-hover {
+  transition: all 0.3s ease;
+}
+
+.card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 
+    0 4px 20px rgba(34, 211, 238, 0.15),
+    0 0 0 1px rgba(34, 211, 238, 0.3);
+}
+
+/* Button variants */
+.btn-cyber-primary {
+  background: linear-gradient(135deg, rgb(34, 211, 238), rgb(6, 182, 212));
+  color: rgb(15, 23, 42);
+  border: 1px solid rgba(34, 211, 238, 0.5);
+  box-shadow: 0 0 10px rgba(34, 211, 238, 0.3);
+}
+
+.btn-cyber-primary:hover {
+  background: linear-gradient(135deg, rgb(6, 182, 212), rgb(34, 211, 238));
+  box-shadow: 0 0 20px rgba(34, 211, 238, 0.5);
+  transform: translateY(-1px);
+}
+
+.btn-cyber-secondary {
+  background: linear-gradient(135deg, rgb(236, 72, 153), rgb(219, 39, 119));
+  color: rgb(15, 23, 42);
+  border: 1px solid rgba(236, 72, 153, 0.5);
+  box-shadow: 0 0 10px rgba(236, 72, 153, 0.3);
+}
+
+.btn-cyber-secondary:hover {
+  background: linear-gradient(135deg, rgb(219, 39, 119), rgb(236, 72, 153));
+  box-shadow: 0 0 20px rgba(236, 72, 153, 0.5);
+  transform: translateY(-1px);
+}
+
+.btn-cyber-danger {
+  background: linear-gradient(135deg, rgb(239, 68, 68), rgb(220, 38, 38));
+  color: rgb(15, 23, 42);
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.3);
+}
+
+.btn-cyber-danger:hover {
+  background: linear-gradient(135deg, rgb(220, 38, 38), rgb(239, 68, 68));
+  box-shadow: 0 0 20px rgba(239, 68, 68, 0.5);
+  transform: translateY(-1px);
+}
+
+/* Status indicators */
+.status-synced {
+  color: rgb(34, 197, 94);
+  text-shadow: 0 0 5px rgba(34, 197, 94, 0.5);
+}
+
+.status-syncing {
+  color: rgb(34, 211, 238);
+  text-shadow: 0 0 5px rgba(34, 211, 238, 0.5);
+  animation: neon-pulse 1.5s ease-in-out infinite;
+}
+
+.status-error {
+  color: rgb(239, 68, 68);
+  text-shadow: 0 0 5px rgba(239, 68, 68, 0.5);
+  animation: neon-pulse 1s ease-in-out infinite;
+}
+
+.status-local {
+  color: rgb(251, 191, 36);
+  text-shadow: 0 0 5px rgba(251, 191, 36, 0.5);
 }
