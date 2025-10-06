@@ -1210,6 +1210,60 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
                             />
                           </div>
 
+                          {/* Connection string display for mobile */}
+                          <div className="bg-muted p-4 rounded-lg">
+                            <p className="text-sm font-medium mb-2 text-foreground">Connection String:</p>
+                            <div className="flex gap-2">
+                              <input
+                                type="text"
+                                value={bunkerUrl}
+                                readOnly
+                                className="flex-1 px-3 py-2 text-sm border rounded font-mono bg-background text-foreground"
+                              />
+                              <Button
+                                onClick={copyUrl}
+                                variant="outline"
+                                size="sm"
+                                className="shrink-0"
+                              >
+                                <Copy className="w-4 h-4" />
+                              </Button>
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-2">
+                              Copy this and paste it in your Nostr signer app
+                            </p>
+                          </div>
+
+                          {/* Manual paste section */}
+                          <div className="bg-muted p-4 rounded-lg">
+                            <p className="text-sm font-medium mb-2 text-foreground">Or paste connection string:</p>
+                            <div className="flex gap-2">
+                              <input
+                                type="text"
+                                placeholder="nostrconnect://..."
+                                onChange={(e) => setNostrconnectInput(e.target.value)}
+                                className="flex-1 px-3 py-2 text-sm border rounded font-mono bg-background text-foreground placeholder-muted-foreground"
+                              />
+                              <Button
+                                onClick={() => {
+                                  if (nostrconnectInput.startsWith('nostrconnect://')) {
+                                    handleNostrconnectLogin()
+                                  } else {
+                                    setError('Invalid connection string')
+                                  }
+                                }}
+                                variant="outline"
+                                size="sm"
+                                className="shrink-0"
+                              >
+                                Connect
+                              </Button>
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-2">
+                              Paste a connection string from your signer app
+                            </p>
+                          </div>
+
                           <div className="space-y-2">
                             <button
                               onClick={copyUrl}

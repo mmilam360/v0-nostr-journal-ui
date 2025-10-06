@@ -784,6 +784,10 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                 {/* Logo */}
                 <div className="flex items-center gap-3">
                   <h1 className="text-xl font-bold text-foreground">Nostr Journal</h1>
+                  {/* Temporary test button to verify colors */}
+                  <Button className="bg-primary text-primary-foreground ml-2" size="sm">
+                    Test Colors
+                  </Button>
                   <div className="hidden sm:flex items-center gap-2 text-xs text-muted-foreground">
                     <span>{notes.length} notes</span>
                     <span>•</span>
@@ -823,7 +827,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent 
                     align="end" 
-                    className="w-64 z-[100]"
+                    className="w-64 !z-[9999]"
                     sideOffset={8}
                   >
                     {/* Profile Section */}
