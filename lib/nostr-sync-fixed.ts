@@ -170,8 +170,18 @@ function mergeNotes(localNotes: DecryptedNote[], remoteNotes: DecryptedNote[]): 
     } else {
       // Note exists both locally and remotely
       // Use the one with the most recent modification
-      const localTime = localNote.lastModified?.getTime() || localNote.createdAt.getTime()
-      const remoteTime = remoteNote.lastModified?.getTime() || remoteNote.createdAt.getTime()
+      
+      // Helper function to safely get timestamp from date
+      const getTimestamp = (date: any): number => {
+        if (!date) return 0
+        if (date instanceof Date) return date.getTime()
+        if (typeof date === 'string') return new Date(date).getTime()
+        if (typeof date === 'number') return date
+        return 0
+      }
+      
+      const localTime = getTimestamp(localNote.lastModified) || getTimestamp(localNote.createdAt)
+      const remoteTime = getTimestamp(remoteNote.lastModified) || getTimestamp(remoteNote.createdAt)
       
       if (remoteTime > localTime) {
         // Remote is newer - use it
