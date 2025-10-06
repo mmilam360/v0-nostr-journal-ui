@@ -125,8 +125,8 @@ export async function smartSyncNotes(
     if (deletionsToSync.length > 0) {
       console.log("[SmartSync] 🗑️ Syncing", deletionsToSync.length, "deletions to Nostr...")
       
-      // Find the notes that need to be deleted
-      const notesToDelete = mergedNotes.filter(note => 
+      // Find the notes that need to be deleted from the original local notes
+      const notesToDelete = localNotes.filter(note => 
         deletionsToSync.some(deleted => deleted.id === note.id)
       )
       
