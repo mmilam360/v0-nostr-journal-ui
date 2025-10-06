@@ -79,9 +79,19 @@ export async function encryptWithRemote(plaintext: string, recipientPubkey: stri
   console.log("[SignerManager] 🔐 Encrypting data with NIP-04...")
   
   try {
-    // For remote signer, we need to use the client secret key to generate shared secret
-    // The remote signer doesn't expose nip04 methods directly
+    // Import nip04 the same way as in login-page.tsx
     const { nip04 } = await import("nostr-tools/pure")
+    
+    console.log("[SignerManager] 🔍 nip04 object:", nip04)
+    console.log("[SignerManager] 🔍 nip04 methods:", nip04 ? Object.keys(nip04) : "nip04 is undefined")
+    
+    if (!nip04) {
+      throw new Error("nip04 module is undefined")
+    }
+    
+    if (!nip04.getSharedSecret || !nip04.encrypt) {
+      throw new Error(`nip04 methods missing. Available: ${Object.keys(nip04)}`)
+    }
     
     // Use the client secret key to generate shared secret with recipient
     const sharedSecret = nip04.getSharedSecret(authData.clientSecretKey!, recipientPubkey)
@@ -102,9 +112,19 @@ export async function decryptWithRemote(ciphertext: string, senderPubkey: string
   console.log("[SignerManager] 🔓 Decrypting data with NIP-04...")
   
   try {
-    // For remote signer, we need to use the client secret key to generate shared secret
-    // The remote signer doesn't expose nip04 methods directly
+    // Import nip04 the same way as in login-page.tsx
     const { nip04 } = await import("nostr-tools/pure")
+    
+    console.log("[SignerManager] 🔍 nip04 object:", nip04)
+    console.log("[SignerManager] 🔍 nip04 methods:", nip04 ? Object.keys(nip04) : "nip04 is undefined")
+    
+    if (!nip04) {
+      throw new Error("nip04 module is undefined")
+    }
+    
+    if (!nip04.getSharedSecret || !nip04.decrypt) {
+      throw new Error(`nip04 methods missing. Available: ${Object.keys(nip04)}`)
+    }
     
     // Use the client secret key to generate shared secret with sender
     const sharedSecret = nip04.getSharedSecret(authData.clientSecretKey!, senderPubkey)
