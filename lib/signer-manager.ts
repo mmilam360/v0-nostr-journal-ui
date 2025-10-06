@@ -73,17 +73,19 @@ export async function signEventWithRemote(unsignedEvent: any, authData: AuthData
 }
 
 /**
- * Encrypt data using remote signer's nip04_encrypt
+ * Encrypt data using NIP-04 with remote signer's shared secret
  */
 export async function encryptWithRemote(plaintext: string, recipientPubkey: string, authData: AuthData): Promise<string> {
-  console.log("[SignerManager] 🔐 Encrypting data with remote signer...")
+  console.log("[SignerManager] 🔐 Encrypting data with NIP-04...")
   
   try {
-    const signer = await getRemoteSigner(authData)
+    // For remote signer, we need to use the client secret key to generate shared secret
+    // The remote signer doesn't expose nip04 methods directly
+    const { nip04 } = await import("nostr-tools/pure")
     
-    // Use the signer's nip04 encryption method
-    // This calls the remote signer's nip04_encrypt which uses the user's actual private key
-    const encrypted = await signer.nip04.encrypt(recipientPubkey, plaintext)
+    // Use the client secret key to generate shared secret with recipient
+    const sharedSecret = nip04.getSharedSecret(authData.clientSecretKey!, recipientPubkey)
+    const encrypted = await nip04.encrypt(sharedSecret, plaintext)
     
     console.log("[SignerManager] ✅ Data encrypted successfully")
     return encrypted
@@ -94,16 +96,19 @@ export async function encryptWithRemote(plaintext: string, recipientPubkey: stri
 }
 
 /**
- * Decrypt data using remote signer's nip04_decrypt
+ * Decrypt data using NIP-04 with remote signer's shared secret
  */
 export async function decryptWithRemote(ciphertext: string, senderPubkey: string, authData: AuthData): Promise<string> {
-  console.log("[SignerManager] 🔓 Decrypting data with remote signer...")
+  console.log("[SignerManager] 🔓 Decrypting data with NIP-04...")
   
   try {
-    const signer = await getRemoteSigner(authData)
+    // For remote signer, we need to use the client secret key to generate shared secret
+    // The remote signer doesn't expose nip04 methods directly
+    const { nip04 } = await import("nostr-tools/pure")
     
-    // Use the signer's nip04 decryption method
-    const decrypted = await signer.nip04.decrypt(senderPubkey, ciphertext)
+    // Use the client secret key to generate shared secret with sender
+    const sharedSecret = nip04.getSharedSecret(authData.clientSecretKey!, senderPubkey)
+    const decrypted = await nip04.decrypt(sharedSecret, ciphertext)
     
     console.log("[SignerManager] ✅ Data decrypted successfully")
     return decrypted
