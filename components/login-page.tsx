@@ -324,8 +324,12 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
     setError("")
     setCopied(false)
 
-    try {
-      console.log("[NostrConnect] 🚀 Starting NIP-46 bunker login")
+    const maxRetries = 3
+    const retryDelay = 2000 // 2 seconds
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`[NostrConnect] 🚀 Starting NIP-46 bunker login (attempt ${attempt}/${maxRetries})`)
 
       const { generateSecretKey, getPublicKey, nip04, finalizeEvent, verifyEvent } = await import("nostr-tools/pure")
       // Import nip44 separately - it's in a different module
@@ -359,7 +363,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
       let isConnected = false
       let remotePubkey: string | null = null
 
-      // Set timeout for connection (2 minutes)
+      // Set timeout for connection (30 seconds for mobile)
       timeoutRef.current = setTimeout(() => {
         if (!isConnected) {
           console.log("[NostrConnect] ⏱️ Connection timeout")
@@ -367,7 +371,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
           setConnectionState("error")
           setError("Connection timed out. Please try scanning the QR code again.")
         }
-      }, 120000)
+      }, 30000)
 
       // Connect to relay
       console.log("[NostrConnect] 🔌 Connecting to relay...")
@@ -602,11 +606,31 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
         console.log("[NostrConnect] 🔌 WebSocket closed")
       }
 
-    } catch (err) {
-      console.error("[NostrConnect] ❌ Fatal error:", err)
-      setConnectionState("error")
-      setError(err instanceof Error ? err.message : "Failed to establish connection")
-      cleanup()
+      } catch (err) {
+        console.error(`[NostrConnect] ❌ Attempt ${attempt} failed:`, err)
+        
+        if (attempt === maxRetries) {
+          console.error("[NostrConnect] ❌ All attempts failed")
+          setConnectionState("error")
+          setError(
+            'Failed to connect after multiple attempts. Please try:\n' +
+            '1. Check your internet connection\n' +
+            '2. Make sure nsec.app is still open\n' +
+            '3. Try scanning the QR code instead'
+          )
+          cleanup()
+          return
+        }
+        
+        // Wait before retrying
+        console.log(`[NostrConnect] ⏳ Waiting ${retryDelay}ms before retry...`)
+        await new Promise(resolve => setTimeout(resolve, retryDelay))
+        
+        // Reset state for next attempt
+        setConnectionState("generating")
+        setError("")
+        cleanup()
+      }
     }
   }
 
@@ -1168,6 +1192,14 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
                       <>
                         <div className="space-y-4">
                           <p className="text-center text-slate-300 font-medium">Scan with Nsec.app or compatible wallet</p>
+                          
+                          {/* Connection status feedback */}
+                          <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+                            <div className="flex items-center gap-2 text-sm text-blue-700 dark:text-blue-300">
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                              <span>Waiting for connection...</span>
+                            </div>
+                          </div>
 
                           <div className="bg-white rounded-lg p-4">
                             <QRCodeSVG 
@@ -1246,6 +1278,18 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
                         <div className="bg-red-900/20 border border-red-500/50 rounded-lg p-4">
                           <p className="text-sm text-red-400">{error}</p>
                         </div>
+                        
+                        {/* Mobile connection help */}
+                        <div className="bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 text-left">
+                          <h4 className="text-yellow-800 dark:text-yellow-200 font-medium mb-2">Connection Issues?</h4>
+                          <ul className="text-xs text-yellow-700 dark:text-yellow-300 space-y-1">
+                            <li>• Use QR code scan instead (more reliable)</li>
+                            <li>• Keep nsec.app open while connecting</li>
+                            <li>• Check your internet connection</li>
+                            <li>• Try again in a few seconds</li>
+                          </ul>
+                        </div>
+                        
                         <button
                           onClick={() => {
                             setRemoteSignerMode("select")

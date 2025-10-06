@@ -34,6 +34,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuGroup,
 } from "@/components/ui/dropdown-menu"
 import { useTheme } from "@/lib/theme-provider"
 import { Input } from "@/components/ui/input"
@@ -764,210 +765,102 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   return (
     <ErrorBoundary>
       <div className="h-screen bg-background flex flex-col w-full">
-        {/* Clean Professional Header */}
-        <div className="bg-white dark:bg-card border-b border-border px-6 py-4">
-          <div className="flex items-center justify-between max-w-7xl mx-auto">
-            {/* Left side - Logo and status */}
-            <div className="flex items-center gap-4">
-              <Button
-                onClick={() => setIsMobileSidebarOpen(true)}
-                variant="ghost"
-                size="sm"
-                className="md:hidden"
-              >
-                <Menu className="w-4 h-4" />
-              </Button>
-              
-              <h1 className="text-xl font-bold text-foreground">Nostr Journal</h1>
-              <div className="hidden sm:flex items-center gap-3 text-sm text-muted-foreground">
-                <span>{notes.length} notes</span>
-                <span>•</span>
-                <span className="capitalize">{authData.authMethod}</span>
-              </div>
-              
-              <div className="hidden md:flex items-center gap-2">
-                {getSyncStatusIcon()}
-                <span className="text-xs text-muted-foreground">{getSyncStatusText()}</span>
-                {syncStatus !== "syncing" && (
-                  <Button
-                    onClick={handleManualSync}
-                    variant="ghost"
-                    size="sm"
-                    className="p-1"
-                    title="Manual sync"
-                  >
-                    <RefreshCw className="w-3 h-3" />
-                  </Button>
-                )}
-                {notes.some((n) => n.syncStatus === "error") && (
-                  <Button
-                    onClick={retrySyncFailedNotes}
-                    variant="ghost"
-                    size="sm"
-                    className="text-red-500 hover:text-red-700 p-1"
-                    title={`Retry ${notes.filter((n) => n.syncStatus === "error").length} failed syncs`}
-                  >
-                    <RefreshCw className="w-3 h-3" />
-                    <span className="text-xs ml-1">{notes.filter((n) => n.syncStatus === "error").length}</span>
-                  </Button>
-                )}
-              </div>
-
-              {/* Connection Status */}
-              <ConnectionStatus onRetry={retryConnection} className="text-xs" />
-
-              {/* Connection Error Display */}
-              {connectionError && (
-                <div className="flex items-center gap-1 text-red-500 text-xs">
-                  <AlertCircle className="w-3 h-3" />
-                  <span className="truncate max-w-xs">{connectionError}</span>
-                  <Button
-                    onClick={() => setShowDiagnostics(true)}
-                    variant="ghost"
-                    size="sm"
-                    className="h-4 px-1 text-xs text-red-500 hover:text-red-700"
-                  >
-                    Diagnose
-                  </Button>
+        {/* Clean Header */}
+        <header className="sticky top-0 z-50 bg-white/95 dark:bg-card/95 backdrop-blur-sm border-b border-border">
+          <div className="container-xl mx-auto px-4 py-3">
+            <div className="flex items-center justify-between">
+              {/* Left side */}
+              <div className="flex items-center gap-4">
+                {/* Mobile menu */}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="md:hidden"
+                  onClick={() => setIsMobileSidebarOpen(true)}
+                >
+                  <Menu className="w-4 h-4" />
+                </Button>
+                
+                {/* Logo */}
+                <div className="flex items-center gap-3">
+                  <h1 className="text-xl font-bold text-foreground">Nostr Journal</h1>
+                  <div className="hidden sm:flex items-center gap-2 text-xs text-muted-foreground">
+                    <span>{notes.length} notes</span>
+                    <span>•</span>
+                    <span className="capitalize">{authData.authMethod}</span>
+                  </div>
                 </div>
-              )}
-            </div>
-
-            {/* Right side buttons */}
-            <div className="flex items-center gap-2">
-              {/* Theme Toggle */}
-              <Button
-                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-                variant="ghost"
-                size="sm"
-                title="Toggle theme"
-              >
-                {theme === 'dark' ? (
-                  <Sun className="w-4 h-4" />
-                ) : (
-                  <Moon className="w-4 h-4" />
-                )}
-                <span className="hidden sm:inline ml-2 text-xs">Theme</span>
-              </Button>
-
-              {/* Relay Manager Dropdown */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    title="Edit Relays"
+              </div>
+              
+              {/* Right side */}
+              <div className="flex items-center gap-1">
+                {/* Sync status */}
+                <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-secondary/50 text-xs">
+                  {getSyncStatusIcon()}
+                  <span className="text-muted-foreground">{getSyncStatusText()}</span>
+                </div>
+                
+                {/* Theme toggle */}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                >
+                  {theme === 'dark' ? (
+                    <Sun className="w-4 h-4" />
+                  ) : (
+                    <Moon className="w-4 h-4" />
+                  )}
+                </Button>
+                
+                {/* Account dropdown (consolidated) */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="sm">
+                      <User className="w-4 h-4" />
+                      <span className="hidden sm:inline ml-2">Account</span>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent 
+                    align="end" 
+                    className="w-64 z-[100]"
+                    sideOffset={8}
                   >
-                    <Settings className="w-4 h-4" />
-                    <span className="hidden sm:inline ml-2 text-xs">Relays</span>
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-80 z-50">
-                  <DropdownMenuLabel>Nostr Relays ({relays.length})</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  <div className="max-h-48 overflow-y-auto px-2 py-1">
-                    {relays.map((relay) => (
-                      <div key={relay} className="flex items-center gap-2 py-1.5 px-2 hover:bg-muted rounded-md group">
-                        <span className="flex-1 text-xs font-mono truncate">{relay}</span>
-                        <Button
-                          onClick={() => handleRemoveRelay(relay)}
-                          variant="ghost"
-                          size="sm"
-                          className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 text-destructive hover:text-destructive hover:bg-destructive/10"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                  <DropdownMenuSeparator />
-                  <div className="px-2 py-2">
-                    <div className="flex gap-2">
-                      <Input
-                        type="text"
-                        value={newRelay}
-                        onChange={(e) => setNewRelay(e.target.value)}
-                        placeholder="wss://relay.example.com"
-                        className="h-8 text-xs"
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            handleAddRelay()
-                          }
-                        }}
-                      />
-                      <Button onClick={handleAddRelay} size="sm" className="h-8 w-8 p-0">
-                        <Plus className="h-3 w-3" />
-                      </Button>
+                    {/* Profile Section */}
+                    <div className="px-3 py-2 border-b border-border">
+                      <p className="text-sm font-medium">Nostr Profile</p>
+                      <p className="text-xs text-muted-foreground truncate mt-1 font-mono">
+                        {authData.pubkey.slice(0, 16)}...
+                      </p>
                     </div>
-                  </div>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => setShowRelayManager(true)}>
-                    <Settings className="w-3 h-3 mr-2" />
-                    Advanced Settings
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-
-              {/* Profile Dropdown */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    title="Profile"
-                  >
-                    <User className="w-4 h-4" />
-                    <span className="hidden sm:inline ml-2 text-xs">Profile</span>
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-72 z-50">
-                  <DropdownMenuLabel>Account</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  <div className="px-2 py-2 space-y-2">
-                    <div className="text-xs text-muted-foreground">
-                      Auth Method:{" "}
-                      <span className="text-foreground font-medium">
-                        {authData.authMethod === "extension"
-                          ? "Extension"
-                          : authData.authMethod === "remote"
-                            ? "Remote Signer"
-                            : "Private Key"}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Input type="text" value={npub} readOnly className="h-8 text-xs font-mono" />
-                      <Button
-                        onClick={handleCopyNpub}
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 w-8 p-0"
-                        title="Copy npub"
-                      >
-                        {copiedNpub ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
-                      </Button>
-                    </div>
-                  </div>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => setShowProfile(true)}>
-                    <User className="w-3 h-3 mr-2" />
-                    View Full Profile
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-
-              {/* Logout */}
-              <Button
-                onClick={handleLogout}
-                variant="ghost"
-                size="sm"
-                title="Logout"
-              >
-                <LogOut className="w-4 h-4" />
-                <span className="hidden sm:inline ml-2 text-xs">Logout</span>
-              </Button>
+                    
+                    <DropdownMenuGroup>
+                      <DropdownMenuItem onClick={() => setShowProfile(true)}>
+                        <User className="w-4 h-4 mr-2" />
+                        View Profile
+                      </DropdownMenuItem>
+                      
+                      <DropdownMenuItem onClick={() => setShowRelayManager(true)}>
+                        <Settings className="w-4 h-4 mr-2" />
+                        Manage Relays
+                      </DropdownMenuItem>
+                    </DropdownMenuGroup>
+                    
+                    <DropdownMenuSeparator />
+                    
+                    <DropdownMenuItem 
+                      onClick={handleLogout}
+                      className="text-destructive focus:text-destructive"
+                    >
+                      <LogOut className="w-4 h-4 mr-2" />
+                      Logout
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             </div>
           </div>
-        </div>
+        </header>
 
         <div className="flex flex-1 overflow-hidden">
           {/* Desktop Sidebar */}
