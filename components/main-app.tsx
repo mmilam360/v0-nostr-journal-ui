@@ -800,7 +800,17 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
 
         {showProfile && <ProfilePage authData={authData} onClose={() => setShowProfile(false)} />}
 
-        {showRelayManager && <RelayManager onClose={() => setShowRelayManager(false)} />}
+        {showRelayManager && (
+          <RelayManager 
+            onClose={() => setShowRelayManager(false)}
+            onSave={(relays) => {
+              console.log("[v0] 🔄 Relays updated:", relays)
+              setShowRelayManager(false)
+              // Clear relay cache to force reload
+              localStorage.removeItem("nostr_user_relays")
+            }}
+          />
+        )}
 
         {showDiagnostics && (
           <div className="fixed inset-0 z-50 bg-background">

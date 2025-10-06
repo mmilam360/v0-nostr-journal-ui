@@ -20,12 +20,25 @@ export function RelayManager({ onClose, onSave, initialRelays }: RelayManagerPro
 
   useEffect(() => {
     if (initialRelays && initialRelays.length > 0) {
-      setRelays(initialRelays)
+      // Handle both string arrays and Relay objects
+      const relayUrls = initialRelays.map(relay => 
+        typeof relay === 'string' ? relay : relay.url
+      )
+      setRelays(relayUrls)
     } else {
       const savedRelays = localStorage.getItem("nostr_user_relays")
       if (savedRelays) {
         try {
-          setRelays(JSON.parse(savedRelays))
+          const userRelays = JSON.parse(savedRelays)
+          if (userRelays && userRelays.length > 0) {
+            // Handle both string arrays and Relay objects
+            const relayUrls = userRelays.map((relay: any) => 
+              typeof relay === 'string' ? relay : relay.url
+            )
+            setRelays(relayUrls)
+          } else {
+            setRelays(getDefaultRelays())
+          }
         } catch {
           setRelays(getDefaultRelays())
         }
@@ -54,8 +67,15 @@ export function RelayManager({ onClose, onSave, initialRelays }: RelayManagerPro
   }
 
   const handleSave = () => {
+    // Convert string array back to Relay objects for login page compatibility
+    const relayObjects = relays.map(url => ({
+      url,
+      enabled: true,
+      status: "unknown" as const
+    }))
+    
     // Save to localStorage with the same key as login page
-    localStorage.setItem("nostr_user_relays", JSON.stringify(relays))
+    localStorage.setItem("nostr_user_relays", JSON.stringify(relayObjects))
     
     // Also save using the relay manager function
     saveRelays(relays)

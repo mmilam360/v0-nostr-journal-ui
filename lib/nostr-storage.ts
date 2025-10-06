@@ -172,11 +172,27 @@ async function getCurrentRelays(): Promise<string[]> {
       try {
         const userRelays = JSON.parse(savedRelays)
         if (userRelays && userRelays.length > 0) {
-          // Use user's relays but limit to 3 for speed
-          cachedRelays = userRelays.slice(0, 3)
-          lastRelayCheck = now
-          console.log("[v0] 🔄 Using user's saved relays:", cachedRelays)
-          return cachedRelays
+          // Handle both string arrays and Relay objects
+          const relayUrls = userRelays
+            .filter((relay: any) => {
+              // If it's a Relay object, check if it's enabled
+              if (typeof relay === 'object' && relay.url) {
+                return relay.enabled !== false
+              }
+              // If it's a string, include it
+              return typeof relay === 'string'
+            })
+            .map((relay: any) => 
+              typeof relay === 'string' ? relay : relay.url
+            )
+          
+          if (relayUrls.length > 0) {
+            // Use user's relays but limit to 3 for speed
+            cachedRelays = relayUrls.slice(0, 3)
+            lastRelayCheck = now
+            console.log("[v0] 🔄 Using user's saved relays:", cachedRelays)
+            return cachedRelays
+          }
         }
       } catch (error) {
         console.warn("[v0] ⚠️ Failed to parse saved relays:", error)

@@ -148,7 +148,7 @@ export async function getSmartRelayList(): Promise<string[]> {
 export function getRelays(): string[] {
   if (typeof window === "undefined") return RELAY_CONFIG.primary
   
-  const savedRelays = localStorage.getItem("nostr-journal-relays")
+  const savedRelays = localStorage.getItem("nostr_user_relays")
   if (savedRelays) {
     try {
       return JSON.parse(savedRelays)
@@ -165,7 +165,7 @@ export function saveRelays(relays: string[]): void {
   if (typeof window === "undefined") return
   
   try {
-    localStorage.setItem("nostr-journal-relays", JSON.stringify(relays))
+    localStorage.setItem("nostr_user_relays", JSON.stringify(relays))
     console.log("[v0] 💾 Saved relay configuration:", relays)
   } catch (error) {
     console.error("[v0] Failed to save relays:", error)
