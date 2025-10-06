@@ -3,6 +3,7 @@ import { useState, useEffect } from "react"
 import { LoginPage } from "@/components/login-page"
 import { MainApp } from "@/components/main-app"
 import type { AuthData } from "@/components/main-app"
+import { ErrorBoundary } from "@/components/error-boundary"
 
 const SESSION_KEY = "nostr_session"
 const SESSION_DURATION = 24 * 60 * 60 * 1000 // 24 hours in milliseconds
@@ -192,29 +193,31 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-900">
-      {isLoggedIn && authData ? (
-        <MainApp authData={authData} onLogout={handleLogout} />
-      ) : (
-        <div>
-          <LoginPage onLoginSuccess={handleLoginSuccess} />
-          {/* Debug button - remove this after testing */}
-          <div className="fixed bottom-4 right-4 z-50">
-            <button
-              onClick={() => {
-                console.log("=== DEBUG STATE ===")
-                console.log("isLoggedIn:", isLoggedIn)
-                console.log("authData:", authData)
-                console.log("localStorage session:", localStorage.getItem(SESSION_KEY))
-                console.log("==================")
-              }}
-              className="bg-red-600 hover:bg-red-700 text-white text-xs px-2 py-1 rounded"
-            >
-              Debug State
-            </button>
+    <ErrorBoundary>
+      <main className="min-h-screen bg-slate-900">
+        {isLoggedIn && authData ? (
+          <MainApp authData={authData} onLogout={handleLogout} />
+        ) : (
+          <div>
+            <LoginPage onLoginSuccess={handleLoginSuccess} />
+            {/* Debug button - remove this after testing */}
+            <div className="fixed bottom-4 right-4 z-50">
+              <button
+                onClick={() => {
+                  console.log("=== DEBUG STATE ===")
+                  console.log("isLoggedIn:", isLoggedIn)
+                  console.log("authData:", authData)
+                  console.log("localStorage session:", localStorage.getItem(SESSION_KEY))
+                  console.log("==================")
+                }}
+                className="bg-red-600 hover:bg-red-700 text-white text-xs px-2 py-1 rounded"
+              >
+                Debug State
+              </button>
+            </div>
           </div>
-        </div>
-      )}
-    </main>
+        )}
+      </main>
+    </ErrorBoundary>
   )
 }

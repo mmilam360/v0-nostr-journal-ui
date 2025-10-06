@@ -13,9 +13,10 @@ import ProfilePage from "@/components/profile-page"
 import { Button } from "@/components/ui/button"
 import { saveEncryptedNotes, loadEncryptedNotes } from "@/lib/nostr-crypto"
 import { createNostrEvent, publishToNostr } from "@/lib/nostr-publish"
-import { syncNotes } from "@/lib/nostr-storage"
 import { cleanupSigner } from "@/lib/signer-manager"
 import { smartSyncNotes, saveAndSyncNote } from "@/lib/nostr-sync-fixed"
+import { sanitizeNotes } from "@/lib/data-validators"
+import { ErrorBoundary } from "@/components/error-boundary"
 import { RelayManager } from "@/components/relay-manager"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { ConnectionStatus } from "@/components/connection-status"
@@ -130,67 +131,91 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
 
       try {
         // Load from local storage first
-        const localNotes = await loadEncryptedNotes(authData.pubkey)
-        console.log("[v0] Loaded", localNotes.length, "local notes")
+        const rawLocalNotes = await loadEncryptedNotes(authData.pubkey)
+        console.log("[v0] Raw local notes loaded:", rawLocalNotes.length)
 
-        const notesWithStatus = localNotes.map((note) => ({
+        // CRITICAL: Validate and sanitize all notes
+        const validatedNotes = sanitizeNotes(rawLocalNotes)
+        console.log("[v0] Validated notes:", validatedNotes.length)
+
+        const notesWithStatus = validatedNotes.map((note) => ({
           ...note,
           syncStatus: note.syncStatus || ("local" as const),
         }))
 
         // CRITICAL: Show local notes immediately (don't wait for sync)
         setNotes(notesWithStatus)
-        setIsLoading(false)
-
+        
         // Extract tags
         const allTags = new Set<string>()
         notesWithStatus.forEach((note) => {
           note.tags.forEach((tag) => allTags.add(tag))
         })
         setTags(Array.from(allTags))
-
-        // Now sync in background
-        console.log("[v0] Starting background sync...")
-        const syncResult = await smartSyncNotes(notesWithStatus, deletedNotes, authData)
-
-        // Update with synced notes
-        setNotes(syncResult.notes)
-        setDeletedNotes(syncResult.deletedNotes)
-        setSyncStatus(syncResult.synced ? "synced" : "error")
-        setConnectionError(syncResult.errors.length > 0 ? syncResult.errors[0] : null)
         
-        if (syncResult.synced) {
-          setLastSyncTime(new Date())
+        setIsLoading(false)
+
+        // Now sync in background (with error protection)
+        console.log("[v0] Starting background sync...")
+        
+        try {
+          const syncResult = await smartSyncNotes(notesWithStatus, deletedNotes, authData)
+
+          // CRITICAL: Validate sync results before updating state
+          const validatedSyncNotes = sanitizeNotes(syncResult.notes)
+          
+          // CRITICAL: Only update if we got valid notes
+          if (validatedSyncNotes.length > 0 || notesWithStatus.length === 0) {
+            setNotes(validatedSyncNotes)
+            setDeletedNotes(syncResult.deletedNotes)
+            setSyncStatus(syncResult.synced ? "synced" : "error")
+            setConnectionError(syncResult.errors.length > 0 ? syncResult.errors[0] : null)
+            
+            if (syncResult.synced) {
+              setLastSyncTime(new Date())
+              // Save synced state to local storage
+              await saveEncryptedNotes(authData.pubkey, validatedSyncNotes)
+            }
+
+            // Update tags again
+            const finalTags = new Set<string>()
+            validatedSyncNotes.forEach((note) => {
+              note.tags.forEach((tag) => finalTags.add(tag))
+            })
+            setTags(Array.from(finalTags))
+
+            console.log("[v0] Initial load complete:", {
+              total: validatedSyncNotes.length,
+              synced: syncResult.syncedCount,
+              failed: syncResult.failedCount
+            })
+          } else {
+            console.warn("[v0] Sync returned no valid notes, keeping local data")
+            setSyncStatus("error")
+            setConnectionError("Sync returned invalid data")
+          }
+
+        } catch (syncError) {
+          console.error("[v0] Background sync failed, keeping local notes:", syncError)
+          setSyncStatus("error")
+          setConnectionError(syncError instanceof Error ? syncError.message : "Sync failed")
+          // CRITICAL: Keep the local notes we already loaded
         }
-
-        // Save synced state to local storage
-        await saveEncryptedNotes(authData.pubkey, syncResult.notes)
-
-        // Update tags again (in case sync brought new tags)
-        const finalTags = new Set<string>()
-        syncResult.notes.forEach((note) => {
-          note.tags.forEach((tag) => finalTags.add(tag))
-        })
-        setTags(Array.from(finalTags))
-
-        console.log("[v0] Initial load complete:", {
-          total: syncResult.notes.length,
-          synced: syncResult.syncedCount,
-          failed: syncResult.failedCount
-        })
 
       } catch (error) {
         console.error("[v0] Error loading notes:", error)
         setSyncStatus("error")
-        setConnectionError(error instanceof Error ? error.message : "Unknown error occurred")
+        setConnectionError(error instanceof Error ? error.message : "Failed to load notes")
         setIsLoading(false)
+        // CRITICAL: Set empty array instead of leaving undefined
+        setNotes([])
       }
     }
 
     if (authData.pubkey) {
       loadUserNotes()
     }
-  }, [authData]) // Updated to use the entire authData object
+  }, [authData.pubkey]) // Only depend on pubkey, not entire authData object
 
   useEffect(() => {
     const syncInterval = setInterval(async () => {
@@ -200,15 +225,16 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       setSyncStatus("syncing")
 
       try {
-        const syncResult = await syncNotes(notes, deletedNotes, authData)
+        const syncResult = await smartSyncNotes(notes, deletedNotes, authData)
 
-        if (
-          JSON.stringify(syncResult.notes) !== JSON.stringify(notes) ||
-          JSON.stringify(syncResult.deletedNotes) !== JSON.stringify(deletedNotes)
-        ) {
+        // Validate results
+        const validatedNotes = sanitizeNotes(syncResult.notes)
+
+        // Only update if we got different valid data
+        if (validatedNotes.length > 0 && JSON.stringify(validatedNotes) !== JSON.stringify(notes)) {
           console.log("[v0] Background sync found changes")
 
-          const syncedNotes = syncResult.notes.map((note) => ({
+          const syncedNotes = validatedNotes.map((note) => ({
             ...note,
             syncStatus: syncResult.synced ? ("synced" as const) : ("error" as const),
           }))
@@ -228,13 +254,14 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     }, 60000)
 
     return () => clearInterval(syncInterval)
-  }, [syncStatus, needsSync, authData, notes, deletedNotes])
+  }, [syncStatus, needsSync]) // Removed notes/deletedNotes from deps to prevent loops
 
   useEffect(() => {
     if (!isLoading && needsSync && syncStatus !== "syncing") {
       const saveNotes = async () => {
         console.log("[v0] Triggering sync after changes...")
 
+        // Save locally first (instant feedback)
         await saveEncryptedNotes(authData.pubkey, notes)
 
         if (notes.length > 0 || deletedNotes.length > 0) {
@@ -249,15 +276,15 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
             )
 
             console.log("[v0] Syncing changes to Nostr...")
-            const result = await syncNotes(notes, deletedNotes, authData)
+            const result = await smartSyncNotes(notes, deletedNotes, authData)
 
-            if (
-              JSON.stringify(result.notes) !== JSON.stringify(notes) ||
-              JSON.stringify(result.deletedNotes) !== JSON.stringify(deletedNotes)
-            ) {
+            // Validate results
+            const validatedNotes = sanitizeNotes(result.notes)
+
+            if (validatedNotes.length > 0 && JSON.stringify(validatedNotes) !== JSON.stringify(notes)) {
               console.log("[v0] Sync returned changes, updating state")
 
-              const syncedNotes = result.notes.map((note) => ({
+              const syncedNotes = validatedNotes.map((note) => ({
                 ...note,
                 syncStatus: result.synced ? ("synced" as const) : ("error" as const),
               }))
@@ -289,7 +316,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       const timeoutId = setTimeout(saveNotes, 2000)
       return () => clearTimeout(timeoutId)
     }
-  }, [needsSync, authData, isLoading, syncStatus, deletedNotes, notes])
+  }, [needsSync, isLoading, syncStatus]) // Removed notes/deletedNotes to prevent loops
 
   const handleCreateNote = async () => {
     console.log("[v0] Creating new note...")
@@ -557,24 +584,38 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   }
 
   const handleManualSync = async () => {
+    console.log("[v0] Manual sync requested")
     setSyncStatus("syncing")
+    
     try {
-      const syncResult = await syncNotes(notes, deletedNotes, authData)
+      const syncResult = await smartSyncNotes(notes, deletedNotes, authData)
 
-      const syncedNotes = syncResult.notes.map((note) => ({
-        ...note,
-        syncStatus: syncResult.synced ? ("synced" as const) : ("error" as const),
-      }))
+      // Validate results
+      const validatedNotes = sanitizeNotes(syncResult.notes)
 
-      setNotes(syncedNotes)
-      setDeletedNotes(syncResult.deletedNotes)
-      setSyncStatus(syncResult.synced ? "synced" : "error")
-      if (syncResult.synced) {
-        setLastSyncTime(new Date())
+      if (validatedNotes.length > 0) {
+        const syncedNotes = validatedNotes.map((note) => ({
+          ...note,
+          syncStatus: syncResult.synced ? ("synced" as const) : ("error" as const),
+        }))
+
+        setNotes(syncedNotes)
+        setDeletedNotes(syncResult.deletedNotes)
+        setSyncStatus(syncResult.synced ? "synced" : "error")
+        
+        if (syncResult.synced) {
+          setLastSyncTime(new Date())
+          await saveEncryptedNotes(authData.pubkey, syncedNotes)
+        }
+        
+        setConnectionError(syncResult.errors.length > 0 ? syncResult.errors[0] : null)
+      } else {
+        throw new Error("Sync returned no valid notes")
       }
     } catch (error) {
       console.error("[v0] Manual sync failed:", error)
       setSyncStatus("error")
+      setConnectionError(error instanceof Error ? error.message : "Manual sync failed")
     }
   }
 
@@ -593,7 +634,8 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   }
 
   return (
-    <div className="h-screen bg-background flex flex-col w-full">
+    <ErrorBoundary>
+      <div className="h-screen bg-background flex flex-col w-full">
       <div className="bg-card border-b border-border px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Button
@@ -831,5 +873,6 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
 
       <DonationBubble />
     </div>
+    </ErrorBoundary>
   )
 }
