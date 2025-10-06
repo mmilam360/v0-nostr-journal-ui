@@ -22,7 +22,7 @@ export function RelayManager({ onClose, onSave, initialRelays }: RelayManagerPro
     if (initialRelays && initialRelays.length > 0) {
       setRelays(initialRelays)
     } else {
-      const savedRelays = localStorage.getItem("nostr-journal-relays")
+      const savedRelays = localStorage.getItem("nostr_user_relays")
       if (savedRelays) {
         try {
           setRelays(JSON.parse(savedRelays))
@@ -54,7 +54,12 @@ export function RelayManager({ onClose, onSave, initialRelays }: RelayManagerPro
   }
 
   const handleSave = () => {
+    // Save to localStorage with the same key as login page
+    localStorage.setItem("nostr_user_relays", JSON.stringify(relays))
+    
+    // Also save using the relay manager function
     saveRelays(relays)
+    
     if (onSave) {
       onSave(relays)
     }

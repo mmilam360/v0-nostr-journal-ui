@@ -157,7 +157,7 @@ async function decryptNote(encryptedData: string, authData: any): Promise<Decryp
   }
 }
 
-// Get current relay list with caching
+// Get current relay list with caching and user preferences
 async function getCurrentRelays(): Promise<string[]> {
   const now = Date.now()
   
@@ -166,6 +166,24 @@ async function getCurrentRelays(): Promise<string[]> {
   }
   
   try {
+    // First try to get user's saved relay preferences
+    const savedRelays = localStorage.getItem("nostr_user_relays")
+    if (savedRelays) {
+      try {
+        const userRelays = JSON.parse(savedRelays)
+        if (userRelays && userRelays.length > 0) {
+          // Use user's relays but limit to 3 for speed
+          cachedRelays = userRelays.slice(0, 3)
+          lastRelayCheck = now
+          console.log("[v0] 🔄 Using user's saved relays:", cachedRelays)
+          return cachedRelays
+        }
+      } catch (error) {
+        console.warn("[v0] ⚠️ Failed to parse saved relays:", error)
+      }
+    }
+    
+    // Fallback to smart relay selection
     cachedRelays = await getSmartRelayList()
     lastRelayCheck = now
     console.log("[v0] 🔄 Updated relay list:", cachedRelays)

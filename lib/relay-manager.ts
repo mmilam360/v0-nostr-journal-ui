@@ -141,7 +141,7 @@ export async function getSmartRelayList(): Promise<string[]> {
     ...RELAY_CONFIG.fallback.filter(relay => !healthyRelays.includes(relay))
   ]
   
-  return smartList.slice(0, 6) // Limit to 6 relays for performance
+  return smartList.slice(0, 3) // Limit to 3 relays for faster sync
 }
 
 // Legacy function for backward compatibility

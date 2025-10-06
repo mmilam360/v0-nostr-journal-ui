@@ -39,13 +39,17 @@ export default function NoteList({ notes, selectedNote, onSelectNote, onCreateNo
   }
 
   const handleNoteClick = (note: Note) => {
+    console.log("[NoteList] Clicking note:", note.title, "syncStatus:", note.syncStatus)
+    
     // Check if note is currently syncing
     if (note.syncStatus === 'syncing') {
+      console.log("[NoteList] Note is syncing, showing warning popup")
       setShowSyncWarning(note.id)
       return
     }
     
     // Otherwise, select the note normally
+    console.log("[NoteList] Note not syncing, selecting normally")
     onSelectNote(note)
   }
 
