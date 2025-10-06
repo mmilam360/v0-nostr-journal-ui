@@ -35,10 +35,39 @@ export interface NotesData {
 async function encryptNote(note: DecryptedNote, authData: any): Promise<string> {
   const noteData = JSON.stringify(note)
 
-  // For remote signer, use remote encryption (user's actual key encrypting to themselves)
+  // For remote signer, use local encryption with pubkey-based key (same as extension)
+  // Remote signer doesn't expose private key for encryption, only for signing
   if (authData.authMethod === "remote") {
-    console.log("[v0] 🔐 Encrypting note with remote signer (NIP-04 to self)")
-    return await encryptWithRemote(noteData, authData.pubkey, authData)
+    console.log("[v0] 🔐 Encrypting note with local encryption (remote signer)")
+    // Use same encryption as extension - pubkey-based key
+    const encoder = new TextEncoder()
+    const encryptionKey = encoder.encode(authData.pubkey).slice(0, 32)
+    
+    const keyMaterial = await crypto.subtle.importKey("raw", encryptionKey.slice(0, 32), { name: "PBKDF2" }, false, [
+      "deriveKey",
+    ])
+
+    const key = await crypto.subtle.deriveKey(
+      {
+        name: "PBKDF2",
+        salt: encoder.encode("nostr-journal-self-encrypt"),
+        iterations: 100000,
+        hash: "SHA-256",
+      },
+      keyMaterial,
+      { name: "AES-GCM", length: 256 },
+      false,
+      ["encrypt"],
+    )
+
+    const iv = crypto.getRandomValues(new Uint8Array(12))
+    const encrypted = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, encoder.encode(noteData))
+
+    const combined = new Uint8Array(iv.length + encrypted.byteLength)
+    combined.set(iv)
+    combined.set(new Uint8Array(encrypted), iv.length)
+
+    return btoa(String.fromCharCode(...combined))
   }
 
   // For nsec/extension, use local encryption (existing code)
@@ -81,18 +110,7 @@ async function encryptNote(note: DecryptedNote, authData: any): Promise<string> 
 }
 
 async function decryptNote(encryptedData: string, authData: any): Promise<DecryptedNote> {
-  // For remote signer, use remote decryption
-  if (authData.authMethod === "remote") {
-    console.log("[v0] 🔓 Decrypting note with remote signer (NIP-04 from self)")
-    const decryptedData = await decryptWithRemote(encryptedData, authData.pubkey, authData)
-    const noteData = JSON.parse(decryptedData)
-
-    return {
-      ...noteData,
-      createdAt: new Date(noteData.createdAt),
-      lastModified: noteData.lastModified ? new Date(noteData.lastModified) : new Date(noteData.createdAt),
-    }
-  }
+  // All auth methods now use local decryption (remote signer uses same as extension)
 
   // For nsec/extension, use local decryption (existing code)
   const decoder = new TextDecoder()
