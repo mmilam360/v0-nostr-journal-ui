@@ -13,9 +13,9 @@ interface TagsPanelProps {
 
 export default function TagsPanel({ tags, selectedTag, onSelectTag, pubkey, onLogout }: TagsPanelProps) {
   return (
-    <div className="w-64 bg-slate-800 border-r border-slate-700 flex flex-col">
+    <div className="w-64 bg-card border-r border-border flex flex-col h-full">
       {pubkey && onLogout && (
-        <div className="border-b border-slate-700">
+        <div className="border-b border-border">
           <UserMenu pubkey={pubkey} onLogout={onLogout} />
         </div>
       )}
@@ -24,7 +24,9 @@ export default function TagsPanel({ tags, selectedTag, onSelectTag, pubkey, onLo
         <button
           onClick={() => onSelectTag("all")}
           className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors ${
-            selectedTag === "all" ? "bg-slate-700 text-white" : "text-slate-400 hover:text-white hover:bg-slate-700"
+            selectedTag === "all"
+              ? "bg-accent text-accent-foreground"
+              : "text-muted-foreground hover:text-foreground hover:bg-muted"
           }`}
         >
           <Inbox className="w-4 h-4" />
@@ -34,7 +36,9 @@ export default function TagsPanel({ tags, selectedTag, onSelectTag, pubkey, onLo
         <button
           onClick={() => onSelectTag("trash")}
           className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors ${
-            selectedTag === "trash" ? "bg-slate-700 text-white" : "text-slate-400 hover:text-white hover:bg-slate-700"
+            selectedTag === "trash"
+              ? "bg-accent text-accent-foreground"
+              : "text-muted-foreground hover:text-foreground hover:bg-muted"
           }`}
         >
           <Trash2 className="w-4 h-4" />
@@ -43,18 +47,20 @@ export default function TagsPanel({ tags, selectedTag, onSelectTag, pubkey, onLo
       </div>
 
       <div className="px-4 py-2">
-        <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">TAGS</h3>
+        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">TAGS</h3>
 
         <div className="space-y-1">
           {tags.length === 0 ? (
-            <p className="text-slate-500 text-sm px-3 py-2">No tags created.</p>
+            <p className="text-muted-foreground text-sm px-3 py-2">No tags created.</p>
           ) : (
             tags.map((tag) => (
               <button
                 key={tag}
                 onClick={() => onSelectTag(tag)}
                 className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors ${
-                  selectedTag === tag ? "bg-slate-700 text-white" : "text-slate-400 hover:text-white hover:bg-slate-700"
+                  selectedTag === tag
+                    ? "bg-accent text-accent-foreground"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted"
                 }`}
               >
                 <Hash className="w-4 h-4" />

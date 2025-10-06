@@ -53,77 +53,78 @@ button {
   overflow-x: hidden;
 }
 
-/* Updated color scheme to "Crisp Paper" theme for light mode - high contrast and clarity */
+/* Updated color scheme to match Nostr Journal logo - blue primary with clean neutrals */
 :root {
-  --background: 252 252 253; /* Cool, almost white background */
-  --foreground: 36 38 41; /* Very dark, near-black text for max readability */
-  --card: 255 255 255; /* Pure white cards for separation */
-  --card-foreground: 36 38 41;
+  /* Light mode - Clean and crisp with blue accents from logo */
+  --background: 250 251 252; /* Very light blue-gray background */
+  --foreground: 15 23 42; /* Deep slate for text */
+  --card: 255 255 255; /* Pure white cards */
+  --card-foreground: 15 23 42;
   --popover: 255 255 255;
-  --popover-foreground: 36 38 41;
-  --primary: 99 102 241; /* Indigo from logo - strong, clear, accessible */
-  --primary-foreground: 252 252 253;
-  --secondary: 241 242 243;
-  --secondary-foreground: 36 38 41;
-  --muted: 241 242 243;
-  --muted-foreground: 100 108 120; /* Darker muted text for better contrast */
-  --accent: 245 243 255; /* A very light, subtle blue accent */
-  --accent-foreground: 55 48 163;
+  --popover-foreground: 15 23 42;
+  --primary: 37 99 235; /* Vibrant blue matching logo */
+  --primary-foreground: 255 255 255;
+  --secondary: 241 245 249;
+  --secondary-foreground: 15 23 42;
+  --muted: 241 245 249;
+  --muted-foreground: 100 116 139;
+  --accent: 219 234 254; /* Light blue accent */
+  --accent-foreground: 30 64 175;
   --destructive: 239 68 68;
-  --destructive-foreground: 252 252 253;
-  --border: 220 222 224; /* Darker borders for clear separation */
-  --input: 220 222 224;
-  --ring: 99 102 241;
-  --chart-1: 99 102 241;
-  --chart-2: 192 160 96;
-  --chart-3: 36 38 41;
-  --chart-4: 220 222 224;
-  --chart-5: 252 252 253;
-  --radius: 0.625rem;
-  --sidebar: 252 252 253;
-  --sidebar-foreground: 36 38 41;
-  --sidebar-primary: 99 102 241;
-  --sidebar-primary-foreground: 252 252 253;
-  --sidebar-accent: 241 242 243;
-  --sidebar-accent-foreground: 36 38 41;
-  --sidebar-border: 220 222 224;
-  --sidebar-ring: 99 102 241;
+  --destructive-foreground: 255 255 255;
+  --border: 226 232 240;
+  --input: 226 232 240;
+  --ring: 37 99 235;
+  --chart-1: 37 99 235;
+  --chart-2: 59 130 246;
+  --chart-3: 147 197 253;
+  --chart-4: 226 232 240;
+  --chart-5: 241 245 249;
+  --radius: 0.5rem;
+  --sidebar: 255 255 255;
+  --sidebar-foreground: 15 23 42;
+  --sidebar-primary: 37 99 235;
+  --sidebar-primary-foreground: 255 255 255;
+  --sidebar-accent: 241 245 249;
+  --sidebar-accent-foreground: 15 23 42;
+  --sidebar-border: 226 232 240;
+  --sidebar-ring: 37 99 235;
 }
 
-/* Updated color scheme to "Focused Ink" theme for dark mode - soft, comfortable, and consistent */
+/* Dark mode - Sophisticated dark with blue accents */
 .dark {
-  --background: 36 38 41; /* A very dark, soft slate-blue */
-  --foreground: 238 239 240; /* Soft, light gray text (not pure white) */
-  --card: 43 46 50; /* Slightly lighter cards for depth */
-  --card-foreground: 238 239 240;
-  --popover: 43 46 50;
-  --popover-foreground: 238 239 240;
-  --primary: 147 149 255; /* Indigo from logo - vibrant but not overly bright */
-  --primary-foreground: 36 38 41;
-  --secondary: 60 64 70;
-  --secondary-foreground: 238 239 240;
-  --muted: 60 64 70;
-  --muted-foreground: 148 153 160;
-  --accent: 60 64 70;
-  --accent-foreground: 238 239 240;
+  --background: 15 23 42; /* Deep slate background */
+  --foreground: 241 245 249; /* Light text */
+  --card: 30 41 59; /* Slightly lighter cards */
+  --card-foreground: 241 245 249;
+  --popover: 30 41 59;
+  --popover-foreground: 241 245 249;
+  --primary: 59 130 246; /* Bright blue for dark mode */
+  --primary-foreground: 255 255 255;
+  --secondary: 51 65 85;
+  --secondary-foreground: 241 245 249;
+  --muted: 51 65 85;
+  --muted-foreground: 148 163 184;
+  --accent: 30 58 138; /* Deep blue accent */
+  --accent-foreground: 191 219 254;
   --destructive: 239 68 68;
-  --destructive-foreground: 238 239 240;
-  --border: 72 76 82; /* Clearly visible but soft borders */
-  --input: 72 76 82;
-  --ring: 147 149 255;
-  --chart-1: 147 149 255;
-  --chart-2: 192 160 96;
-  --chart-3: 238 239 240;
-  --chart-4: 72 76 82;
-  --chart-5: 36 38 41;
-  --sidebar: 36 38 41;
-  --sidebar-foreground: 238 239 240;
-  --sidebar-primary: 147 149 255;
-  --sidebar-primary-foreground: 36 38 41;
-  --sidebar-accent: 60 64 70;
-  --sidebar-accent-foreground: 238 239 240;
-  --sidebar-border: 72 76 82;
-  --sidebar-ring: 147 149 255;
+  --destructive-foreground: 241 245 249;
+  --border: 51 65 85;
+  --input: 51 65 85;
+  --ring: 59 130 246;
+  --chart-1: 59 130 246;
+  --chart-2: 96 165 250;
+  --chart-3: 147 197 253;
+  --chart-4: 51 65 85;
+  --chart-5: 30 41 59;
+  --sidebar: 15 23 42;
+  --sidebar-foreground: 241 245 249;
+  --sidebar-primary: 59 130 246;
+  --sidebar-primary-foreground: 255 255 255;
+  --sidebar-accent: 51 65 85;
+  --sidebar-accent-foreground: 241 245 249;
+  --sidebar-border: 51 65 85;
+  --sidebar-ring: 59 130 246;
 }
 
 @theme inline {

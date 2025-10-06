@@ -23,7 +23,6 @@ import Editor from "@/components/editor"
 import PublishModal from "@/components/publish-modal"
 import PublishConfirmationModal from "@/components/publish-confirmation-modal"
 import DeleteConfirmationModal from "@/components/delete-confirmation-modal"
-import DonationBubble from "@/components/donation-bubble"
 import ProfilePage from "@/components/profile-page"
 import { Button } from "@/components/ui/button"
 import {
@@ -35,6 +34,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
+import DonationBubble from "@/components/donation-bubble"
 import { saveEncryptedNotes, loadEncryptedNotes } from "@/lib/nostr-crypto"
 import { createNostrEvent, publishToNostr } from "@/lib/nostr-publish"
 import { cleanupSigner } from "@/lib/signer-manager"
@@ -42,10 +42,9 @@ import { smartSyncNotes, saveAndSyncNote } from "@/lib/nostr-sync-fixed"
 import { sanitizeNotes } from "@/lib/data-validators"
 import { ErrorBoundary } from "@/components/error-boundary"
 import { RelayManager } from "@/components/relay-manager"
-import { ThemeToggle } from "@/components/theme-toggle"
 import { ConnectionStatus } from "@/components/connection-status"
 import { DiagnosticPage } from "@/components/diagnostic-page"
-import UserMenu from "@/components/user-menu"
+import { getDefaultRelays } from "@/lib/relay-manager"
 
 export interface Note {
   id: string
@@ -63,12 +62,12 @@ export interface AuthData {
   pubkey: string
   authMethod: "extension" | "nsec" | "remote"
   nsec?: string
-  privateKey?: string  // Hex string of private key (for nsec method)
+  privateKey?: string // Hex string of private key (for nsec method)
   signer?: any
-  clientSecretKey?: Uint8Array  // For remote signer
-  bunkerPubkey?: string  // For remote signer
-  bunkerUri?: string  // For remote signer
-  relays?: string[]  // For remote signer
+  clientSecretKey?: Uint8Array // For remote signer
+  bunkerPubkey?: string // For remote signer
+  bunkerUri?: string // For remote signer
+  relays?: string[] // For remote signer
 }
 
 interface MainAppProps {
@@ -106,15 +105,15 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     console.log("[v0] 🔄 Retrying connection...")
     setConnectionError(null)
     setSyncStatus("syncing")
-    
+
     try {
       const syncResult = await smartSyncNotes(notes, deletedNotes, authData)
-      
+
       setNotes(syncResult.notes)
       setDeletedNotes(syncResult.deletedNotes)
       setSyncStatus(syncResult.synced ? "synced" : "error")
       setConnectionError(syncResult.errors.length > 0 ? syncResult.errors[0] : null)
-      
+
       if (syncResult.synced) {
         setLastSyncTime(new Date())
       }
@@ -126,8 +125,8 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   }
 
   const retrySyncFailedNotes = async () => {
-    const failedNotes = notes.filter(n => n.syncStatus === 'error')
-    
+    const failedNotes = notes.filter((n) => n.syncStatus === "error")
+
     if (failedNotes.length === 0) {
       return
     }
@@ -138,10 +137,13 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     for (const note of failedNotes) {
       try {
         const result = await saveAndSyncNote(note, authData)
-        setNotes(notes.map(n => n.id === note.id ? result.note : n))
-        
+        setNotes(notes.map((n) => (n.id === note.id ? result.note : n)))
+
         if (result.success) {
-          await saveEncryptedNotes(authData.pubkey, notes.map(n => n.id === note.id ? result.note : n))
+          await saveEncryptedNotes(
+            authData.pubkey,
+            notes.map((n) => (n.id === note.id ? result.note : n)),
+          )
         }
       } catch (error) {
         console.error("[v0] Retry failed for:", note.title, error)
@@ -174,32 +176,32 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
 
         // CRITICAL: Show local notes immediately (don't wait for sync)
         setNotes(notesWithStatus)
-        
+
         // Extract tags
         const allTags = new Set<string>()
         notesWithStatus.forEach((note) => {
           note.tags.forEach((tag) => allTags.add(tag))
         })
         setTags(Array.from(allTags))
-        
+
         setIsLoading(false)
 
         // Now sync in background (with error protection)
         console.log("[v0] Starting background sync...")
-        
+
         try {
           const syncResult = await smartSyncNotes(notesWithStatus, deletedNotes, authData)
 
           // CRITICAL: Validate sync results before updating state
           const validatedSyncNotes = sanitizeNotes(syncResult.notes)
-          
+
           // CRITICAL: Only update if we got valid notes
           if (validatedSyncNotes.length > 0 || notesWithStatus.length === 0) {
             setNotes(validatedSyncNotes)
             setDeletedNotes(syncResult.deletedNotes)
             setSyncStatus(syncResult.synced ? "synced" : "error")
             setConnectionError(syncResult.errors.length > 0 ? syncResult.errors[0] : null)
-            
+
             if (syncResult.synced) {
               setLastSyncTime(new Date())
               // Save synced state to local storage
@@ -216,21 +218,19 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
             console.log("[v0] Initial load complete:", {
               total: validatedSyncNotes.length,
               synced: syncResult.syncedCount,
-              failed: syncResult.failedCount
+              failed: syncResult.failedCount,
             })
           } else {
             console.warn("[v0] Sync returned no valid notes, keeping local data")
             setSyncStatus("error")
             setConnectionError("Sync returned invalid data")
           }
-
         } catch (syncError) {
           console.error("[v0] Background sync failed, keeping local notes:", syncError)
           setSyncStatus("error")
           setConnectionError(syncError instanceof Error ? syncError.message : "Sync failed")
           // CRITICAL: Keep the local notes we already loaded
         }
-
       } catch (error) {
         console.error("[v0] Error loading notes:", error)
         setSyncStatus("error")
@@ -244,7 +244,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     if (authData.pubkey) {
       loadUserNotes()
     }
-  }, [authData.pubkey]) // Only depend on pubkey, not entire authData object
+  }, [authData]) // Only depend on pubkey, not entire authData object
 
   useEffect(() => {
     const syncInterval = setInterval(async () => {
@@ -275,6 +275,8 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
         setSyncStatus(syncResult.synced ? "synced" : "error")
         if (syncResult.synced) {
           setLastSyncTime(new Date())
+          // Save synced state to local storage
+          await saveEncryptedNotes(authData.pubkey, validatedNotes)
         }
       } catch (error) {
         console.error("[v0] Background sync failed:", error)
@@ -283,69 +285,76 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     }, 60000)
 
     return () => clearInterval(syncInterval)
-  }, [syncStatus, needsSync]) // Removed notes/deletedNotes from deps to prevent loops
+  }, [syncStatus, needsSync, authData, notes, deletedNotes]) // Removed notes/deletedNotes from deps to prevent loops
 
   useEffect(() => {
-    if (!isLoading && needsSync && syncStatus !== "syncing") {
-      const saveNotes = async () => {
-        console.log("[v0] Triggering sync after changes...")
+    const saveNotes = async () => {
+      console.log("[v0] Triggering sync after changes...")
 
-        // Save locally first (instant feedback)
-        await saveEncryptedNotes(authData.pubkey, notes)
+      // Save locally first (instant feedback)
+      await saveEncryptedNotes(authData.pubkey, notes)
 
-        if (notes.length > 0 || deletedNotes.length > 0) {
-          try {
-            setSyncStatus("syncing")
+      if (notes.length > 0 || deletedNotes.length > 0) {
+        try {
+          setSyncStatus("syncing")
 
-            setNotes((prev) =>
-              prev.map((note) => ({
-                ...note,
-                syncStatus: "syncing" as const,
-              })),
-            )
+          setNotes((prev) =>
+            prev.map((note) => ({
+              ...note,
+              syncStatus: "syncing" as const,
+            })),
+          )
 
-            console.log("[v0] Syncing changes to Nostr...")
-            const result = await smartSyncNotes(notes, deletedNotes, authData)
+          console.log("[v0] Syncing changes to Nostr...")
+          const result = await smartSyncNotes(notes, deletedNotes, authData)
 
-            // Validate results
-            const validatedNotes = sanitizeNotes(result.notes)
+          // Validate results
+          const validatedNotes = sanitizeNotes(result.notes)
 
-            if (validatedNotes.length > 0 && JSON.stringify(validatedNotes) !== JSON.stringify(notes)) {
-              console.log("[v0] Sync returned changes, updating state")
+          if (validatedNotes.length > 0 && JSON.stringify(validatedNotes) !== JSON.stringify(notes)) {
+            console.log("[v0] Sync returned changes, updating state")
 
-              const syncedNotes = validatedNotes.map((note) => ({
-                ...note,
-                syncStatus: result.synced ? ("synced" as const) : ("error" as const),
-              }))
+            const syncedNotes = validatedNotes.map((note) => ({
+              ...note,
+              syncStatus: result.synced ? ("synced" as const) : ("error" as const),
+            }))
 
-              setNotes(syncedNotes)
-              setDeletedNotes(result.deletedNotes)
-            }
-
-            setSyncStatus(result.synced ? "synced" : "error")
-            if (result.synced) {
-              setLastSyncTime(new Date())
-            }
-          } catch (error) {
-            console.error("[v0] Error syncing to Nostr:", error)
-            setSyncStatus("error")
-
-            setNotes((prev) =>
-              prev.map((note) => ({
-                ...note,
-                syncStatus: "error" as const,
-              })),
-            )
+            setNotes(syncedNotes)
+            setDeletedNotes(result.deletedNotes)
           }
-        }
 
-        setNeedsSync(false)
+          setSyncStatus(result.synced ? "synced" : "error")
+          if (result.synced) {
+            setLastSyncTime(new Date())
+          }
+        } catch (error) {
+          console.error("[v0] Error syncing to Nostr:", error)
+          setSyncStatus("error")
+
+          setNotes((prev) =>
+            prev.map((note) => ({
+              ...note,
+              syncStatus: "error" as const,
+            })),
+          )
+        }
       }
 
-      const timeoutId = setTimeout(saveNotes, 2000)
-      return () => clearTimeout(timeoutId)
+      setNeedsSync(false)
     }
-  }, [needsSync, isLoading, syncStatus]) // Removed notes/deletedNotes to prevent loops
+
+    let timeoutId: NodeJS.Timeout | null = null
+
+    if (!isLoading && needsSync && syncStatus !== "syncing") {
+      timeoutId = setTimeout(saveNotes, 2000)
+    }
+
+    return () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId)
+      }
+    }
+  }, [needsSync, isLoading, syncStatus, authData, notes, deletedNotes]) // Removed notes/deletedNotes to prevent loops
 
   const handleCreateNote = async () => {
     console.log("[v0] Creating new note...")
@@ -378,10 +387,10 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     // Sync to Nostr in background
     try {
       const result = await saveAndSyncNote(newNote, authData)
-      
+
       setNotes([result.note, ...notes])
       setSelectedNote(result.note)
-      
+
       if (result.success) {
         const syncedNotes = [result.note, ...notes]
         await saveEncryptedNotes(authData.pubkey, syncedNotes)
@@ -394,7 +403,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       const errorNote = {
         ...newNote,
         syncStatus: "error" as const,
-        syncError: error instanceof Error ? error.message : "Sync failed"
+        syncError: error instanceof Error ? error.message : "Sync failed",
       }
       setNotes([errorNote, ...notes])
       setSelectedNote(errorNote)
@@ -423,11 +432,11 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     // Sync to Nostr in background
     try {
       const result = await saveAndSyncNote(optimisticNote, authData)
-      
+
       // Update with final sync status
       setNotes(notes.map((note) => (note.id === updatedNote.id ? result.note : note)))
       setSelectedNote(result.note)
-      
+
       if (result.success) {
         // Save successful sync to local storage
         const syncedNotes = notes.map((note) => (note.id === updatedNote.id ? result.note : note))
@@ -442,7 +451,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       const errorNote = {
         ...optimisticNote,
         syncStatus: "error" as const,
-        syncError: error instanceof Error ? error.message : "Sync failed"
+        syncError: error instanceof Error ? error.message : "Sync failed",
       }
       setNotes(notes.map((note) => (note.id === updatedNote.id ? errorNote : note)))
       setSelectedNote(errorNote)
@@ -498,37 +507,28 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
 
   const handleLogout = async () => {
     console.log("[v0] User logging out, cleaning up signer connection...")
-    
+
     // Clean up the remote signer connection
     await cleanupSigner()
-    
+
     console.log("[v0] Notes will remain encrypted in storage")
     onLogout()
   }
 
   const handleDeleteNote = async (noteToDelete: Note) => {
     console.log("[v0] Delete requested for note:", noteToDelete.id)
-    
+
     // Show confirmation modal instead of deleting immediately
     setNoteToDelete(noteToDelete)
     setShowDeleteConfirmation(true)
   }
-
 
   const handleConfirmDelete = async () => {
     if (!noteToDelete) return
 
     console.log("[v0] Deleting note:", noteToDelete.id, noteToDelete.title)
 
-    // Step 1: Add to deleted notes FIRST (before UI update)
-    const deletedNote = {
-      id: noteToDelete.id,
-      deletedAt: new Date(),
-    }
-    const newDeletedNotes = [...deletedNotes, deletedNote]
-    setDeletedNotes(newDeletedNotes)
-
-    // Step 2: Optimistically update the UI IMMEDIATELY
+    // Step 1: Optimistically update the UI
     const updatedNotes = notes.filter((note) => note.id !== noteToDelete.id)
     console.log("[v0] Notes before delete:", notes.length, "after delete:", updatedNotes.length)
 
@@ -546,23 +546,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     })
     setTags(Array.from(allTags))
 
-    // Step 3: Save the updated state to localStorage IMMEDIATELY
-    try {
-      await saveEncryptedNotes(authData.pubkey, updatedNotes)
-      console.log("[v0] Saved updated notes to localStorage")
-    } catch (error) {
-      console.error("[v0] Failed to save to localStorage:", error)
-    }
-
-    // Step 4: Publish deletion event to Nostr (async, don't wait)
-    deleteNoteOnNostrAsync(noteToDelete, authData)
-
-    setShowDeleteConfirmation(false)
-    setNoteToDelete(null)
-  }
-
-  // Helper function to delete on Nostr asynchronously
-  const deleteNoteOnNostrAsync = async (noteToDelete: Note, authData: any) => {
+    // Step 2: Publish deletion event to Nostr
     try {
       console.log("[v0] Publishing NIP-09 deletion event to Nostr network...")
       const { deleteNoteOnNostr } = await import("@/lib/nostr-storage")
@@ -571,6 +555,18 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     } catch (error) {
       console.error("[v0] Failed to publish deletion event:", error)
     }
+
+    // Update deleted notes tracking
+    const deletedNote = {
+      id: noteToDelete.id,
+      deletedAt: new Date(),
+    }
+    setDeletedNotes([...deletedNotes, deletedNote])
+    setNeedsSync(true)
+    console.log("[v0] Delete completed, triggering sync")
+
+    setShowDeleteConfirmation(false)
+    setNoteToDelete(null)
   }
 
   const handleCancelDelete = () => {
@@ -627,7 +623,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   const handleManualSync = async () => {
     console.log("[v0] Manual sync requested")
     setSyncStatus("syncing")
-    
+
     try {
       const syncResult = await smartSyncNotes(notes, deletedNotes, authData)
 
@@ -643,12 +639,12 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
         setNotes(syncedNotes)
         setDeletedNotes(syncResult.deletedNotes)
         setSyncStatus(syncResult.synced ? "synced" : "error")
-        
+
         if (syncResult.synced) {
           setLastSyncTime(new Date())
           await saveEncryptedNotes(authData.pubkey, syncedNotes)
         }
-        
+
         setConnectionError(syncResult.errors.length > 0 ? syncResult.errors[0] : null)
       } else {
         throw new Error("Sync returned no valid notes")
@@ -723,10 +719,10 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
           const relayUrls = userRelays.map((relay: any) => (typeof relay === "string" ? relay : relay.url))
           setRelays(relayUrls)
         } catch {
-          setRelays(["wss://relay.damus.io", "wss://nos.lol", "wss://relay.nostr.band"])
+          setRelays(getDefaultRelays())
         }
       } else {
-        setRelays(["wss://relay.damus.io", "wss://nos.lol", "wss://relay.nostr.band"])
+        setRelays(getDefaultRelays())
       }
     }
 
@@ -751,89 +747,73 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   return (
     <ErrorBoundary>
       <div className="h-screen bg-background flex flex-col w-full">
-      <div className="bg-card border-b border-border px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Button
-            onClick={() => setIsMobileSidebarOpen(true)}
-            variant="ghost"
-            size="sm"
-            className="md:hidden text-muted-foreground hover:text-foreground hover:bg-muted"
-          >
-            <Menu className="w-4 h-4" />
-          </Button>
+        <div className="bg-card border-b border-border px-4 py-3 flex items-center justify-between shadow-sm">
+          <div className="flex items-center gap-3">
+            <Button
+              onClick={() => setIsMobileSidebarOpen(true)}
+              variant="ghost"
+              size="sm"
+              className="md:hidden text-muted-foreground hover:text-foreground hover:bg-muted"
+            >
+              <Menu className="w-4 h-4" />
+            </Button>
 
-          {/* Nostr Journal Logo */}
-          <div className="flex items-center gap-2">
-            <img 
-              src="/nostr-journal-logo.svg" 
-              alt="Nostr Journal" 
-              className="h-8 w-8 rounded-lg"
-              onError={(e) => {
-                // Fallback to placeholder if logo not found
-                e.currentTarget.src = "/placeholder-logo.png"
-              }}
-            />
-            <div className="hidden sm:block">
-              <h1 className="text-lg font-semibold text-foreground">Nostr Journal</h1>
-              <p className="text-xs text-muted-foreground">Your decentralized notes</p>
+            <span className="text-muted-foreground text-xs">({notes.length} notes)</span>
+            <span className="text-muted-foreground text-xs bg-muted px-2 py-1 rounded">
+              {authData.authMethod === "extension"
+                ? "Extension"
+                : authData.authMethod === "remote"
+                  ? "Remote Signer"
+                  : "Private Key"}
+            </span>
+
+            <div className="flex items-center gap-2">
+              {getSyncStatusIcon()}
+              <span className="text-muted-foreground text-xs hidden lg:inline">{getSyncStatusText()}</span>
+              {syncStatus !== "syncing" && (
+                <Button
+                  onClick={handleManualSync}
+                  variant="ghost"
+                  size="sm"
+                  className="text-muted-foreground hover:text-foreground hover:bg-muted p-1"
+                  title="Manual sync"
+                >
+                  <RefreshCw className="w-3 h-3" />
+                </Button>
+              )}
+              {notes.some((n) => n.syncStatus === "error") && (
+                <Button
+                  onClick={retrySyncFailedNotes}
+                  variant="ghost"
+                  size="sm"
+                  className="text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30 p-1"
+                  title={`Retry ${notes.filter((n) => n.syncStatus === "error").length} failed syncs`}
+                >
+                  <RefreshCw className="w-3 h-3" />
+                  <span className="text-xs ml-1">{notes.filter((n) => n.syncStatus === "error").length}</span>
+                </Button>
+              )}
             </div>
-          </div>
 
-          <span className="text-muted-foreground text-xs">({notes.length} notes)</span>
-          <span className="text-muted-foreground text-xs bg-muted px-2 py-1 rounded">
-            {authData.authMethod === "extension" ? "Extension" : authData.authMethod === "remote" ? "Remote" : "nsec"}
-          </span>
+            {/* Connection Status */}
+            <ConnectionStatus onRetry={retryConnection} className="text-xs" />
 
-          <div className="flex items-center gap-2">
-            {getSyncStatusIcon()}
-            <span className="text-muted-foreground text-xs hidden lg:inline">{getSyncStatusText()}</span>
-            {syncStatus !== "syncing" && (
-              <Button
-                onClick={handleManualSync}
-                variant="ghost"
-                size="sm"
-                className="text-muted-foreground hover:text-foreground hover:bg-muted p-1"
-                title="Manual sync"
-              >
-                <RefreshCw className="w-3 h-3" />
-              </Button>
-            )}
-            {notes.some(n => n.syncStatus === 'error') && (
-              <Button
-                onClick={retrySyncFailedNotes}
-                variant="ghost"
-                size="sm"
-                className="text-red-500 hover:text-red-700 hover:bg-red-50 p-1"
-                title={`Retry ${notes.filter(n => n.syncStatus === 'error').length} failed syncs`}
-              >
-                <RefreshCw className="w-3 h-3" />
-                <span className="text-xs ml-1">{notes.filter(n => n.syncStatus === 'error').length}</span>
-              </Button>
+            {/* Connection Error Display */}
+            {connectionError && (
+              <div className="flex items-center gap-1 text-red-500 text-xs">
+                <AlertCircle className="w-3 h-3" />
+                <span className="truncate max-w-xs">{connectionError}</span>
+                <Button
+                  onClick={() => setShowDiagnostics(true)}
+                  variant="ghost"
+                  size="sm"
+                  className="h-4 px-1 text-xs text-red-500 hover:text-red-700"
+                >
+                  Diagnose
+                </Button>
+              </div>
             )}
           </div>
-          
-          {/* Connection Status */}
-          <ConnectionStatus 
-            onRetry={retryConnection}
-            className="text-xs"
-          />
-          
-          {/* Connection Error Display */}
-          {connectionError && (
-            <div className="flex items-center gap-1 text-red-500 text-xs">
-              <AlertCircle className="w-3 h-3" />
-              <span className="truncate">{connectionError}</span>
-              <Button
-                onClick={() => setShowDiagnostics(true)}
-                variant="ghost"
-                size="sm"
-                className="h-4 px-1 text-xs text-red-500 hover:text-red-700"
-              >
-                Diagnose
-              </Button>
-            </div>
-          )}
-        </div>
 
           {/* Right side buttons */}
           <div className="flex items-center gap-2">
@@ -957,84 +937,63 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
               <span className="hidden md:inline ml-2 text-xs">Logout</span>
             </Button>
           </div>
-      </div>
-
-      <div className="flex flex-1 relative w-full">
-        <div className="hidden md:block">
-          <TagsPanel
-            tags={tags}
-            selectedTag={selectedTag}
-            onSelectTag={setSelectedTag}
-            pubkey={authData.pubkey}
-            onLogout={onLogout}
-          />
         </div>
 
-        {isMobileSidebarOpen && (
-          <div className="fixed inset-0 z-50 md:hidden">
-            <div className="absolute inset-0 bg-black bg-opacity-50" onClick={() => setIsMobileSidebarOpen(false)} />
-            <div className="absolute left-0 top-0 h-full w-64 bg-slate-800">
-              <div className="flex items-center justify-between p-4 border-b border-slate-700">
-                <h2 className="text-white font-medium">Menu</h2>
-                <Button
-                  onClick={() => setIsMobileSidebarOpen(false)}
-                  variant="ghost"
-                  size="sm"
-                  className="text-slate-400 hover:text-white"
-                >
-                  <X className="w-4 h-4" />
-                </Button>
+        <div className="flex flex-1 overflow-hidden">
+          {/* Desktop Sidebar */}
+          <div className="hidden md:block">
+            <TagsPanel
+              tags={tags}
+              selectedTag={selectedTag}
+              onSelectTag={setSelectedTag}
+              pubkey={authData.pubkey}
+              onLogout={handleLogout}
+            />
+          </div>
+
+          {/* Mobile Sidebar */}
+          {isMobileSidebarOpen && (
+            <div className="fixed inset-0 z-50 md:hidden">
+              <div className="absolute inset-0 bg-black bg-opacity-50" onClick={() => setIsMobileSidebarOpen(false)} />
+              <div className="absolute left-0 top-0 h-full w-64 bg-card border-r border-border shadow-xl">
+                <div className="flex items-center justify-between p-4 border-b border-border">
+                  <h2 className="text-foreground font-medium">Menu</h2>
+                  <Button
+                    onClick={() => setIsMobileSidebarOpen(false)}
+                    variant="ghost"
+                    size="sm"
+                    className="text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
+                <TagsPanel
+                  tags={tags}
+                  selectedTag={selectedTag}
+                  onSelectTag={(tag) => {
+                    setSelectedTag(tag)
+                    setIsMobileSidebarOpen(false)
+                  }}
+                  pubkey={authData.pubkey}
+                  onLogout={handleLogout}
+                />
               </div>
-              <TagsPanel
-                tags={tags}
-                selectedTag={selectedTag}
-                onSelectTag={(tag) => {
-                  setSelectedTag(tag)
-                  setIsMobileSidebarOpen(false)
-                }}
-                pubkey={authData.pubkey}
-                onLogout={onLogout}
+            </div>
+          )}
+
+          {/* Main content: Note List + Editor */}
+          <div className="flex flex-1 min-w-0">
+            <div className="w-full md:w-80 border-r border-border">
+              <NoteList
+                notes={filteredNotes}
+                selectedNote={selectedNote}
+                onSelectNote={setSelectedNote}
+                onCreateNote={handleCreateNote}
+                onDeleteNote={handleDeleteNote}
               />
             </div>
-          </div>
-        )}
 
-        <div className="flex flex-1 min-w-0 w-full">
-          <div className="w-full md:w-80 border-r border-border">
-            <NoteList
-              notes={filteredNotes}
-              selectedNote={selectedNote}
-              onSelectNote={setSelectedNote}
-              onCreateNote={handleCreateNote}
-              onDeleteNote={handleDeleteNote}
-            />
-          </div>
-
-          <div className="hidden lg:block flex-1 w-full">
-            <Editor
-              note={selectedNote}
-              onUpdateNote={handleUpdateNote}
-              onPublishNote={handlePublishNote}
-              onPublishHighlight={handlePublishHighlight}
-              onDeleteNote={handleDeleteNote}
-            />
-          </div>
-        </div>
-
-        {selectedNote && (
-          <div className="fixed inset-0 z-40 lg:hidden bg-slate-900">
-            <div className="h-full">
-              <div className="bg-card border-b border-border px-4 py-3 flex items-center justify-between">
-                <h2 className="text-foreground font-medium truncate">{selectedNote.title}</h2>
-                <Button
-                  onClick={() => setSelectedNote(null)}
-                  variant="ghost"
-                  size="sm"
-                  className="text-muted-foreground hover:text-foreground"
-                >
-                  <X className="w-4 h-4" />
-                </Button>
-              </div>
+            <div className="hidden lg:block flex-1">
               <Editor
                 note={selectedNote}
                 onUpdateNote={handleUpdateNote}
@@ -1044,7 +1003,35 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
               />
             </div>
           </div>
-        )}
+
+          {/* Mobile Editor Overlay */}
+          {selectedNote && (
+            <div className="fixed inset-0 z-40 lg:hidden bg-background">
+              <div className="h-full flex flex-col">
+                <div className="bg-card border-b border-border px-4 py-3 flex items-center justify-between shadow-sm">
+                  <h2 className="text-foreground font-medium truncate">{selectedNote.title}</h2>
+                  <Button
+                    onClick={() => setSelectedNote(null)}
+                    variant="ghost"
+                    size="sm"
+                    className="text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
+                <div className="flex-1 overflow-hidden">
+                  <Editor
+                    note={selectedNote}
+                    onUpdateNote={handleUpdateNote}
+                    onPublishNote={handlePublishNote}
+                    onPublishHighlight={handlePublishHighlight}
+                    onDeleteNote={handleDeleteNote}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
 
         {showPublishConfirmation && noteToPublish && (
           <PublishConfirmationModal
@@ -1063,7 +1050,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
         {showProfile && <ProfilePage authData={authData} onClose={() => setShowProfile(false)} />}
 
         {showRelayManager && (
-          <RelayManager 
+          <RelayManager
             onClose={() => setShowRelayManager(false)}
             onSave={(relays) => {
               console.log("[v0] 🔄 Relays updated:", relays)
@@ -1078,11 +1065,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
           <div className="fixed inset-0 z-50 bg-background">
             <div className="flex items-center justify-between p-4 border-b">
               <h2 className="text-lg font-semibold">Connection Diagnostics</h2>
-              <Button
-                onClick={() => setShowDiagnostics(false)}
-                variant="ghost"
-                size="sm"
-              >
+              <Button onClick={() => setShowDiagnostics(false)} variant="ghost" size="sm">
                 <X className="w-4 h-4" />
               </Button>
             </div>
@@ -1090,9 +1073,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
           </div>
         )}
       </div>
-
       <DonationBubble />
-    </div>
     </ErrorBoundary>
   )
 }

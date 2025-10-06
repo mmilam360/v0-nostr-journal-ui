@@ -4,7 +4,7 @@ import { NostrFetcher } from "nostr-fetch"
 import * as nostrTools from "nostr-tools"
 import type { DecryptedNote } from "./nostr-crypto"
 import { getSmartRelayList, getRelays } from "./relay-manager"
-import { encryptWithRemote, decryptWithRemote, signEventWithRemote } from "./signer-manager"
+import { signEventWithRemote } from "./signer-manager"
 
 // ===================================================================================
 // SMART RELAY MANAGEMENT: Dynamic relay selection with health checking
@@ -42,7 +42,7 @@ async function encryptNote(note: DecryptedNote, authData: any): Promise<string> 
     // Use same encryption as extension - pubkey-based key
     const encoder = new TextEncoder()
     const encryptionKey = encoder.encode(authData.pubkey).slice(0, 32)
-    
+
     const keyMaterial = await crypto.subtle.importKey("raw", encryptionKey.slice(0, 32), { name: "PBKDF2" }, false, [
       "deriveKey",
     ])
@@ -76,7 +76,7 @@ async function encryptNote(note: DecryptedNote, authData: any): Promise<string> 
 
   if (authData.authMethod === "nsec" && authData.privateKey) {
     encryptionKey = new Uint8Array(
-      authData.privateKey.match(/.{1,2}/g)?.map((byte: string) => Number.parseInt(byte, 16)) || []
+      authData.privateKey.match(/.{1,2}/g)?.map((byte: string) => Number.parseInt(byte, 16)) || [],
     )
   } else {
     encryptionKey = encoder.encode(authData.pubkey).slice(0, 32)
@@ -124,7 +124,7 @@ async function decryptNote(encryptedData: string, authData: any): Promise<Decryp
 
   if (authData.authMethod === "nsec" && authData.privateKey) {
     encryptionKey = new Uint8Array(
-      authData.privateKey.match(/.{1,2}/g)?.map((byte: string) => Number.parseInt(byte, 16)) || []
+      authData.privateKey.match(/.{1,2}/g)?.map((byte: string) => Number.parseInt(byte, 16)) || [],
     )
   } else {
     encryptionKey = encoder.encode(authData.pubkey).slice(0, 32)
@@ -160,11 +160,11 @@ async function decryptNote(encryptedData: string, authData: any): Promise<Decryp
 // Get current relay list with caching and user preferences
 async function getCurrentRelays(): Promise<string[]> {
   const now = Date.now()
-  
-  if (cachedRelays.length > 0 && (now - lastRelayCheck) < RELAY_CACHE_DURATION) {
+
+  if (cachedRelays.length > 0 && now - lastRelayCheck < RELAY_CACHE_DURATION) {
     return cachedRelays
   }
-  
+
   try {
     // First try to get user's saved relay preferences
     const savedRelays = localStorage.getItem("nostr_user_relays")
@@ -176,16 +176,14 @@ async function getCurrentRelays(): Promise<string[]> {
           const relayUrls = userRelays
             .filter((relay: any) => {
               // If it's a Relay object, check if it's enabled
-              if (typeof relay === 'object' && relay.url) {
+              if (typeof relay === "object" && relay.url) {
                 return relay.enabled !== false
               }
               // If it's a string, include it
-              return typeof relay === 'string'
+              return typeof relay === "string"
             })
-            .map((relay: any) => 
-              typeof relay === 'string' ? relay : relay.url
-            )
-          
+            .map((relay: any) => (typeof relay === "string" ? relay : relay.url))
+
           if (relayUrls.length > 0) {
             // Use user's relays but limit to 3 for speed
             cachedRelays = relayUrls.slice(0, 3)
@@ -198,7 +196,7 @@ async function getCurrentRelays(): Promise<string[]> {
         console.warn("[v0] ⚠️ Failed to parse saved relays:", error)
       }
     }
-    
+
     // Fallback to smart relay selection
     cachedRelays = await getSmartRelayList()
     lastRelayCheck = now
@@ -207,7 +205,7 @@ async function getCurrentRelays(): Promise<string[]> {
     console.warn("[v0] ⚠️ Failed to get smart relay list, using fallback:", error)
     cachedRelays = getRelays()
   }
-  
+
   return cachedRelays
 }
 
@@ -253,27 +251,26 @@ export const fetchAllNotesFromNostr = async (authData: any): Promise<DecryptedNo
     return notes.filter((note): note is DecryptedNote => note !== null)
   } catch (error) {
     console.error("[v0] ❌ Error fetching notes from Nostr:", error)
-    
+
     // If this is a network error, try with fallback relays
-    if (error instanceof Error && (
-      error.message.includes('timeout') || 
-      error.message.includes('connection') ||
-      error.message.includes('network')
-    )) {
+    if (
+      error instanceof Error &&
+      (error.message.includes("timeout") || error.message.includes("connection") || error.message.includes("network"))
+    ) {
       console.log("[v0] 🔄 Network error detected, trying fallback relays...")
       try {
         const fallbackRelays = getRelays()
         const fallbackEvents = await fetcher.fetchAllEvents(
           fallbackRelays,
           { kinds: [30078], authors: [authData.pubkey] },
-          { sort: true }
+          { sort: true },
         )
-        
+
         const fallbackAppEvents = fallbackEvents.filter((event) => {
           const dTag = event.tags.find((tag) => tag[0] === "d")
           return dTag && dTag[1]?.startsWith(APP_D_TAG_PREFIX)
         })
-        
+
         const fallbackNotes = await Promise.all(
           fallbackAppEvents.map(async (event) => {
             try {
@@ -286,25 +283,27 @@ export const fetchAllNotesFromNostr = async (authData: any): Promise<DecryptedNo
             }
           }),
         )
-        
-        console.log(`[v0] ✅ Fallback fetch successful: ${fallbackNotes.filter(n => n !== null).length} notes`)
+
+        console.log(`[v0] ✅ Fallback fetch successful: ${fallbackNotes.filter((n) => n !== null).length} notes`)
         return fallbackNotes.filter((note): note is DecryptedNote => note !== null)
       } catch (fallbackError) {
         console.error("[v0] ❌ Fallback fetch also failed:", fallbackError)
       }
     }
-    
+
     return []
   } finally {
-    fetcher.shutdown()
+    try {
+      fetcher.shutdown()
+    } catch (shutdownError) {
+      // Silently ignore shutdown errors - relay may already be disconnected
+      // This prevents "failed to close subscription" errors from polluting logs
+    }
   }
 }
 
 // Saves a SINGLE note as its own event
-export const saveNoteToNostr = async (
-  note: DecryptedNote,
-  authData: any,
-): Promise<NostrStorageResult> => {
+export const saveNoteToNostr = async (note: DecryptedNote, authData: any): Promise<NostrStorageResult> => {
   if (!authData) {
     return { success: false, error: "Auth failed" }
   }
@@ -364,7 +363,7 @@ export const saveNoteToNostr = async (
     // Publish using SimplePool (same as nostr-publish.ts)
     const relays = await getCurrentRelays()
     console.log("[v0] 📤 Publishing note event to relays:", relays)
-    
+
     const pool = new nostrTools.SimplePool()
     try {
       await Promise.any(pool.publish(relays, signedEvent))
@@ -444,7 +443,7 @@ export const deleteNoteOnNostr = async (noteToDelete: DecryptedNote, authData: a
 
     const relays = await getCurrentRelays()
     console.log(`[v0] 📤 Publishing kind:5 deletion for event ${noteToDelete.eventId}`)
-    
+
     const pool = new nostrTools.SimplePool()
     try {
       await Promise.any(pool.publish(relays, signedEvent))

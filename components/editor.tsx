@@ -157,25 +157,27 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
 
   if (!note) {
     return (
-      <div className="flex-1 bg-slate-900 flex items-center justify-center">
+      <div className="flex-1 bg-background flex items-center justify-center">
         <div className="text-center">
-          <div className="w-16 h-16 text-slate-600 mx-auto mb-4 flex items-center justify-center text-4xl">✍️</div>
-          <p className="text-slate-400">Select a note to view or create a new one to start writing.</p>
+          <div className="w-16 h-16 text-muted-foreground mx-auto mb-4 flex items-center justify-center text-4xl">
+            ✍️
+          </div>
+          <p className="text-muted-foreground">Select a note to view or create a new one to start writing.</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="flex-1 bg-slate-900 flex flex-col w-full h-full">
+    <div className="flex-1 bg-background flex flex-col w-full h-full">
       {/* Header */}
-      <div className="p-4 border-b border-slate-700 flex items-center gap-2 sm:gap-4">
+      <div className="p-4 border-b border-border flex items-center gap-2 sm:gap-4 bg-card shadow-sm">
         <input
           type="text"
           value={title}
           onChange={(e) => handleTitleChange(e.target.value)}
           placeholder="Note title..."
-          className="flex-1 bg-transparent border-none text-lg sm:text-xl font-semibold text-white placeholder-slate-500 focus:outline-none focus:ring-0 px-0"
+          className="flex-1 bg-transparent border-none text-lg sm:text-xl font-semibold text-foreground placeholder-muted-foreground focus:outline-none focus:ring-0 px-0"
         />
 
         <div className="flex items-center gap-2">
@@ -188,8 +190,8 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
               size="sm"
               className={
                 hasUnsavedChanges
-                  ? "border-green-600 text-green-400 hover:bg-green-900/20"
-                  : "border-slate-600 text-slate-500 opacity-50"
+                  ? "border-green-600 text-green-600 hover:bg-green-50 dark:hover:bg-green-950/30"
+                  : "border-border text-muted-foreground opacity-50"
               }
             >
               💾 Save
@@ -199,7 +201,7 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
               onClick={handleDeleteClick}
               variant="ghost"
               size="sm"
-              className="text-red-400 hover:text-red-300 hover:bg-red-900/20"
+              className="text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
             >
               ✕ Delete
             </Button>
@@ -207,13 +209,13 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
             <Button
               onClick={handlePublishClick}
               disabled={!content.trim()}
-              className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 flex items-center gap-2"
+              className="bg-primary hover:bg-primary/90 text-primary-foreground disabled:opacity-50 flex items-center gap-2 shadow-sm"
             >
               📤 {getPublishButtonText()}
             </Button>
           </div>
 
-          {/* Mobile buttons - making them always visible instead of dropdown */}
+          {/* Mobile buttons */}
           <div className="sm:hidden flex items-center gap-2">
             <Button
               onClick={handleSave}
@@ -221,8 +223,8 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
               size="sm"
               className={
                 hasUnsavedChanges
-                  ? "bg-green-600 hover:bg-green-500 text-xs px-2 no-select"
-                  : "bg-slate-600 opacity-50 text-xs px-2 no-select"
+                  ? "bg-green-600 hover:bg-green-700 text-white text-xs px-2 no-select"
+                  : "bg-muted opacity-50 text-xs px-2 no-select"
               }
             >
               💾
@@ -231,7 +233,7 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
               onClick={handlePublishClick}
               disabled={!content.trim()}
               size="sm"
-              className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-xs px-2 no-select"
+              className="bg-primary hover:bg-primary/90 text-primary-foreground disabled:opacity-50 text-xs px-2 no-select"
             >
               📤 {selectedText ? "Highlight" : "Publish"}
             </Button>
@@ -239,7 +241,7 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
               onClick={handleDeleteClick}
               variant="ghost"
               size="sm"
-              className="text-red-400 hover:text-white text-xs px-2 no-select"
+              className="text-red-500 hover:text-red-600 text-xs px-2 no-select"
             >
               ✕
             </Button>
@@ -248,7 +250,7 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
       </div>
 
       {/* Editor */}
-      <div className="flex-1 p-4">
+      <div className="flex-1 p-6">
         <Textarea
           ref={textareaRef}
           value={content}
@@ -258,20 +260,20 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
           onKeyUp={handleTextSelection}
           onFocus={handleTextSelection}
           placeholder="Start writing..."
-          className="w-full h-full bg-transparent border-none text-white placeholder-slate-500 resize-none focus:ring-0 text-base sm:text-lg leading-relaxed"
+          className="w-full h-full bg-transparent border-none text-foreground placeholder-muted-foreground resize-none focus:ring-0 text-base sm:text-lg leading-relaxed"
         />
       </div>
 
       {/* Footer - Tags and Sync Status */}
-      <div className="p-4 border-t border-slate-700">
+      <div className="p-4 border-t border-border bg-card">
         <div className="flex flex-wrap gap-2 mb-3">
           {note.tags.map((tag) => (
             <span
               key={tag}
-              className="inline-flex items-center gap-1 px-3 py-1 bg-slate-700 text-slate-300 rounded-full text-sm"
+              className="inline-flex items-center gap-1 px-3 py-1 bg-accent text-accent-foreground rounded-full text-sm"
             >
               #{tag}
-              <button onClick={() => handleRemoveTag(tag)} className="text-slate-400 hover:text-white">
+              <button onClick={() => handleRemoveTag(tag)} className="text-muted-foreground hover:text-foreground">
                 ×
               </button>
             </span>
@@ -284,38 +286,38 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
             onChange={(e) => setNewTag(e.target.value)}
             onKeyPress={handleKeyPress}
             placeholder="Add a tag..."
-            className="flex-1 bg-slate-800 border-slate-600 text-white placeholder-slate-400"
+            className="flex-1 bg-background border-input text-foreground placeholder-muted-foreground"
           />
           <Button
             onClick={handleAddTag}
             disabled={!newTag.trim()}
             variant="outline"
-            className="border-slate-600 text-slate-300 hover:bg-slate-700 bg-transparent"
+            className="border-border text-foreground hover:bg-muted bg-transparent"
           >
             Add
           </Button>
         </div>
 
-        <div className="text-xs text-slate-500 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+        <div className="text-xs text-muted-foreground flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
           <span>
             Created: {note.createdAt.toLocaleDateString()} {note.createdAt.toLocaleTimeString()}
           </span>
           <div className="flex items-center gap-2">
-            {hasUnsavedChanges && <span className="text-yellow-400 text-xs">● Auto-saving...</span>}
+            {hasUnsavedChanges && <span className="text-yellow-500 text-xs">● Auto-saving...</span>}
             <span>
               {note.lastSynced ? (
-                <span className="text-green-400">
+                <span className="text-green-500">
                   Synced: {note.lastSynced.toLocaleDateString()} {note.lastSynced.toLocaleTimeString()}
                 </span>
               ) : (
-                <span className="text-yellow-400">Not synced</span>
+                <span className="text-yellow-500">Not synced</span>
               )}
             </span>
           </div>
         </div>
 
         {selectedText && (
-          <div className="text-xs text-blue-400 mt-2">
+          <div className="text-xs text-primary mt-2">
             Selected: "{selectedText.substring(0, 100)}
             {selectedText.length > 100 ? "..." : ""}"
           </div>
