@@ -389,8 +389,89 @@ export const saveNoteToNostr = async (note: DecryptedNote, authData: any): Promi
 // THE "NOSTR DELETE" SECRET: The NIP-09 `kind: 5` deletion function.
 // ===================================================================================
 export const deleteNoteOnNostr = async (noteToDelete: DecryptedNote, authData: any): Promise<void> => {
+  // For notes without eventId (old notes), we'll try to find them by searching for the d-tag
   if (!noteToDelete.eventId) {
-    console.warn("[v0] Cannot delete note from Nostr: event ID is missing.")
+    console.log("[v0] Note has no eventId, searching for it on Nostr...")
+    
+    try {
+      const relays = await getCurrentRelays()
+      const fetcher = NostrFetcher.init()
+      
+      const dTag = `${APP_D_TAG_PREFIX}${noteToDelete.id}`
+      const events = await fetcher.fetchAllEvents(
+        relays,
+        { kinds: [30078], authors: [authData.pubkey], "#d": [dTag] },
+        { sort: true }
+      )
+      
+      if (events.length > 0) {
+        // Found the event, use its ID for deletion
+        const eventToDelete = events[0]
+        console.log("[v0] Found event to delete:", eventToDelete.id)
+        
+        const unsignedEvent: any = {
+          kind: 5,
+          created_at: Math.floor(Date.now() / 1000),
+          tags: [["e", eventToDelete.id]],
+          content: "Deleted a note from Nostr Journal.",
+          pubkey: authData.pubkey,
+        }
+
+        let signedEvent
+
+        switch (authData.authMethod) {
+          case "nsec":
+            if (!authData.privateKey) {
+              throw new Error("Private key is missing for nsec login method.")
+            }
+            const pkBytes = new Uint8Array(
+              authData.privateKey.match(/.{1,2}/g)?.map((byte: string) => Number.parseInt(byte, 16)) || [],
+            )
+            signedEvent = nostrTools.finalizeEvent(unsignedEvent, pkBytes)
+            console.log("[v0] Deletion event signed locally.")
+            break
+
+          case "remote":
+            if (!authData.bunkerUri || !authData.clientSecretKey) {
+              throw new Error("Remote signer connection data is missing.")
+            }
+            signedEvent = await signEventWithRemote(unsignedEvent, authData)
+            console.log("[v0] Deletion event signed by remote signer.")
+            break
+
+          case "extension":
+            if (typeof window.nostr === "undefined") {
+              throw new Error("Nostr browser extension not found.")
+            }
+            signedEvent = await window.nostr.signEvent(unsignedEvent)
+            console.log("[v0] Deletion event signed by browser extension.")
+            break
+
+          default:
+            throw new Error("Unsupported authentication method.")
+        }
+
+        console.log(`[v0] 📤 Publishing kind:5 deletion for event ${eventToDelete.id}`)
+
+        const pool = new nostrTools.SimplePool()
+        try {
+          await Promise.any(pool.publish(relays, signedEvent))
+          console.log("[v0] ✅ Successfully published deletion event")
+        } finally {
+          pool.close(relays)
+        }
+      } else {
+        console.log("[v0] Note not found on Nostr, it may have been created locally only")
+      }
+    } catch (error) {
+      console.error("[v0] Error searching for or deleting note:", error)
+    } finally {
+      try {
+        fetcher.shutdown()
+      } catch (shutdownError) {
+        // Ignore shutdown errors
+      }
+    }
     return
   }
 

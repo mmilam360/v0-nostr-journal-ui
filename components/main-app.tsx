@@ -529,7 +529,15 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
 
     console.log("[v0] Deleting note:", noteToDelete.id, noteToDelete.title)
 
-    // Step 1: Optimistically update the UI
+    // Step 1: Add to deleted notes FIRST (before UI update)
+    const deletedNote = {
+      id: noteToDelete.id,
+      deletedAt: new Date(),
+    }
+    const newDeletedNotes = [...deletedNotes, deletedNote]
+    setDeletedNotes(newDeletedNotes)
+
+    // Step 2: Optimistically update the UI IMMEDIATELY
     const updatedNotes = notes.filter((note) => note.id !== noteToDelete.id)
     console.log("[v0] Notes before delete:", notes.length, "after delete:", updatedNotes.length)
 
@@ -547,7 +555,23 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     })
     setTags(Array.from(allTags))
 
-    // Step 2: Publish deletion event to Nostr
+    // Step 3: Save the updated state to localStorage IMMEDIATELY
+    try {
+      await saveEncryptedNotes(authData.pubkey, updatedNotes)
+      console.log("[v0] Saved updated notes to localStorage")
+    } catch (error) {
+      console.error("[v0] Failed to save to localStorage:", error)
+    }
+
+    // Step 4: Publish deletion event to Nostr (async, don't wait)
+    deleteNoteOnNostrAsync(noteToDelete, authData)
+
+    setShowDeleteConfirmation(false)
+    setNoteToDelete(null)
+  }
+
+  // Helper function to delete on Nostr asynchronously
+  const deleteNoteOnNostrAsync = async (noteToDelete: Note, authData: any) => {
     try {
       console.log("[v0] Publishing NIP-09 deletion event to Nostr network...")
       const { deleteNoteOnNostr } = await import("@/lib/nostr-storage")
@@ -556,18 +580,6 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     } catch (error) {
       console.error("[v0] Failed to publish deletion event:", error)
     }
-
-    // Update deleted notes tracking
-    const deletedNote = {
-      id: noteToDelete.id,
-      deletedAt: new Date(),
-    }
-    setDeletedNotes([...deletedNotes, deletedNote])
-    setNeedsSync(true)
-    console.log("[v0] Delete completed, triggering sync")
-
-    setShowDeleteConfirmation(false)
-    setNoteToDelete(null)
   }
 
   const handleCancelDelete = () => {
