@@ -309,12 +309,13 @@ export const saveNoteToNostr = async (
         throw new Error("Unsupported authentication method.")
     }
 
-    // Publish
-    const fetcher = NostrFetcher.init()
+    // Publish using SimplePool (same as nostr-publish.ts)
+    const relays = await getCurrentRelays()
+    console.log("[v0] 📤 Publishing note event to relays:", relays)
+    
+    const pool = new nostrTools.SimplePool()
     try {
-      const relays = await getCurrentRelays()
-      console.log("[v0] 📤 Publishing note event to relays:", relays)
-      await fetcher.publish(relays, signedEvent)
+      await Promise.any(pool.publish(relays, signedEvent))
       console.log("[v0] ✅ Successfully published note:", signedEvent.id)
 
       return {
@@ -322,7 +323,7 @@ export const saveNoteToNostr = async (
         eventId: signedEvent.id,
       }
     } finally {
-      fetcher.shutdown()
+      pool.close(relays)
     }
   } catch (error) {
     console.error("[v0] Error saving note to Nostr:", error)
@@ -389,14 +390,15 @@ export const deleteNoteOnNostr = async (noteToDelete: DecryptedNote, authData: a
         throw new Error("Unsupported authentication method.")
     }
 
-    const fetcher = NostrFetcher.init()
+    const relays = await getCurrentRelays()
+    console.log(`[v0] 📤 Publishing kind:5 deletion for event ${noteToDelete.eventId}`)
+    
+    const pool = new nostrTools.SimplePool()
     try {
-      const relays = await getCurrentRelays()
-      console.log(`[v0] 📤 Publishing kind:5 deletion for event ${noteToDelete.eventId}`)
-      await fetcher.publish(relays, signedEvent)
+      await Promise.any(pool.publish(relays, signedEvent))
       console.log("[v0] ✅ Successfully published deletion event")
     } finally {
-      fetcher.shutdown()
+      pool.close(relays)
     }
   } catch (error) {
     console.error("[v0] Error publishing deletion event:", error)
