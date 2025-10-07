@@ -51,7 +51,6 @@ import { ConnectionStatus } from "@/components/connection-status"
 import { DiagnosticPage } from "@/components/diagnostic-page"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { getDefaultRelays } from "@/lib/relay-manager"
-import { DonationModal } from "@/components/donation-modal"
 
 export interface Note {
   id: string
@@ -113,7 +112,6 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   const [newRelay, setNewRelay] = useState("")
   const [profilePicture, setProfilePicture] = useState<string>("")
   const [displayName, setDisplayName] = useState<string>("")
-  const [showDonationModal, setShowDonationModal] = useState(false)
 
   const retryConnection = async () => {
     console.log("[v0] 🔄 Retrying connection...")
@@ -900,16 +898,6 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                   <span className="text-muted-foreground">{getSyncStatusText()}</span>
                 </div>
                 
-                {/* Support button */}
-              <Button
-                variant="ghost"
-                size="sm"
-                  onClick={() => setShowDonationModal(true)}
-                  className="hidden sm:flex items-center gap-1 text-amber-600 hover:text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/20"
-              >
-                  <Zap className="w-4 h-4" />
-                  <span>Support</span>
-              </Button>
                 
                 {/* Theme toggle with system option */}
                 <DropdownMenu>
@@ -1125,7 +1113,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
             onSelectTag={setSelectedTag}
             pubkey={authData.pubkey}
             onLogout={handleLogout}
-            onDonationClick={() => setShowDonationModal(true)}
+            onDonationClick={() => {}}
           />
         </div>
 
@@ -1155,7 +1143,6 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                 pubkey={authData.pubkey}
                 onLogout={handleLogout}
                 onDonationClick={() => {
-                  setShowDonationModal(true)
                   setIsMobileSidebarOpen(false)
                 }}
               />
@@ -1260,11 +1247,6 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
 
     </div>
     
-    {/* Donation Modal */}
-    <DonationModal
-      open={showDonationModal}
-      onOpenChange={setShowDonationModal}
-    />
     </ErrorBoundary>
   )
 }
