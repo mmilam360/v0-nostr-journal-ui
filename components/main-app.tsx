@@ -103,6 +103,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   const [deletedNotes, setDeletedNotes] = useState<{ id: string; deletedAt: Date }[]>([])
   const [showProfile, setShowProfile] = useState(false)
   const [showRelayManager, setShowRelayManager] = useState(false)
+  const [showRelaysInDropdown, setShowRelaysInDropdown] = useState(false)
   const [showDiagnostics, setShowDiagnostics] = useState(false)
   const [connectionError, setConnectionError] = useState<string | null>(null)
   const [copiedNpub, setCopiedNpub] = useState(false)
@@ -902,49 +903,140 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                   
                   <DropdownMenuContent 
                     align="end" 
-                    className="w-80 z-[9999]"
+                    className="w-96 z-[9999]"
                     sideOffset={8}
                   >
-                    {/* Profile Section */}
-                    <div className="px-3 py-2 border-b border-border">
-                      <p className="text-sm font-medium">Nostr Profile</p>
-                      <p className="text-xs text-muted-foreground truncate mt-1 font-mono">
-                        {authData.pubkey.slice(0, 16)}...
-                      </p>
+                    {/* Profile Section with Picture and NPub */}
+                    <div className="px-4 py-4 border-b border-border">
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center">
+                          <User className="w-6 h-6 text-primary" />
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-sm font-medium">Nostr Profile</p>
+                          <p className="text-xs text-muted-foreground">Connected</p>
+                        </div>
+                      </div>
+                      
+                      <div>
+                        <label className="text-xs text-muted-foreground mb-1 block">Public Key (npub)</label>
+                        <div className="flex items-center gap-2">
+                          <code className="text-xs bg-muted px-3 py-2 rounded font-mono flex-1 truncate">
+                            {npub || 'Loading...'}
+                          </code>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              if (npub) {
+                                navigator.clipboard.writeText(npub)
+                                setCopiedNpub(true)
+                                setTimeout(() => setCopiedNpub(false), 2000)
+                              }
+                            }}
+                            className="h-8 w-8 p-0"
+                          >
+                            {copiedNpub ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                          </Button>
+                        </div>
+                      </div>
                     </div>
                     
                     <DropdownMenuGroup>
                       <DropdownMenuItem 
-                        onClick={() => {
-                          setShowProfile(true)
-                        }}
+                        onClick={() => setShowRelaysInDropdown(!showRelaysInDropdown)}
+                        className="cursor-pointer"
                       >
-                        <User className="w-4 h-4 mr-2" />
-                        View Profile
+                        <Settings className="w-4 h-4 mr-2" />
+                        Manage Relays
+                        {showRelaysInDropdown ? (
+                          <span className="ml-auto text-xs">▼</span>
+                        ) : (
+                          <span className="ml-auto text-xs">▶</span>
+                        )}
                       </DropdownMenuItem>
                       
                       <DropdownMenuItem 
                         onClick={() => {
-                          setShowRelayManager(true)
+                          console.log('[Dropdown] Logout clicked')
+                          handleLogout()
                         }}
+                        className="text-destructive focus:text-destructive"
                       >
-                        <Settings className="w-4 h-4 mr-2" />
-                        Manage Relays
+                        <LogOut className="w-4 h-4 mr-2" />
+                        Logout
                       </DropdownMenuItem>
                     </DropdownMenuGroup>
                     
-                    <DropdownMenuSeparator />
-                    
-                    <DropdownMenuItem 
-                      onClick={() => {
-                        console.log('[Dropdown] Logout clicked')
-                        handleLogout()
-                      }}
-                      className="text-destructive focus:text-destructive"
-                    >
-                      <LogOut className="w-4 h-4 mr-2" />
-                      Logout
-                    </DropdownMenuItem>
+                    {/* Relays Submenu */}
+                    {showRelaysInDropdown && (
+                      <div className="px-4 py-3 border-t border-border bg-muted/30">
+                        <div className="space-y-3">
+                          <div>
+                            <label className="text-xs text-muted-foreground mb-2 block">Add New Relay</label>
+                            <div className="flex gap-2">
+                              <input
+                                type="text"
+                                value={newRelay}
+                                onChange={(e) => setNewRelay(e.target.value)}
+                                placeholder="wss://relay.example.com"
+                                className="flex-1 text-xs px-3 py-2 border rounded bg-background"
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' && newRelay && !relays.includes(newRelay)) {
+                                    const updatedRelays = [...relays, newRelay]
+                                    setRelays(updatedRelays)
+                                    localStorage.setItem('nostr-relays', JSON.stringify(updatedRelays))
+                                    setNewRelay('')
+                                  }
+                                }}
+                              />
+                              <Button
+                                size="sm"
+                                onClick={() => {
+                                  if (newRelay && !relays.includes(newRelay)) {
+                                    const updatedRelays = [...relays, newRelay]
+                                    setRelays(updatedRelays)
+                                    localStorage.setItem('nostr-relays', JSON.stringify(updatedRelays))
+                                    setNewRelay('')
+                                  }
+                                }}
+                                className="h-8 px-3 text-xs"
+                                disabled={!newRelay || relays.includes(newRelay)}
+                              >
+                                <Plus className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </div>
+                          
+                          <div>
+                            <label className="text-xs text-muted-foreground mb-2 block">Active Relays ({relays.length})</label>
+                            <div className="space-y-1 max-h-32 overflow-y-auto">
+                              {relays.length > 0 ? (
+                                relays.map((relay, index) => (
+                                  <div key={index} className="flex items-center justify-between text-xs bg-background rounded px-2 py-1">
+                                    <span className="font-mono truncate flex-1">{relay}</span>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => {
+                                        const updatedRelays = relays.filter((_, i) => i !== index)
+                                        setRelays(updatedRelays)
+                                        localStorage.setItem('nostr-relays', JSON.stringify(updatedRelays))
+                                      }}
+                                      className="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                                    >
+                                      <Trash2 className="h-3 w-3" />
+                                    </Button>
+                                  </div>
+                                ))
+                              ) : (
+                                <div className="text-xs text-muted-foreground text-center py-2">No relays configured</div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </DropdownMenuContent>
                 </DropdownMenu>
         </div>
