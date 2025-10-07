@@ -4,8 +4,9 @@ import type React from "react"
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { CheckCircle, Loader2, AlertCircle, CloudOff, AlertTriangle, Calendar, Plus } from "lucide-react"
+import { CheckCircle, Loader2, AlertCircle, CloudOff, AlertTriangle, Calendar, Plus, Copy, ExternalLink, Lock, ShieldCheck } from "lucide-react"
 import type { Note } from "@/components/main-app"
+import VerifyNoteModal from "./verify-note-modal"
 
 interface NoteListProps {
   notes: Note[]
@@ -13,11 +14,14 @@ interface NoteListProps {
   onSelectNote: (note: Note) => void
   onCreateNote: () => void
   onDeleteNote: (note: Note) => void
+  authData: any // AuthData type
 }
 
-export default function NoteList({ notes, selectedNote, onSelectNote, onCreateNote, onDeleteNote }: NoteListProps) {
+export default function NoteList({ notes, selectedNote, onSelectNote, onCreateNote, onDeleteNote, authData }: NoteListProps) {
   const [searchQuery, setSearchQuery] = useState("")
   const [showSyncWarning, setShowSyncWarning] = useState<string | null>(null)
+  const [showVerify, setShowVerify] = useState(false)
+  const [verifyNote, setVerifyNote] = useState<Note | null>(null)
 
   const filteredNotes = notes.filter(
     (note) =>
@@ -57,6 +61,19 @@ export default function NoteList({ notes, selectedNote, onSelectNote, onCreateNo
     e.stopPropagation()
     console.log("[v0] Note list delete clicked for:", note.id, note.title)
     onDeleteNote(note)
+  }
+
+  const copyEventId = async (eventId: string) => {
+    try {
+      await navigator.clipboard.writeText(eventId)
+    } catch (err) {
+      console.error('Failed to copy event ID:', err)
+    }
+  }
+
+  const handleVerifyNote = (note: Note) => {
+    setVerifyNote(note)
+    setShowVerify(true)
   }
 
   return (
@@ -125,6 +142,91 @@ export default function NoteList({ notes, selectedNote, onSelectNote, onCreateNo
                     )}
                   </div>
                 </button>
+                
+                {/* Event verification section */}
+                <div className="border-t border-border mt-3 pt-3 space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-muted-foreground">Event ID:</span>
+                    <div className="flex items-center gap-1">
+                      <code className="text-xs font-mono text-primary bg-primary/10 px-1.5 py-0.5 rounded">
+                        {note.eventId ? note.eventId.slice(0, 8) : 'local'}...
+                      </code>
+                      {note.eventId && (
+                        <>
+                          <Button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              copyEventId(note.eventId!)
+                            }}
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 w-6 p-0"
+                          >
+                            <Copy className="w-3 h-3" />
+                          </Button>
+                          <Button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              window.open(`https://nostr.band/e/${note.eventId}`, '_blank')
+                            }}
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 w-6 p-0"
+                            title="View on Nostr.band"
+                          >
+                            <ExternalLink className="w-3 h-3" />
+                          </Button>
+                        </>
+                      )}
+                      <Button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleVerifyNote(note)
+                        }}
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0"
+                        title="Verify note details"
+                      >
+                        <ShieldCheck className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  </div>
+                  
+                  {/* Encryption indicator */}
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <Lock className="w-3 h-3 text-green-500" />
+                    <span>Encrypted with NIP-04</span>
+                  </div>
+                  
+                  {/* Sync status with indicator */}
+                  <div className="flex items-center gap-1.5 text-xs">
+                    {note.syncStatus === 'synced' && (
+                      <>
+                        <CheckCircle className="w-3 h-3 text-green-500" />
+                        <span className="text-green-600 dark:text-green-400">Synced to relays</span>
+                      </>
+                    )}
+                    {note.syncStatus === 'local' && (
+                      <>
+                        <AlertTriangle className="w-3 h-3 text-yellow-500" />
+                        <span className="text-yellow-600 dark:text-yellow-400">Local only</span>
+                      </>
+                    )}
+                    {note.syncStatus === 'syncing' && (
+                      <>
+                        <Loader2 className="w-3 h-3 animate-spin text-blue-500" />
+                        <span className="text-blue-600 dark:text-blue-400">Syncing...</span>
+                      </>
+                    )}
+                    {note.syncStatus === 'error' && (
+                      <>
+                        <AlertCircle className="w-3 h-3 text-red-500" />
+                        <span className="text-red-600 dark:text-red-400">Sync error</span>
+                      </>
+                    )}
+                  </div>
+                </div>
               </div>
             ))}
           </div>
@@ -153,6 +255,14 @@ export default function NoteList({ notes, selectedNote, onSelectNote, onCreateNo
           </div>
         </div>
       )}
+      
+      {/* Verification Modal */}
+      <VerifyNoteModal
+        isOpen={showVerify}
+        onClose={() => setShowVerify(false)}
+        note={verifyNote}
+        authData={authData}
+      />
     </div>
   )
 }

@@ -23,6 +23,7 @@ import { generateSecretKey, getPublicKey, nip19 } from 'nostr-tools'
 import { bytesToHex } from '@noble/hashes/utils'
 import { QRCodeSVG } from 'qrcode.react'
 import InfoModal from './info-modal'
+import { Logo } from './logo'
 
 interface LoginPageRedesignedProps {
   onLoginSuccess: (authData: any) => void
@@ -184,11 +185,7 @@ export default function LoginPageRedesigned({ onLoginSuccess }: LoginPageRedesig
         <div className="w-full max-w-md space-y-8">
           {/* Logo & Tagline */}
           <div className="text-center">
-            <img 
-              src="/Nostr%20Journal%20Logo.svg" 
-              alt="Nostr Journal" 
-              className="h-16 w-auto mx-auto mb-4"
-            />
+            <Logo className="h-16 w-auto mx-auto mb-4" />
             <h1 className="text-3xl font-bold text-foreground">Nostr Journal</h1>
             <p className="text-muted-foreground mt-2">
               Your private, decentralized journal

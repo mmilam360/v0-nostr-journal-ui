@@ -37,6 +37,7 @@ import {
   DropdownMenuGroup,
 } from "@/components/ui/dropdown-menu"
 import { useTheme } from "@/lib/theme-provider"
+import { Logo } from "./logo"
 import { Input } from "@/components/ui/input"
 import DonationBubble from "@/components/donation-bubble"
 import { saveEncryptedNotes, loadEncryptedNotes } from "@/lib/nostr-crypto"
@@ -61,6 +62,7 @@ export interface Note {
   lastSynced?: Date
   syncStatus?: "local" | "syncing" | "synced" | "error"
   syncError?: string
+  eventId?: string // Nostr event ID for verification
 }
 
 export interface AuthData {
@@ -783,11 +785,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                 
                 {/* Logo */}
                 <div className="flex items-center gap-3">
-                  <img 
-                    src="/Nostr%20Journal%20Logo.svg" 
-                    alt="Nostr Journal" 
-                    className="h-8 w-auto"
-                  />
+                  <Logo className="h-8 w-auto" />
                   <h1 className="text-xl font-bold text-foreground">Nostr Journal</h1>
                   {/* Color test - should be logo blue */}
                   <div className="w-4 h-4 bg-primary rounded ml-2" title="Logo blue test"></div>
@@ -924,6 +922,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                 onSelectNote={setSelectedNote}
                 onCreateNote={handleCreateNote}
                 onDeleteNote={handleDeleteNote}
+                authData={authData}
               />
             </div>
 
