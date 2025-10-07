@@ -13,6 +13,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import { QRCodeSVG } from "qrcode.react"
+import { NostrOnboarding } from "@/components/nostr-onboarding"
 import {
   Loader2,
   AlertCircle,
@@ -55,6 +56,7 @@ interface LoginPageProps {
 export function LoginPage({ onLoginSuccess }: LoginPageProps) {
   const [loginMethod, setLoginMethod] = useState<LoginMethod>("idle")
   const [connectionState, setConnectionState] = useState<ConnectionState>("idle")
+  const [showOnboarding, setShowOnboarding] = useState(false)
   const [remoteSignerMode, setRemoteSignerMode] = useState<RemoteSignerMode>("select")
   const [bunkerUrl, setBunkerUrl] = useState<string>("")
   const [nostrconnectInput, setNostrconnectInput] = useState<string>("")
@@ -144,6 +146,38 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
     }
 
     connectionDataRef.current = null
+  }
+
+  // Handle onboarding completion
+  const handleOnboardingComplete = async (nsec: string) => {
+    setShowOnboarding(false)
+    
+    // Auto-login with the new nsec
+    try {
+      const { decode } = await import('nostr-tools/nip19')
+      const { data: privateKeyBytes } = decode(nsec)
+      
+      // Convert to hex
+      const privateKeyHex = Array.from(privateKeyBytes as Uint8Array)
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('')
+      
+      const { getPublicKey } = await import('nostr-tools/pure')
+      const publicKey = getPublicKey(privateKeyBytes as Uint8Array)
+      
+      // Login with new account
+      onLoginSuccess({
+        pubkey: publicKey,
+        authMethod: 'nsec',
+        nsec: nsec,
+        privateKey: privateKeyHex
+      })
+      
+      console.log('[Onboarding] ✅ New user logged in successfully')
+    } catch (error) {
+      console.error('[Onboarding] ❌ Failed to login after onboarding:', error)
+      alert('Account created but failed to login. Please login manually with your nsec.')
+    }
   }
 
   const saveRelays = (updated: Relay[]) => {
@@ -847,10 +881,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
             {loginMethod === "idle" && (
               <div className="space-y-3">
                 <button
-                  onClick={() => {
-                    setLoginMethod("create")
-                    setConnectionState("idle")
-                  }}
+                  onClick={() => setShowOnboarding(true)}
                   className="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 shadow-lg shadow-green-500/20"
                 >
                   <UserPlus className="h-5 w-5" />
@@ -1426,6 +1457,14 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
           )}
         </div>
       </div>
+      
+      {/* Nostr Onboarding Modal */}
+      {showOnboarding && (
+        <NostrOnboarding
+          onComplete={handleOnboardingComplete}
+          onCancel={() => setShowOnboarding(false)}
+        />
+      )}
     </div>
   )
 }

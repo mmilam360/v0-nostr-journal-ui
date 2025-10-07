@@ -314,31 +314,18 @@ button {
   animation: fade-in 0.3s ease-out;
 }
 
-/* Slide animation for horizontal login */
-@keyframes slide-enter {
-  from {
-    transform: translateX(100%);
-    opacity: 0;
-  }
-  to {
-    transform: translateX(0);
-    opacity: 1;
-  }
+/* Ensure dropdown menus are always on top */
+[data-radix-popper-content-wrapper] {
+  z-index: 9999 !important;
 }
 
-@keyframes slide-exit {
-  from {
-    transform: translateX(0);
-    opacity: 1;
-  }
-  to {
-    transform: translateX(-100%);
-    opacity: 0;
-  }
+[data-radix-portal] {
+  z-index: 9999 !important;
 }
 
-.slide-content {
-  animation: slide-enter 0.3s ease-out;
+/* Dropdown menu specific styles */
+[role="menu"] {
+  z-index: 9999 !important;
 }
 
 /* Typography */

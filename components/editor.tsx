@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import type { Note } from "@/components/main-app"
 import { useDebounce } from "@/hooks/useDebounce"
-import { Copy, ExternalLink, ShieldCheck, Lock, CheckCircle2, AlertCircle, Loader2, Check } from "lucide-react"
+import { Copy, ExternalLink, ShieldCheck, Lock, CheckCircle2, AlertCircle, Loader2, Check, Save, Trash2, Upload } from "lucide-react"
 
 interface EditorProps {
   note: Note | null
@@ -230,7 +230,8 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
                   : "border-border text-muted-foreground opacity-50"
               }
             >
-              💾 Save
+              <Save className="w-4 h-4 mr-2" />
+              Save
             </Button>
 
             <Button
@@ -239,7 +240,8 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
               size="sm"
               className="text-red-500 hover:text-red-700"
             >
-              ✕ Delete
+              <Trash2 className="w-4 h-4 mr-2" />
+              Delete
             </Button>
 
             <Button
@@ -247,7 +249,8 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
               disabled={!content.trim()}
               className="bg-primary hover:bg-primary/90 disabled:opacity-50 flex items-center gap-2"
             >
-              📤 {getPublishButtonText()}
+              <Upload className="w-4 h-4" />
+              {getPublishButtonText()}
             </Button>
           </div>
 
@@ -263,7 +266,7 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
                   : "bg-muted opacity-50 text-xs px-2 no-select"
               }
             >
-              💾
+              <Save className="w-4 h-4" />
             </Button>
             <Button
               onClick={handlePublishClick}
@@ -271,7 +274,8 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
               size="sm"
               className="bg-primary hover:bg-primary/90 disabled:opacity-50 text-xs px-2 no-select"
             >
-              📤 {selectedText ? "Highlight" : "Publish"}
+              <Upload className="w-4 h-4" />
+              {selectedText ? "Highlight" : "Publish"}
             </Button>
             <Button
               onClick={handleDeleteClick}
@@ -279,7 +283,7 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
               size="sm"
               className="text-red-500 hover:text-red-700 text-xs px-2 no-select"
             >
-              ✕
+              <Trash2 className="w-4 h-4" />
             </Button>
           </div>
         </div>
@@ -456,7 +460,7 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
                         eventKind: remoteNote.eventKind
                       })
                       
-                      alert(`Found on Nostr!\n\nEvent ID: ${remoteNote.eventId.slice(0, 16)}...\n\nVerify button now available.`)
+                      console.log('[Editor] ✅ Note updated with eventId:', remoteNote.eventId)
                     } else {
                       console.log('[Editor] ❌ Note not found on Nostr')
                       alert('Note not found on Nostr network.\n\nThis note may not have synced yet, or may only exist locally.')
