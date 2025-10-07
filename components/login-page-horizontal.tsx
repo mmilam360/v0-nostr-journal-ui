@@ -196,21 +196,65 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
     setError("")
 
     try {
-      const { generateSecretKey, getPublicKey } = await import("nostr-tools/pure")
+      const { NostrFetcher } = await import("nostr-fetch")
+      const { generateSecretKey, getPublicKey, nip04 } = await import("nostr-tools")
       
-      const clientSecretKey = generateSecretKey()
-      const clientPublicKey = getPublicKey(clientSecretKey)
+      // Generate temporary keypair for connection
+      const tempSecretKey = generateSecretKey()
+      const tempPublicKey = getPublicKey(tempSecretKey)
       
-      const secret = bytesToHex(clientSecretKey)
-      const appName = "Nostr Journal"
-      const appPublicKey = clientPublicKey
-      const perms = "read,write"
-      const BUNKER_RELAY = "wss://relay.nsec.app"
-      
-      const bunkerURI = `nostrconnect://${appPublicKey}?relay=${encodeURIComponent(BUNKER_RELAY)}&secret=${secret}&name=${appName}&perms=${perms}`
+      // Create bunker connection string (not nostrconnect)
+      const BUNKER_RELAY = "wss://relay.nostr.band"
+      const bunkerURI = `bunker://${tempPublicKey}?relay=${BUNKER_RELAY}`
       
       setBunkerUrl(bunkerURI)
       setConnectionState("waiting")
+      
+      console.log("[Bunker] 📡 Listening for approval on relay:", BUNKER_RELAY)
+      
+      // Initialize fetcher and start listening for approval
+      const fetcher = NostrFetcher.init()
+      
+      const sub = fetcher.allEventsIterator(
+        [BUNKER_RELAY],
+        { kinds: [24133] },
+        { "#p": [tempPublicKey] },
+        { realTime: true, timeout: 120000 }
+      )
+      
+      for await (const event of sub) {
+        try {
+          console.log("[Bunker] 📨 Received event from:", event.pubkey)
+          
+          const remotePubkey = event.pubkey
+          const sharedSecret = nip04.getSharedSecret(tempSecretKey, remotePubkey)
+          const decryptedContent = await nip04.decrypt(sharedSecret, event.content)
+          const response = JSON.parse(decryptedContent)
+
+          console.log("[Bunker] 📦 Decrypted response:", response)
+
+          if (response.result === "ack") {
+            console.log("[Bunker] ✅ Connection approved!")
+            setConnectionState("success")
+            
+            // Call onLoginSuccess with the remote pubkey
+            onLoginSuccess({
+              pubkey: remotePubkey,
+              secretKey: tempSecretKey,
+              connectionType: 'remote-signer',
+              relay: BUNKER_RELAY
+            })
+            return
+          } else if (response.error) {
+            throw new Error(response.error.message || "Connection rejected")
+          }
+        } catch (e) {
+          console.log("[Bunker] ⚠️ Could not decrypt event:", e)
+        }
+      }
+      
+      // Timeout
+      throw new Error("Connection timeout. Please try again or check that your signing app is running.")
       
     } catch (err: any) {
       console.error("Bunker login failed:", err)
