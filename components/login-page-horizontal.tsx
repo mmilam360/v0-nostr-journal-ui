@@ -165,9 +165,9 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
       let privateKeyHex: string
 
       if (nsecInput.startsWith("nsec1")) {
-        const { type, data } = nip19.decode(nsecInput)
-        if (type !== "nsec") throw new Error("Invalid nsec format")
-        privateKey = data as Uint8Array
+        const decoded = nip19.decode(nsecInput)
+        if (decoded.type !== "nsec") throw new Error("Invalid nsec format")
+        privateKey = decoded.data as Uint8Array
       } else {
         // Assume it's hex
         privateKey = new Uint8Array(Buffer.from(nsecInput, "hex"))
@@ -214,7 +214,8 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
       
       // App name and perms in query string format (better compatibility)
       const appName = encodeURIComponent("Nostr Journal")
-      const perms = encodeURIComponent("sign_event:1,sign_event:30078,sign_event:5,nip04_encrypt,nip04_decrypt")
+      // Comprehensive permissions for full app functionality
+      const perms = encodeURIComponent("sign_event:1,sign_event:5,sign_event:30078,sign_event:31078,nip04_encrypt,nip04_decrypt,nip44_encrypt,nip44_decrypt,get_public_key,get_relays")
       
       // Use nsec.app relay for better compatibility
       const BUNKER_RELAY = "wss://relay.nsec.app"
@@ -234,14 +235,14 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
       let isConnected = false
       let remotePubkey: string | null = null
 
-      // Set timeout for connection (30 seconds)
+      // Set timeout for connection (60 seconds for mobile compatibility)
       const timeoutId = setTimeout(() => {
         if (!isConnected) {
           console.log("[NostrConnect] ⏱️ Connection timeout")
           setConnectionState("error")
           setError("Connection timed out. Please try scanning the QR code again.")
         }
-      }, 30000)
+      }, 60000)
 
       // Connect to relay
       console.log("[NostrConnect] 🔌 Connecting to relay...")
@@ -357,9 +358,11 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
 
               } else if (response.error) {
                 console.error("[NostrConnect] ❌ Connection error:", response.error)
-                setConnectionState("error")
-                setError(response.error.message || "Connection rejected")
-                clearTimeout(timeoutId)
+                if (!isConnected) {
+                  setConnectionState("error")
+                  setError(response.error.message || "Connection rejected")
+                  clearTimeout(timeoutId)
+                }
               } else {
                 console.warn("[NostrConnect] ⚠️ Unknown response format:", response)
               }
@@ -388,7 +391,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
               <Logo className="h-24 w-auto mx-auto mb-8" />
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
               {/* Use Existing Account */}
               <button
                 onClick={() => {
@@ -482,7 +485,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                 <p className="text-muted-foreground">How would you like to connect your account?</p>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {/* Browser Extension */}
                 <button
                   onClick={() => {
@@ -718,11 +721,27 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
 
                     {remoteSignerMode === 'bunker' && connectionState === 'waiting' && bunkerUrl && (
                       <div className="space-y-4">
+                        <Button
+                          onClick={() => {
+                            setRemoteSignerMode('select')
+                            setConnectionState('idle')
+                            setError('')
+                          }}
+                          variant="outline"
+                          size="sm"
+                          className="mb-4"
+                        >
+                          <ChevronLeft className="w-4 h-4 mr-2" />
+                          Back to Options
+                        </Button>
+                        
                         <p className="text-sm text-muted-foreground text-center">
                           Scan this QR code with your Nostr app
                         </p>
                         <div className="flex justify-center">
-                          <QRCodeSVG value={bunkerUrl} size={200} />
+                          <div className="w-40 h-40 sm:w-52 sm:h-52">
+                            <QRCodeSVG value={bunkerUrl} size="100%" />
+                          </div>
                         </div>
                         <div className="space-y-2">
                           <input
@@ -746,6 +765,20 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
 
                     {remoteSignerMode === 'nostrconnect' && (
                       <div className="space-y-4">
+                        <Button
+                          onClick={() => {
+                            setRemoteSignerMode('select')
+                            setNostrconnectInput('')
+                            setError('')
+                          }}
+                          variant="outline"
+                          size="sm"
+                          className="mb-4"
+                        >
+                          <ChevronLeft className="w-4 h-4 mr-2" />
+                          Back to Options
+                        </Button>
+                        
                         <p className="text-sm text-muted-foreground text-center">
                           Paste the connection string from your Nostr app
                         </p>
@@ -843,8 +876,8 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
 
   return (
     <>
-      <div className="min-h-screen bg-background flex items-center justify-center p-4">
-        <div className="w-full max-w-4xl flex flex-col justify-center min-h-[600px]">
+      <div className="min-h-screen bg-background flex items-center justify-center p-2 sm:p-4">
+        <div className="w-full max-w-4xl flex flex-col justify-center min-h-[500px] sm:min-h-[600px]">
           {/* Progress Indicator */}
           <div className="mb-8">
             <div className="flex items-center justify-center max-w-md mx-auto">
@@ -868,7 +901,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
           </div>
           
           {/* Content Area with Slide Animation */}
-          <div className="bg-card rounded-xl border p-8 min-h-[500px] relative overflow-hidden flex flex-col justify-center">
+          <div className="bg-card rounded-xl border p-4 sm:p-8 min-h-[400px] sm:min-h-[500px] relative overflow-hidden flex flex-col justify-center">
             <div className="slide-content w-full">
               {renderStepContent()}
             </div>
