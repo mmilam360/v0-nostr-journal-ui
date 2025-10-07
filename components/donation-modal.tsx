@@ -12,7 +12,7 @@ interface DonationModalProps {
 }
 
 export function DonationModal({ open, onOpenChange }: DonationModalProps) {
-  const lightningAddress = "mmilam@getalby.com" // Replace with your actual Lightning address
+  const lightningAddress = "michaelmilam@getalby.com"
   const [copied, setCopied] = useState(false)
   const [customAmount, setCustomAmount] = useState("")
   
