@@ -877,9 +877,9 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
           </div>
 
           {/* Main Login Card */}
-          <div className="bg-slate-800 rounded-lg shadow-xl p-8 border border-slate-700 min-h-[400px] flex flex-col justify-center">
+          <div className="bg-slate-800 rounded-lg shadow-xl p-8 border border-slate-700 min-h-[500px] flex flex-col justify-center items-center">
             {loginMethod === "idle" && (
-              <div className="space-y-4">
+              <div className="space-y-4 w-full max-w-md">
                 <button
                   onClick={() => setShowOnboarding(true)}
                   className="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 shadow-lg shadow-green-500/20"
@@ -929,7 +929,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
             )}
 
             {loginMethod === "create" && (
-              <div className="space-y-4">
+              <div className="space-y-6 w-full max-w-md flex flex-col justify-center min-h-[400px]">
                 {connectionState === "idle" && (
                   <>
                     <div>
@@ -1050,7 +1050,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
             )}
 
             {loginMethod === "extension" && (
-              <div className="text-center py-8 flex flex-col justify-center min-h-[300px]">
+              <div className="w-full max-w-md flex flex-col justify-center items-center min-h-[400px] text-center">
                 {connectionState === "idle" && (
                   <>
                     <KeyRound className="h-12 w-12 text-blue-500 mx-auto mb-4" />
@@ -1092,7 +1092,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
             )}
 
             {loginMethod === "nsec" && (
-              <div className="space-y-6 flex flex-col justify-center min-h-[300px]">
+              <div className="space-y-6 w-full max-w-md flex flex-col justify-center min-h-[400px]">
                 <div>
                   <label className="block text-sm font-medium text-slate-300 mb-2">Private Key (nsec or hex)</label>
                   <input
@@ -1136,9 +1136,9 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
             )}
 
             {loginMethod === "remote" && (
-              <div className="space-y-6">
+              <div className="w-full max-w-md flex flex-col justify-center items-center min-h-[400px]">
                 {remoteSignerMode === "select" && (
-                  <div className="space-y-4 flex flex-col justify-center min-h-[300px]">
+                  <div className="space-y-4 w-full">
                     <p className="text-center text-slate-300 font-medium mb-6">Choose Connection Method</p>
                     
                     <button
@@ -1173,7 +1173,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
                 )}
 
                 {remoteSignerMode === "nostrconnect" && (
-                  <div className="space-y-6 flex flex-col justify-center min-h-[300px]">
+                  <div className="space-y-6 w-full">
                     <div>
                       <label className="block text-sm font-medium text-slate-300 mb-2">
                         Connection String
