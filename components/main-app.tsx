@@ -783,11 +783,9 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                 
                 {/* Logo */}
                 <div className="flex items-center gap-3">
-                  <img 
-                    src="/Nostr Journal Logo.svg" 
-                    alt="Nostr Journal" 
-                    className="h-8 w-auto"
-                  />
+                  <div className="h-8 w-8 bg-primary/10 rounded flex items-center justify-center">
+                    <span className="text-sm font-bold text-primary">NJ</span>
+                  </div>
                   <h1 className="text-xl font-bold text-foreground">Nostr Journal</h1>
                   {/* Color test - should be logo blue */}
                   <div className="w-4 h-4 bg-primary rounded ml-2" title="Logo blue test"></div>

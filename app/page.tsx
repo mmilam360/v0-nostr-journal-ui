@@ -200,21 +200,6 @@ export default function Home() {
         ) : (
           <div>
                 <LoginPageRedesigned onLoginSuccess={handleLoginSuccess} />
-            {/* Debug button - remove this after testing */}
-            <div className="fixed bottom-4 right-4 z-50">
-              <button
-                onClick={() => {
-                  console.log("=== DEBUG STATE ===")
-                  console.log("isLoggedIn:", isLoggedIn)
-                  console.log("authData:", authData)
-                  console.log("localStorage session:", localStorage.getItem(SESSION_KEY))
-                  console.log("==================")
-                }}
-                className="bg-red-600 hover:bg-red-700 text-white text-xs px-2 py-1 rounded"
-              >
-                Debug State
-              </button>
-            </div>
           </div>
         )}
       </main>

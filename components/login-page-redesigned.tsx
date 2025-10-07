@@ -35,6 +35,7 @@ export default function LoginPageRedesigned({ onLoginSuccess }: LoginPageRedesig
   const [showInfo, setShowInfo] = useState(false)
   const [generatedKeys, setGeneratedKeys] = useState<GeneratedKeys | null>(null)
   const [hasConfirmedSave, setHasConfirmedSave] = useState(false)
+  const [selectedLoginMethod, setSelectedLoginMethod] = useState<'extension' | 'remote' | 'nsec' | null>(null)
 
   const generateNewKeypair = () => {
     const secretKey = generateSecretKey()
@@ -68,11 +69,9 @@ export default function LoginPageRedesigned({ onLoginSuccess }: LoginPageRedesig
         <div className="w-full max-w-md space-y-8">
           {/* Logo & Tagline */}
           <div className="text-center">
-            <img 
-              src="/Nostr Journal Logo.svg" 
-              alt="Nostr Journal" 
-              className="h-16 w-auto mx-auto mb-4"
-            />
+            <div className="h-16 w-16 mx-auto mb-4 bg-primary/10 rounded-lg flex items-center justify-center">
+              <span className="text-2xl font-bold text-primary">NJ</span>
+            </div>
             <h1 className="text-3xl font-bold text-foreground">Nostr Journal</h1>
             <p className="text-muted-foreground mt-2">
               Your private, decentralized journal
@@ -138,7 +137,10 @@ export default function LoginPageRedesigned({ onLoginSuccess }: LoginPageRedesig
                   
                   <div className="space-y-4">
                     {/* Browser Extension */}
-                    <button className="w-full p-4 rounded-lg border-2 border-border hover:border-primary transition-all text-left bg-card hover:bg-card/80">
+                    <button 
+                      onClick={() => setSelectedLoginMethod('extension')}
+                      className="w-full p-4 rounded-lg border-2 border-border hover:border-primary transition-all text-left bg-card hover:bg-card/80"
+                    >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-4">
                           <Radio className="w-6 h-6 text-primary" />
@@ -154,7 +156,10 @@ export default function LoginPageRedesigned({ onLoginSuccess }: LoginPageRedesig
                     </button>
 
                     {/* Remote Signer / QR Code */}
-                    <button className="w-full p-4 rounded-lg border-2 border-border hover:border-primary transition-all text-left bg-card hover:bg-card/80">
+                    <button 
+                      onClick={() => setSelectedLoginMethod('remote')}
+                      className="w-full p-4 rounded-lg border-2 border-border hover:border-primary transition-all text-left bg-card hover:bg-card/80"
+                    >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-4">
                           <Smartphone className="w-6 h-6 text-primary" />
@@ -170,7 +175,10 @@ export default function LoginPageRedesigned({ onLoginSuccess }: LoginPageRedesig
                     </button>
 
                     {/* Import Private Key */}
-                    <button className="w-full p-4 rounded-lg border-2 border-border hover:border-primary transition-all text-left bg-card hover:bg-card/80">
+                    <button 
+                      onClick={() => setSelectedLoginMethod('nsec')}
+                      className="w-full p-4 rounded-lg border-2 border-border hover:border-primary transition-all text-left bg-card hover:bg-card/80"
+                    >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-4">
                           <Key className="w-6 h-6 text-primary" />
@@ -197,6 +205,33 @@ export default function LoginPageRedesigned({ onLoginSuccess }: LoginPageRedesig
                       </Button>
                     </div>
                   </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Show actual login functionality when method is selected */}
+          {selectedPath === 'existing' && selectedLoginMethod && (
+            <div className="space-y-4 animate-fade-in">
+              <div className="border border-primary/20 rounded-lg bg-card">
+                <div className="p-4 border-b border-primary/20">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-medium">
+                      {selectedLoginMethod === 'extension' && 'Browser Extension Login'}
+                      {selectedLoginMethod === 'remote' && 'Remote Signer / QR Code'}
+                      {selectedLoginMethod === 'nsec' && 'Import Private Key'}
+                    </h4>
+                    <Button 
+                      onClick={() => setSelectedLoginMethod(null)}
+                      variant="ghost" 
+                      size="sm"
+                    >
+                      Back
+                    </Button>
+                  </div>
+                </div>
+                <div className="p-4">
+                  <LoginPage onLoginSuccess={onLoginSuccess} />
                 </div>
               </div>
             </div>
