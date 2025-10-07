@@ -1,6 +1,6 @@
 "use client"
 
-import * as nostrTools from "nostr-tools"
+import { verifyEvent } from "nostr-tools"
 
 export interface ValidationResult {
   isValid: boolean
@@ -58,7 +58,7 @@ export function validateEvent(event: any): ValidationResult {
   // Validate signature if possible
   if (event.id && event.sig && event.pubkey && errors.length === 0) {
     try {
-      const isValidSig = nostrTools.verifySignature(event)
+      const isValidSig = verifyEvent(event)
       if (!isValidSig) {
         errors.push("Event signature is invalid")
       }
