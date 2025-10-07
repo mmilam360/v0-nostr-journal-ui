@@ -18,6 +18,7 @@ import {
   Trash2,
   Sun,
   Moon,
+  Zap,
 } from "lucide-react"
 import TagsPanel from "@/components/tags-panel"
 import NoteList from "@/components/note-list"
