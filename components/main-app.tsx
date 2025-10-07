@@ -110,6 +110,8 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   const [npub, setNpub] = useState<string>("")
   const [relays, setRelays] = useState<string[]>([])
   const [newRelay, setNewRelay] = useState("")
+  const [profilePicture, setProfilePicture] = useState<string>("")
+  const [displayName, setDisplayName] = useState<string>("")
 
   const retryConnection = async () => {
     console.log("[v0] 🔄 Retrying connection...")
@@ -787,6 +789,36 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       }
     }
 
+    const loadProfile = async () => {
+      try {
+        const { SimplePool } = await import("nostr-tools/pool")
+        const { getRelays } = await import("@/lib/relay-manager")
+        
+        const RELAYS = await getRelays()
+        const pool = new SimplePool()
+        
+        const events = await pool.querySync(RELAYS, {
+          kinds: [0],
+          authors: [authData.pubkey],
+          limit: 1
+        })
+
+        if (events.length > 0) {
+          const metadata = JSON.parse(events[0].content)
+          if (metadata.picture) {
+            setProfilePicture(metadata.picture)
+          }
+          if (metadata.name || metadata.display_name) {
+            setDisplayName(metadata.display_name || metadata.name)
+          }
+        }
+
+        pool.close(RELAYS)
+      } catch (err) {
+        console.error("Failed to fetch profile metadata:", err)
+      }
+    }
+
     const loadRelays = () => {
       const savedRelays = localStorage.getItem("nostr_user_relays")
       if (savedRelays) {
@@ -803,6 +835,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     }
 
     loadNpub()
+    loadProfile()
     loadRelays()
   }, [authData.pubkey])
 
@@ -908,13 +941,28 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                   >
                     {/* Profile Section with Picture and NPub */}
                     <div className="px-4 py-4 border-b border-border">
-                      <div className="flex items-center gap-3 mb-3">
-                        <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center">
-                          <User className="w-6 h-6 text-primary" />
+                      <div className="flex items-center gap-4 mb-4">
+                        <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center overflow-hidden">
+                          {profilePicture ? (
+                            <img 
+                              src={profilePicture} 
+                              alt="Profile" 
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                e.currentTarget.style.display = 'none'
+                                e.currentTarget.nextElementSibling.style.display = 'flex'
+                              }}
+                            />
+                          ) : null}
+                          <div className={`w-full h-full flex items-center justify-center ${profilePicture ? 'hidden' : 'flex'}`}>
+                            <User className="w-8 h-8 text-primary" />
+                          </div>
                         </div>
                         <div className="flex-1">
-                          <p className="text-sm font-medium">Nostr Profile</p>
-                          <p className="text-xs text-muted-foreground">Connected</p>
+                          <p className="text-sm font-medium leading-tight">
+                            {displayName || "Nostr Profile"}
+                          </p>
+                          <p className="text-xs text-muted-foreground leading-tight">Connected</p>
                         </div>
                       </div>
                       
@@ -944,7 +992,11 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                     
                     <DropdownMenuGroup>
                       <DropdownMenuItem 
-                        onClick={() => setShowRelaysInDropdown(!showRelaysInDropdown)}
+                        onClick={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          setShowRelaysInDropdown(!showRelaysInDropdown)
+                        }}
                         className="cursor-pointer"
                       >
                         <Settings className="w-4 h-4 mr-2" />
@@ -954,17 +1006,6 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                         ) : (
                           <span className="ml-auto text-xs">▶</span>
                         )}
-                      </DropdownMenuItem>
-                      
-                      <DropdownMenuItem 
-                        onClick={() => {
-                          console.log('[Dropdown] Logout clicked')
-                          handleLogout()
-                        }}
-                        className="text-destructive focus:text-destructive"
-                      >
-                        <LogOut className="w-4 h-4 mr-2" />
-                        Logout
                       </DropdownMenuItem>
                     </DropdownMenuGroup>
                     
@@ -1037,6 +1078,19 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                         </div>
                       </div>
                     )}
+                    
+                    <DropdownMenuSeparator />
+                    
+                    <DropdownMenuItem 
+                      onClick={() => {
+                        console.log('[Dropdown] Logout clicked')
+                        handleLogout()
+                      }}
+                      className="text-destructive focus:text-destructive"
+                    >
+                      <LogOut className="w-4 h-4 mr-2" />
+                      Logout
+                    </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
         </div>
