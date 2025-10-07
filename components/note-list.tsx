@@ -142,6 +142,89 @@ export default function NoteList({ notes, selectedNote, onSelectNote, onCreateNo
                     )}
                   </div>
                 </button>
+                
+                {/* Verification Section - Show for ALL notes */}
+                <div className="border-t border-border mt-3 pt-3 px-4 pb-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2">
+                      {/* Encryption indicator */}
+                      <div className="flex items-center gap-1 text-green-600 dark:text-green-400">
+                        <Lock className="w-3 h-3" />
+                        <span>Encrypted</span>
+                      </div>
+                      
+                      {/* Sync status */}
+                      {note.syncStatus === 'synced' && note.eventId && (
+                        <div className="flex items-center gap-1 text-blue-600 dark:text-blue-400">
+                          <CheckCircle2 className="w-3 h-3" />
+                          <span>Synced</span>
+                        </div>
+                      )}
+                      
+                      {note.syncStatus === 'local' && (
+                        <div className="flex items-center gap-1 text-yellow-600 dark:text-yellow-400">
+                          <AlertCircle className="w-3 h-3" />
+                          <span>Local only</span>
+                        </div>
+                      )}
+                      
+                      {note.syncStatus === 'syncing' && (
+                        <div className="flex items-center gap-1 text-blue-600 dark:text-blue-400">
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                          <span>Syncing...</span>
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* Event ID with actions - Show for synced notes */}
+                    {note.eventId && (
+                      <div className="flex items-center gap-1">
+                        <code className="text-xs font-mono text-muted-foreground">
+                          {note.eventId.slice(0, 8)}...
+                        </code>
+                        
+                        <Button
+                          onClick={(e) => {
+                            e.stopPropagation() // Don't open note
+                            copyEventId(note.eventId!)
+                          }}
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 w-6 p-0"
+                          title="Copy Event ID"
+                        >
+                          <Copy className="w-3 h-3" />
+                        </Button>
+                        
+                        <Button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleVerifyNote(note)
+                          }}
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 w-6 p-0"
+                          title="Verify on Nostr"
+                        >
+                          <ShieldCheck className="w-3 h-3" />
+                        </Button>
+                        
+                        <Button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            window.open(`https://nostr.band/e/${note.eventId}`, '_blank')
+                          }}
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 w-6 p-0"
+                          title="View on Explorer"
+                        >
+                          <ExternalLink className="w-3 h-3" />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             ))}
           </div>

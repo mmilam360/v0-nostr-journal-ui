@@ -63,6 +63,7 @@ export interface Note {
   syncStatus?: "local" | "syncing" | "synced" | "error"
   syncError?: string
   eventId?: string // Nostr event ID for verification
+  eventKind?: number // Track which kind was used (30078 or 31078)
 }
 
 export interface AuthData {

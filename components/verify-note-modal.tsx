@@ -100,13 +100,21 @@ export default function VerifyNoteModal({ isOpen, onClose, note, authData }: Ver
           <div>
             <label className="text-sm font-medium block mb-2">Event Kind</label>
             <div className="px-3 py-2 border rounded bg-muted">
-              <span className="text-sm font-mono">30078</span>
+              <span className="text-sm font-mono">{note.eventKind || 31078}</span>
               <span className="text-sm text-muted-foreground ml-2">
-                (Parameterized Replaceable Event)
+                ({note.eventKind === 31078 ? 'Private Note' : 'Parameterized Replaceable Event'})
               </span>
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              This event type is used for replaceable notes in Nostr
+              {note.eventKind === 31078 ? (
+                <>
+                  <span className="text-green-600 dark:text-green-400 font-medium">✓ Private format</span> - Won't appear in social feeds
+                </>
+              ) : (
+                <>
+                  <span className="text-yellow-600 dark:text-yellow-400 font-medium">⚠ Legacy format</span> - May appear in followers' feeds
+                </>
+              )}
             </p>
           </div>
           
@@ -144,15 +152,6 @@ export default function VerifyNoteModal({ isOpen, onClose, note, authData }: Ver
                 >
                   <ExternalLink className="w-4 h-4" />
                   Nostrrr
-                </Button>
-                <Button
-                  onClick={() => window.open(`https://nostr.wine/e/${note.eventId}`, '_blank')}
-                  variant="outline"
-                  size="sm"
-                  className="flex items-center gap-2"
-                >
-                  <ExternalLink className="w-4 h-4" />
-                  Nostr.wine
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground mt-2">
