@@ -1,6 +1,6 @@
 "use client"
 
-import { Inbox, Trash2, Hash } from "lucide-react"
+import { Inbox, Hash } from "lucide-react"
 import UserMenu from "@/components/user-menu"
 import DonationBubble from "@/components/donation-bubble"
 
@@ -35,17 +35,6 @@ export default function TagsPanel({ tags, selectedTag, onSelectTag, pubkey, onLo
           All Notes
         </button>
 
-        <button
-          onClick={() => onSelectTag("trash")}
-          className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors hover:bg-secondary ${
-            selectedTag === "trash"
-              ? "bg-red-500/10 text-red-500 font-medium"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          <Trash2 className="w-4 h-4" />
-          Trash
-        </button>
       </div>
 
       <div className="px-4 py-2">

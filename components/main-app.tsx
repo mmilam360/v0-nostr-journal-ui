@@ -51,6 +51,7 @@ import { ConnectionStatus } from "@/components/connection-status"
 import { DiagnosticPage } from "@/components/diagnostic-page"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { getDefaultRelays } from "@/lib/relay-manager"
+import { QRCodeSVG } from 'qrcode.react'
 
 export interface Note {
   id: string
@@ -112,6 +113,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   const [newRelay, setNewRelay] = useState("")
   const [profilePicture, setProfilePicture] = useState<string>("")
   const [displayName, setDisplayName] = useState<string>("")
+  const [showDonationModal, setShowDonationModal] = useState(false)
 
   const retryConnection = async () => {
     console.log("[v0] 🔄 Retrying connection...")
@@ -928,6 +930,17 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                   </DropdownMenuContent>
                 </DropdownMenu>
                 
+                {/* Support button */}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowDonationModal(true)}
+                  className="hidden sm:flex items-center gap-1 text-amber-600 hover:text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/20"
+                >
+                  <Zap className="w-4 h-4" />
+                  <span>Support</span>
+                </Button>
+                
                 {/* Account dropdown - working version */}
                 <DropdownMenu>
                   <DropdownMenuTrigger>
@@ -1246,6 +1259,53 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
         )}
 
     </div>
+    
+    {/* Simple Donation Modal */}
+    {showDonationModal && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+        <div className="bg-background border rounded-lg p-6 max-w-md w-full mx-4">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold flex items-center gap-2">
+              <Zap className="w-5 h-5 text-amber-500" />
+              Support Nostr Journal
+            </h2>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowDonationModal(false)}
+            >
+              <X className="w-4 h-4" />
+            </Button>
+          </div>
+          
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              This app is 100% funded by users like you. No VC money. No ads. No tracking.
+            </p>
+            
+            <div className="text-center">
+              <p className="text-sm font-medium mb-3">Lightning Address:</p>
+              <div className="bg-secondary p-3 rounded-lg mb-3">
+                <code className="text-sm font-mono">michaelmilam@getalby.com</code>
+              </div>
+              
+              <p className="text-sm font-medium mb-3">Or scan QR code:</p>
+              <div className="flex justify-center">
+                <QRCodeSVG 
+                  value="michaelmilam@getalby.com" 
+                  size={150} 
+                  className="border rounded-lg p-2"
+                />
+              </div>
+            </div>
+            
+            <p className="text-xs text-center text-muted-foreground">
+              Thank you for supporting independent Nostr development! 🙏
+            </p>
+          </div>
+        </div>
+      </div>
+    )}
     
     </ErrorBoundary>
   )
