@@ -228,8 +228,8 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
       // Comprehensive permissions for full app functionality
       const perms = encodeURIComponent("sign_event:1,sign_event:5,sign_event:30078,sign_event:31078,nip04_encrypt,nip04_decrypt,nip44_encrypt,nip44_decrypt,get_public_key,get_relays")
       
-      // Use nostr.band relay for better mobile compatibility
-      const BUNKER_RELAY = "wss://relay.nostr.band"
+      // Use nsec.app relay for better compatibility
+      const BUNKER_RELAY = "wss://relay.nsec.app"
       
       // Generate the nostrconnect URI with secret
       const bunkerURI = `nostrconnect://${appPublicKey}?relay=${encodeURIComponent(BUNKER_RELAY)}&secret=${secret}&name=${appName}&perms=${perms}`
@@ -501,7 +501,8 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                 <p className="text-muted-foreground">How would you like to connect your account?</p>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+              <div className="max-w-2xl mx-auto">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                 {/* Browser Extension */}
                 <button
                   onClick={() => {
@@ -552,6 +553,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                     Enter your private key directly
                   </p>
                 </button>
+                </div>
               </div>
             </div>
           )
@@ -868,7 +870,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
         <div className="w-full max-w-4xl flex flex-col justify-center min-h-[500px] sm:min-h-[600px]">
           {/* Progress Indicator */}
           <div className="mb-8">
-            <div className="flex items-center justify-center max-w-md mx-auto">
+            <div className="flex items-center justify-center max-w-2xl mx-auto">
               {steps.map((step, index) => (
                 <div key={step} className="flex items-center">
                   <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium transition-all ${
