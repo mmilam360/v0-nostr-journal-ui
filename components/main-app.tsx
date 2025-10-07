@@ -207,12 +207,12 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
           // CRITICAL: Only update if we got valid notes
           if (validatedSyncNotes.length > 0 || notesWithStatus.length === 0) {
             setNotes(validatedSyncNotes)
-            setDeletedNotes(syncResult.deletedNotes)
-            setSyncStatus(syncResult.synced ? "synced" : "error")
+        setDeletedNotes(syncResult.deletedNotes)
+        setSyncStatus(syncResult.synced ? "synced" : "error")
             setConnectionError(syncResult.errors.length > 0 ? syncResult.errors[0] : null)
 
-            if (syncResult.synced) {
-              setLastSyncTime(new Date())
+        if (syncResult.synced) {
+          setLastSyncTime(new Date())
               // Save synced state to local storage
               await saveEncryptedNotes(authData.pubkey, validatedSyncNotes)
             }
@@ -297,60 +297,60 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   }, [syncStatus, needsSync, authData, notes, deletedNotes]) // Removed notes/deletedNotes from deps to prevent loops
 
   useEffect(() => {
-    const saveNotes = async () => {
-      console.log("[v0] Triggering sync after changes...")
+      const saveNotes = async () => {
+        console.log("[v0] Triggering sync after changes...")
 
       // Save locally first (instant feedback)
-      await saveEncryptedNotes(authData.pubkey, notes)
+        await saveEncryptedNotes(authData.pubkey, notes)
 
-      if (notes.length > 0 || deletedNotes.length > 0) {
-        try {
-          setSyncStatus("syncing")
+        if (notes.length > 0 || deletedNotes.length > 0) {
+          try {
+            setSyncStatus("syncing")
 
-          setNotes((prev) =>
-            prev.map((note) => ({
-              ...note,
-              syncStatus: "syncing" as const,
-            })),
-          )
+            setNotes((prev) =>
+              prev.map((note) => ({
+                ...note,
+                syncStatus: "syncing" as const,
+              })),
+            )
 
-          console.log("[v0] Syncing changes to Nostr...")
+            console.log("[v0] Syncing changes to Nostr...")
           const result = await smartSyncNotes(notes, deletedNotes, authData)
 
           // Validate results
           const validatedNotes = sanitizeNotes(result.notes)
 
           if (validatedNotes.length > 0 && JSON.stringify(validatedNotes) !== JSON.stringify(notes)) {
-            console.log("[v0] Sync returned changes, updating state")
+              console.log("[v0] Sync returned changes, updating state")
 
             const syncedNotes = validatedNotes.map((note) => ({
-              ...note,
-              syncStatus: result.synced ? ("synced" as const) : ("error" as const),
-            }))
+                ...note,
+                syncStatus: result.synced ? ("synced" as const) : ("error" as const),
+              }))
 
-            setNotes(syncedNotes)
-            setDeletedNotes(result.deletedNotes)
+              setNotes(syncedNotes)
+              setDeletedNotes(result.deletedNotes)
+            }
+
+            setSyncStatus(result.synced ? "synced" : "error")
+            if (result.synced) {
+              setLastSyncTime(new Date())
+            }
+          } catch (error) {
+            console.error("[v0] Error syncing to Nostr:", error)
+            setSyncStatus("error")
+
+            setNotes((prev) =>
+              prev.map((note) => ({
+                ...note,
+                syncStatus: "error" as const,
+              })),
+            )
           }
-
-          setSyncStatus(result.synced ? "synced" : "error")
-          if (result.synced) {
-            setLastSyncTime(new Date())
-          }
-        } catch (error) {
-          console.error("[v0] Error syncing to Nostr:", error)
-          setSyncStatus("error")
-
-          setNotes((prev) =>
-            prev.map((note) => ({
-              ...note,
-              syncStatus: "error" as const,
-            })),
-          )
         }
-      }
 
-      setNeedsSync(false)
-    }
+        setNeedsSync(false)
+      }
 
     let timeoutId: NodeJS.Timeout | null = null
 
@@ -595,7 +595,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     } catch (error) {
       console.error("[v0] Failed to publish deletion event:", error)
     }
-  }
+    }
 
   const handleCancelDelete = () => {
     setShowDeleteConfirmation(false)
@@ -706,16 +706,16 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
 
       if (validatedNotes.length > 0) {
         const syncedNotes = validatedNotes.map((note) => ({
-          ...note,
-          syncStatus: syncResult.synced ? ("synced" as const) : ("error" as const),
-        }))
+        ...note,
+        syncStatus: syncResult.synced ? ("synced" as const) : ("error" as const),
+      }))
 
-        setNotes(syncedNotes)
-        setDeletedNotes(syncResult.deletedNotes)
-        setSyncStatus(syncResult.synced ? "synced" : "error")
+      setNotes(syncedNotes)
+      setDeletedNotes(syncResult.deletedNotes)
+      setSyncStatus(syncResult.synced ? "synced" : "error")
 
-        if (syncResult.synced) {
-          setLastSyncTime(new Date())
+      if (syncResult.synced) {
+        setLastSyncTime(new Date())
           await saveEncryptedNotes(authData.pubkey, syncedNotes)
         }
 
@@ -821,7 +821,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
 
   return (
     <ErrorBoundary>
-      <div className="h-screen bg-background flex flex-col w-full">
+    <div className="h-screen bg-background flex flex-col w-full">
         {/* Clean Header */}
         <header className="sticky top-0 z-50 bg-white/95 dark:bg-card/95 backdrop-blur-sm border-b border-border">
           <div className="w-full px-4 py-3">
@@ -829,15 +829,15 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
               {/* Left side */}
               <div className="flex items-center gap-4">
                 {/* Mobile menu */}
-                <Button
-                  variant="ghost"
-                  size="sm"
+          <Button
+            variant="ghost"
+            size="sm"
                   className="md:hidden"
                   onClick={() => setIsMobileSidebarOpen(true)}
-                >
-                  <Menu className="w-4 h-4" />
-                </Button>
-                
+          >
+            <Menu className="w-4 h-4" />
+          </Button>
+
                 {/* Logo */}
                 <div className="flex items-center gap-3">
                   <Logo className="h-8 w-auto" />
@@ -855,14 +855,14 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
               <div className="flex items-center gap-1">
                 {/* Sync status */}
                 <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-secondary/50 text-xs">
-                  {getSyncStatusIcon()}
+            {getSyncStatusIcon()}
                   <span className="text-muted-foreground">{getSyncStatusText()}</span>
                 </div>
                 
                 {/* Theme toggle */}
-                <Button
-                  variant="ghost"
-                  size="sm"
+              <Button
+                variant="ghost"
+                size="sm"
                   onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
                 >
                   {theme === 'dark' ? (
@@ -872,30 +872,29 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                   )}
                 </Button>
                 
-                {/* Test dropdown */}
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm">
-                      Test
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent>
-                    <DropdownMenuItem>Test Item 1</DropdownMenuItem>
-                    <DropdownMenuItem>Test Item 2</DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                {/* Test simple button */}
+          <Button
+                  variant="outline" 
+            size="sm"
+                  onClick={() => {
+                    console.log('[Test] Simple button clicked!')
+                    alert('Simple button works!')
+                  }}
+                >
+                  Test Click
+          </Button>
 
-                {/* Account dropdown - minimal test implementation */}
+                {/* Account dropdown - test without asChild */}
                 <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button 
-                      variant="ghost" 
-                      size="sm"
+                  <DropdownMenuTrigger>
+          <Button
+            variant="ghost"
+            size="sm"
                       onClick={() => console.log('[Dropdown] Button clicked!')}
-                    >
+          >
                       <User className="w-4 h-4" />
                       <span className="hidden sm:inline ml-2">Account</span>
-                    </Button>
+          </Button>
                   </DropdownMenuTrigger>
                   
                   <DropdownMenuContent 
@@ -944,112 +943,112 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                         handleLogout()
                       }}
                       className="text-destructive focus:text-destructive"
-                    >
-                      <LogOut className="w-4 h-4 mr-2" />
+          >
+            <LogOut className="w-4 h-4 mr-2" />
                       Logout
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
-              </div>
-            </div>
+        </div>
+      </div>
           </div>
         </header>
 
         <div className="flex flex-1 overflow-hidden">
           {/* Desktop Sidebar */}
-          <div className="hidden md:block">
-            <TagsPanel
-              tags={tags}
-              selectedTag={selectedTag}
-              onSelectTag={setSelectedTag}
-              pubkey={authData.pubkey}
+        <div className="hidden md:block">
+          <TagsPanel
+            tags={tags}
+            selectedTag={selectedTag}
+            onSelectTag={setSelectedTag}
+            pubkey={authData.pubkey}
               onLogout={handleLogout}
-            />
-          </div>
+          />
+        </div>
 
           {/* Mobile Sidebar */}
-          {isMobileSidebarOpen && (
-            <div className="fixed inset-0 z-50 md:hidden">
-              <div className="absolute inset-0 bg-black bg-opacity-50" onClick={() => setIsMobileSidebarOpen(false)} />
+        {isMobileSidebarOpen && (
+          <div className="fixed inset-0 z-50 md:hidden">
+            <div className="absolute inset-0 bg-black bg-opacity-50" onClick={() => setIsMobileSidebarOpen(false)} />
               <div className="absolute left-0 top-0 h-full w-64 bg-card border-r border-border shadow-xl">
                 <div className="flex items-center justify-between p-4 border-b border-border">
                   <h2 className="text-foreground font-medium">Menu</h2>
-                  <Button
-                    onClick={() => setIsMobileSidebarOpen(false)}
-                    variant="ghost"
-                    size="sm"
+                <Button
+                  onClick={() => setIsMobileSidebarOpen(false)}
+                  variant="ghost"
+                  size="sm"
                     className="text-muted-foreground hover:text-foreground"
-                  >
-                    <X className="w-4 h-4" />
-                  </Button>
-                </div>
-                <TagsPanel
-                  tags={tags}
-                  selectedTag={selectedTag}
-                  onSelectTag={(tag) => {
-                    setSelectedTag(tag)
-                    setIsMobileSidebarOpen(false)
-                  }}
-                  pubkey={authData.pubkey}
-                  onLogout={handleLogout}
-                />
+                >
+                  <X className="w-4 h-4" />
+                </Button>
               </div>
+              <TagsPanel
+                tags={tags}
+                selectedTag={selectedTag}
+                onSelectTag={(tag) => {
+                  setSelectedTag(tag)
+                  setIsMobileSidebarOpen(false)
+                }}
+                pubkey={authData.pubkey}
+                  onLogout={handleLogout}
+              />
             </div>
-          )}
+          </div>
+        )}
 
           {/* Main content: Note List + Editor */}
           <div className="flex flex-1 min-w-0">
-            <div className="w-full md:w-80 border-r border-border">
-              <NoteList
-                notes={filteredNotes}
-                selectedNote={selectedNote}
-                onSelectNote={setSelectedNote}
-                onCreateNote={handleCreateNote}
-                onDeleteNote={handleDeleteNote}
+          <div className="w-full md:w-80 border-r border-border">
+            <NoteList
+              notes={filteredNotes}
+              selectedNote={selectedNote}
+              onSelectNote={setSelectedNote}
+              onCreateNote={handleCreateNote}
+              onDeleteNote={handleDeleteNote}
                 authData={authData}
-              />
-            </div>
+            />
+          </div>
 
             <div className="hidden lg:block flex-1">
+            <Editor
+              note={selectedNote}
+              onUpdateNote={handleUpdateNote}
+              onPublishNote={handlePublishNote}
+              onPublishHighlight={handlePublishHighlight}
+              onDeleteNote={handleDeleteNote}
+                authData={authData}
+            />
+          </div>
+        </div>
+
+          {/* Mobile Editor Overlay */}
+        {selectedNote && (
+            <div className="fixed inset-0 z-40 lg:hidden bg-background">
+              <div className="h-full flex flex-col">
+                <div className="bg-card border-b border-border px-4 py-3 flex items-center justify-between shadow-sm">
+                <h2 className="text-foreground font-medium truncate">{selectedNote.title}</h2>
+                <Button
+                  onClick={() => setSelectedNote(null)}
+                  variant="ghost"
+                  size="sm"
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
+                <div className="flex-1 overflow-hidden">
               <Editor
                 note={selectedNote}
                 onUpdateNote={handleUpdateNote}
                 onPublishNote={handlePublishNote}
                 onPublishHighlight={handlePublishHighlight}
                 onDeleteNote={handleDeleteNote}
-                authData={authData}
+                    authData={authData}
               />
+                </div>
             </div>
           </div>
-
-          {/* Mobile Editor Overlay */}
-          {selectedNote && (
-            <div className="fixed inset-0 z-40 lg:hidden bg-background">
-              <div className="h-full flex flex-col">
-                <div className="bg-card border-b border-border px-4 py-3 flex items-center justify-between shadow-sm">
-                  <h2 className="text-foreground font-medium truncate">{selectedNote.title}</h2>
-                  <Button
-                    onClick={() => setSelectedNote(null)}
-                    variant="ghost"
-                    size="sm"
-                    className="text-muted-foreground hover:text-foreground"
-                  >
-                    <X className="w-4 h-4" />
-                  </Button>
-                </div>
-                <div className="flex-1 overflow-hidden">
-                  <Editor
-                    note={selectedNote}
-                    onUpdateNote={handleUpdateNote}
-                    onPublishNote={handlePublishNote}
-                    onPublishHighlight={handlePublishHighlight}
-                    onDeleteNote={handleDeleteNote}
-                    authData={authData}
-                  />
-                </div>
-              </div>
-            </div>
-          )}
+        )}
         </div>
 
         {showPublishConfirmation && noteToPublish && (
@@ -1087,12 +1086,12 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
               <Button onClick={() => setShowDiagnostics(false)} variant="ghost" size="sm">
                 <X className="w-4 h-4" />
               </Button>
-            </div>
+      </div>
             <DiagnosticPage />
           </div>
         )}
 
-      </div>
+    </div>
     </ErrorBoundary>
   )
 }
