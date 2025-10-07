@@ -1,6 +1,6 @@
 "use client"
 import { useState, useCallback } from "react"
-import { QrReader } from "react-qr-reader"
+import jsQR from "jsqr"
 import { generateSecretKey, getPublicKey, nip04, finalizeEvent } from "nostr-tools"
 import { SimplePool } from "nostr-tools/pool"
 import { Loader2, CheckCircle, AlertTriangle, CameraOff, Wifi, KeyRound, Send } from "lucide-react"
@@ -121,20 +121,24 @@ export default function NwcScannerLogic({
         return (
           <div>
             <h2 className="text-xl font-bold text-center mb-4 text-white">Scan to Connect</h2>
-            <div className="overflow-hidden rounded-lg bg-black">
-              <QrReader
-                onResult={handleQrReaderResult}
-                onError={(e: any) => {
-                  if (e?.name === "NotAllowedError") setStatus("permission_denied")
-                }}
-                constraints={{ facingMode: "environment" }}
-                ViewFinder={() => (
-                  <div className="absolute top-0 left-0 w-full h-full flex items-center justify-center">
-                    <div className="w-60 h-60 border-4 border-dashed border-white/50 rounded-2xl" />
-                  </div>
-                )}
-                className="w-full"
-              />
+            <div className="overflow-hidden rounded-lg bg-black p-8">
+              <div className="flex flex-col items-center justify-center space-y-4 text-white">
+                <CameraOff className="h-16 w-16 text-white/50" />
+                <h3 className="text-lg font-semibold">QR Scanner Temporarily Disabled</h3>
+                <p className="text-white/70 text-center">
+                  Please use manual connection string input for now.
+                </p>
+                <button
+                  onClick={() => {
+                    // Simulate scanning for testing
+                    const testUri = "nostrconnect://test@wss://relay.example.com"
+                    handleScanResult(testUri)
+                  }}
+                  className="mt-4 rounded-md bg-indigo-600 px-4 py-2 font-semibold text-white hover:bg-indigo-500"
+                >
+                  Use Test Connection (Dev Only)
+                </button>
+              </div>
             </div>
           </div>
         )
