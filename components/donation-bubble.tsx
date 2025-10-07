@@ -15,7 +15,7 @@ export default function DonationBubble({ onClick }: DonationBubbleProps) {
         aria-label="Support development with Lightning"
       >
         <Zap className="w-4 h-4" />
-        <span>⚡ Support</span>
+        <span>Support</span>
           </button>
     </div>
   )

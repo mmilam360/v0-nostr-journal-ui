@@ -1117,7 +1117,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
             onSelectTag={setSelectedTag}
             pubkey={authData.pubkey}
             onLogout={handleLogout}
-            onDonationClick={() => {}}
+            onDonationClick={() => setShowDonationModal(true)}
           />
         </div>
 
@@ -1147,6 +1147,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                 pubkey={authData.pubkey}
                 onLogout={handleLogout}
                 onDonationClick={() => {
+                  setShowDonationModal(true)
                   setIsMobileSidebarOpen(false)
                 }}
               />
