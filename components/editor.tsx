@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import type { Note } from "@/components/main-app"
 import { useDebounce } from "@/hooks/useDebounce"
+import { Copy, ExternalLink, ShieldCheck } from "lucide-react"
+import VerifyNoteModal from "./verify-note-modal"
 
 interface EditorProps {
   note: Note | null
@@ -15,14 +17,16 @@ interface EditorProps {
   onPublishNote: (note: Note) => void
   onPublishHighlight: (note: Note, highlightedText: string) => void
   onDeleteNote: (note: Note) => void
+  authData: any // AuthData type
 }
 
-export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHighlight, onDeleteNote }: EditorProps) {
+export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHighlight, onDeleteNote, authData }: EditorProps) {
   const [title, setTitle] = useState("")
   const [content, setContent] = useState("")
   const [newTag, setNewTag] = useState("")
   const [selectedText, setSelectedText] = useState("")
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
+  const [showVerify, setShowVerify] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const currentNoteIdRef = useRef<string | null>(null)
   const previousNoteDataRef = useRef<{ id: string; title: string; content: string } | null>(null)
@@ -87,6 +91,14 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
       // Update previous note data ref
       previousNoteDataRef.current = { id: note.id, title, content }
       console.log("[v0] Note saved immediately")
+    }
+  }
+
+  const copyEventId = async (eventId: string) => {
+    try {
+      await navigator.clipboard.writeText(eventId)
+    } catch (err) {
+      console.error('Failed to copy event ID:', err)
     }
   }
 
@@ -316,6 +328,47 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
           </div>
         </div>
 
+        {/* Verification Section */}
+        {note.eventId && (
+          <div className="border-t border-border pt-3 mt-3">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-muted-foreground">Event ID:</span>
+              <div className="flex items-center gap-1">
+                <code className="text-xs font-mono text-primary bg-primary/10 px-1.5 py-0.5 rounded">
+                  {note.eventId.slice(0, 8)}...
+                </code>
+                <Button
+                  onClick={() => copyEventId(note.eventId!)}
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 w-6 p-0"
+                  title="Copy Event ID"
+                >
+                  <Copy className="w-3 h-3" />
+                </Button>
+                <Button
+                  onClick={() => window.open(`https://nostr.band/e/${note.eventId}`, '_blank')}
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 w-6 p-0"
+                  title="View on Nostr.band"
+                >
+                  <ExternalLink className="w-3 h-3" />
+                </Button>
+                <Button
+                  onClick={() => setShowVerify(true)}
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 w-6 p-0"
+                  title="Verify note details"
+                >
+                  <ShieldCheck className="w-3 h-3" />
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {selectedText && (
           <div className="text-xs text-primary mt-2">
             Selected: "{selectedText.substring(0, 100)}
@@ -323,6 +376,14 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
           </div>
         )}
       </div>
+      
+      {/* Verification Modal */}
+      <VerifyNoteModal
+        isOpen={showVerify}
+        onClose={() => setShowVerify(false)}
+        note={note}
+        authData={authData}
+      />
     </div>
   )
 }

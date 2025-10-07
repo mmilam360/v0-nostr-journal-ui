@@ -2,6 +2,7 @@
 
 import { Inbox, Trash2, Hash } from "lucide-react"
 import UserMenu from "@/components/user-menu"
+import DonationBubble from "@/components/donation-bubble"
 
 interface TagsPanelProps {
   tags: string[]
@@ -69,6 +70,11 @@ export default function TagsPanel({ tags, selectedTag, onSelectTag, pubkey, onLo
             ))
           )}
         </div>
+      </div>
+      
+      {/* Donation Bubble - Bottom of left column */}
+      <div className="mt-auto p-4">
+        <DonationBubble />
       </div>
     </div>
   )

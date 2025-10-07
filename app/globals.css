@@ -314,6 +314,33 @@ button {
   animation: fade-in 0.3s ease-out;
 }
 
+/* Slide animation for horizontal login */
+@keyframes slide-enter {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slide-exit {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+}
+
+.slide-content {
+  animation: slide-enter 0.3s ease-out;
+}
+
 /* Typography */
 .mono {
   font-family: 'Courier New', monospace;

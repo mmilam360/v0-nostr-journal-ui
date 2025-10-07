@@ -1,6 +1,6 @@
 "use client"
 import { useState, useEffect } from "react"
-import LoginPageRedesigned from "@/components/login-page-redesigned"
+import LoginPageHorizontal from "@/components/login-page-horizontal"
 import { MainApp } from "@/components/main-app"
 import type { AuthData } from "@/components/main-app"
 import { ErrorBoundary } from "@/components/error-boundary"
@@ -197,11 +197,11 @@ export default function Home() {
       <main className="min-h-screen bg-slate-900">
         {isLoggedIn && authData ? (
           <MainApp authData={authData} onLogout={handleLogout} />
-        ) : (
-          <div>
-                <LoginPageRedesigned onLoginSuccess={handleLoginSuccess} />
-          </div>
-        )}
+                ) : (
+                  <div>
+                        <LoginPageHorizontal onLoginSuccess={handleLoginSuccess} />
+                  </div>
+                )}
       </main>
     </ErrorBoundary>
   )

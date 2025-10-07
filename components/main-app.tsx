@@ -932,6 +932,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                 onPublishNote={handlePublishNote}
                 onPublishHighlight={handlePublishHighlight}
                 onDeleteNote={handleDeleteNote}
+                authData={authData}
               />
             </div>
           </div>
@@ -958,6 +959,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                     onPublishNote={handlePublishNote}
                     onPublishHighlight={handlePublishHighlight}
                     onDeleteNote={handleDeleteNote}
+                    authData={authData}
                   />
                 </div>
               </div>
@@ -1005,7 +1007,6 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
           </div>
         )}
       </div>
-      <DonationBubble />
     </ErrorBoundary>
   )
 }
