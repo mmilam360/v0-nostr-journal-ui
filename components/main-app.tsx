@@ -790,7 +790,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                   />
                   <h1 className="text-xl font-bold text-foreground">Nostr Journal</h1>
                   {/* Color test - should be logo blue */}
-                  <div className="w-4 h-4 bg-primary rounded ml-2"></div>
+                  <div className="w-4 h-4 bg-primary rounded ml-2" title="Logo blue test"></div>
                   <div className="hidden sm:flex items-center gap-2 text-xs text-muted-foreground">
                     <span>{notes.length} notes</span>
                     <span>•</span>
