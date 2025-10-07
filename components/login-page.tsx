@@ -1092,7 +1092,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
             )}
 
             {loginMethod === "nsec" && (
-              <div className="space-y-4">
+              <div className="space-y-6 flex flex-col justify-center min-h-[300px]">
                 <div>
                   <label className="block text-sm font-medium text-slate-300 mb-2">Private Key (nsec or hex)</label>
                   <input
@@ -1138,8 +1138,8 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
             {loginMethod === "remote" && (
               <div className="space-y-6">
                 {remoteSignerMode === "select" && (
-                  <div className="space-y-3">
-                    <p className="text-center text-slate-300 font-medium mb-4">Choose Connection Method</p>
+                  <div className="space-y-4 flex flex-col justify-center min-h-[300px]">
+                    <p className="text-center text-slate-300 font-medium mb-6">Choose Connection Method</p>
                     
                     <button
                       onClick={startBunkerLogin}
@@ -1165,7 +1165,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
 
                     <button
                       onClick={handleBack}
-                      className="w-full text-slate-400 hover:text-white text-sm mt-2"
+                      className="w-full text-slate-400 hover:text-white text-sm mt-6"
                     >
                       ← Back
                     </button>
@@ -1173,7 +1173,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
                 )}
 
                 {remoteSignerMode === "nostrconnect" && (
-                  <div className="space-y-4">
+                  <div className="space-y-6 flex flex-col justify-center min-h-[300px]">
                     <div>
                       <label className="block text-sm font-medium text-slate-300 mb-2">
                         Connection String
