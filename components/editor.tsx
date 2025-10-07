@@ -9,7 +9,6 @@ import { Textarea } from "@/components/ui/textarea"
 import type { Note } from "@/components/main-app"
 import { useDebounce } from "@/hooks/useDebounce"
 import { Copy, ExternalLink, ShieldCheck, Lock, CheckCircle2, AlertCircle, Loader2, Check } from "lucide-react"
-import VerifyNoteModal from "./verify-note-modal"
 
 interface EditorProps {
   note: Note | null
@@ -26,7 +25,6 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
   const [newTag, setNewTag] = useState("")
   const [selectedText, setSelectedText] = useState("")
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
-  const [showVerify, setShowVerify] = useState(false)
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const currentNoteIdRef = useRef<string | null>(null)
@@ -408,11 +406,11 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
                 </Button>
                 
                 <Button
-                  onClick={() => setShowVerify(true)}
+                  onClick={() => window.open(`https://nostrrr.com/e/${note.eventId}`, '_blank')}
                   variant="ghost"
                   size="sm"
                   className="h-6 w-6 p-0"
-                  title="Verify note details"
+                  title="View raw event data"
                 >
                   <ShieldCheck className="w-3 h-3" />
                 </Button>

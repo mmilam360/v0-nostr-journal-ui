@@ -209,8 +209,7 @@ export default function VerifyNoteModal({ note, authData, onClose }: VerifyNoteM
                   <div className="flex items-center justify-between">
                     <span className="font-mono">{rawEvent.kind}</span>
                     <span className="text-muted-foreground">
-                      {rawEvent.kind === 30078 && "(Replaceable Event - May show in feeds)"}
-                      {rawEvent.kind === 31078 && "(Private Note - Won't show in feeds)"}
+                      {rawEvent.kind === 30078 && "(Parameterized Replaceable Event - Encrypted content)"}
                       {rawEvent.kind === 1 && "(Public Note)"}
                     </span>
                   </div>

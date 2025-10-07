@@ -100,8 +100,10 @@ export const publishToNostr = async (unsignedEvent: any, authData: any): Promise
     throw new Error(`Failed to publish to any relay. Errors: ${failedRelays.map(r => r.error).join(", ")}`)
   }
 
-  console.log("[Publish] 🎉 Successfully published to", successfulRelays.length, "relay(s)")
-  return signedEvent.id
+          console.log("[Publish] 🎉 Successfully published to", successfulRelays.length, "relay(s)")
+          console.log("[Publish] 🔗 View on nostr.band:", `https://nostr.band/e/${signedEvent.id}`)
+          console.log("[Publish] 🔗 View on nostrrr:", `https://nostrrr.com/e/${signedEvent.id}`)
+          return signedEvent.id
 }
 
 // Helper function to publish to relays individually and track results

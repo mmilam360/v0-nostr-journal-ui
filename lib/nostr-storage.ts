@@ -218,10 +218,10 @@ export const fetchAllNotesFromNostr = async (authData: any): Promise<DecryptedNo
     const relays = await getCurrentRelays()
     console.log("[v0] 📡 Fetching notes from relays:", relays)
 
-    // Query both old (30078) and new (31078) kinds for backwards compatibility
+    // Query for parameterized replaceable events (kind 30078)
     const events = await fetcher.fetchAllEvents(
       relays,
-      { kinds: [30078, 31078], authors: [authData.pubkey] },
+      { kinds: [30078], authors: [authData.pubkey] },
       { sort: true }, // Sort by created_at descending
     )
 
@@ -264,7 +264,7 @@ export const fetchAllNotesFromNostr = async (authData: any): Promise<DecryptedNo
         const fallbackRelays = getRelays()
         const fallbackEvents = await fetcher.fetchAllEvents(
           fallbackRelays,
-          { kinds: [30078, 31078], authors: [authData.pubkey] },
+          { kinds: [30078], authors: [authData.pubkey] },
           { sort: true },
         )
 
@@ -319,7 +319,7 @@ export const saveNoteToNostr = async (note: DecryptedNote, authData: any): Promi
     const dTag = `${APP_D_TAG_PREFIX}${note.id}`
 
     const unsignedEvent: any = {
-      kind: 31078, // Private note kind - won't show in social feeds
+      kind: 30078, // Parameterized replaceable event - widely supported
       created_at: Math.floor(Date.now() / 1000),
       tags: [
         ["d", dTag],
@@ -381,7 +381,7 @@ export const saveNoteToNostr = async (note: DecryptedNote, authData: any): Promi
       return {
         success: true,
         eventId: signedEvent.id,
-        eventKind: 31078, // Track the kind used
+        eventKind: 30078, // Track the kind used
       }
     } finally {
       pool.close(relays)

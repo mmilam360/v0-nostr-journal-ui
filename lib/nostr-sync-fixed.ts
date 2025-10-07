@@ -294,7 +294,7 @@ export async function saveAndSyncNote(
         note: {
           ...updatedNote,
           eventId: result.eventId,
-          eventKind: result.eventKind || 31078, // Default to new kind
+          eventKind: result.eventKind || 30078, // Default to standard kind
           lastSynced: new Date(),
           syncStatus: 'synced',
           syncError: undefined
