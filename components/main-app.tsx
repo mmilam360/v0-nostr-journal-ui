@@ -23,6 +23,7 @@ import TagsPanel from "@/components/tags-panel"
 import NoteList from "@/components/note-list"
 import Editor from "@/components/editor"
 import PublishModal from "@/components/publish-modal"
+import VerifyNoteModal from "@/components/verify-note-modal"
 import PublishConfirmationModal from "@/components/publish-confirmation-modal"
 import DeleteConfirmationModal from "@/components/delete-confirmation-modal"
 import ProfilePage from "@/components/profile-page"
@@ -105,6 +106,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   const [showRelayManager, setShowRelayManager] = useState(false)
   const [showDiagnostics, setShowDiagnostics] = useState(false)
   const [connectionError, setConnectionError] = useState<string | null>(null)
+  const [verifyingNote, setVerifyingNote] = useState<Note | null>(null)
   const [copiedNpub, setCopiedNpub] = useState(false)
   const [npub, setNpub] = useState<string>("")
   const [relays, setRelays] = useState<string[]>([])
@@ -740,6 +742,11 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     }
   }
 
+  const handleVerifyNote = (note: Note) => {
+    console.log("[Verify] Opening verification for note:", note.id, note.title)
+    setVerifyingNote(note)
+  }
+
   const handleAddRelay = () => {
     if (!newRelay.trim()) return
     if (!newRelay.startsWith("wss://") && !newRelay.startsWith("ws://")) {
@@ -985,6 +992,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                 onSelectNote={setSelectedNote}
                 onCreateNote={handleCreateNote}
                 onDeleteNote={handleDeleteNote}
+                onVerifyNote={handleVerifyNote}
                 authData={authData}
               />
             </div>
@@ -1069,6 +1077,15 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
             </div>
             <DiagnosticPage />
           </div>
+        )}
+
+        {/* Verify Note Modal */}
+        {verifyingNote && (
+          <VerifyNoteModal
+            note={verifyingNote}
+            authData={authData}
+            onClose={() => setVerifyingNote(null)}
+          />
         )}
       </div>
     </ErrorBoundary>

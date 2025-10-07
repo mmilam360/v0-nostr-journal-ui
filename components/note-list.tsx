@@ -4,7 +4,7 @@ import type React from "react"
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { CheckCircle, Loader2, AlertCircle, CloudOff, AlertTriangle, Calendar, Plus, Copy, ExternalLink, Lock, ShieldCheck } from "lucide-react"
+import { CheckCircle, Loader2, AlertCircle, CloudOff, AlertTriangle, Calendar, Plus, Copy, ExternalLink, Lock, ShieldCheck, Check } from "lucide-react"
 import type { Note } from "@/components/main-app"
 import VerifyNoteModal from "./verify-note-modal"
 
@@ -14,14 +14,16 @@ interface NoteListProps {
   onSelectNote: (note: Note) => void
   onCreateNote: () => void
   onDeleteNote: (note: Note) => void
+  onVerifyNote?: (note: Note) => void  // Add verify handler
   authData: any // AuthData type
 }
 
-export default function NoteList({ notes, selectedNote, onSelectNote, onCreateNote, onDeleteNote, authData }: NoteListProps) {
+export default function NoteList({ notes, selectedNote, onSelectNote, onCreateNote, onDeleteNote, onVerifyNote, authData }: NoteListProps) {
   const [searchQuery, setSearchQuery] = useState("")
   const [showSyncWarning, setShowSyncWarning] = useState<string | null>(null)
   const [showVerify, setShowVerify] = useState(false)
   const [verifyNote, setVerifyNote] = useState<Note | null>(null)
+  const [copiedId, setCopiedId] = useState<string | null>(null)
 
   const filteredNotes = notes.filter(
     (note) =>
@@ -63,17 +65,36 @@ export default function NoteList({ notes, selectedNote, onSelectNote, onCreateNo
     onDeleteNote(note)
   }
 
-  const copyEventId = async (eventId: string) => {
+  const copyEventId = async (eventId: string, e: React.MouseEvent) => {
+    e.stopPropagation() // Stop note from opening
+    
     try {
       await navigator.clipboard.writeText(eventId)
-    } catch (err) {
-      console.error('Failed to copy event ID:', err)
+      setCopiedId(eventId)
+      setTimeout(() => setCopiedId(null), 2000)
+    } catch (error) {
+      console.error("Failed to copy:", error)
+      // Fallback for older browsers
+      const textArea = document.createElement('textarea')
+      textArea.value = eventId
+      textArea.style.position = 'fixed'
+      textArea.style.left = '-999999px'
+      document.body.appendChild(textArea)
+      textArea.select()
+      document.execCommand('copy')
+      textArea.remove()
+      setCopiedId(eventId)
+      setTimeout(() => setCopiedId(null), 2000)
     }
   }
 
   const handleVerifyNote = (note: Note) => {
-    setVerifyNote(note)
-    setShowVerify(true)
+    if (onVerifyNote) {
+      onVerifyNote(note)
+    } else {
+      setVerifyNote(note)
+      setShowVerify(true)
+    }
   }
 
   return (
@@ -144,7 +165,10 @@ export default function NoteList({ notes, selectedNote, onSelectNote, onCreateNo
                 </button>
                 
                 {/* Verification Section - Show for ALL notes */}
-                <div className="border-t border-border mt-3 pt-3 px-4 pb-2">
+                <div 
+                  className="border-t border-border mt-3 pt-3 px-4 pb-2"
+                  onClick={(e) => e.stopPropagation()} // CRITICAL: Stop propagation
+                >
                   <div className="flex items-center justify-between text-xs">
                     <div className="flex items-center gap-2">
                       {/* Encryption indicator */}
@@ -157,7 +181,7 @@ export default function NoteList({ notes, selectedNote, onSelectNote, onCreateNo
                       {note.syncStatus === 'synced' && note.eventId && (
                         <div className="flex items-center gap-1 text-blue-600 dark:text-blue-400">
                           <CheckCircle2 className="w-3 h-3" />
-                          <span>Synced</span>
+                          <span>On Nostr</span>
                         </div>
                       )}
                       
@@ -179,35 +203,38 @@ export default function NoteList({ notes, selectedNote, onSelectNote, onCreateNo
                     {/* Event ID with actions - Show for synced notes */}
                     {note.eventId && (
                       <div className="flex items-center gap-1">
-                        <code className="text-xs font-mono text-muted-foreground">
+                        <code className="text-xs font-mono text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
                           {note.eventId.slice(0, 8)}...
                         </code>
                         
                         <Button
-                          onClick={(e) => {
-                            e.stopPropagation() // Don't open note
-                            copyEventId(note.eventId!)
-                          }}
+                          onClick={(e) => copyEventId(note.eventId!, e)}
                           variant="ghost"
                           size="sm"
                           className="h-6 w-6 p-0"
                           title="Copy Event ID"
                         >
-                          <Copy className="w-3 h-3" />
+                          {copiedId === note.eventId ? (
+                            <Check className="w-3 h-3 text-green-500" />
+                          ) : (
+                            <Copy className="w-3 h-3" />
+                          )}
                         </Button>
                         
-                        <Button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleVerifyNote(note)
-                          }}
-                          variant="ghost"
-                          size="sm"
-                          className="h-6 w-6 p-0"
-                          title="Verify on Nostr"
-                        >
-                          <ShieldCheck className="w-3 h-3" />
-                        </Button>
+                        {onVerifyNote && (
+                          <Button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleVerifyNote(note)
+                            }}
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 w-6 p-0"
+                            title="Verify on Nostr"
+                          >
+                            <ShieldCheck className="w-3 h-3" />
+                          </Button>
+                        )}
                         
                         <Button
                           onClick={(e) => {
@@ -217,11 +244,17 @@ export default function NoteList({ notes, selectedNote, onSelectNote, onCreateNo
                           variant="ghost"
                           size="sm"
                           className="h-6 w-6 p-0"
-                          title="View on Explorer"
+                          title="View on Nostr.band"
                         >
                           <ExternalLink className="w-3 h-3" />
                         </Button>
                       </div>
+                    )}
+                    
+                    {!note.eventId && note.syncStatus !== 'error' && (
+                      <span className="text-xs text-muted-foreground">
+                        Not yet synced
+                      </span>
                     )}
                   </div>
                 </div>
