@@ -824,7 +824,6 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                     <Button 
                       variant="ghost" 
                       size="sm"
-                      onClick={() => console.log('Account button clicked')}
                     >
                       <User className="w-4 h-4" />
                       <span className="hidden sm:inline ml-2">Account</span>
@@ -832,7 +831,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent 
                     align="end" 
-                    className="w-64 z-50"
+                    className="w-64 !z-[9999]"
                     sideOffset={8}
                   >
                     {/* Profile Section */}

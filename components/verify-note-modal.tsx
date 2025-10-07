@@ -2,8 +2,7 @@
 
 import React, { useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Copy, ExternalLink, Lock, ShieldCheck } from 'lucide-react'
+import { Copy, ExternalLink, Lock, ShieldCheck, X } from 'lucide-react'
 import type { Note } from '@/components/main-app'
 import type { AuthData } from '@/components/main-app'
 
@@ -29,17 +28,35 @@ export default function VerifyNoteModal({ isOpen, onClose, note, authData }: Ver
     }
   }
 
+  if (!isOpen) return null
+
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      {/* Backdrop */}
+      <div 
+        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+        onClick={onClose}
+      />
+      
+      {/* Modal */}
+      <div className="relative bg-card border border-border rounded-lg shadow-lg max-w-2xl w-full max-h-[80vh] overflow-y-auto mx-4">
+        {/* Header */}
+        <div className="flex items-center justify-between p-6 border-b border-border">
+          <h2 className="text-xl font-semibold flex items-center gap-2">
             <ShieldCheck className="w-5 h-5 text-primary" />
             Verify Note on Nostr
-          </DialogTitle>
-        </DialogHeader>
+          </h2>
+          <Button
+            onClick={onClose}
+            variant="ghost"
+            size="sm"
+          >
+            <X className="w-4 h-4" />
+          </Button>
+        </div>
         
-        <div className="space-y-6 py-4">
+        {/* Content */}
+        <div className="p-6 space-y-6">
           {/* Event ID */}
           <div>
             <label className="text-sm font-medium block mb-2">Event ID</label>
@@ -173,12 +190,13 @@ export default function VerifyNoteModal({ isOpen, onClose, note, authData }: Ver
           </div>
         </div>
         
-        <div className="flex justify-end pt-4 border-t">
+        {/* Footer */}
+        <div className="flex justify-end p-6 pt-4 border-t">
           <Button onClick={onClose} variant="outline">
             Close
           </Button>
         </div>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </div>
   )
 }
