@@ -115,6 +115,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   const [profilePicture, setProfilePicture] = useState<string>("")
   const [displayName, setDisplayName] = useState<string>("")
   const [showDonationModal, setShowDonationModal] = useState(false)
+  const [donationAmount, setDonationAmount] = useState<string>("")
 
   const retryConnection = async () => {
     console.log("[v0] 🔄 Retrying connection...")
@@ -931,17 +932,6 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                   </DropdownMenuContent>
                 </DropdownMenu>
                 
-                {/* Support button */}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowDonationModal(true)}
-                  className="hidden sm:flex items-center gap-1 text-amber-600 hover:text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/20"
-                >
-                  <Zap className="w-4 h-4" />
-                  <span>Support</span>
-                </Button>
-                
                 {/* Account dropdown - working version */}
                 <DropdownMenu>
                   <DropdownMenuTrigger>
@@ -1261,7 +1251,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
 
     </div>
     
-    {/* Simple Donation Modal */}
+    {/* Lightning Donation Modal */}
     {showDonationModal && (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
         <div className="bg-background border rounded-lg p-6 max-w-md w-full mx-4">
@@ -1281,23 +1271,62 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
           
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              This app is 100% funded by users like you. No VC money. No ads. No tracking.
+              This app is 100% funded by users like you. No ads. No tracking.
             </p>
             
-            <div className="text-center">
-              <p className="text-sm font-medium mb-3">Lightning Address:</p>
-              <div className="bg-secondary p-3 rounded-lg mb-3">
-                <code className="text-sm font-mono">michaelmilam@getalby.com</code>
+            {/* Sats Input */}
+            <div>
+              <label className="text-sm font-medium mb-2 block">Amount (sats):</label>
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  placeholder="Enter sats (optional)"
+                  value={donationAmount}
+                  onChange={(e) => setDonationAmount(e.target.value)}
+                  className="flex-1 px-3 py-2 border rounded-lg bg-background text-foreground"
+                />
+                <Button
+                  onClick={() => setDonationAmount("")}
+                  variant="outline"
+                  size="sm"
+                >
+                  Clear
+                </Button>
               </div>
-              
-              <p className="text-sm font-medium mb-3">Or scan QR code:</p>
-              <div className="flex justify-center">
+            </div>
+            
+            {/* QR Code */}
+            <div className="text-center">
+              <p className="text-sm font-medium mb-3">
+                {donationAmount ? `Lightning Invoice (${donationAmount} sats):` : "Lightning Address:"}
+              </p>
+              <div className="flex justify-center mb-3">
                 <QRCodeSVG 
-                  value="michaelmilam@getalby.com" 
-                  size={150} 
+                  value={donationAmount ? `lightning:michaelmilam@getalby.com?amount=${donationAmount}000` : "michaelmilam@getalby.com"} 
+                  size={180} 
                   className="border rounded-lg p-2"
                 />
               </div>
+              
+              {/* Copy Address/Invoice */}
+              <div className="bg-secondary p-3 rounded-lg mb-3">
+                <code className="text-xs font-mono break-all">
+                  {donationAmount ? `lightning:michaelmilam@getalby.com?amount=${donationAmount}000` : "michaelmilam@getalby.com"}
+                </code>
+              </div>
+              
+              <Button
+                onClick={() => {
+                  const text = donationAmount ? `lightning:michaelmilam@getalby.com?amount=${donationAmount}000` : "michaelmilam@getalby.com"
+                  navigator.clipboard.writeText(text)
+                }}
+                variant="outline"
+                size="sm"
+                className="w-full"
+              >
+                <Copy className="w-4 h-4 mr-2" />
+                Copy {donationAmount ? "Invoice" : "Address"}
+              </Button>
             </div>
             
             <p className="text-xs text-center text-muted-foreground">
