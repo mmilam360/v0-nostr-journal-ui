@@ -789,6 +789,8 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                     className="h-8 w-auto"
                   />
                   <h1 className="text-xl font-bold text-foreground">Nostr Journal</h1>
+                  {/* Color test - should be logo blue */}
+                  <div className="w-4 h-4 bg-primary rounded ml-2"></div>
                   <div className="hidden sm:flex items-center gap-2 text-xs text-muted-foreground">
                     <span>{notes.length} notes</span>
                     <span>•</span>
@@ -821,7 +823,11 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                 {/* Account dropdown (consolidated) */}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm">
+                    <Button 
+                      variant="ghost" 
+                      size="sm"
+                      onClick={() => console.log('Account button clicked')}
+                    >
                       <User className="w-4 h-4" />
                       <span className="hidden sm:inline ml-2">Account</span>
                     </Button>
