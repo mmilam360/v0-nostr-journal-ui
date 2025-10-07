@@ -213,6 +213,220 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
     }
   }
 
+  // Handle connection string (both bunker:// and nostrconnect://)
+  const handleConnectionString = async (connectionString: string) => {
+    setRemoteSignerMode("nostrconnect")
+    setConnectionState("generating")
+    setError("")
+    setCopied(false)
+    
+    // Clear any existing session keypair to start fresh
+    setSessionKeypair(null)
+
+    try {
+      console.log("[NostrConnect] 🚀 Starting connection string login")
+      console.log("[NostrConnect] 📱 Connection string:", connectionString)
+
+      // Add delay to give user time to get back to our app
+      console.log("[NostrConnect] ⏱️ Waiting 3 seconds for user to return to app...")
+      await new Promise(resolve => setTimeout(resolve, 3000))
+
+      const { generateSecretKey, getPublicKey, nip04, finalizeEvent, verifyEvent } = await import("nostr-tools/pure")
+      const { bytesToHex } = await import("@noble/hashes/utils")
+
+      // Use cached keypair or generate new one for this session
+      let appSecretKey: Uint8Array
+      let appPublicKey: string
+      let secret: string
+      
+      if (sessionKeypair) {
+        console.log("[NostrConnect] 🔄 Reusing cached keypair for session")
+        appSecretKey = sessionKeypair.appSecretKey
+        appPublicKey = sessionKeypair.appPublicKey
+        secret = sessionKeypair.secret
+      } else {
+        console.log("[NostrConnect] 🔑 Generating new keypair for session")
+        appSecretKey = generateSecretKey()
+        appPublicKey = getPublicKey(appSecretKey)
+        
+        // CRITICAL: Generate a secret token to prevent connection spoofing
+        const secretBytes = crypto.getRandomValues(new Uint8Array(16))
+        secret = bytesToHex(secretBytes)
+        
+        // Cache the keypair for this session
+        setSessionKeypair({
+          appSecretKey,
+          appPublicKey,
+          secret
+        })
+      }
+
+      // Parse the connection string
+      let remotePubkey: string
+      let relay: string
+      
+      if (connectionString.startsWith('bunker://')) {
+        // Parse bunker:// format
+        const url = new URL(connectionString)
+        remotePubkey = url.hostname
+        relay = url.searchParams.get('relay') || 'wss://relay.nsec.app'
+      } else if (connectionString.startsWith('nostrconnect://')) {
+        // Parse nostrconnect:// format
+        const url = new URL(connectionString)
+        remotePubkey = url.hostname
+        relay = url.searchParams.get('relay') || 'wss://relay.nsec.app'
+      } else {
+        throw new Error('Invalid connection string format. Must start with bunker:// or nostrconnect://')
+      }
+
+      console.log("[NostrConnect] 🔑 Remote pubkey:", remotePubkey)
+      console.log("[NostrConnect] 🔌 Relay:", relay)
+
+      // Create and send connect request
+      const connectRequest = {
+        kind: 24133,
+        pubkey: appPublicKey,
+        created_at: Math.floor(Date.now() / 1000),
+        tags: [["p", remotePubkey]],
+        content: await nip04.encrypt(
+          nip04.getSharedSecret(appSecretKey, remotePubkey),
+          JSON.stringify({
+            id: crypto.randomUUID(),
+            method: "connect",
+            params: [appPublicKey],
+          })
+        ),
+      }
+
+      const signedEvent = finalizeEvent(connectRequest, appSecretKey)
+
+      console.log("[NostrConnect] 📤 Sending connect request...")
+      
+      // Use WebSocket to send the event and wait for response
+      let ws: WebSocket | null = null
+      let isConnected = false
+      
+      const cleanup = () => {
+        if (ws) {
+          try {
+            ws.close()
+          } catch (e) {}
+        }
+        ws = null
+      }
+
+      // Set timeout for connection (90 seconds for mobile compatibility)
+      const timeoutId = setTimeout(() => {
+        if (!isConnected) {
+          console.log("[NostrConnect] ⏱️ Connection timeout")
+          setConnectionState("error")
+          setError("Connection timed out. Please try again.")
+          cleanup()
+        }
+      }, 90000)
+
+      // Connect to relay
+      console.log("[NostrConnect] 🔌 Connecting to relay...")
+      ws = new WebSocket(relay)
+
+      ws.onerror = (error) => {
+        console.error("[NostrConnect] ❌ WebSocket error:", error)
+        if (!isConnected) {
+          setConnectionState("error")
+          setError("Failed to connect to relay. Please check your internet connection and try again.")
+          clearTimeout(timeoutId)
+          cleanup()
+        }
+      }
+
+      ws.onopen = () => {
+        console.log("[NostrConnect] ✅ WebSocket connected")
+        
+        // Subscribe to NIP-46 events tagged with our pubkey
+        const subscriptionId = crypto.randomUUID()
+        const subscription = [
+          "REQ",
+          subscriptionId,
+          {
+            kinds: [24133],
+            "#p": [appPublicKey],
+            since: Math.floor(Date.now() / 1000) - 60
+          }
+        ]
+        
+        const subMessage = JSON.stringify(subscription)
+        console.log("[NostrConnect] 📤 Subscribing to NIP-46 events")
+        ws.send(subMessage)
+        
+        // Send the connect request
+        const eventMessage = JSON.stringify(["EVENT", signedEvent])
+        console.log("[NostrConnect] 📤 Sending connect request event")
+        ws.send(eventMessage)
+      }
+
+      ws.onmessage = async (message) => {
+        try {
+          const data = JSON.parse(message.data)
+          console.log("[NostrConnect] 📱 Received message:", data[0])
+          
+          if (data[0] === "EVENT" && data[2] && !isConnected) {
+            const event = data[2]
+            
+            if (event.kind !== 24133) return
+            
+            console.log("[NostrConnect] 📨 Received NIP-46 event from:", event.pubkey)
+            
+            if (event.pubkey !== remotePubkey) {
+              console.log("[NostrConnect] ⚠️ Event from different pubkey, ignoring")
+              return
+            }
+
+            try {
+              const sharedSecret = nip04.getSharedSecret(appSecretKey, event.pubkey)
+              const decryptedContent = await nip04.decrypt(sharedSecret, event.content)
+              const response = JSON.parse(decryptedContent)
+              
+              console.log("[NostrConnect] 🔓 Decrypted response:", response)
+              
+              if (response.result === "connect_approved") {
+                console.log("[NostrConnect] ✅ Connection approved!")
+                isConnected = true
+                clearTimeout(timeoutId)
+                cleanup()
+                
+                setConnectionState("success")
+                
+                // Success! Login with the remote signer
+                onLoginSuccess({
+                  pubkey: remotePubkey,
+                  authMethod: 'remote',
+                  clientSecretKey: appSecretKey,
+                  bunkerUri: connectionString,
+                  bunkerPubkey: remotePubkey,
+                  relays: [relay]
+                })
+              } else if (response.error) {
+                console.error("[NostrConnect] ❌ Connection rejected:", response.error)
+                setConnectionState("error")
+                setError(response.error.message || "Connection rejected")
+                cleanup()
+              }
+            } catch (decryptError) {
+              console.error("[NostrConnect] ❌ Failed to decrypt response:", decryptError)
+            }
+          }
+        } catch (parseError) {
+          console.error("[NostrConnect] ❌ Failed to parse message:", parseError)
+        }
+      }
+
+    } catch (error) {
+      console.error("[NostrConnect] ❌ Connection string login failed:", error)
+      setConnectionState("error")
+      setError(error instanceof Error ? error.message : "Connection failed")
+    }
+  }
+
   // Remote signer login function - Using working implementation from login-page.tsx
   const startBunkerLogin = async () => {
     setRemoteSignerMode("bunker")
@@ -875,16 +1089,16 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                         </p>
                         <input
                           type="text"
-                          placeholder="nostrconnect://..."
+                          placeholder="bunker://... or nostrconnect://..."
                           value={nostrconnectInput}
                           onChange={(e) => setNostrconnectInput(e.target.value)}
                           className="w-full px-3 py-2 text-sm border rounded font-mono bg-background text-foreground placeholder-muted-foreground"
                         />
                         <Button
                           onClick={() => {
-                            setError('NostrConnect login not yet implemented')
+                            handleConnectionString(nostrconnectInput)
                           }}
-                          disabled={!nostrconnectInput.startsWith('nostrconnect://')}
+                          disabled={!nostrconnectInput.startsWith('bunker://') && !nostrconnectInput.startsWith('nostrconnect://')}
                           className="w-full"
                         >
                           Connect
