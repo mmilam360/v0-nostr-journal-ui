@@ -1303,7 +1303,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
               </p>
               <div className="flex justify-center mb-3">
                 <QRCodeSVG 
-                  value={donationAmount ? `lightning:michaelmilam@getalby.com?amount=${donationAmount}000` : "michaelmilam@getalby.com"} 
+                  value={donationAmount ? `michaelmilam@getalby.com?amount=${donationAmount}` : "michaelmilam@getalby.com"} 
                   size={180} 
                   className="border rounded-lg p-2"
                 />
@@ -1312,13 +1312,13 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
               {/* Copy Address/Invoice */}
               <div className="bg-secondary p-3 rounded-lg mb-3">
                 <code className="text-xs font-mono break-all">
-                  {donationAmount ? `lightning:michaelmilam@getalby.com?amount=${donationAmount}000` : "michaelmilam@getalby.com"}
+                  {donationAmount ? `michaelmilam@getalby.com?amount=${donationAmount}` : "michaelmilam@getalby.com"}
                 </code>
               </div>
               
               <Button
                 onClick={() => {
-                  const text = donationAmount ? `lightning:michaelmilam@getalby.com?amount=${donationAmount}000` : "michaelmilam@getalby.com"
+                  const text = donationAmount ? `michaelmilam@getalby.com?amount=${donationAmount}` : "michaelmilam@getalby.com"
                   navigator.clipboard.writeText(text)
                 }}
                 variant="outline"
