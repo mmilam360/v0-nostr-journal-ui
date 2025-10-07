@@ -9,11 +9,14 @@ import {
   HelpCircle,
   Copy,
   CheckCircle,
-  AlertTriangle
+  AlertTriangle,
+  Key,
+  Radio
 } from 'lucide-react'
 import { generateSecretKey, getPublicKey, nip19 } from 'nostr-tools'
 import { bytesToHex } from '@noble/hashes/utils'
 import InfoModal from './info-modal'
+import { LoginPage } from './login-page'
 
 interface LoginPageRedesignedProps {
   onLoginSuccess: (authData: any) => void
@@ -119,20 +122,22 @@ export default function LoginPageRedesigned({ onLoginSuccess }: LoginPageRedesig
           {/* Expanded Options */}
           {selectedPath === 'existing' && (
             <div className="space-y-4 animate-fade-in">
-              <div className="p-4 border border-primary/20 rounded-lg bg-primary/5">
-                <h4 className="font-medium mb-2">Coming Soon</h4>
-                <p className="text-sm text-muted-foreground">
-                  We're working on integrating with existing Nostr clients. 
-                  For now, please use the "Create New Account" option.
-                </p>
-                <Button 
-                  onClick={() => setSelectedPath(null)}
-                  variant="outline" 
-                  size="sm" 
-                  className="mt-3"
-                >
-                  Back
-                </Button>
+              <div className="border border-primary/20 rounded-lg bg-primary/5">
+                <div className="p-4 border-b border-primary/20">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-medium">Sign in with Existing Account</h4>
+                    <Button 
+                      onClick={() => setSelectedPath(null)}
+                      variant="ghost" 
+                      size="sm"
+                    >
+                      Back
+                    </Button>
+                  </div>
+                </div>
+                <div className="p-4">
+                  <LoginPage onLoginSuccess={onLoginSuccess} />
+                </div>
               </div>
             </div>
           )}

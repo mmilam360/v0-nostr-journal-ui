@@ -69,11 +69,9 @@ export default function InfoModal({ onClose }: InfoModalProps) {
                     <User className="w-10 h-10 text-primary" />
                   </div>
                   <div className="text-2xl">↓</div>
-                  <div className="w-32 h-24 rounded-lg bg-red-500/20 border-2 border-red-500 flex items-center justify-center text-center px-2">
-                    <div>
-                      <Server className="w-8 h-8 mx-auto mb-1 text-red-500" />
-                      <p className="text-xs font-medium">Company Server</p>
-                    </div>
+                  <div className="w-32 h-24 rounded-lg bg-red-500/20 border-2 border-red-500 flex flex-col items-center justify-center text-center px-2">
+                    <Server className="w-8 h-8 mb-1 text-red-500" />
+                    <p className="text-xs font-medium text-red-700 dark:text-red-300">Company Server</p>
                   </div>
                   <p className="text-xs text-center text-muted-foreground">
                     Company owns & can read your data
@@ -89,16 +87,26 @@ export default function InfoModal({ onClose }: InfoModalProps) {
                     <Key className="w-10 h-10 text-primary" />
                   </div>
                   <div className="text-2xl">↓</div>
-                  <div className="flex gap-2">
-                    <div className="w-24 h-20 rounded-lg bg-green-500/20 border-2 border-green-500 flex items-center justify-center">
-                      <Radio className="w-6 h-6 text-green-500" />
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="w-20 h-16 rounded-lg bg-green-500/20 border-2 border-green-500 flex flex-col items-center justify-center">
+                      <Radio className="w-5 h-5 text-green-500 mb-1" />
+                      <span className="text-xs font-medium text-green-700 dark:text-green-300">Relay 1</span>
                     </div>
-                    <div className="w-24 h-20 rounded-lg bg-green-500/20 border-2 border-green-500 flex items-center justify-center">
-                      <Radio className="w-6 h-6 text-green-500" />
+                    <div className="w-20 h-16 rounded-lg bg-green-500/20 border-2 border-green-500 flex flex-col items-center justify-center">
+                      <Radio className="w-5 h-5 text-green-500 mb-1" />
+                      <span className="text-xs font-medium text-green-700 dark:text-green-300">Relay 2</span>
+                    </div>
+                    <div className="w-20 h-16 rounded-lg bg-green-500/20 border-2 border-green-500 flex flex-col items-center justify-center">
+                      <Radio className="w-5 h-5 text-green-500 mb-1" />
+                      <span className="text-xs font-medium text-green-700 dark:text-green-300">Relay 3</span>
+                    </div>
+                    <div className="w-20 h-16 rounded-lg bg-green-500/20 border-2 border-green-500 flex flex-col items-center justify-center">
+                      <Radio className="w-5 h-5 text-green-500 mb-1" />
+                      <span className="text-xs font-medium text-green-700 dark:text-green-300">Relay 4</span>
                     </div>
                   </div>
                   <p className="text-xs text-center text-muted-foreground">
-                    Just sync encrypted data - can't read it
+                    Encrypted data only goes to the Nostr relays
                   </p>
                 </div>
               </div>
