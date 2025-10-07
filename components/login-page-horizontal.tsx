@@ -60,6 +60,13 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
   const [showNsec, setShowNsec] = useState(false)
   const [copied, setCopied] = useState(false)
   
+  // Cache keypair for session to avoid generating new npub each time
+  const [sessionKeypair, setSessionKeypair] = useState<{
+    appSecretKey: Uint8Array
+    appPublicKey: string
+    secret: string
+  } | null>(null)
+  
   const timeoutRef = useRef<NodeJS.Timeout | null>(null)
   const wsRef = useRef<WebSocket | null>(null)
 
@@ -82,12 +89,18 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
       setError('')
       setBunkerUrl('')
       setNostrconnectInput('')
+      // Clear session keypair when going back from remote signer modes
+      setSessionKeypair(null)
       return
     }
     
     const prevIndex = currentStepIndex - 1
     if (prevIndex >= 0) {
       setCurrentStep(steps[prevIndex])
+      // Clear session keypair when going back to previous steps
+      if (prevIndex <= 1) { // Going back to 'choose' or 'method'
+        setSessionKeypair(null)
+      }
     }
   }
 
@@ -206,6 +219,9 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
     setConnectionState("generating")
     setError("")
     setCopied(false)
+    
+    // Clear any existing session keypair to start fresh
+    setSessionKeypair(null)
 
     try {
       console.log("[NostrConnect] 🚀 Starting NIP-46 bunker login")
@@ -215,13 +231,32 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
       const nip44 = await import("nostr-tools/nip44")
       const { bytesToHex } = await import("@noble/hashes/utils")
 
-      // Generate keypair for this connection
-      const appSecretKey = generateSecretKey()
-      const appPublicKey = getPublicKey(appSecretKey)
+      // Use cached keypair or generate new one for this session
+      let appSecretKey: Uint8Array
+      let appPublicKey: string
+      let secret: string
       
-      // CRITICAL: Generate a secret token to prevent connection spoofing
-      const secretBytes = crypto.getRandomValues(new Uint8Array(16))
-      const secret = bytesToHex(secretBytes)
+      if (sessionKeypair) {
+        console.log("[NostrConnect] 🔄 Reusing cached keypair for session")
+        appSecretKey = sessionKeypair.appSecretKey
+        appPublicKey = sessionKeypair.appPublicKey
+        secret = sessionKeypair.secret
+      } else {
+        console.log("[NostrConnect] 🔑 Generating new keypair for session")
+        appSecretKey = generateSecretKey()
+        appPublicKey = getPublicKey(appSecretKey)
+        
+        // CRITICAL: Generate a secret token to prevent connection spoofing
+        const secretBytes = crypto.getRandomValues(new Uint8Array(16))
+        secret = bytesToHex(secretBytes)
+        
+        // Cache the keypair for this session
+        setSessionKeypair({
+          appSecretKey,
+          appPublicKey,
+          secret
+        })
+      }
       
       // App name and perms in query string format (better compatibility)
       const appName = encodeURIComponent("Nostr Journal")
