@@ -222,9 +222,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
         return (
           <div className="space-y-8">
             <div className="text-center">
-              <Logo className="h-20 w-auto mx-auto mb-6" />
-              <h1 className="text-4xl font-bold text-foreground mb-2">Welcome to Nostr Journal</h1>
-              <p className="text-muted-foreground text-lg">Your private, decentralized journal</p>
+              <Logo className="h-24 w-auto mx-auto mb-8" />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -668,7 +666,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
   return (
     <>
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
-        <div className="w-full max-w-4xl">
+        <div className="w-full max-w-4xl flex flex-col justify-center min-h-[600px]">
           {/* Progress Indicator */}
           <div className="mb-8">
             <div className="flex items-center justify-center max-w-md mx-auto">
@@ -692,14 +690,14 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
           </div>
           
           {/* Content Area with Slide Animation */}
-          <div className="bg-card rounded-xl border p-8 min-h-[500px] relative overflow-hidden">
-            <div className="slide-content">
+          <div className="bg-card rounded-xl border p-8 min-h-[500px] relative overflow-hidden flex flex-col justify-center">
+            <div className="slide-content w-full">
               {renderStepContent()}
             </div>
           </div>
           
           {/* Navigation Buttons */}
-          <div className="flex justify-between mt-8">
+          <div className="flex justify-center mt-8">
             <Button
               onClick={goBack}
               variant="ghost"
@@ -709,17 +707,6 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
               <ChevronLeft className="w-4 h-4" />
               Back
             </Button>
-            
-            {currentStep !== 'complete' && (
-              <Button
-                onClick={goNext}
-                disabled={!canProceed()}
-                className="flex items-center gap-2"
-              >
-                Next
-                <ChevronRight className="w-4 h-4" />
-              </Button>
-            )}
           </div>
         </div>
       </div>
