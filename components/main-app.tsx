@@ -874,13 +874,23 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                 </Button>
                 
                 {/* Account dropdown - working version */}
-                <DropdownMenu>
+                <DropdownMenu 
+                  open={dropdownSubmenu !== 'none'}
+                  onOpenChange={(open) => {
+                    if (!open) {
+                      setDropdownSubmenu('none')
+                    }
+                  }}
+                >
                   <DropdownMenuTrigger>
-          <Button
-            variant="ghost"
-            size="sm"
-                      onClick={() => console.log('[Dropdown] Button clicked!')}
-          >
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        console.log('[Dropdown] Button clicked!')
+                        setDropdownSubmenu('none')
+                      }}
+                    >
                       <User className="w-4 h-4" />
                       <span className="hidden sm:inline ml-2">Account</span>
           </Button>
@@ -972,20 +982,15 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                           
                           <div>
                             <label className="text-xs text-muted-foreground">Connected Relays</label>
-                            <div className="mt-1 space-y-1">
+                            <div className="mt-1 space-y-1 max-h-32 overflow-y-auto">
                               {relays.length > 0 ? (
-                                relays.slice(0, 3).map((relay, index) => (
+                                relays.map((relay, index) => (
                                   <div key={index} className="text-xs text-muted-foreground font-mono truncate">
                                     {relay}
                                   </div>
                                 ))
                               ) : (
                                 <div className="text-xs text-muted-foreground">No relays configured</div>
-                              )}
-                              {relays.length > 3 && (
-                                <div className="text-xs text-muted-foreground">
-                                  +{relays.length - 3} more...
-                                </div>
                               )}
                             </div>
                           </div>

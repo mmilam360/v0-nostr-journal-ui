@@ -1,10 +1,16 @@
 import React from 'react'
+import { useTheme } from '@/lib/theme-provider'
 
 interface LogoProps {
   className?: string
 }
 
 export function Logo({ className = "h-8 w-auto" }: LogoProps) {
+  const { theme } = useTheme()
+  
+  // Use different colors for light vs dark mode
+  const isDark = theme === 'dark' || (theme === 'system' && typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+  
   return (
     <svg 
       className={className}
@@ -15,9 +21,9 @@ export function Logo({ className = "h-8 w-auto" }: LogoProps) {
       <defs>
         <style>
           {`
-            .fil1 {fill:#FEFEFE}
-            .fil2 {fill:#345DC5}
-            .fil0 {fill:#355CBF}
+            .fil1 {fill:${isDark ? '#FEFEFE' : '#1F2937'}}
+            .fil2 {fill:${isDark ? '#345DC5' : '#3B82F6'}}
+            .fil0 {fill:${isDark ? '#355CBF' : '#1E40AF'}}
           `}
         </style>
       </defs>
