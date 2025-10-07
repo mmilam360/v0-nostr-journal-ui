@@ -386,7 +386,7 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
                   variant="ghost"
                   size="sm"
                   className="h-6 w-6 p-0"
-                  title="Copy Event ID"
+                  title="Copy Full Event ID"
                 >
                   {copiedId === note.eventId ? (
                     <Check className="w-3 h-3 text-green-500" />
@@ -395,24 +395,26 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
                   )}
                 </Button>
                 
+                {/* Primary verify button - njump shows all event kinds */}
                 <Button
-                  onClick={() => window.open(`https://nostr.band/e/${note.eventId}`, '_blank')}
+                  onClick={() => window.open(`https://njump.me/${note.eventId}`, '_blank')}
                   variant="ghost"
                   size="sm"
-                  className="h-6 w-6 p-0"
-                  title="View on Nostr.band"
+                  className="h-6 px-2 text-xs bg-blue-500/10 hover:bg-blue-500/20 text-blue-600"
+                  title="Verify on Nostr (njump gateway)"
                 >
-                  <ExternalLink className="w-3 h-3" />
+                  🔍 Verify
                 </Button>
                 
+                {/* Alternative: nostr.com (same as njump) */}
                 <Button
-                  onClick={() => window.open(`https://nostrrr.com/e/${note.eventId}`, '_blank')}
+                  onClick={() => window.open(`https://nostr.com/${note.eventId}`, '_blank')}
                   variant="ghost"
                   size="sm"
                   className="h-6 w-6 p-0"
-                  title="View raw event data"
+                  title="View on nostr.com"
                 >
-                  <ShieldCheck className="w-3 h-3" />
+                  <ExternalLink className="w-3 h-3" />
                 </Button>
               </div>
             )}

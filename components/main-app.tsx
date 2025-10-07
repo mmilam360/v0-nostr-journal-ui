@@ -824,8 +824,8 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       <div className="h-screen bg-background flex flex-col w-full">
         {/* Clean Header */}
         <header className="sticky top-0 z-50 bg-white/95 dark:bg-card/95 backdrop-blur-sm border-b border-border">
-          <div className="container-xl mx-auto px-4 py-3">
-            <div className="flex items-center justify-between">
+          <div className="w-full px-4 py-3">
+            <div className="flex items-center justify-between w-full">
               {/* Left side */}
               <div className="flex items-center gap-4">
                 {/* Mobile menu */}

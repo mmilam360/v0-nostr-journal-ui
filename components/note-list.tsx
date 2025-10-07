@@ -133,10 +133,11 @@ export default function NoteList({ notes, selectedNote, onSelectNote, onCreateNo
                       <button
                         onClick={(e) => {
                           e.stopPropagation() // Don't select note
-                          window.open(`https://nostr.band/e/${note.eventId}`, '_blank')
+                          // Use njump.me - reliable Nostr gateway for all event kinds
+                          window.open(`https://njump.me/${note.eventId}`, '_blank')
                         }}
                         className="text-blue-500 hover:text-blue-600 hover:underline flex items-center gap-1 transition-colors"
-                        title="Verify on Nostr"
+                        title="Verify on Nostr (view encrypted event)"
                       >
                         <span>🔍</span>
                         <span>Verify</span>

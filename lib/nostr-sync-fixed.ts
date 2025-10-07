@@ -200,6 +200,7 @@ export async function smartSyncNotes(
 
 /**
  * Merge local and remote notes, keeping the most recent version
+ * CRITICAL: Always preserve eventId from remote, even when using local content
  */
 function mergeNotes(localNotes: DecryptedNote[], remoteNotes: DecryptedNote[]): DecryptedNote[] {
   const noteMap = new Map<string, DecryptedNote>()
@@ -217,7 +218,7 @@ function mergeNotes(localNotes: DecryptedNote[], remoteNotes: DecryptedNote[]): 
     const localNote = noteMap.get(remoteNote.id)
     
     if (!localNote) {
-      // New note from remote
+      // New note from remote - use it completely
       noteMap.set(remoteNote.id, {
         ...remoteNote,
         syncStatus: 'synced',
@@ -225,7 +226,7 @@ function mergeNotes(localNotes: DecryptedNote[], remoteNotes: DecryptedNote[]): 
       })
     } else {
       // Note exists both locally and remotely
-      // Use the one with the most recent modification
+      // CRITICAL: Always preserve eventId from remote, even if using local content
       
       // Helper function to safely get timestamp from date
       const getTimestamp = (date: any): number => {
@@ -240,7 +241,7 @@ function mergeNotes(localNotes: DecryptedNote[], remoteNotes: DecryptedNote[]): 
       const remoteTime = getTimestamp(remoteNote.lastModified) || getTimestamp(remoteNote.createdAt)
       
       if (remoteTime > localTime) {
-        // Remote is newer - use it
+        // Remote is newer - use it completely
         console.log("[SmartSync] 📥 Using remote version (newer):", remoteNote.title)
         noteMap.set(remoteNote.id, {
           ...remoteNote,
@@ -248,14 +249,17 @@ function mergeNotes(localNotes: DecryptedNote[], remoteNotes: DecryptedNote[]): 
           lastSynced: new Date()
         })
       } else if (localTime > remoteTime) {
-        // Local is newer - keep it but mark for sync
-        console.log("[SmartSync] 📤 Keeping local version (newer):", localNote.title)
+        // Local is newer - use local content BUT keep remote's eventId
+        console.log("[SmartSync] 📤 Keeping local version (newer) but preserving eventId:", localNote.title)
         noteMap.set(localNote.id, {
           ...localNote,
-          syncStatus: 'local' // Will be synced to Nostr
+          eventId: remoteNote.eventId,        // ⭐ CRITICAL: Preserve eventId from remote
+          eventKind: remoteNote.eventKind,    // ⭐ CRITICAL: Preserve eventKind from remote
+          syncStatus: 'local' // Will be synced to Nostr to update content
         })
       } else {
         // Same time - prefer remote (it's the source of truth)
+        console.log("[SmartSync] ⚖️ Same timestamp, using remote:", remoteNote.title)
         noteMap.set(remoteNote.id, {
           ...remoteNote,
           syncStatus: 'synced',
