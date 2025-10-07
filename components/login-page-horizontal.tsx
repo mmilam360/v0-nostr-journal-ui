@@ -108,6 +108,9 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
       nsec,
       npub
     })
+    
+    // Move to the next step to show the keys
+    setCurrentStep('connect')
   }
 
   const completeAccountCreation = () => {
