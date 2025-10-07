@@ -1303,7 +1303,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
               </p>
               <div className="flex justify-center mb-3">
                 <QRCodeSVG 
-                  value={donationAmount ? `michaelmilam@getalby.com?amount=${donationAmount}` : "michaelmilam@getalby.com"} 
+                  value={donationAmount ? `lightning:michaelmilam@getalby.com?amount=${donationAmount}` : "michaelmilam@getalby.com"} 
                   size={180} 
                   className="border rounded-lg p-2"
                 />
@@ -1312,13 +1312,13 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
               {/* Copy Address/Invoice */}
               <div className="bg-secondary p-3 rounded-lg mb-3">
                 <code className="text-xs font-mono break-all">
-                  {donationAmount ? `michaelmilam@getalby.com?amount=${donationAmount}` : "michaelmilam@getalby.com"}
+                  {donationAmount ? `lightning:michaelmilam@getalby.com?amount=${donationAmount}` : "michaelmilam@getalby.com"}
                 </code>
               </div>
               
               <Button
                 onClick={() => {
-                  const text = donationAmount ? `michaelmilam@getalby.com?amount=${donationAmount}` : "michaelmilam@getalby.com"
+                  const text = donationAmount ? `lightning:michaelmilam@getalby.com?amount=${donationAmount}` : "michaelmilam@getalby.com"
                   navigator.clipboard.writeText(text)
                 }}
                 variant="outline"
@@ -1328,6 +1328,29 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                 <Copy className="w-4 h-4 mr-2" />
                 Copy {donationAmount ? "Invoice" : "Address"}
               </Button>
+              
+              {/* Alternative formats for different wallets */}
+              {donationAmount && (
+                <div className="mt-4 p-3 bg-amber-50 dark:bg-amber-950/20 rounded-lg">
+                  <p className="text-xs text-amber-800 dark:text-amber-200 mb-2">
+                    <strong>Alternative formats for different wallets:</strong>
+                  </p>
+                  <div className="space-y-2 text-xs">
+                    <div>
+                      <span className="font-mono">michaelmilam@getalby.com</span>
+                      <span className="text-muted-foreground ml-2">(Lightning address only)</span>
+                    </div>
+                    <div>
+                      <span className="font-mono">lightning:michaelmilam@getalby.com</span>
+                      <span className="text-muted-foreground ml-2">(With lightning: prefix)</span>
+                    </div>
+                    <p className="text-muted-foreground text-xs mt-2">
+                      Some wallets work better with different formats. Try scanning the QR code first, 
+                      or copy the Lightning address and enter the amount manually in your wallet.
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
             
             <p className="text-xs text-center text-muted-foreground">
