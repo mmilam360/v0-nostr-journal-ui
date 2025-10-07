@@ -783,11 +783,12 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                 
                 {/* Logo */}
                 <div className="flex items-center gap-3">
+                  <img 
+                    src="/Nostr Journal Logo.svg" 
+                    alt="Nostr Journal" 
+                    className="h-8 w-auto"
+                  />
                   <h1 className="text-xl font-bold text-foreground">Nostr Journal</h1>
-                  {/* Temporary test button to verify colors */}
-                  <Button className="bg-primary text-primary-foreground ml-2" size="sm">
-                    Test Colors
-                  </Button>
                   <div className="hidden sm:flex items-center gap-2 text-xs text-muted-foreground">
                     <span>{notes.length} notes</span>
                     <span>•</span>
