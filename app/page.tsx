@@ -1,6 +1,6 @@
 "use client"
 import { useState, useEffect } from "react"
-import { LoginPage } from "@/components/login-page"
+import LoginPageRedesigned from "@/components/login-page-redesigned"
 import { MainApp } from "@/components/main-app"
 import type { AuthData } from "@/components/main-app"
 import { ErrorBoundary } from "@/components/error-boundary"
@@ -199,7 +199,7 @@ export default function Home() {
           <MainApp authData={authData} onLogout={handleLogout} />
         ) : (
           <div>
-            <LoginPage onLoginSuccess={handleLoginSuccess} />
+                <LoginPageRedesigned onLoginSuccess={handleLoginSuccess} />
             {/* Debug button - remove this after testing */}
             <div className="fixed bottom-4 right-4 z-50">
               <button

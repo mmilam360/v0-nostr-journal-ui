@@ -834,7 +834,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent 
                     align="end" 
-                    className="w-64 !z-[9999]"
+                    className="w-64 z-50"
                     sideOffset={8}
                   >
                     {/* Profile Section */}
