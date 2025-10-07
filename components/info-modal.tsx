@@ -60,54 +60,82 @@ export default function InfoModal({ onClose }: InfoModalProps) {
           {/* Section 2: Comparison Diagram */}
           <div>
             <h3 className="font-semibold mb-4">Traditional vs Nostr Storage</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               {/* Traditional */}
               <div className="space-y-4">
-                <h4 className="font-medium text-center">Traditional Apps</h4>
-                <div className="flex flex-col items-center gap-3">
-                  <div className="w-20 h-20 rounded-lg bg-primary/20 flex items-center justify-center">
-                    <User className="w-10 h-10 text-primary" />
+                <div className="text-center mb-4">
+                  <h4 className="font-semibold text-lg mb-1">Traditional Notes</h4>
+                  <div className="h-px bg-border w-full"></div>
+                </div>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-red-500/20 flex items-center justify-center flex-shrink-0">
+                      <Server className="w-5 h-5 text-red-500" />
+                    </div>
+                    <span className="text-sm">Company Servers</span>
                   </div>
-                  <div className="text-2xl">↓</div>
-                  <div className="w-32 h-24 rounded-lg bg-red-500/20 border-2 border-red-500 flex flex-col items-center justify-center text-center px-2">
-                    <Server className="w-8 h-8 mb-1 text-red-500" />
-                    <p className="text-xs font-medium text-red-700 dark:text-red-300">Company Server</p>
+                  <div className="ml-4 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-muted-foreground">├</span>
+                      <span className="text-sm text-muted-foreground">Holds your keys</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-muted-foreground">├</span>
+                      <span className="text-sm text-muted-foreground">Can lock you out</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-muted-foreground">├</span>
+                      <span className="text-sm text-muted-foreground">Data trapped inside</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-muted-foreground">└</span>
+                      <span className="text-sm text-muted-foreground">Company can shut down</span>
+                    </div>
                   </div>
-                  <p className="text-xs text-center text-muted-foreground">
-                    Company owns & can read your data
-                  </p>
+                  <div className="mt-4 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
+                    <p className="text-sm font-medium text-red-800 dark:text-red-200 text-center">
+                      "Trust us forever"
+                    </p>
+                  </div>
                 </div>
               </div>
 
               {/* Nostr */}
               <div className="space-y-4">
-                <h4 className="font-medium text-center">Nostr Journal</h4>
-                <div className="flex flex-col items-center gap-3">
-                  <div className="w-20 h-20 rounded-lg bg-primary/20 flex items-center justify-center">
-                    <Key className="w-10 h-10 text-primary" />
+                <div className="text-center mb-4">
+                  <h4 className="font-semibold text-lg mb-1">Nostr Journal</h4>
+                  <div className="h-px bg-border w-full"></div>
+                </div>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-green-500/20 flex items-center justify-center flex-shrink-0">
+                      <Globe className="w-5 h-5 text-green-500" />
+                    </div>
+                    <span className="text-sm">Open Network</span>
                   </div>
-                  <div className="text-2xl">↓</div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="w-20 h-16 rounded-lg bg-green-500/20 border-2 border-green-500 flex flex-col items-center justify-center">
-                      <Radio className="w-5 h-5 text-green-500 mb-1" />
-                      <span className="text-xs font-medium text-green-700 dark:text-green-300">Relay 1</span>
+                  <div className="ml-4 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-muted-foreground">├</span>
+                      <span className="text-sm text-muted-foreground">You hold keys</span>
                     </div>
-                    <div className="w-20 h-16 rounded-lg bg-green-500/20 border-2 border-green-500 flex flex-col items-center justify-center">
-                      <Radio className="w-5 h-5 text-green-500 mb-1" />
-                      <span className="text-xs font-medium text-green-700 dark:text-green-300">Relay 2</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-muted-foreground">├</span>
+                      <span className="text-sm text-muted-foreground">Can't be banned</span>
                     </div>
-                    <div className="w-20 h-16 rounded-lg bg-green-500/20 border-2 border-green-500 flex flex-col items-center justify-center">
-                      <Radio className="w-5 h-5 text-green-500 mb-1" />
-                      <span className="text-xs font-medium text-green-700 dark:text-green-300">Relay 3</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-muted-foreground">├</span>
+                      <span className="text-sm text-muted-foreground">Data portable</span>
                     </div>
-                    <div className="w-20 h-16 rounded-lg bg-green-500/20 border-2 border-green-500 flex flex-col items-center justify-center">
-                      <Radio className="w-5 h-5 text-green-500 mb-1" />
-                      <span className="text-xs font-medium text-green-700 dark:text-green-300">Relay 4</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-muted-foreground">└</span>
+                      <span className="text-sm text-muted-foreground">Network stays up</span>
                     </div>
                   </div>
-                  <p className="text-xs text-center text-muted-foreground">
-                    Encrypted data only goes to the Nostr relays
-                  </p>
+                  <div className="mt-4 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                    <p className="text-sm font-medium text-green-800 dark:text-green-200 text-center">
+                      "Trust yourself"
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>

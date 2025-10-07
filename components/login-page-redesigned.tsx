@@ -11,7 +11,8 @@ import {
   CheckCircle,
   AlertTriangle,
   Key,
-  Radio
+  Radio,
+  Settings
 } from 'lucide-react'
 import { generateSecretKey, getPublicKey, nip19 } from 'nostr-tools'
 import { bytesToHex } from '@noble/hashes/utils'
@@ -122,10 +123,10 @@ export default function LoginPageRedesigned({ onLoginSuccess }: LoginPageRedesig
           {/* Expanded Options */}
           {selectedPath === 'existing' && (
             <div className="space-y-4 animate-fade-in">
-              <div className="border border-primary/20 rounded-lg bg-primary/5">
-                <div className="p-4 border-b border-primary/20">
-                  <div className="flex items-center justify-between">
-                    <h4 className="font-medium">Sign in with Existing Account</h4>
+              <div className="border border-primary/20 rounded-lg bg-card">
+                <div className="p-6">
+                  <div className="flex items-center justify-between mb-6">
+                    <h4 className="font-semibold text-lg">Sign in with Existing Account</h4>
                     <Button 
                       onClick={() => setSelectedPath(null)}
                       variant="ghost" 
@@ -134,9 +135,68 @@ export default function LoginPageRedesigned({ onLoginSuccess }: LoginPageRedesig
                       Back
                     </Button>
                   </div>
-                </div>
-                <div className="p-4">
-                  <LoginPage onLoginSuccess={onLoginSuccess} />
+                  
+                  <div className="space-y-4">
+                    {/* Browser Extension */}
+                    <button className="w-full p-4 rounded-lg border-2 border-border hover:border-primary transition-all text-left bg-card hover:bg-card/80">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          <Radio className="w-6 h-6 text-primary" />
+                          <div>
+                            <h3 className="font-semibold">Browser Extension</h3>
+                            <p className="text-sm text-muted-foreground">
+                              Use your Nostr browser extension
+                            </p>
+                          </div>
+                        </div>
+                        <ChevronRight className="w-5 h-5 text-muted-foreground" />
+                      </div>
+                    </button>
+
+                    {/* Remote Signer / QR Code */}
+                    <button className="w-full p-4 rounded-lg border-2 border-border hover:border-primary transition-all text-left bg-card hover:bg-card/80">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          <Smartphone className="w-6 h-6 text-primary" />
+                          <div>
+                            <h3 className="font-semibold">Remote Signer / QR Code</h3>
+                            <p className="text-sm text-muted-foreground">
+                              Connect with nsec.app or other Nostr apps
+                            </p>
+                          </div>
+                        </div>
+                        <ChevronRight className="w-5 h-5 text-muted-foreground" />
+                      </div>
+                    </button>
+
+                    {/* Import Private Key */}
+                    <button className="w-full p-4 rounded-lg border-2 border-border hover:border-primary transition-all text-left bg-card hover:bg-card/80">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          <Key className="w-6 h-6 text-primary" />
+                          <div>
+                            <h3 className="font-semibold">Import Private Key (nsec)</h3>
+                            <p className="text-sm text-muted-foreground">
+                              Enter your private key directly
+                            </p>
+                          </div>
+                        </div>
+                        <ChevronRight className="w-5 h-5 text-muted-foreground" />
+                      </div>
+                    </button>
+
+                    {/* Relay Configuration */}
+                    <div className="mt-6 p-4 border border-border rounded-lg bg-muted/50">
+                      <h4 className="font-medium mb-2">Configure Relays</h4>
+                      <p className="text-sm text-muted-foreground mb-3">
+                        Set up which Nostr relays to use for your account
+                      </p>
+                      <Button variant="outline" size="sm">
+                        <Settings className="w-4 h-4 mr-2" />
+                        Manage Relays
+                      </Button>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
