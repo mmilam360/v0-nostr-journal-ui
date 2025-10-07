@@ -157,7 +157,7 @@ App: Nostr Journal (nostrjournal.com)
               <div className="space-y-4">
                 <div className="flex items-start gap-3 p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg">
                   <ShieldCheck className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
-                  <div>
+                  <div className="text-center">
                     <h3 className="font-semibold text-blue-900 dark:text-blue-100 mb-1">
                       What is Nostr?
                     </h3>
@@ -170,7 +170,7 @@ App: Nostr Journal (nostrjournal.com)
 
                 <div className="flex items-start gap-3 p-4 bg-green-50 dark:bg-green-950/20 rounded-lg">
                   <Lock className="w-5 h-5 text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
-                  <div>
+                  <div className="text-center">
                     <h3 className="font-semibold text-green-900 dark:text-green-100 mb-1">
                       Your Keys, Your Identity
                     </h3>
@@ -183,7 +183,7 @@ App: Nostr Journal (nostrjournal.com)
 
                 <div className="flex items-start gap-3 p-4 bg-amber-50 dark:bg-amber-950/20 rounded-lg">
                   <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
-                  <div>
+                  <div className="text-center">
                     <h3 className="font-semibold text-amber-900 dark:text-amber-100 mb-1">
                       You Are Responsible for Your Keys
                     </h3>
@@ -388,9 +388,10 @@ App: Nostr Journal (nostrjournal.com)
                   <label className="flex items-start gap-3 p-3 rounded-lg border cursor-pointer hover:bg-secondary/50 transition-colors">
                     <Checkbox
                       checked={confirmations.saved}
-                      onCheckedChange={(checked) => 
+                      onCheckedChange={(checked) => {
+                        console.log('[Onboarding] Saved checkbox changed to:', checked)
                         setConfirmations(prev => ({ ...prev, saved: checked as boolean }))
-                      }
+                      }}
                       className="mt-0.5"
                     />
                     <div className="space-y-1">
@@ -406,9 +407,10 @@ App: Nostr Journal (nostrjournal.com)
                   <label className="flex items-start gap-3 p-3 rounded-lg border cursor-pointer hover:bg-secondary/50 transition-colors">
                     <Checkbox
                       checked={confirmations.understand}
-                      onCheckedChange={(checked) => 
+                      onCheckedChange={(checked) => {
+                        console.log('[Onboarding] Understand checkbox changed to:', checked)
                         setConfirmations(prev => ({ ...prev, understand: checked as boolean }))
-                      }
+                      }}
                       className="mt-0.5"
                     />
                     <div className="space-y-1">
@@ -424,9 +426,10 @@ App: Nostr Journal (nostrjournal.com)
                   <label className="flex items-start gap-3 p-3 rounded-lg border cursor-pointer hover:bg-secondary/50 transition-colors">
                     <Checkbox
                       checked={confirmations.noRecovery}
-                      onCheckedChange={(checked) => 
+                      onCheckedChange={(checked) => {
+                        console.log('[Onboarding] NoRecovery checkbox changed to:', checked)
                         setConfirmations(prev => ({ ...prev, noRecovery: checked as boolean }))
-                      }
+                      }}
                       className="mt-0.5"
                     />
                     <div className="space-y-1">
@@ -518,7 +521,7 @@ App: Nostr Journal (nostrjournal.com)
               <div className="space-y-4">
                 <div className="flex items-start gap-3 p-4 bg-green-50 dark:bg-green-950/20 rounded-lg">
                   <CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
-                  <div>
+                  <div className="text-center">
                     <h3 className="font-semibold text-green-900 dark:text-green-100 mb-1">
                       Your Nostr Identity is Created
                     </h3>

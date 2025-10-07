@@ -103,6 +103,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   const [deletedNotes, setDeletedNotes] = useState<{ id: string; deletedAt: Date }[]>([])
   const [showProfile, setShowProfile] = useState(false)
   const [showRelayManager, setShowRelayManager] = useState(false)
+  const [accountDropdownOpen, setAccountDropdownOpen] = useState(false)
   const [showDiagnostics, setShowDiagnostics] = useState(false)
   const [connectionError, setConnectionError] = useState<string | null>(null)
   const [copiedNpub, setCopiedNpub] = useState(false)
@@ -872,21 +873,32 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                   )}
                 </Button>
                 
-                {/* Account dropdown (consolidated) */}
-                <DropdownMenu modal={true}>
+                {/* Account dropdown with controlled state */}
+                <DropdownMenu 
+                  open={accountDropdownOpen}
+                  onOpenChange={(open) => {
+                    console.log('[Dropdown] State changing to:', open)
+                    setAccountDropdownOpen(open)
+                  }}
+                >
                   <DropdownMenuTrigger asChild>
                     <Button 
                       variant="ghost" 
                       size="sm"
+                      onClick={() => {
+                        console.log('[Dropdown] Button clicked, current state:', accountDropdownOpen)
+                      }}
                     >
                       <User className="w-4 h-4" />
                       <span className="hidden sm:inline ml-2">Account</span>
                     </Button>
                   </DropdownMenuTrigger>
+                  
                   <DropdownMenuContent 
                     align="end" 
                     className="w-64"
                     sideOffset={8}
+                    onCloseAutoFocus={(e) => e.preventDefault()}
                   >
                     {/* Profile Section */}
                     <div className="px-3 py-2 border-b border-border">
@@ -897,12 +909,24 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                     </div>
                     
                     <DropdownMenuGroup>
-                      <DropdownMenuItem onClick={() => setShowProfile(true)}>
+                      <DropdownMenuItem 
+                        onClick={() => {
+                          console.log('[Dropdown] View Profile clicked')
+                          setShowProfile(true)
+                          setAccountDropdownOpen(false)
+                        }}
+                      >
                         <User className="w-4 h-4 mr-2" />
                         View Profile
                       </DropdownMenuItem>
                       
-                      <DropdownMenuItem onClick={() => setShowRelayManager(true)}>
+                      <DropdownMenuItem 
+                        onClick={() => {
+                          console.log('[Dropdown] Manage Relays clicked')
+                          setShowRelayManager(true)
+                          setAccountDropdownOpen(false)
+                        }}
+                      >
                         <Settings className="w-4 h-4 mr-2" />
                         Manage Relays
                       </DropdownMenuItem>
@@ -911,7 +935,11 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                     <DropdownMenuSeparator />
                     
                     <DropdownMenuItem 
-                      onClick={handleLogout}
+                      onClick={() => {
+                        console.log('[Dropdown] Logout clicked')
+                        setAccountDropdownOpen(false)
+                        handleLogout()
+                      }}
                       className="text-destructive focus:text-destructive"
                     >
                       <LogOut className="w-4 h-4 mr-2" />
