@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { 
   Smartphone, 
@@ -12,12 +12,17 @@ import {
   AlertTriangle,
   Key,
   Radio,
-  Settings
+  Settings,
+  Loader2,
+  QrCode,
+  Link2,
+  Eye,
+  EyeOff
 } from 'lucide-react'
 import { generateSecretKey, getPublicKey, nip19 } from 'nostr-tools'
 import { bytesToHex } from '@noble/hashes/utils'
+import { QRCodeSVG } from 'qrcode.react'
 import InfoModal from './info-modal'
-import { LoginPage } from './login-page'
 
 interface LoginPageRedesignedProps {
   onLoginSuccess: (authData: any) => void
@@ -30,12 +35,28 @@ interface GeneratedKeys {
   npub: string
 }
 
+type ConnectionState = "idle" | "generating" | "waiting" | "connecting" | "success" | "error"
+type RemoteSignerMode = "select" | "bunker" | "nostrconnect"
+
 export default function LoginPageRedesigned({ onLoginSuccess }: LoginPageRedesignedProps) {
   const [selectedPath, setSelectedPath] = useState<'existing' | 'new' | null>(null)
   const [showInfo, setShowInfo] = useState(false)
   const [generatedKeys, setGeneratedKeys] = useState<GeneratedKeys | null>(null)
   const [hasConfirmedSave, setHasConfirmedSave] = useState(false)
   const [selectedLoginMethod, setSelectedLoginMethod] = useState<'extension' | 'remote' | 'nsec' | null>(null)
+  
+  // Login functionality states
+  const [connectionState, setConnectionState] = useState<ConnectionState>("idle")
+  const [error, setError] = useState<string>("")
+  const [remoteSignerMode, setRemoteSignerMode] = useState<RemoteSignerMode>("select")
+  const [bunkerUrl, setBunkerUrl] = useState<string>("")
+  const [nostrconnectInput, setNostrconnectInput] = useState<string>("")
+  const [nsecInput, setNsecInput] = useState<string>("")
+  const [showNsec, setShowNsec] = useState(false)
+  const [copied, setCopied] = useState(false)
+  
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const wsRef = useRef<WebSocket | null>(null)
 
   const generateNewKeypair = () => {
     const secretKey = generateSecretKey()
@@ -63,15 +84,111 @@ export default function LoginPageRedesigned({ onLoginSuccess }: LoginPageRedesig
     navigator.clipboard.writeText(text)
   }
 
+  // Extension login function
+  const handleExtensionLogin = async () => {
+    setConnectionState("connecting")
+    setError("")
+
+    try {
+      if (!window.nostr) {
+        throw new Error("No Nostr extension found. Please install Alby or nos2x.")
+      }
+
+      const pubkey = await window.nostr.getPublicKey()
+      
+      onLoginSuccess({
+        pubkey,
+        authMethod: "extension",
+        privateKey: null
+      })
+    } catch (err: any) {
+      console.error("Extension login failed:", err)
+      setError(err.message || "Extension login failed")
+      setConnectionState("error")
+    }
+  }
+
+  // Nsec login function
+  const handleNsecLogin = async () => {
+    setConnectionState("connecting")
+    setError("")
+
+    try {
+      const { getPublicKey, nip19 } = await import("nostr-tools/pure")
+      const { bytesToHex } = await import("@noble/hashes/utils")
+
+      let privateKey: Uint8Array
+      let privateKeyHex: string
+
+      if (nsecInput.startsWith("nsec1")) {
+        const { type, data } = nip19.decode(nsecInput)
+        if (type !== "nsec") throw new Error("Invalid nsec format")
+        privateKey = data as Uint8Array
+      } else {
+        // Assume it's hex
+        privateKey = new Uint8Array(Buffer.from(nsecInput, "hex"))
+      }
+
+      privateKeyHex = bytesToHex(privateKey)
+      const pubkey = getPublicKey(privateKey)
+
+      onLoginSuccess({
+        pubkey,
+        authMethod: "nsec",
+        privateKey: privateKeyHex,
+        nsec: nsecInput
+      })
+    } catch (err: any) {
+      console.error("Nsec login failed:", err)
+      setError(err.message || "Invalid private key")
+      setConnectionState("error")
+    }
+  }
+
+  // Remote signer login function (simplified version)
+  const startBunkerLogin = async () => {
+    setRemoteSignerMode("bunker")
+    setConnectionState("generating")
+    setError("")
+
+    try {
+      const { generateSecretKey, getPublicKey } = await import("nostr-tools/pure")
+      
+      const clientSecretKey = generateSecretKey()
+      const clientPublicKey = getPublicKey(clientSecretKey)
+      
+      const secret = bytesToHex(clientSecretKey)
+      const appName = "Nostr Journal"
+      const appPublicKey = clientPublicKey
+      const perms = "read,write"
+      const BUNKER_RELAY = "wss://relay.nsec.app"
+      
+      const bunkerURI = `nostrconnect://${appPublicKey}?relay=${encodeURIComponent(BUNKER_RELAY)}&secret=${secret}&name=${appName}&perms=${perms}`
+      
+      setBunkerUrl(bunkerURI)
+      setConnectionState("waiting")
+      
+      // For now, we'll just show the QR code and let user manually connect
+      // The actual WebSocket connection logic would go here
+      
+    } catch (err: any) {
+      console.error("Bunker login failed:", err)
+      setError(err.message || "Failed to generate connection")
+      setConnectionState("error")
+    }
+  }
+
   return (
     <>
       <div className="min-h-screen flex items-center justify-center bg-background p-4">
         <div className="w-full max-w-md space-y-8">
           {/* Logo & Tagline */}
           <div className="text-center">
-            <div className="h-16 w-16 mx-auto mb-4 bg-primary/10 rounded-lg flex items-center justify-center">
-              <span className="text-2xl font-bold text-primary">NJ</span>
-            </div>
+            <img 
+              src="/Nostr%20Journal%20Logo.svg" 
+              alt="Nostr Journal" 
+              className="h-16 w-auto mx-auto mb-4"
+            />
             <h1 className="text-3xl font-bold text-foreground">Nostr Journal</h1>
             <p className="text-muted-foreground mt-2">
               Your private, decentralized journal
@@ -230,8 +347,161 @@ export default function LoginPageRedesigned({ onLoginSuccess }: LoginPageRedesig
                     </Button>
                   </div>
                 </div>
-                <div className="p-4">
-                  <LoginPage onLoginSuccess={onLoginSuccess} />
+                <div className="p-4 space-y-4">
+                  {selectedLoginMethod === 'extension' && (
+                    <div className="space-y-4">
+                      <p className="text-sm text-muted-foreground">
+                        Connect with your Nostr browser extension (Alby, nos2x, etc.)
+                      </p>
+                      <Button 
+                        onClick={handleExtensionLogin}
+                        disabled={connectionState === 'connecting'}
+                        className="w-full bg-primary hover:bg-primary/90"
+                      >
+                        {connectionState === 'connecting' ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Connecting...
+                          </>
+                        ) : (
+                          <>
+                            <Radio className="w-4 h-4 mr-2" />
+                            Connect Extension
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  )}
+
+                  {selectedLoginMethod === 'remote' && (
+                    <div className="space-y-4">
+                      {remoteSignerMode === 'select' && (
+                        <>
+                          <p className="text-sm text-muted-foreground">
+                            Connect with a remote Nostr signer app
+                          </p>
+                          <div className="space-y-3">
+                            <Button 
+                              onClick={startBunkerLogin}
+                              className="w-full bg-purple-600 hover:bg-purple-700 text-white"
+                            >
+                              <QrCode className="w-4 h-4 mr-2" />
+                              Scan QR Code (nsec.app, Amber)
+                            </Button>
+                            <Button 
+                              onClick={() => setRemoteSignerMode('nostrconnect')}
+                              variant="outline"
+                              className="w-full"
+                            >
+                              <Link2 className="w-4 h-4 mr-2" />
+                              Paste Connection String
+                            </Button>
+                          </div>
+                        </>
+                      )}
+
+                      {remoteSignerMode === 'bunker' && connectionState === 'waiting' && bunkerUrl && (
+                        <div className="space-y-4">
+                          <p className="text-sm text-muted-foreground">
+                            Scan this QR code with your Nostr app
+                          </p>
+                          <div className="flex justify-center">
+                            <QRCodeSVG value={bunkerUrl} size={200} />
+                          </div>
+                          <div className="space-y-2">
+                            <input
+                              type="text"
+                              value={bunkerUrl}
+                              readOnly
+                              className="w-full px-3 py-2 text-sm border rounded font-mono bg-background text-foreground"
+                            />
+                            <Button
+                              onClick={() => copyToClipboard(bunkerUrl)}
+                              variant="outline"
+                              size="sm"
+                              className="w-full"
+                            >
+                              <Copy className="w-4 h-4 mr-2" />
+                              Copy Connection String
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+
+                      {remoteSignerMode === 'nostrconnect' && (
+                        <div className="space-y-4">
+                          <p className="text-sm text-muted-foreground">
+                            Paste the connection string from your Nostr app
+                          </p>
+                          <input
+                            type="text"
+                            placeholder="nostrconnect://..."
+                            value={nostrconnectInput}
+                            onChange={(e) => setNostrconnectInput(e.target.value)}
+                            className="w-full px-3 py-2 text-sm border rounded font-mono bg-background text-foreground placeholder-muted-foreground"
+                          />
+                          <Button
+                            onClick={() => {
+                              // Handle nostrconnect login
+                              setError('NostrConnect login not yet implemented')
+                            }}
+                            disabled={!nostrconnectInput.startsWith('nostrconnect://')}
+                            className="w-full"
+                          >
+                            Connect
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {selectedLoginMethod === 'nsec' && (
+                    <div className="space-y-4">
+                      <p className="text-sm text-muted-foreground">
+                        Enter your private key (nsec format or hex)
+                      </p>
+                      <div className="space-y-2">
+                        <div className="relative">
+                          <input
+                            type={showNsec ? "text" : "password"}
+                            placeholder="nsec1..."
+                            value={nsecInput}
+                            onChange={(e) => setNsecInput(e.target.value)}
+                            className="w-full px-3 py-2 pr-10 text-sm border rounded font-mono bg-background text-foreground placeholder-muted-foreground"
+                          />
+                          <button
+                            onClick={() => setShowNsec(!showNsec)}
+                            className="absolute right-2 top-2 p-1 text-muted-foreground hover:text-foreground"
+                          >
+                            {showNsec ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                          </button>
+                        </div>
+                        <Button 
+                          onClick={handleNsecLogin}
+                          disabled={connectionState === 'connecting' || !nsecInput.trim()}
+                          className="w-full bg-primary hover:bg-primary/90"
+                        >
+                          {connectionState === 'connecting' ? (
+                            <>
+                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                              Connecting...
+                            </>
+                          ) : (
+                            <>
+                              <Key className="w-4 h-4 mr-2" />
+                              Import Key
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {error && (
+                    <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                      <p className="text-sm text-red-800 dark:text-red-200">{error}</p>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
