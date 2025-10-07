@@ -80,7 +80,7 @@ export default function DonationBubble() {
 
   if (!isOpen) {
     return (
-      <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 z-40">
+      <div className="relative">
         <button
           onClick={() => setIsOpen(true)}
           className="bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-600 shadow-lg hover:shadow-xl transition-all duration-200 flex items-center gap-2 px-4 py-2 rounded-full text-sm"

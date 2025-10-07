@@ -394,16 +394,20 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
 
     // Sync to Nostr in background
     try {
+      console.log("[v0] 🔄 Starting sync for new note:", newNote.id)
       const result = await saveAndSyncNote(newNote, authData)
+      console.log("[v0] 📊 Sync result:", { success: result.success, eventId: result.note.eventId })
 
       setNotes([result.note, ...notes])
       setSelectedNote(result.note)
 
       if (result.success) {
+        console.log("[v0] ✅ Note synced successfully with event ID:", result.note.eventId)
         const syncedNotes = [result.note, ...notes]
         await saveEncryptedNotes(authData.pubkey, syncedNotes)
         setLastSyncTime(new Date())
       } else {
+        console.error("[v0] ❌ Sync failed:", result.error)
         setConnectionError(result.error || "Failed to sync new note")
       }
     } catch (error) {
@@ -439,19 +443,22 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
 
     // Sync to Nostr in background
     try {
+      console.log("[v0] 🔄 Starting sync for updated note:", updatedNote.id)
       const result = await saveAndSyncNote(optimisticNote, authData)
+      console.log("[v0] 📊 Update sync result:", { success: result.success, eventId: result.note.eventId })
 
       // Update with final sync status
       setNotes(notes.map((note) => (note.id === updatedNote.id ? result.note : note)))
       setSelectedNote(result.note)
 
       if (result.success) {
+        console.log("[v0] ✅ Note update synced successfully with event ID:", result.note.eventId)
         // Save successful sync to local storage
         const syncedNotes = notes.map((note) => (note.id === updatedNote.id ? result.note : note))
         await saveEncryptedNotes(authData.pubkey, syncedNotes)
         setLastSyncTime(new Date())
       } else {
-        console.error("[v0] Sync failed:", result.error)
+        console.error("[v0] ❌ Update sync failed:", result.error)
         setConnectionError(result.error || "Failed to sync note")
       }
     } catch (error) {
@@ -786,7 +793,6 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                 {/* Logo */}
                 <div className="flex items-center gap-3">
                   <Logo className="h-8 w-auto" />
-                  <h1 className="text-xl font-bold text-foreground">Nostr Journal</h1>
                   {/* Color test - should be logo blue */}
                   <div className="w-4 h-4 bg-primary rounded ml-2" title="Logo blue test"></div>
                   <div className="hidden sm:flex items-center gap-2 text-xs text-muted-foreground">

@@ -363,11 +363,12 @@ export const saveNoteToNostr = async (note: DecryptedNote, authData: any): Promi
     // Publish using SimplePool (same as nostr-publish.ts)
     const relays = await getCurrentRelays()
     console.log("[v0] 📤 Publishing note event to relays:", relays)
+    console.log("[v0] 📝 Event details:", { id: signedEvent.id, kind: signedEvent.kind, pubkey: signedEvent.pubkey })
 
     const pool = new nostrTools.SimplePool()
     try {
       await Promise.any(pool.publish(relays, signedEvent))
-      console.log("[v0] ✅ Successfully published note:", signedEvent.id)
+      console.log("[v0] ✅ Successfully published note with event ID:", signedEvent.id)
 
       return {
         success: true,
