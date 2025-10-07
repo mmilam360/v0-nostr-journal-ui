@@ -75,6 +75,16 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
   }
 
   const goBack = () => {
+    // Handle remote signer mode changes first
+    if (remoteSignerMode === 'bunker' || remoteSignerMode === 'nostrconnect') {
+      setRemoteSignerMode('select')
+      setConnectionState('idle')
+      setError('')
+      setBunkerUrl('')
+      setNostrconnectInput('')
+      return
+    }
+    
     const prevIndex = currentStepIndex - 1
     if (prevIndex >= 0) {
       setCurrentStep(steps[prevIndex])
@@ -158,14 +168,15 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
     setError("")
 
     try {
-      const { getPublicKey, nip19 } = await import("nostr-tools/pure")
+      const { getPublicKey } = await import("nostr-tools/pure")
       const { bytesToHex } = await import("@noble/hashes/utils")
+      const { decode } = await import('nostr-tools/nip19')
 
       let privateKey: Uint8Array
       let privateKeyHex: string
 
       if (nsecInput.startsWith("nsec1")) {
-        const decoded = nip19.decode(nsecInput)
+        const decoded = decode(nsecInput)
         if (decoded.type !== "nsec") throw new Error("Invalid nsec format")
         privateKey = decoded.data as Uint8Array
       } else {
@@ -217,8 +228,8 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
       // Comprehensive permissions for full app functionality
       const perms = encodeURIComponent("sign_event:1,sign_event:5,sign_event:30078,sign_event:31078,nip04_encrypt,nip04_decrypt,nip44_encrypt,nip44_decrypt,get_public_key,get_relays")
       
-      // Use nsec.app relay for better compatibility
-      const BUNKER_RELAY = "wss://relay.nsec.app"
+      // Use nostr.band relay for better mobile compatibility
+      const BUNKER_RELAY = "wss://relay.nostr.band"
       
       // Generate the nostrconnect URI with secret
       const bunkerURI = `nostrconnect://${appPublicKey}?relay=${encodeURIComponent(BUNKER_RELAY)}&secret=${secret}&name=${appName}&perms=${perms}`
@@ -241,6 +252,10 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
           console.log("[NostrConnect] ⏱️ Connection timeout")
           setConnectionState("error")
           setError("Connection timed out. Please try scanning the QR code again.")
+          // Close WebSocket on timeout
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.close()
+          }
         }
       }, 60000)
 
@@ -253,6 +268,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
         if (!isConnected) {
           setConnectionState("error")
           setError("Failed to connect to relay. Please check your internet connection.")
+          clearTimeout(timeoutId)
         }
       }
 
@@ -485,14 +501,14 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                 <p className="text-muted-foreground">How would you like to connect your account?</p>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                 {/* Browser Extension */}
                 <button
                   onClick={() => {
                     setSelectedMethod('extension')
                     goNext()
                   }}
-                  className="p-6 rounded-lg border-2 border-border hover:border-primary transition-all text-left bg-card hover:bg-card/80 group"
+                  className="p-4 sm:p-6 rounded-lg border-2 border-border hover:border-primary transition-all text-left bg-card hover:bg-card/80 group"
                 >
                   <div className="flex items-center gap-3 mb-3">
                     <Radio className="w-6 h-6 text-primary" />
@@ -509,7 +525,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                     setSelectedMethod('remote')
                     goNext()
                   }}
-                  className="p-6 rounded-lg border-2 border-border hover:border-primary transition-all text-left bg-card hover:bg-card/80 group"
+                  className="p-4 sm:p-6 rounded-lg border-2 border-border hover:border-primary transition-all text-left bg-card hover:bg-card/80 group"
                 >
                   <div className="flex items-center gap-3 mb-3">
                     <Smartphone className="w-6 h-6 text-primary" />
@@ -526,7 +542,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                     setSelectedMethod('nsec')
                     goNext()
                   }}
-                  className="p-6 rounded-lg border-2 border-border hover:border-primary transition-all text-left bg-card hover:bg-card/80 group"
+                  className="p-4 sm:p-6 rounded-lg border-2 border-border hover:border-primary transition-all text-left bg-card hover:bg-card/80 group"
                 >
                   <div className="flex items-center gap-3 mb-3">
                     <Key className="w-6 h-6 text-primary" />
@@ -721,20 +737,6 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
 
                     {remoteSignerMode === 'bunker' && connectionState === 'waiting' && bunkerUrl && (
                       <div className="space-y-4">
-                        <Button
-                          onClick={() => {
-                            setRemoteSignerMode('select')
-                            setConnectionState('idle')
-                            setError('')
-                          }}
-                          variant="outline"
-                          size="sm"
-                          className="mb-4"
-                        >
-                          <ChevronLeft className="w-4 h-4 mr-2" />
-                          Back to Options
-                        </Button>
-                        
                         <p className="text-sm text-muted-foreground text-center">
                           Scan this QR code with your Nostr app
                         </p>
@@ -765,20 +767,6 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
 
                     {remoteSignerMode === 'nostrconnect' && (
                       <div className="space-y-4">
-                        <Button
-                          onClick={() => {
-                            setRemoteSignerMode('select')
-                            setNostrconnectInput('')
-                            setError('')
-                          }}
-                          variant="outline"
-                          size="sm"
-                          className="mb-4"
-                        >
-                          <ChevronLeft className="w-4 h-4 mr-2" />
-                          Back to Options
-                        </Button>
-                        
                         <p className="text-sm text-muted-foreground text-center">
                           Paste the connection string from your Nostr app
                         </p>
