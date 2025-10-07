@@ -7,6 +7,108 @@ import { getSmartRelayList, getRelays } from "./relay-manager"
 import { signEventWithRemote } from "./signer-manager"
 
 // ===================================================================================
+// RELAY PUBLISHING: Proper WebSocket handling with OK response verification
+// ===================================================================================
+
+/**
+ * Publish to a single relay with proper OK response handling
+ * Waits for relay to accept/reject the event before resolving
+ */
+async function publishToSingleRelay(relayUrl: string, signedEvent: any): Promise<boolean> {
+  return new Promise((resolve, reject) => {
+    const ws = new WebSocket(relayUrl)
+    let resolved = false
+    
+    const timeout = setTimeout(() => {
+      if (!resolved) {
+        resolved = true
+        ws.close()
+        reject(new Error(`Timeout connecting to ${relayUrl}`))
+      }
+    }, 10000) // 10 second timeout
+    
+    ws.onopen = () => {
+      console.log("[Storage] 🔗 Connected to", relayUrl)
+      ws.send(JSON.stringify(["EVENT", signedEvent]))
+    }
+    
+    ws.onmessage = (msg) => {
+      try {
+        const data = JSON.parse(msg.data)
+        
+        if (data[0] === "OK" && data[1] === signedEvent.id) {
+          if (!resolved) {
+            resolved = true
+            clearTimeout(timeout)
+            ws.close()
+            
+            if (data[2] === true) {
+              console.log("[Storage] ✅ Received OK from", relayUrl)
+              resolve(true)
+            } else {
+              // Relay rejected the event - log the reason
+              console.error("[Storage] ❌ Relay rejected event:", relayUrl, "Reason:", data[3])
+              reject(new Error(`Relay rejected: ${data[3] || "Unknown reason"}`))
+            }
+          }
+        } else if (data[0] === "NOTICE") {
+          console.warn("[Storage] ⚠️ Notice from", relayUrl, ":", data[1])
+        }
+      } catch (error) {
+        console.error("[Storage] ❌ Error parsing message from", relayUrl, ":", error)
+      }
+    }
+    
+    ws.onerror = (error) => {
+      if (!resolved) {
+        resolved = true
+        clearTimeout(timeout)
+        console.error("[Storage] ❌ WebSocket error on", relayUrl, ":", error)
+        reject(new Error(`WebSocket error`))
+      }
+    }
+    
+    ws.onclose = (event) => {
+      if (!resolved) {
+        resolved = true
+        clearTimeout(timeout)
+        if (event.code !== 1000) {
+          console.error("[Storage] ❌ Connection closed unexpectedly on", relayUrl, "Code:", event.code)
+          reject(new Error(`Connection closed: ${event.code}`))
+        }
+      }
+    }
+  })
+}
+
+/**
+ * Publish to multiple relays individually and track results
+ */
+async function publishToRelaysIndividually(
+  signedEvent: any, 
+  relays: string[]
+): Promise<Array<{url: string, success: boolean, error?: string}>> {
+  const results = []
+  
+  for (const relayUrl of relays) {
+    try {
+      console.log("[Storage] 📤 Publishing to", relayUrl)
+      const success = await publishToSingleRelay(relayUrl, signedEvent)
+      results.push({ url: relayUrl, success })
+      if (success) {
+        console.log("[Storage] ✅ Success on", relayUrl)
+      }
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : "Unknown error"
+      console.error("[Storage] ❌ Failed on", relayUrl, ":", errorMsg)
+      results.push({ url: relayUrl, success: false, error: errorMsg })
+    }
+  }
+  
+  return results
+}
+
+// ===================================================================================
 // SMART RELAY MANAGEMENT: Dynamic relay selection with health checking
 // ===================================================================================
 let cachedRelays: string[] = []
@@ -368,23 +470,40 @@ export const saveNoteToNostr = async (note: DecryptedNote, authData: any): Promi
         throw new Error("Unsupported authentication method.")
     }
 
-    // Publish using SimplePool (same as nostr-publish.ts)
+    // Publish to relays with proper OK response handling
     const relays = await getCurrentRelays()
-    console.log("[v0] 📤 Publishing note event to relays:", relays)
-    console.log("[v0] 📝 Event details:", { id: signedEvent.id, kind: signedEvent.kind, pubkey: signedEvent.pubkey })
+    console.log("[Storage] 📤 Publishing note event to relays:", relays)
+    console.log("[Storage] 📝 Event details:", { 
+      id: signedEvent.id, 
+      kind: signedEvent.kind, 
+      pubkey: signedEvent.pubkey,
+      tags: signedEvent.tags?.length || 0,
+      dTag: signedEvent.tags?.find((t: any) => t[0] === 'd')?.[1]
+    })
 
-    const pool = new nostrTools.SimplePool()
-    try {
-      await Promise.any(pool.publish(relays, signedEvent))
-      console.log("[v0] ✅ Successfully published note with event ID:", signedEvent.id)
+    // Publish to each relay individually with proper OK handling
+    const relayResults = await publishToRelaysIndividually(signedEvent, relays)
+    
+    const successfulRelays = relayResults.filter(r => r.success)
+    const failedRelays = relayResults.filter(r => !r.success)
 
-      return {
-        success: true,
-        eventId: signedEvent.id,
-        eventKind: 30078, // Track the kind used
-      }
-    } finally {
-      pool.close(relays)
+    console.log("[Storage] 📊 Relay Results:")
+    console.log("[Storage] ✅ Successful:", successfulRelays.map(r => r.url))
+    console.log("[Storage] ❌ Failed:", failedRelays.map(r => `${r.url}: ${r.error}`))
+
+    if (successfulRelays.length === 0) {
+      const errorDetails = failedRelays.map(r => `${r.url}: ${r.error}`).join("; ")
+      throw new Error(`Failed to publish to any relay. Errors: ${errorDetails}`)
+    }
+
+    console.log("[Storage] 🎉 Successfully published to", successfulRelays.length, "relay(s)")
+    console.log("[Storage] 🔗 View on nostr.band:", `https://nostr.band/e/${signedEvent.id}`)
+    console.log("[Storage] 🔗 View on nostrrr:", `https://nostrrr.com/e/${signedEvent.id}`)
+
+    return {
+      success: true,
+      eventId: signedEvent.id,
+      eventKind: 30078,
     }
   } catch (error) {
     console.error("[v0] Error saving note to Nostr:", error)
@@ -533,14 +652,21 @@ export const deleteNoteOnNostr = async (noteToDelete: DecryptedNote, authData: a
     }
 
     const relays = await getCurrentRelays()
-    console.log(`[v0] 📤 Publishing kind:5 deletion for event ${noteToDelete.eventId}`)
+    console.log(`[Storage] 📤 Publishing kind:5 deletion for event ${noteToDelete.eventId}`)
+    
+    const relayResults = await publishToRelaysIndividually(signedEvent, relays)
+    
+    const successfulRelays = relayResults.filter(r => r.success)
+    const failedRelays = relayResults.filter(r => !r.success)
 
-    const pool = new nostrTools.SimplePool()
-    try {
-      await Promise.any(pool.publish(relays, signedEvent))
-      console.log("[v0] ✅ Successfully published deletion event")
-    } finally {
-      pool.close(relays)
+    console.log("[Storage] 📊 Deletion Relay Results:")
+    console.log("[Storage] ✅ Successful:", successfulRelays.map(r => r.url))
+    console.log("[Storage] ❌ Failed:", failedRelays.map(r => `${r.url}: ${r.error}`))
+
+    if (successfulRelays.length > 0) {
+      console.log("[Storage] ✅ Successfully published deletion event to", successfulRelays.length, "relay(s)")
+    } else {
+      console.warn("[Storage] ⚠️ Deletion event failed on all relays")
     }
   } catch (error) {
     console.error("[v0] Error publishing deletion event:", error)
