@@ -245,6 +245,17 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
       // Connection state tracking
       let isConnected = false
       let remotePubkey: string | null = null
+      let ws: WebSocket | null = null
+
+      // Cleanup function
+      const cleanup = () => {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          try {
+            ws.close()
+          } catch (e) {}
+        }
+        ws = null
+      }
 
       // Set timeout for connection (60 seconds for mobile compatibility)
       const timeoutId = setTimeout(() => {
@@ -252,16 +263,13 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
           console.log("[NostrConnect] ⏱️ Connection timeout")
           setConnectionState("error")
           setError("Connection timed out. Please try scanning the QR code again.")
-          // Close WebSocket on timeout
-          if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.close()
-          }
+          cleanup()
         }
       }, 60000)
 
       // Connect to relay
       console.log("[NostrConnect] 🔌 Connecting to relay...")
-      const ws = new WebSocket(BUNKER_RELAY)
+      ws = new WebSocket(BUNKER_RELAY)
 
       ws.onerror = (error) => {
         console.error("[NostrConnect] ❌ WebSocket error:", error)
@@ -269,6 +277,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
           setConnectionState("error")
           setError("Failed to connect to relay. Please check your internet connection.")
           clearTimeout(timeoutId)
+          cleanup()
         }
       }
 
@@ -358,17 +367,16 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                 setTimeout(() => {
                   console.log("[NostrConnect] 🎉 Proceeding with login")
                   
-                  // Close WebSocket
-                  if (ws && ws.readyState === WebSocket.OPEN) {
-                    ws.close()
-                  }
+                  // Clean up WebSocket
+                  cleanup()
                   
-                  // Call login success
+                  // Call login success with proper auth data structure
                   onLoginSuccess({
                     pubkey: remotePubkey,
-                    secretKey: appSecretKey,
-                    connectionType: 'remote-signer',
-                    relay: BUNKER_RELAY
+                    authMethod: 'remote',
+                    clientSecretKey: appSecretKey,
+                    bunkerUri: bunkerURI,
+                    relays: [BUNKER_RELAY]
                   })
                 }, 1500)
 
@@ -870,18 +878,18 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
         <div className="w-full max-w-4xl flex flex-col justify-center min-h-[500px] sm:min-h-[600px]">
           {/* Progress Indicator */}
           <div className="mb-8">
-            <div className="flex items-center justify-center max-w-2xl mx-auto">
+            <div className="flex items-center justify-center max-w-2xl mx-auto px-4">
               {steps.map((step, index) => (
                 <div key={step} className="flex items-center">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium transition-all ${
+                  <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center text-xs sm:text-sm font-medium transition-all ${
                     index <= currentStepIndex 
                       ? "bg-primary text-primary-foreground" 
                       : "bg-muted text-muted-foreground"
                   }`}>
-                    {index < currentStepIndex ? <Check className="w-5 h-5" /> : index + 1}
+                    {index < currentStepIndex ? <Check className="w-4 h-4 sm:w-5 sm:h-5" /> : index + 1}
                   </div>
                   {index < steps.length - 1 && (
-                    <div className={`w-20 h-1 mx-2 transition-all ${
+                    <div className={`w-12 sm:w-20 h-1 mx-1 sm:mx-2 transition-all ${
                       index < currentStepIndex ? "bg-primary" : "bg-muted"
                     }`} />
                   )}
