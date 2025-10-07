@@ -293,13 +293,13 @@ button {
 .card-padding { padding: var(--spacing-lg); }
 .section-padding { padding: var(--spacing-xl) var(--spacing-lg); }
 
-/* Smooth transitions */
-* {
+/* Smooth transitions - removed global transitions that cause mobile fade-in issues */
+/* * {
   transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
-}
+} */
 
-/* Fade in animation */
-@keyframes fade-in {
+/* Fade in animation - removed to prevent mobile UI fade-in issues */
+/* @keyframes fade-in {
   from {
     opacity: 0;
     transform: translateY(10px);
@@ -312,7 +312,7 @@ button {
 
 .animate-fade-in {
   animation: fade-in 0.3s ease-out;
-}
+} */
 
 /* Ensure dropdown menus are always on top */
 [data-radix-popper-content-wrapper] {

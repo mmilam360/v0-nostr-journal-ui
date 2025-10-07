@@ -515,10 +515,10 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                   setSelectedPath('existing')
                   goNext()
                 }}
-                className="p-8 rounded-xl border-2 border-border hover:border-primary transition-all text-left bg-card hover:bg-card/80 group"
+                className="p-8 rounded-xl border-2 border-border hover:border-primary  text-left bg-card hover:bg-card/80 group"
               >
                 <div className="flex items-center gap-4 mb-4">
-                  <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center group-hover:bg-primary/20 transition-colors">
+                  <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center group-hover:bg-primary/20 ">
                     <Smartphone className="w-6 h-6 text-primary" />
                   </div>
                   <div>
@@ -537,10 +537,10 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                   setSelectedPath('new')
                   goNext()
                 }}
-                className="p-8 rounded-xl border-2 border-border hover:border-primary transition-all text-left bg-card hover:bg-card/80 group"
+                className="p-8 rounded-xl border-2 border-border hover:border-primary  text-left bg-card hover:bg-card/80 group"
               >
                 <div className="flex items-center gap-4 mb-4">
-                  <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center group-hover:bg-primary/20 transition-colors">
+                  <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center group-hover:bg-primary/20 ">
                     <Sparkles className="w-6 h-6 text-primary" />
                   </div>
                   <div>
@@ -610,7 +610,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                     setSelectedMethod('extension')
                     goNext()
                   }}
-                  className="p-4 sm:p-6 rounded-lg border-2 border-border hover:border-primary transition-all text-left bg-card hover:bg-card/80 group"
+                  className="p-4 sm:p-6 rounded-lg border-2 border-border hover:border-primary  text-left bg-card hover:bg-card/80 group"
                 >
                   <div className="flex items-center gap-3 mb-3">
                     <Radio className="w-6 h-6 text-primary" />
@@ -627,7 +627,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                     setSelectedMethod('remote')
                     goNext()
                   }}
-                  className="p-4 sm:p-6 rounded-lg border-2 border-border hover:border-primary transition-all text-left bg-card hover:bg-card/80 group"
+                  className="p-4 sm:p-6 rounded-lg border-2 border-border hover:border-primary  text-left bg-card hover:bg-card/80 group"
                 >
                   <div className="flex items-center gap-3 mb-3">
                     <Smartphone className="w-6 h-6 text-primary" />
@@ -644,7 +644,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                     setSelectedMethod('nsec')
                     goNext()
                   }}
-                  className="p-4 sm:p-6 rounded-lg border-2 border-border hover:border-primary transition-all text-left bg-card hover:bg-card/80 group"
+                  className="p-4 sm:p-6 rounded-lg border-2 border-border hover:border-primary  text-left bg-card hover:bg-card/80 group"
                 >
                   <div className="flex items-center gap-3 mb-3">
                     <Key className="w-6 h-6 text-primary" />
@@ -735,7 +735,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                     <button
                       type="button"
                       onClick={() => setHasConfirmedSave(!hasConfirmedSave)}
-                      className="mt-1 w-5 h-5 flex items-center justify-center border-2 border-muted-foreground rounded-sm hover:border-primary transition-colors"
+                      className="mt-1 w-5 h-5 flex items-center justify-center border-2 border-muted-foreground rounded-sm hover:border-primary "
                     >
                       {hasConfirmedSave && (
                         <svg 
@@ -844,7 +844,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                           Scan this QR code with your Nostr app
                         </p>
                         <div className="flex justify-center">
-                          <div className="w-40 h-40 sm:w-52 sm:h-52">
+                          <div className="w-40 h-40 sm:w-52 sm:h-52 bg-white p-4 rounded-lg border-2 border-gray-200">
                             {bunkerUrl && <QRCodeSVG value={bunkerUrl} size="100%" />}
                           </div>
                         </div>
@@ -974,7 +974,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
             <div className="flex items-center justify-center max-w-2xl mx-auto px-4">
               {steps.map((step, index) => (
                 <div key={step} className="flex items-center">
-                  <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center text-xs sm:text-sm font-medium transition-all ${
+                  <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center text-xs sm:text-sm font-medium  ${
                     index <= currentStepIndex 
                       ? "bg-primary text-primary-foreground" 
                       : "bg-muted text-muted-foreground"
@@ -982,7 +982,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                     {index < currentStepIndex ? <Check className="w-4 h-4 sm:w-5 sm:h-5" /> : index + 1}
                   </div>
                   {index < steps.length - 1 && (
-                    <div className={`w-12 sm:w-20 h-1 mx-1 sm:mx-2 transition-all ${
+                    <div className={`w-12 sm:w-20 h-1 mx-1 sm:mx-2  ${
                       index < currentStepIndex ? "bg-primary" : "bg-muted"
                     }`} />
                   )}
