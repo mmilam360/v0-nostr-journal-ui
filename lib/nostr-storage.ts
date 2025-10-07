@@ -421,13 +421,15 @@ export const saveNoteToNostr = async (note: DecryptedNote, authData: any): Promi
     const dTag = `${APP_D_TAG_PREFIX}${note.id}`
 
     const unsignedEvent: any = {
-      kind: 30078, // Parameterized replaceable event - widely supported
+      kind: 30078, // NIP-78: Application-specific Data (addressable)
       created_at: Math.floor(Date.now() / 1000),
       tags: [
-        ["d", dTag],
-        ["client", "nostr-journal"], // Identify our app
-        ["encrypted"], // Flag as encrypted content
-        ["t", "private"] // Tag as private note
+        ["d", dTag],                      // Addressable identifier (required for kind 30078)
+        ["client", "nostr-journal"],      // App identifier - filters our notes from other apps
+        ["encrypted"],                    // Encryption flag
+        ["t", "private"],                 // Privacy tag
+        ["title", note.title],            // Store title for quick reference
+        ["created", note.createdAt.toISOString()], // Original creation time
       ],
       content: encryptedContent,
       pubkey: authData.pubkey,

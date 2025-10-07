@@ -116,14 +116,31 @@ export default function NoteList({ notes, selectedNote, onSelectNote, onCreateNo
                   <p className="text-sm text-muted-foreground line-clamp-2 mb-3">
                     {note.content || "No content yet..."}
                   </p>
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <Calendar className="w-3 h-3" />
-                    <time>{new Date(note.lastModified).toLocaleDateString()}</time>
-                    {note.tags.length > 0 && (
-                      <>
-                        <span>•</span>
-                        <span>{note.tags.length} tags</span>
-                      </>
+                  <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                    <div className="flex items-center gap-2">
+                      <Calendar className="w-3 h-3" />
+                      <time>{new Date(note.lastModified).toLocaleDateString()}</time>
+                      {note.tags.length > 0 && (
+                        <>
+                          <span>•</span>
+                          <span>{note.tags.length} tags</span>
+                        </>
+                      )}
+                    </div>
+                    
+                    {/* Show verify link for ALL notes with event ID */}
+                    {note.eventId && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation() // Don't select note
+                          window.open(`https://nostr.band/e/${note.eventId}`, '_blank')
+                        }}
+                        className="text-blue-500 hover:text-blue-600 hover:underline flex items-center gap-1 transition-colors"
+                        title="Verify on Nostr"
+                      >
+                        <span>🔍</span>
+                        <span>Verify</span>
+                      </button>
                     )}
                   </div>
                 </button>
