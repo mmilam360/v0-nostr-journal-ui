@@ -52,7 +52,7 @@ import { ConnectionStatus } from "@/components/connection-status"
 import { DiagnosticPage } from "@/components/diagnostic-page"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { getDefaultRelays } from "@/lib/relay-manager"
-import { QRCodeSVG } from 'qrcode.react'
+import { DonationModal } from "@/components/donation-modal-proper"
 
 export interface Note {
   id: string
@@ -115,7 +115,6 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   const [profilePicture, setProfilePicture] = useState<string>("")
   const [displayName, setDisplayName] = useState<string>("")
   const [showDonationModal, setShowDonationModal] = useState(false)
-  const [donationAmount, setDonationAmount] = useState<string>("")
 
   const retryConnection = async () => {
     console.log("[v0] 🔄 Retrying connection...")
@@ -1252,114 +1251,11 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
 
     </div>
     
-    {/* Lightning Donation Modal */}
-    {showDonationModal && (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-        <div className="bg-background border rounded-lg p-6 max-w-md w-full mx-4">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold flex items-center gap-2">
-              <Zap className="w-5 h-5 text-amber-500" />
-              Support Nostr Journal
-            </h2>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowDonationModal(false)}
-            >
-              <X className="w-4 h-4" />
-            </Button>
-          </div>
-          
-          <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              This app is 100% funded by users like you. No ads. No tracking.
-            </p>
-            
-            {/* Sats Input */}
-            <div>
-              <label className="text-sm font-medium mb-2 block">Amount (sats):</label>
-              <div className="flex gap-2">
-                <input
-                  type="number"
-                  placeholder="Enter sats (optional)"
-                  value={donationAmount}
-                  onChange={(e) => setDonationAmount(e.target.value)}
-                  className="flex-1 px-3 py-2 border rounded-lg bg-background text-foreground"
-                />
-                <Button
-                  onClick={() => setDonationAmount("")}
-                  variant="outline"
-                  size="sm"
-                >
-                  Clear
-                </Button>
-              </div>
-            </div>
-            
-            {/* QR Code */}
-            <div className="text-center">
-              <p className="text-sm font-medium mb-3">
-                {donationAmount ? `Lightning Invoice (${donationAmount} sats):` : "Lightning Address:"}
-              </p>
-              <div className="flex justify-center mb-3">
-                <QRCodeSVG 
-                  value={donationAmount ? `lightning:michaelmilam@getalby.com?amount=${donationAmount}` : "michaelmilam@getalby.com"} 
-                  size={180} 
-                  className="border rounded-lg p-2"
-                />
-              </div>
-              
-              {/* Copy Address/Invoice */}
-              <div className="bg-secondary p-3 rounded-lg mb-3">
-                <code className="text-xs font-mono break-all">
-                  {donationAmount ? `lightning:michaelmilam@getalby.com?amount=${donationAmount}` : "michaelmilam@getalby.com"}
-                </code>
-              </div>
-              
-              <Button
-                onClick={() => {
-                  const text = donationAmount ? `lightning:michaelmilam@getalby.com?amount=${donationAmount}` : "michaelmilam@getalby.com"
-                  navigator.clipboard.writeText(text)
-                }}
-                variant="outline"
-                size="sm"
-                className="w-full"
-              >
-                <Copy className="w-4 h-4 mr-2" />
-                Copy {donationAmount ? "Invoice" : "Address"}
-              </Button>
-              
-              {/* Alternative formats for different wallets */}
-              {donationAmount && (
-                <div className="mt-4 p-3 bg-amber-50 dark:bg-amber-950/20 rounded-lg">
-                  <p className="text-xs text-amber-800 dark:text-amber-200 mb-2">
-                    <strong>Alternative formats for different wallets:</strong>
-                  </p>
-                  <div className="space-y-2 text-xs">
-                    <div>
-                      <span className="font-mono">michaelmilam@getalby.com</span>
-                      <span className="text-muted-foreground ml-2">(Lightning address only)</span>
-                    </div>
-                    <div>
-                      <span className="font-mono">lightning:michaelmilam@getalby.com</span>
-                      <span className="text-muted-foreground ml-2">(With lightning: prefix)</span>
-                    </div>
-                    <p className="text-muted-foreground text-xs mt-2">
-                      Some wallets work better with different formats. Try scanning the QR code first, 
-                      or copy the Lightning address and enter the amount manually in your wallet.
-                    </p>
-                  </div>
-                </div>
-              )}
-            </div>
-            
-            <p className="text-xs text-center text-muted-foreground">
-              Thank you for supporting independent Nostr development! 🙏
-            </p>
-          </div>
-        </div>
-      </div>
-    )}
+    {/* Proper Lightning Donation Modal */}
+    <DonationModal
+      open={showDonationModal}
+      onOpenChange={setShowDonationModal}
+    />
     
     </ErrorBoundary>
   )
