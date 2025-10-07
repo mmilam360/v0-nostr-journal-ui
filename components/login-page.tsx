@@ -858,22 +858,16 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
     <div style={containerStyle} className="bg-slate-900">
       <div className="min-h-full flex items-center justify-center p-4">
         <div className="w-full max-w-md space-y-4">
-          <div className="text-center">
-            <div className="flex items-center justify-center gap-3 mb-4">
-              <img 
-                src="/nostr-journal-logo.svg" 
-                alt="Nostr Journal" 
-                className="h-12 w-12 rounded-lg"
-                onError={(e) => {
-                  // Fallback to placeholder if logo not found
-                  e.currentTarget.src = "/placeholder-logo.png"
-                }}
-              />
-              <div>
-                <h1 className="text-4xl font-bold text-white">Nostr Journal</h1>
-                <p className="text-slate-400">Private encrypted journaling on Nostr</p>
-              </div>
-            </div>
+          <div className="text-center mb-8">
+            <img 
+              src="/Nostr Journal Logo - Dark Mode.svg" 
+              alt="Nostr Journal" 
+              className="h-24 w-auto mx-auto"
+              onError={(e) => {
+                // Fallback to placeholder if logo not found
+                e.currentTarget.src = "/placeholder-logo.png"
+              }}
+            />
           </div>
 
           {/* Main Login Card */}
