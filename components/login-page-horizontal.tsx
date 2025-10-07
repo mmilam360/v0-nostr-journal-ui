@@ -376,6 +376,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                     authMethod: 'remote',
                     clientSecretKey: appSecretKey,
                     bunkerUri: bunkerURI,
+                    bunkerPubkey: remotePubkey,
                     relays: [BUNKER_RELAY]
                   })
                 }, 1500)
@@ -384,8 +385,8 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                 console.error("[NostrConnect] ❌ Connection error:", response.error)
                 if (!isConnected) {
                   setConnectionState("error")
-                  setError(response.error.message || "Connection rejected")
                   clearTimeout(timeoutId)
+                  cleanup()
                 }
               } else {
                 console.warn("[NostrConnect] ⚠️ Unknown response format:", response)
