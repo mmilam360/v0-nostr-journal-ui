@@ -189,73 +189,189 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
     }
   }
 
-  // Remote signer login function
+  // Remote signer login function - Using working implementation from login-page.tsx
   const startBunkerLogin = async () => {
     setRemoteSignerMode("bunker")
     setConnectionState("generating")
     setError("")
+    setCopied(false)
 
     try {
-      const { NostrFetcher } = await import("nostr-fetch")
-      const { generateSecretKey, getPublicKey, nip04 } = await import("nostr-tools")
+      console.log("[NostrConnect] 🚀 Starting NIP-46 bunker login")
+
+      const { generateSecretKey, getPublicKey, nip04, finalizeEvent, verifyEvent } = await import("nostr-tools/pure")
+      // Import nip44 separately - it's in a different module
+      const nip44 = await import("nostr-tools/nip44")
+      const { bytesToHex } = await import("@noble/hashes/utils")
+
+      // Generate keypair for this connection
+      const appSecretKey = generateSecretKey()
+      const appPublicKey = getPublicKey(appSecretKey)
       
-      // Generate temporary keypair for connection
-      const tempSecretKey = generateSecretKey()
-      const tempPublicKey = getPublicKey(tempSecretKey)
+      // CRITICAL: Generate a secret token to prevent connection spoofing
+      const secretBytes = crypto.getRandomValues(new Uint8Array(16))
+      const secret = bytesToHex(secretBytes)
       
-      // Create bunker connection string (not nostrconnect)
-      const BUNKER_RELAY = "wss://relay.nostr.band"
-      const bunkerURI = `bunker://${tempPublicKey}?relay=${BUNKER_RELAY}`
+      // App name and perms in query string format (better compatibility)
+      const appName = encodeURIComponent("Nostr Journal")
+      const perms = encodeURIComponent("sign_event:1,sign_event:30078,sign_event:5,nip04_encrypt,nip04_decrypt")
+      
+      // Use nsec.app relay for better compatibility
+      const BUNKER_RELAY = "wss://relay.nsec.app"
+      
+      // Generate the nostrconnect URI with secret
+      const bunkerURI = `nostrconnect://${appPublicKey}?relay=${encodeURIComponent(BUNKER_RELAY)}&secret=${secret}&name=${appName}&perms=${perms}`
+
+      console.log("[NostrConnect] 📱 Connection URI generated with secret")
+      console.log("[NostrConnect] 🔑 Local App Public Key:", appPublicKey)
+      console.log("[NostrConnect] 🔐 Secret:", secret.slice(0, 8) + "...")
+      console.log("[NostrConnect] 🔌 Using relay:", BUNKER_RELAY)
       
       setBunkerUrl(bunkerURI)
       setConnectionState("waiting")
-      
-      console.log("[Bunker] 📡 Listening for approval on relay:", BUNKER_RELAY)
-      
-      // Initialize fetcher and start listening for approval
-      const fetcher = NostrFetcher.init()
-      
-      const sub = fetcher.allEventsIterator(
-        [BUNKER_RELAY],
-        { kinds: [24133] },
-        { "#p": [tempPublicKey] },
-        { realTime: true, timeout: 120000 }
-      )
-      
-      for await (const event of sub) {
-        try {
-          console.log("[Bunker] 📨 Received event from:", event.pubkey)
-          
-          const remotePubkey = event.pubkey
-          const sharedSecret = nip04.getSharedSecret(tempSecretKey, remotePubkey)
-          const decryptedContent = await nip04.decrypt(sharedSecret, event.content)
-          const response = JSON.parse(decryptedContent)
 
-          console.log("[Bunker] 📦 Decrypted response:", response)
+      // Connection state tracking
+      let isConnected = false
+      let remotePubkey: string | null = null
 
-          if (response.result === "ack") {
-            console.log("[Bunker] ✅ Connection approved!")
-            setConnectionState("success")
-            
-            // Call onLoginSuccess with the remote pubkey
-            onLoginSuccess({
-              pubkey: remotePubkey,
-              secretKey: tempSecretKey,
-              connectionType: 'remote-signer',
-              relay: BUNKER_RELAY
-            })
-            return
-          } else if (response.error) {
-            throw new Error(response.error.message || "Connection rejected")
-          }
-        } catch (e) {
-          console.log("[Bunker] ⚠️ Could not decrypt event:", e)
+      // Set timeout for connection (30 seconds)
+      const timeoutId = setTimeout(() => {
+        if (!isConnected) {
+          console.log("[NostrConnect] ⏱️ Connection timeout")
+          setConnectionState("error")
+          setError("Connection timed out. Please try scanning the QR code again.")
+        }
+      }, 30000)
+
+      // Connect to relay
+      console.log("[NostrConnect] 🔌 Connecting to relay...")
+      const ws = new WebSocket(BUNKER_RELAY)
+
+      ws.onerror = (error) => {
+        console.error("[NostrConnect] ❌ WebSocket error:", error)
+        if (!isConnected) {
+          setConnectionState("error")
+          setError("Failed to connect to relay. Please check your internet connection.")
         }
       }
-      
-      // Timeout
-      throw new Error("Connection timeout. Please try again or check that your signing app is running.")
-      
+
+      ws.onopen = () => {
+        console.log("[NostrConnect] ✅ WebSocket connected")
+        
+        // Subscribe to NIP-46 events tagged with our pubkey
+        const subscriptionId = crypto.randomUUID()
+        const subscription = [
+          "REQ",
+          subscriptionId,
+          {
+            kinds: [24133],
+            "#p": [appPublicKey],
+            since: Math.floor(Date.now() / 1000) - 60
+          }
+        ]
+        
+        const subMessage = JSON.stringify(subscription)
+        console.log("[NostrConnect] 📤 Subscribing to NIP-46 events")
+        ws.send(subMessage)
+      }
+
+      ws.onmessage = async (message) => {
+        try {
+          const data = JSON.parse(message.data)
+          
+          // Handle different message types
+          if (data[0] === "EVENT" && data[2] && !isConnected) {
+            const event = data[2]
+            
+            if (event.kind !== 24133) return
+            
+            console.log("[NostrConnect] 📨 Received NIP-46 event from:", event.pubkey)
+            
+            // Verify event signature
+            const isValid = verifyEvent(event)
+            if (!isValid) {
+              console.warn("[NostrConnect] ⚠️ Invalid event signature - ignoring")
+              return
+            }
+
+            remotePubkey = event.pubkey
+            console.log("[NostrConnect] 👤 Remote signer pubkey:", remotePubkey)
+
+            try {
+              // Try NIP-44 decryption first (modern standard)
+              let decryptedContent: string
+              let usedNip44 = false
+              
+              try {
+                const conversationKey = nip44.v2.utils.getConversationKey(appSecretKey, remotePubkey)
+                decryptedContent = nip44.v2.decrypt(event.content, conversationKey)
+                usedNip44 = true
+                console.log("[NostrConnect] 🔓 Decrypted with NIP-44")
+              } catch (nip44Error) {
+                // Fallback to NIP-04 for older signers
+                console.log("[NostrConnect] ⚠️ NIP-44 failed, trying NIP-04:", nip44Error)
+                const sharedSecret = nip04.getSharedSecret(appSecretKey, remotePubkey)
+                decryptedContent = await nip04.decrypt(sharedSecret, event.content)
+                console.log("[NostrConnect] 🔓 Decrypted with NIP-04 (legacy)")
+              }
+
+              let response: any
+              try {
+                response = JSON.parse(decryptedContent)
+              } catch (e) {
+                console.warn("[NostrConnect] ⚠️ Response is not JSON:", decryptedContent)
+                response = { result: decryptedContent }
+              }
+
+              console.log("[NostrConnect] 📦 Response:", response)
+
+              // CRITICAL: Validate the secret token to prevent spoofing
+              if (response.result === secret || 
+                  (response.params && response.params.includes(secret))) {
+                console.log("[NostrConnect] ✅ Secret validated - connection approved!")
+                isConnected = true
+
+                // Clear timeout
+                clearTimeout(timeoutId)
+
+                // Update UI to success state
+                setConnectionState("success")
+
+                // Wait for UI update, then proceed with login
+                setTimeout(() => {
+                  console.log("[NostrConnect] 🎉 Proceeding with login")
+                  
+                  // Close WebSocket
+                  if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.close()
+                  }
+                  
+                  // Call login success
+                  onLoginSuccess({
+                    pubkey: remotePubkey,
+                    secretKey: appSecretKey,
+                    connectionType: 'remote-signer',
+                    relay: BUNKER_RELAY
+                  })
+                }, 1500)
+
+              } else if (response.error) {
+                console.error("[NostrConnect] ❌ Connection error:", response.error)
+                setConnectionState("error")
+                setError(response.error.message || "Connection rejected")
+                clearTimeout(timeoutId)
+              } else {
+                console.warn("[NostrConnect] ⚠️ Unknown response format:", response)
+              }
+            } catch (decryptError) {
+              console.log("[NostrConnect] ⚠️ Could not decrypt event:", decryptError)
+            }
+          }
+        } catch (parseError) {
+          console.error("[NostrConnect] ❌ Failed to parse message:", parseError)
+        }
+      }
+
     } catch (err: any) {
       console.error("Bunker login failed:", err)
       setError(err.message || "Failed to generate connection")
