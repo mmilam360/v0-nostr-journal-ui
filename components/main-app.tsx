@@ -992,7 +992,6 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                 onSelectNote={setSelectedNote}
                 onCreateNote={handleCreateNote}
                 onDeleteNote={handleDeleteNote}
-                onVerifyNote={handleVerifyNote}
                 authData={authData}
               />
             </div>

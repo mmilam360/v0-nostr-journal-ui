@@ -28,14 +28,19 @@ export default function VerifyNoteModal({ note, authData, onClose }: VerifyNoteM
   const [error, setError] = useState<string | null>(null)
   const [copiedField, setCopiedField] = useState<string | null>(null)
 
+  // Early return if note is null
+  if (!note) {
+    return null
+  }
+
   useEffect(() => {
-    if (note.eventId) {
+    if (note?.eventId) {
       fetchRawEvent(note.eventId)
     } else {
       setLoading(false)
       setError("This note doesn't have an event ID yet")
     }
-  }, [note.eventId])
+  }, [note?.eventId])
 
   const fetchRawEvent = async (eventId: string) => {
     try {
@@ -161,15 +166,15 @@ export default function VerifyNoteModal({ note, authData, onClose }: VerifyNoteM
                 <div className="bg-muted rounded-lg p-4 space-y-2 text-sm">
                   <div>
                     <span className="text-muted-foreground">Title:</span>{" "}
-                    <span className="font-medium">{note.title}</span>
+                    <span className="font-medium">{note?.title || 'Untitled'}</span>
                   </div>
                   <div>
                     <span className="text-muted-foreground">Created:</span>{" "}
-                    <span>{new Date(note.createdAt).toLocaleString()}</span>
+                    <span>{note?.createdAt ? new Date(note.createdAt).toLocaleString() : 'Unknown'}</span>
                   </div>
                   <div>
                     <span className="text-muted-foreground">Last Modified:</span>{" "}
-                    <span>{new Date(note.lastModified).toLocaleString()}</span>
+                    <span>{note?.lastModified ? new Date(note.lastModified).toLocaleString() : 'Unknown'}</span>
                   </div>
                 </div>
               </div>

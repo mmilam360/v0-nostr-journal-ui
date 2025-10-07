@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import type { Note } from "@/components/main-app"
 import { useDebounce } from "@/hooks/useDebounce"
-import { Copy, ExternalLink, ShieldCheck } from "lucide-react"
+import { Copy, ExternalLink, ShieldCheck, Lock, CheckCircle2, AlertCircle, Loader2, Check } from "lucide-react"
 import VerifyNoteModal from "./verify-note-modal"
 
 interface EditorProps {
@@ -27,6 +27,7 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
   const [selectedText, setSelectedText] = useState("")
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const [showVerify, setShowVerify] = useState(false)
+  const [copiedId, setCopiedId] = useState<string | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const currentNoteIdRef = useRef<string | null>(null)
   const previousNoteDataRef = useRef<{ id: string; title: string; content: string } | null>(null)
@@ -97,8 +98,21 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
   const copyEventId = async (eventId: string) => {
     try {
       await navigator.clipboard.writeText(eventId)
+      setCopiedId(eventId)
+      setTimeout(() => setCopiedId(null), 2000)
     } catch (err) {
       console.error('Failed to copy event ID:', err)
+      // Fallback for older browsers
+      const textArea = document.createElement('textarea')
+      textArea.value = eventId
+      textArea.style.position = 'fixed'
+      textArea.style.left = '-999999px'
+      document.body.appendChild(textArea)
+      textArea.select()
+      document.execCommand('copy')
+      textArea.remove()
+      setCopiedId(eventId)
+      setTimeout(() => setCopiedId(null), 2000)
     }
   }
 
@@ -329,14 +343,46 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
         </div>
 
         {/* Verification Section */}
-        {note.eventId && (
-          <div className="border-t border-border pt-3 mt-3">
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-muted-foreground">Event ID:</span>
+        <div className="border-t border-border pt-3 mt-3">
+          <div className="flex items-center justify-between text-xs">
+            <div className="flex items-center gap-3">
+              {/* Encryption indicator */}
+              <div className="flex items-center gap-1 text-green-600 dark:text-green-400">
+                <Lock className="w-3 h-3" />
+                <span>Encrypted</span>
+              </div>
+              
+              {/* Sync status */}
+              {note.syncStatus === 'synced' && note.eventId && (
+                <div className="flex items-center gap-1 text-blue-600 dark:text-blue-400">
+                  <CheckCircle2 className="w-3 h-3" />
+                  <span>On Nostr</span>
+                </div>
+              )}
+              
+              {note.syncStatus === 'local' && (
+                <div className="flex items-center gap-1 text-yellow-600 dark:text-yellow-400">
+                  <AlertCircle className="w-3 h-3" />
+                  <span>Local only</span>
+                </div>
+              )}
+              
+              {note.syncStatus === 'syncing' && (
+                <div className="flex items-center gap-1 text-blue-600 dark:text-blue-400">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  <span>Syncing...</span>
+                </div>
+              )}
+            </div>
+            
+            {/* Event ID with actions - Show for synced notes */}
+            {note.eventId && (
               <div className="flex items-center gap-1">
+                <span className="text-muted-foreground">Event ID:</span>
                 <code className="text-xs font-mono text-primary bg-primary/10 px-1.5 py-0.5 rounded">
                   {note.eventId.slice(0, 8)}...
                 </code>
+                
                 <Button
                   onClick={() => copyEventId(note.eventId!)}
                   variant="ghost"
@@ -344,8 +390,13 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
                   className="h-6 w-6 p-0"
                   title="Copy Event ID"
                 >
-                  <Copy className="w-3 h-3" />
+                  {copiedId === note.eventId ? (
+                    <Check className="w-3 h-3 text-green-500" />
+                  ) : (
+                    <Copy className="w-3 h-3" />
+                  )}
                 </Button>
+                
                 <Button
                   onClick={() => window.open(`https://nostr.band/e/${note.eventId}`, '_blank')}
                   variant="ghost"
@@ -355,6 +406,7 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
                 >
                   <ExternalLink className="w-3 h-3" />
                 </Button>
+                
                 <Button
                   onClick={() => setShowVerify(true)}
                   variant="ghost"
@@ -365,9 +417,15 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
                   <ShieldCheck className="w-3 h-3" />
                 </Button>
               </div>
-            </div>
+            )}
+            
+            {!note.eventId && note.syncStatus !== 'error' && (
+              <span className="text-xs text-muted-foreground">
+                Not yet synced
+              </span>
+            )}
           </div>
-        )}
+        </div>
 
         {selectedText && (
           <div className="text-xs text-primary mt-2">
