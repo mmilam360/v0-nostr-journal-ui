@@ -103,6 +103,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   const [deletedNotes, setDeletedNotes] = useState<{ id: string; deletedAt: Date }[]>([])
   const [showProfile, setShowProfile] = useState(false)
   const [showRelayManager, setShowRelayManager] = useState(false)
+  const [dropdownSubmenu, setDropdownSubmenu] = useState<'none' | 'profile' | 'relays'>('none')
   const [showDiagnostics, setShowDiagnostics] = useState(false)
   const [connectionError, setConnectionError] = useState<string | null>(null)
   const [copiedNpub, setCopiedNpub] = useState(false)
@@ -872,19 +873,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                   )}
                 </Button>
                 
-                {/* Test simple button */}
-          <Button
-                  variant="outline" 
-            size="sm"
-                  onClick={() => {
-                    console.log('[Test] Simple button clicked!')
-                    alert('Simple button works!')
-                  }}
-                >
-                  Test Click
-          </Button>
-
-                {/* Account dropdown - test without asChild */}
+                {/* Account dropdown - working version */}
                 <DropdownMenu>
                   <DropdownMenuTrigger>
           <Button
@@ -899,54 +888,181 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                   
                   <DropdownMenuContent 
                     align="end" 
-                    className="w-64 z-[9999]"
+                    className="w-80 z-[9999]"
                     sideOffset={8}
                   >
-                    {/* Profile Section */}
-                    <div className="px-3 py-2 border-b border-border">
-                      <p className="text-sm font-medium">Nostr Profile</p>
-                      <p className="text-xs text-muted-foreground truncate mt-1 font-mono">
-                        {authData.pubkey.slice(0, 16)}...
-                      </p>
-                    </div>
-                    
-                    <DropdownMenuGroup>
-                      <DropdownMenuItem 
-                        onClick={() => {
-                          console.log('[Dropdown] View Profile clicked')
-                          setShowProfile(true)
-                          setAccountDropdownOpen(false)
-                        }}
-                      >
-                        <User className="w-4 h-4 mr-2" />
-                        View Profile
-                      </DropdownMenuItem>
-                      
-                      <DropdownMenuItem 
-                        onClick={() => {
-                          console.log('[Dropdown] Manage Relays clicked')
-                          setShowRelayManager(true)
-                          setAccountDropdownOpen(false)
-                        }}
-                      >
-                        <Settings className="w-4 h-4 mr-2" />
-                        Manage Relays
-                      </DropdownMenuItem>
-                    </DropdownMenuGroup>
-                    
-                    <DropdownMenuSeparator />
-                    
-                    <DropdownMenuItem 
-                      onClick={() => {
-                        console.log('[Dropdown] Logout clicked')
-                        setAccountDropdownOpen(false)
-                        handleLogout()
-                      }}
-                      className="text-destructive focus:text-destructive"
-          >
-            <LogOut className="w-4 h-4 mr-2" />
-                      Logout
-                    </DropdownMenuItem>
+                    {dropdownSubmenu === 'none' && (
+                      <>
+                        {/* Profile Section */}
+                        <div className="px-3 py-2 border-b border-border">
+                          <p className="text-sm font-medium">Nostr Profile</p>
+                          <p className="text-xs text-muted-foreground truncate mt-1 font-mono">
+                            {authData.pubkey.slice(0, 16)}...
+                          </p>
+                        </div>
+                        
+                        <DropdownMenuGroup>
+                          <DropdownMenuItem 
+                            onClick={() => setDropdownSubmenu('profile')}
+                          >
+                            <User className="w-4 h-4 mr-2" />
+                            View Profile
+                          </DropdownMenuItem>
+                          
+                          <DropdownMenuItem 
+                            onClick={() => setDropdownSubmenu('relays')}
+                          >
+                            <Settings className="w-4 h-4 mr-2" />
+                            Manage Relays
+                          </DropdownMenuItem>
+                        </DropdownMenuGroup>
+                        
+                        <DropdownMenuSeparator />
+                        
+                        <DropdownMenuItem 
+                          onClick={() => {
+                            console.log('[Dropdown] Logout clicked')
+                            handleLogout()
+                          }}
+                          className="text-destructive focus:text-destructive"
+                        >
+                          <LogOut className="w-4 h-4 mr-2" />
+                          Logout
+                        </DropdownMenuItem>
+                      </>
+                    )}
+
+                    {dropdownSubmenu === 'profile' && (
+                      <div className="p-4">
+                        <div className="flex items-center justify-between mb-4">
+                          <h3 className="text-sm font-medium">Profile Details</h3>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setDropdownSubmenu('none')}
+                            className="h-6 w-6 p-0"
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                        
+                        <div className="space-y-3">
+                          <div>
+                            <label className="text-xs text-muted-foreground">Public Key (npub)</label>
+                            <div className="flex items-center gap-2 mt-1">
+                              <code className="text-xs bg-muted px-2 py-1 rounded font-mono flex-1 truncate">
+                                {npub || 'Loading...'}
+                              </code>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  if (npub) {
+                                    navigator.clipboard.writeText(npub)
+                                    setCopiedNpub(true)
+                                    setTimeout(() => setCopiedNpub(false), 2000)
+                                  }
+                                }}
+                                className="h-6 w-6 p-0"
+                              >
+                                {copiedNpub ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                              </Button>
+                            </div>
+                          </div>
+                          
+                          <div>
+                            <label className="text-xs text-muted-foreground">Connected Relays</label>
+                            <div className="mt-1 space-y-1">
+                              {relays.length > 0 ? (
+                                relays.slice(0, 3).map((relay, index) => (
+                                  <div key={index} className="text-xs text-muted-foreground font-mono truncate">
+                                    {relay}
+                                  </div>
+                                ))
+                              ) : (
+                                <div className="text-xs text-muted-foreground">No relays configured</div>
+                              )}
+                              {relays.length > 3 && (
+                                <div className="text-xs text-muted-foreground">
+                                  +{relays.length - 3} more...
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {dropdownSubmenu === 'relays' && (
+                      <div className="p-4">
+                        <div className="flex items-center justify-between mb-4">
+                          <h3 className="text-sm font-medium">Manage Relays</h3>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setDropdownSubmenu('none')}
+                            className="h-6 w-6 p-0"
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                        
+                        <div className="space-y-3">
+                          <div>
+                            <label className="text-xs text-muted-foreground">Add New Relay</label>
+                            <div className="flex gap-2 mt-1">
+                              <input
+                                type="text"
+                                value={newRelay}
+                                onChange={(e) => setNewRelay(e.target.value)}
+                                placeholder="wss://relay.example.com"
+                                className="flex-1 text-xs px-2 py-1 border rounded"
+                              />
+                              <Button
+                                size="sm"
+                                onClick={() => {
+                                  if (newRelay && !relays.includes(newRelay)) {
+                                    const updatedRelays = [...relays, newRelay]
+                                    setRelays(updatedRelays)
+                                    localStorage.setItem('nostr-relays', JSON.stringify(updatedRelays))
+                                    setNewRelay('')
+                                  }
+                                }}
+                                className="h-6 px-2 text-xs"
+                              >
+                                <Plus className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </div>
+                          
+                          <div>
+                            <label className="text-xs text-muted-foreground">Current Relays</label>
+                            <div className="mt-1 space-y-1 max-h-32 overflow-y-auto">
+                              {relays.map((relay, index) => (
+                                <div key={index} className="flex items-center justify-between text-xs">
+                                  <span className="font-mono truncate flex-1">{relay}</span>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => {
+                                      const updatedRelays = relays.filter((_, i) => i !== index)
+                                      setRelays(updatedRelays)
+                                      localStorage.setItem('nostr-relays', JSON.stringify(updatedRelays))
+                                    }}
+                                    className="h-5 w-5 p-0 text-destructive hover:text-destructive"
+                                  >
+                                    <Trash2 className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                              ))}
+                              {relays.length === 0 && (
+                                <div className="text-xs text-muted-foreground">No relays configured</div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </DropdownMenuContent>
                 </DropdownMenu>
         </div>
