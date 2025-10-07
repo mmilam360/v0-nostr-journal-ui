@@ -877,9 +877,9 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
           </div>
 
           {/* Main Login Card */}
-          <div className="bg-slate-800 rounded-lg shadow-xl p-6 border border-slate-700">
+          <div className="bg-slate-800 rounded-lg shadow-xl p-8 border border-slate-700 min-h-[400px] flex flex-col justify-center">
             {loginMethod === "idle" && (
-              <div className="space-y-3">
+              <div className="space-y-4">
                 <button
                   onClick={() => setShowOnboarding(true)}
                   className="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 shadow-lg shadow-green-500/20"
@@ -924,7 +924,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
                   {showRelaySettings ? "Hide" : "Configure"} Relays
                 </button>
 
-                <p className="text-xs text-slate-400 text-center mt-4">Your keys never leave your device</p>
+                <p className="text-xs text-slate-400 text-center mt-6">Your keys never leave your device</p>
               </div>
             )}
 
@@ -1050,7 +1050,29 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
             )}
 
             {loginMethod === "extension" && (
-              <div className="text-center py-8">
+              <div className="text-center py-8 flex flex-col justify-center min-h-[300px]">
+                {connectionState === "idle" && (
+                  <>
+                    <KeyRound className="h-12 w-12 text-blue-500 mx-auto mb-4" />
+                    <h3 className="text-lg font-semibold text-white mb-2">Connect Browser Extension</h3>
+                    <p className="text-slate-300 mb-6">
+                      Make sure you have a Nostr extension installed (like Alby, nos2x, or similar)
+                    </p>
+                    <button
+                      onClick={handleExtensionLogin}
+                      className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-6 rounded-lg transition-colors flex items-center justify-center gap-2 mx-auto"
+                    >
+                      <KeyRound className="h-5 w-5" />
+                      Connect Extension
+                    </button>
+                    <button 
+                      onClick={handleBack} 
+                      className="block mx-auto mt-4 text-slate-400 hover:text-white transition-colors"
+                    >
+                      ← Back to Login Options
+                    </button>
+                  </>
+                )}
                 {connectionState === "connecting" && (
                   <>
                     <Loader2 className="h-12 w-12 animate-spin text-blue-500 mx-auto mb-4" />

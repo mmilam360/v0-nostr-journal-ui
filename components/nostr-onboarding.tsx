@@ -218,7 +218,10 @@ App: Nostr Journal (nostrjournal.com)
               <Button variant="outline" onClick={onCancel}>
                 Cancel
               </Button>
-              <Button onClick={generateKeys} className="gap-2">
+              <Button onClick={() => {
+                console.log('[Onboarding] Generate My Keys button clicked')
+                generateKeys()
+              }} className="gap-2">
                 Generate My Keys
                 <ArrowRight className="w-4 h-4" />
               </Button>

@@ -885,9 +885,6 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                     <Button 
                       variant="ghost" 
                       size="sm"
-                      onClick={() => {
-                        console.log('[Dropdown] Button clicked, current state:', accountDropdownOpen)
-                      }}
                     >
                       <User className="w-4 h-4" />
                       <span className="hidden sm:inline ml-2">Account</span>

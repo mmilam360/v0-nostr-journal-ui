@@ -193,7 +193,7 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
 
   if (!note) {
     return (
-      <div className="flex-1 bg-background flex items-center justify-center">
+      <div className="flex-1 bg-background flex items-center justify-center pt-16">
         <div className="text-center">
           <div className="w-16 h-16 text-muted-foreground mx-auto mb-4 flex items-center justify-center">
             <FileText className="w-16 h-16" />
@@ -213,7 +213,7 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
           value={title}
           onChange={(e) => handleTitleChange(e.target.value)}
           placeholder="Note title..."
-          className="w-full bg-transparent border-none outline-none text-3xl font-bold placeholder:text-muted-foreground focus:outline-none"
+          className="w-full bg-transparent border-none outline-none text-3xl font-bold placeholder:text-muted-foreground focus:outline-none mb-6"
         />
 
         <div className="flex items-center gap-2">
