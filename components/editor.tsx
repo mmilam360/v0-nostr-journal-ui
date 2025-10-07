@@ -432,14 +432,6 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
           </div>
         )}
       </div>
-      
-      {/* Verification Modal */}
-      <VerifyNoteModal
-        isOpen={showVerify}
-        onClose={() => setShowVerify(false)}
-        note={note}
-        authData={authData}
-      />
     </div>
   )
 }
