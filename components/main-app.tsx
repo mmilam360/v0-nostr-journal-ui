@@ -51,6 +51,7 @@ import { ConnectionStatus } from "@/components/connection-status"
 import { DiagnosticPage } from "@/components/diagnostic-page"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { getDefaultRelays } from "@/lib/relay-manager"
+import { DonationModal } from "@/components/donation-modal"
 
 export interface Note {
   id: string
@@ -112,6 +113,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   const [newRelay, setNewRelay] = useState("")
   const [profilePicture, setProfilePicture] = useState<string>("")
   const [displayName, setDisplayName] = useState<string>("")
+  const [showDonationModal, setShowDonationModal] = useState(false)
 
   const retryConnection = async () => {
     console.log("[v0] 🔄 Retrying connection...")
@@ -805,12 +807,17 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
 
         if (events.length > 0) {
           const metadata = JSON.parse(events[0].content)
+          console.log("[Profile] Fetched metadata:", metadata)
           if (metadata.picture) {
+            console.log("[Profile] Setting profile picture:", metadata.picture)
             setProfilePicture(metadata.picture)
           }
           if (metadata.name || metadata.display_name) {
+            console.log("[Profile] Setting display name:", metadata.display_name || metadata.name)
             setDisplayName(metadata.display_name || metadata.name)
           }
+        } else {
+          console.log("[Profile] No profile events found")
         }
 
         pool.close(RELAYS)
@@ -893,6 +900,17 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                   <span className="text-muted-foreground">{getSyncStatusText()}</span>
                 </div>
                 
+                {/* Support button */}
+              <Button
+                variant="ghost"
+                size="sm"
+                  onClick={() => setShowDonationModal(true)}
+                  className="hidden sm:flex items-center gap-1 text-amber-600 hover:text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/20"
+              >
+                  <Zap className="w-4 h-4" />
+                  <span>Support</span>
+              </Button>
+                
                 {/* Theme toggle with system option */}
                 <DropdownMenu>
                   <DropdownMenuTrigger>
@@ -925,13 +943,13 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                 {/* Account dropdown - working version */}
                 <DropdownMenu>
                   <DropdownMenuTrigger>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                    >
+              <Button
+                variant="ghost"
+                size="sm"
+              >
                       <User className="w-4 h-4" />
                       <span className="hidden sm:inline ml-2">Account</span>
-                    </Button>
+              </Button>
                   </DropdownMenuTrigger>
                   
                   <DropdownMenuContent 
@@ -963,18 +981,18 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                             {displayName || "Nostr Profile"}
                           </p>
                           <p className="text-xs text-muted-foreground leading-tight">Connected</p>
-                        </div>
-                      </div>
-                      
+          </div>
+        </div>
+
                       <div>
                         <label className="text-xs text-muted-foreground mb-1 block">Public Key (npub)</label>
-                        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2">
                           <code className="text-xs bg-muted px-3 py-2 rounded font-mono flex-1 truncate">
                             {npub || 'Loading...'}
                           </code>
-                          <Button
-                            variant="ghost"
-                            size="sm"
+          <Button
+            variant="ghost"
+            size="sm"
                             onClick={() => {
                               if (npub) {
                                 navigator.clipboard.writeText(npub)
@@ -985,7 +1003,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                             className="h-8 w-8 p-0"
                           >
                             {copiedNpub ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                          </Button>
+          </Button>
                         </div>
                       </div>
                     </div>
@@ -1031,8 +1049,8 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                                   }
                                 }}
                               />
-                              <Button
-                                size="sm"
+          <Button
+            size="sm"
                                 onClick={() => {
                                   if (newRelay && !relays.includes(newRelay)) {
                                     const updatedRelays = [...relays, newRelay]
@@ -1045,7 +1063,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                                 disabled={!newRelay || relays.includes(newRelay)}
                               >
                                 <Plus className="h-3 w-3" />
-                              </Button>
+          </Button>
                             </div>
                           </div>
                           
@@ -1056,9 +1074,9 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                                 relays.map((relay, index) => (
                                   <div key={index} className="flex items-center justify-between text-xs bg-background rounded px-2 py-1">
                                     <span className="font-mono truncate flex-1">{relay}</span>
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
+          <Button
+            variant="ghost"
+            size="sm"
                                       onClick={() => {
                                         const updatedRelays = relays.filter((_, i) => i !== index)
                                         setRelays(updatedRelays)
@@ -1067,13 +1085,13 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                                       className="h-6 w-6 p-0 text-destructive hover:text-destructive"
                                     >
                                       <Trash2 className="h-3 w-3" />
-                                    </Button>
-                                  </div>
+          </Button>
+        </div>
                                 ))
                               ) : (
                                 <div className="text-xs text-muted-foreground text-center py-2">No relays configured</div>
                               )}
-                            </div>
+      </div>
                           </div>
                         </div>
                       </div>
@@ -1106,7 +1124,8 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
             selectedTag={selectedTag}
             onSelectTag={setSelectedTag}
             pubkey={authData.pubkey}
-              onLogout={handleLogout}
+            onLogout={handleLogout}
+            onDonationClick={() => setShowDonationModal(true)}
           />
         </div>
 
@@ -1134,7 +1153,11 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                   setIsMobileSidebarOpen(false)
                 }}
                 pubkey={authData.pubkey}
-                  onLogout={handleLogout}
+                onLogout={handleLogout}
+                onDonationClick={() => {
+                  setShowDonationModal(true)
+                  setIsMobileSidebarOpen(false)
+                }}
               />
             </div>
           </div>
@@ -1236,6 +1259,12 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
         )}
 
     </div>
+    
+    {/* Donation Modal */}
+    <DonationModal
+      open={showDonationModal}
+      onOpenChange={setShowDonationModal}
+    />
     </ErrorBoundary>
   )
 }

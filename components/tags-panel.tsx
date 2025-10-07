@@ -10,9 +10,10 @@ interface TagsPanelProps {
   onSelectTag: (tag: string | null) => void
   pubkey?: string
   onLogout?: () => void
+  onDonationClick?: () => void
 }
 
-export default function TagsPanel({ tags, selectedTag, onSelectTag, pubkey, onLogout }: TagsPanelProps) {
+export default function TagsPanel({ tags, selectedTag, onSelectTag, pubkey, onLogout, onDonationClick }: TagsPanelProps) {
   return (
     <div className="w-64 bg-white dark:bg-card border-r border-border flex flex-col h-full">
       {pubkey && onLogout && (
@@ -74,7 +75,7 @@ export default function TagsPanel({ tags, selectedTag, onSelectTag, pubkey, onLo
       
       {/* Donation Bubble - Bottom of left column */}
       <div className="mt-auto p-4">
-        <DonationBubble />
+        <DonationBubble onClick={onDonationClick || (() => {})} />
       </div>
     </div>
   )
