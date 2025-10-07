@@ -871,20 +871,9 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                     <Moon className="w-4 h-4" />
                   )}
                 </Button>
-
-                {/* Test Publish Button (for debugging) */}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={testPublish}
-                  title="Test publish to Nostr (debug)"
-                  className="text-xs"
-                >
-                  🧪 Test
-                </Button>
                 
                 {/* Account dropdown (consolidated) */}
-                <DropdownMenu>
+                <DropdownMenu modal={true}>
                   <DropdownMenuTrigger asChild>
                     <Button 
                       variant="ghost" 
@@ -896,7 +885,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent 
                     align="end" 
-                    className="w-64 !z-[9999]"
+                    className="w-64"
                     sideOffset={8}
                   >
                     {/* Profile Section */}

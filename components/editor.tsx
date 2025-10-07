@@ -26,6 +26,7 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
   const [selectedText, setSelectedText] = useState("")
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [findingEventId, setFindingEventId] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const currentNoteIdRef = useRef<string | null>(null)
   const previousNoteDataRef = useRef<{ id: string; title: string; content: string } | null>(null)
@@ -58,14 +59,25 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
 
   useEffect(() => {
     if (note && (debouncedTitle !== note.title || debouncedContent !== note.content)) {
+      // Only save if there's actual content (not just empty note)
       if (debouncedTitle.trim() || debouncedContent.trim()) {
-        console.log("[v0] Auto-saving note after 1.5s delay...")
-        const updatedNote = { ...note, title: debouncedTitle, content: debouncedContent }
-        onUpdateNote(updatedNote)
-        setHasUnsavedChanges(false)
-        // Update previous note data ref
-        previousNoteDataRef.current = { id: note.id, title: debouncedTitle, content: debouncedContent }
-        console.log("[v0] Auto-save completed")
+        // Check if content actually changed (not just formatting/whitespace)
+        const titleChanged = debouncedTitle.trim() !== note.title.trim()
+        const contentChanged = debouncedContent.trim() !== note.content.trim()
+        
+        if (titleChanged || contentChanged) {
+          console.log("[v0] Auto-saving note after 1.5s delay...")
+          const updatedNote = { ...note, title: debouncedTitle, content: debouncedContent }
+          onUpdateNote(updatedNote)
+          setHasUnsavedChanges(false)
+          previousNoteDataRef.current = { id: note.id, title: debouncedTitle, content: debouncedContent }
+          console.log("[v0] Auto-save completed")
+        } else {
+          console.log("[v0] Only whitespace changed, skipping auto-save")
+          setHasUnsavedChanges(false)
+          // Update the ref to prevent re-triggering
+          previousNoteDataRef.current = { id: note.id, title: debouncedTitle, content: debouncedContent }
+        }
       }
     }
   }, [debouncedTitle, debouncedContent])
@@ -358,6 +370,13 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
                 </div>
               )}
               
+              {note.syncStatus === 'synced' && !note.eventId && (
+                <div className="flex items-center gap-1 text-yellow-600 dark:text-yellow-400">
+                  <AlertCircle className="w-3 h-3" />
+                  <span>Synced (no event ID)</span>
+                </div>
+              )}
+              
               {note.syncStatus === 'local' && (
                 <div className="flex items-center gap-1 text-yellow-600 dark:text-yellow-400">
                   <AlertCircle className="w-3 h-3" />
@@ -373,7 +392,7 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
               )}
             </div>
             
-            {/* Event ID with actions - Show for synced notes */}
+            {/* Event ID with actions - Show for notes WITH eventId */}
             {note.eventId && (
               <div className="flex items-center gap-1">
                 <span className="text-muted-foreground">Event ID:</span>
@@ -400,28 +419,83 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
                   onClick={() => window.open(`https://njump.me/${note.eventId}`, '_blank')}
                   variant="ghost"
                   size="sm"
-                  className="h-6 px-2 text-xs bg-blue-500/10 hover:bg-blue-500/20 text-blue-600"
-                  title="Verify on Nostr (njump gateway)"
-                >
-                  🔍 Verify
-                </Button>
-                
-                {/* Alternative: nostr.com (same as njump) */}
-                <Button
-                  onClick={() => window.open(`https://nostr.com/${note.eventId}`, '_blank')}
-                  variant="ghost"
-                  size="sm"
                   className="h-6 w-6 p-0"
-                  title="View on nostr.com"
+                  title="Verify on Nostr (njump gateway)"
                 >
                   <ExternalLink className="w-3 h-3" />
                 </Button>
               </div>
             )}
             
-            {!note.eventId && note.syncStatus !== 'error' && (
+            {/* Find on Nostr button - Show for synced notes WITHOUT eventId */}
+            {!note.eventId && note.syncStatus === 'synced' && (
+              <Button
+                onClick={async () => {
+                  console.log('[Editor] 🔍 Finding note on Nostr...')
+                  setFindingEventId(true)
+                  
+                  try {
+                    // Import the fetch function
+                    const { fetchAllNotesFromNostr } = await import('@/lib/nostr-storage')
+                    
+                    // Fetch all notes from Nostr
+                    console.log('[Editor] Fetching all notes from relays...')
+                    const remoteNotes = await fetchAllNotesFromNostr(authData)
+                    console.log('[Editor] Found', remoteNotes.length, 'notes on Nostr')
+                    
+                    // Find this specific note by ID
+                    const remoteNote = remoteNotes.find(n => n.id === note.id)
+                    
+                    if (remoteNote && remoteNote.eventId) {
+                      console.log('[Editor] ✅ Found event ID:', remoteNote.eventId)
+                      
+                      // Update the note with the eventId
+                      onUpdateNote({
+                        ...note,
+                        eventId: remoteNote.eventId,
+                        eventKind: remoteNote.eventKind
+                      })
+                      
+                      alert(`Found on Nostr!\n\nEvent ID: ${remoteNote.eventId.slice(0, 16)}...\n\nVerify button now available.`)
+                    } else {
+                      console.log('[Editor] ❌ Note not found on Nostr')
+                      alert('Note not found on Nostr network.\n\nThis note may not have synced yet, or may only exist locally.')
+                    }
+                  } catch (error) {
+                    console.error('[Editor] ❌ Error finding note:', error)
+                    alert('Failed to search Nostr:\n\n' + (error instanceof Error ? error.message : 'Unknown error'))
+                  } finally {
+                    setFindingEventId(false)
+                  }
+                }}
+                variant="ghost"
+                size="sm"
+                className="h-6 px-2 text-xs bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-600 dark:text-yellow-500"
+                disabled={findingEventId}
+                title="Search for this note on Nostr relays to retrieve event ID"
+              >
+                {findingEventId ? (
+                  <>
+                    <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                    Searching...
+                  </>
+                ) : (
+                  <>
+                    🔍 Find on Nostr
+                  </>
+                )}
+              </Button>
+            )}
+            
+            {!note.eventId && note.syncStatus === 'local' && (
               <span className="text-xs text-muted-foreground">
-                Not yet synced
+                Not yet synced to Nostr
+              </span>
+            )}
+            
+            {!note.eventId && !note.syncStatus && (
+              <span className="text-xs text-muted-foreground">
+                Not synced
               </span>
             )}
           </div>
