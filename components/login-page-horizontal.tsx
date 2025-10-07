@@ -351,6 +351,24 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
 
               console.log("[NostrConnect] 📦 Response:", response)
 
+              // Handle auth_url response (web-based authentication)
+              if (response.result === "auth_url" && response.error && response.error.includes('http')) {
+                console.log("[NostrConnect] 🔐 Auth challenge received - opening web auth")
+                const authUrl = response.error
+                
+                // Open auth URL in new window/tab
+                const authWindow = window.open(authUrl, '_blank', 'width=500,height=600,scrollbars=yes,resizable=yes')
+                
+                if (authWindow) {
+                  console.log("[NostrConnect] 🌐 Opened auth window:", authUrl)
+                  setError("Please complete authentication in the popup window, then return here.")
+                } else {
+                  console.error("[NostrConnect] ❌ Failed to open auth window")
+                  setError("Please allow popups and try again, or manually visit: " + authUrl)
+                }
+                return
+              }
+
               // CRITICAL: Validate the secret token to prevent spoofing
               if (response.result === secret || 
                   (response.params && response.params.includes(secret))) {
