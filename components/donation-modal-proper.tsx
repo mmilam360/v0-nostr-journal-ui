@@ -115,9 +115,6 @@ export function DonationModal({ open, onOpenChange }: DonationModalProps) {
     }
   }
   
-  const quickZap = (sats: number) => {
-    setAmount(sats)
-  }
   
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -130,55 +127,32 @@ export function DonationModal({ open, onOpenChange }: DonationModalProps) {
         </DialogHeader>
         
         <div className="space-y-6">
-          {/* Amount selector */}
+          {/* Supporting text */}
+          <div className="p-4 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/20 dark:to-orange-950/20 rounded-lg border border-amber-200 dark:border-amber-900">
+            <p className="text-sm text-amber-900 dark:text-amber-100 mb-2">
+              <strong>This app is 100% funded by users like you.</strong>
+            </p>
+            <p className="text-xs text-amber-800 dark:text-amber-200 mb-2">
+              No ads. No tracking. Just one dev who believes in Nostr's mission and Value for Value principles.
+            </p>
+            <p className="text-xs text-amber-800 dark:text-amber-200">
+              Your zaps help build features like image uploads, calendar view, and full-text search while keeping Nostr Journal free and independent.
+            </p>
+          </div>
+          
+          {/* Amount input */}
           <div>
-            <p className="text-sm font-medium mb-3">Select Amount:</p>
-            <div className="grid grid-cols-4 gap-2 mb-3">
-              <Button
-                variant={amount === 1000 ? "default" : "outline"}
-                onClick={() => quickZap(1000)}
-                className="flex flex-col h-auto py-2"
-              >
-                <span className="font-bold">1k</span>
-                <span className="text-xs">~$1</span>
-              </Button>
-              <Button
-                variant={amount === 5000 ? "default" : "outline"}
-                onClick={() => quickZap(5000)}
-                className="flex flex-col h-auto py-2"
-              >
-                <span className="font-bold">5k</span>
-                <span className="text-xs">~$5</span>
-              </Button>
-              <Button
-                variant={amount === 10000 ? "default" : "outline"}
-                onClick={() => quickZap(10000)}
-                className="flex flex-col h-auto py-2"
-              >
-                <span className="font-bold">10k</span>
-                <span className="text-xs">~$10</span>
-              </Button>
-              <Button
-                variant={amount === 21000 ? "default" : "outline"}
-                onClick={() => quickZap(21000)}
-                className="flex flex-col h-auto py-2"
-              >
-                <span className="font-bold">21k</span>
-                <span className="text-xs">~$21</span>
-              </Button>
-            </div>
-            
-            {/* Custom amount */}
+            <p className="text-sm font-medium mb-3">Enter Amount (sats):</p>
             <div className="flex gap-2">
               <Input
                 type="number"
-                placeholder="Custom amount (sats)"
+                placeholder="Enter amount in sats"
                 value={amount}
                 onChange={(e) => setAmount(Number(e.target.value))}
                 min="1"
               />
               <Button onClick={() => generateInvoice(amount)}>
-                Generate
+                Generate Invoice
               </Button>
             </div>
           </div>
@@ -240,9 +214,9 @@ export function DonationModal({ open, onOpenChange }: DonationModalProps) {
             )}
           </div>
           
-          {/* Help text */}
+          {/* Thank you message */}
           <div className="text-xs text-center text-muted-foreground">
-            <p>Supports Alby, Strike, Wallet of Satoshi, Phoenix, and more</p>
+            <p>🙏 Thank you for supporting development in the Nostr network</p>
           </div>
         </div>
       </DialogContent>
