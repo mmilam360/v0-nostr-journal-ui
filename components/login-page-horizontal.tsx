@@ -238,6 +238,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
       console.log("[NostrConnect] 🔑 Local App Public Key:", appPublicKey)
       console.log("[NostrConnect] 🔐 Secret:", secret.slice(0, 8) + "...")
       console.log("[NostrConnect] 🔌 Using relay:", BUNKER_RELAY)
+      console.log("[NostrConnect] 📱 Full bunker URI:", bunkerURI)
       
       setBunkerUrl(bunkerURI)
       setConnectionState("waiting")
@@ -771,7 +772,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                         </p>
                         <div className="flex justify-center">
                           <div className="w-40 h-40 sm:w-52 sm:h-52">
-                            <QRCodeSVG value={bunkerUrl} size="100%" />
+                            {bunkerUrl && <QRCodeSVG value={bunkerUrl} size="100%" />}
                           </div>
                         </div>
                         <div className="space-y-2">
