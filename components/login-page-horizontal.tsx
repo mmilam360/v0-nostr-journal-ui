@@ -258,7 +258,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
         ws = null
       }
 
-      // Set timeout for connection (60 seconds for mobile compatibility)
+      // Set timeout for connection (90 seconds for mobile compatibility)
       const timeoutId = setTimeout(() => {
         if (!isConnected) {
           console.log("[NostrConnect] ⏱️ Connection timeout")
@@ -266,24 +266,40 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
           setError("Connection timed out. Please try scanning the QR code again.")
           cleanup()
         }
-      }, 60000)
+      }, 90000)
 
       // Connect to relay
       console.log("[NostrConnect] 🔌 Connecting to relay...")
       ws = new WebSocket(BUNKER_RELAY)
 
+      // Add mobile-specific WebSocket handling
       ws.onerror = (error) => {
         console.error("[NostrConnect] ❌ WebSocket error:", error)
+        console.error("[NostrConnect] 📱 Mobile WebSocket error details:", {
+          readyState: ws?.readyState,
+          url: ws?.url,
+          error: error
+        })
         if (!isConnected) {
           setConnectionState("error")
-          setError("Failed to connect to relay. Please check your internet connection.")
+          setError("Failed to connect to relay. Please check your internet connection and try again.")
           clearTimeout(timeoutId)
           cleanup()
         }
       }
 
+      // Add connection close handling for mobile
+      ws.onclose = (event) => {
+        console.log("[NostrConnect] 📱 WebSocket closed:", event.code, event.reason)
+        if (!isConnected) {
+          console.log("[NostrConnect] ⚠️ WebSocket closed before connection established")
+          // Don't set error state immediately on close - mobile browsers often close/reopen connections
+        }
+      }
+
       ws.onopen = () => {
         console.log("[NostrConnect] ✅ WebSocket connected")
+        console.log("[NostrConnect] 📱 Mobile connection established, ready to receive responses")
         
         // Subscribe to NIP-46 events tagged with our pubkey
         const subscriptionId = crypto.randomUUID()
@@ -299,12 +315,34 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
         
         const subMessage = JSON.stringify(subscription)
         console.log("[NostrConnect] 📤 Subscribing to NIP-46 events")
+        console.log("[NostrConnect] 📱 Subscription ID:", subscriptionId)
         ws.send(subMessage)
+        
+        // Send ping to keep connection alive (mobile browsers often close idle connections)
+        const pingInterval = setInterval(() => {
+          if (ws && ws.readyState === WebSocket.OPEN && !isConnected) {
+            try {
+              ws.send(JSON.stringify(["PING", subscriptionId]))
+            } catch (e) {
+              console.log("[NostrConnect] 📱 Ping failed:", e)
+              clearInterval(pingInterval)
+            }
+          } else {
+            clearInterval(pingInterval)
+          }
+        }, 30000) // Ping every 30 seconds
       }
 
       ws.onmessage = async (message) => {
         try {
           const data = JSON.parse(message.data)
+          console.log("[NostrConnect] 📱 Received message:", data[0], data[1])
+          
+          // Handle PONG responses
+          if (data[0] === "PONG") {
+            console.log("[NostrConnect] 📱 Received PONG, connection alive")
+            return
+          }
           
           // Handle different message types
           if (data[0] === "EVENT" && data[2] && !isConnected) {
