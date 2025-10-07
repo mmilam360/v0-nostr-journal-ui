@@ -601,6 +601,52 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     setNoteToDelete(null)
   }
 
+  // Test publish function for debugging
+  const testPublish = async () => {
+    console.log("[Test] 🧪 Testing publish to Nostr...")
+    
+    try {
+      const testEvent = {
+        kind: 1,
+        created_at: Math.floor(Date.now() / 1000),
+        tags: [["t", "test"], ["t", "nostr-journal"]],
+        content: "Test message from Nostr Journal - " + new Date().toISOString(),
+        pubkey: authData.pubkey,
+      }
+
+      // Sign the event
+      let signedEvent
+      if (authData.authMethod === "nsec" && authData.privateKey) {
+        const privateKeyBytes = new Uint8Array(
+          authData.privateKey.match(/.{1,2}/g)?.map((byte: string) => Number.parseInt(byte, 16)) || [],
+        )
+        const { finalizeEvent } = await import("nostr-tools/pure")
+        signedEvent = finalizeEvent(testEvent, privateKeyBytes)
+      } else if (authData.authMethod === "extension" && window.nostr) {
+        signedEvent = await window.nostr.signEvent(testEvent)
+      } else {
+        throw new Error("Cannot sign test event with current auth method")
+      }
+
+      console.log("[Test] 📝 Test event created:", signedEvent.id)
+      
+      // Publish using our improved function
+      const { publishToNostr } = await import("@/lib/nostr-publish")
+      const eventId = await publishToNostr(testEvent, authData)
+      
+      console.log("[Test] ✅ Test event published successfully!")
+      console.log("[Test] 🆔 Event ID:", eventId)
+      console.log("[Test] 🔗 View on nostr.band:", `https://nostr.band/e/${eventId}`)
+      
+      // Open in new tab
+      window.open(`https://nostr.band/e/${eventId}`, '_blank')
+      
+    } catch (error) {
+      console.error("[Test] ❌ Test publish failed:", error)
+      setConnectionError("Test publish failed: " + (error instanceof Error ? error.message : "Unknown error"))
+    }
+  }
+
   const handlePublishHighlight = (note: Note, highlightedText: string) => {
     console.log("[v0] Publishing highlight:", highlightedText.substring(0, 50) + "...")
 
@@ -822,6 +868,17 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                   ) : (
                     <Moon className="w-4 h-4" />
                   )}
+                </Button>
+
+                {/* Test Publish Button (for debugging) */}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={testPublish}
+                  title="Test publish to Nostr (debug)"
+                  className="text-xs"
+                >
+                  🧪 Test
                 </Button>
                 
                 {/* Account dropdown (consolidated) */}

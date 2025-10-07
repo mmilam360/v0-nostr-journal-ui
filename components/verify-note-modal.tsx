@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Copy, ExternalLink, Lock, ShieldCheck, X } from 'lucide-react'
 import type { Note } from '@/components/main-app'
 import type { AuthData } from '@/components/main-app'
+import RelayChecker from './relay-checker'
 
 interface VerifyNoteModalProps {
   isOpen: boolean
@@ -157,6 +158,14 @@ export default function VerifyNoteModal({ isOpen, onClose, note, authData }: Ver
               <p className="text-xs text-muted-foreground mt-2">
                 These explorers let you verify your note exists on the Nostr network
               </p>
+            </div>
+          )}
+          
+          {/* Relay Check */}
+          {note.eventId && (
+            <div>
+              <label className="text-sm font-medium block mb-2">Relay Availability</label>
+              <RelayChecker eventId={note.eventId} />
             </div>
           )}
           
