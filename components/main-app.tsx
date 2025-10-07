@@ -104,6 +104,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   const [showProfile, setShowProfile] = useState(false)
   const [showRelayManager, setShowRelayManager] = useState(false)
   const [dropdownSubmenu, setDropdownSubmenu] = useState<'none' | 'profile' | 'relays'>('none')
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false)
   const [showDiagnostics, setShowDiagnostics] = useState(false)
   const [connectionError, setConnectionError] = useState<string | null>(null)
   const [copiedNpub, setCopiedNpub] = useState(false)
@@ -860,23 +861,40 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                   <span className="text-muted-foreground">{getSyncStatusText()}</span>
                 </div>
                 
-                {/* Theme toggle */}
-              <Button
-                variant="ghost"
-                size="sm"
-                  onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-                >
-                  {theme === 'dark' ? (
-                    <Sun className="w-4 h-4" />
-                  ) : (
-                    <Moon className="w-4 h-4" />
-                  )}
-                </Button>
+                {/* Theme toggle with system option */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="sm">
+                      {theme === 'dark' ? (
+                        <Moon className="w-4 h-4" />
+                      ) : theme === 'light' ? (
+                        <Sun className="w-4 h-4" />
+                      ) : (
+                        <div className="w-4 h-4 rounded-full border-2 border-current" />
+                      )}
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-48">
+                    <DropdownMenuItem onClick={() => setTheme('light')}>
+                      <Sun className="w-4 h-4 mr-2" />
+                      Light
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setTheme('dark')}>
+                      <Moon className="w-4 h-4 mr-2" />
+                      Dark
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setTheme('system')}>
+                      <div className="w-4 h-4 mr-2 rounded-full border-2 border-current" />
+                      System
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
                 
                 {/* Account dropdown - working version */}
                 <DropdownMenu 
-                  open={dropdownSubmenu !== 'none'}
+                  open={isDropdownOpen}
                   onOpenChange={(open) => {
+                    setIsDropdownOpen(open)
                     if (!open) {
                       setDropdownSubmenu('none')
                     }
@@ -886,14 +904,10 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => {
-                        console.log('[Dropdown] Button clicked!')
-                        setDropdownSubmenu('none')
-                      }}
                     >
                       <User className="w-4 h-4" />
                       <span className="hidden sm:inline ml-2">Account</span>
-          </Button>
+                    </Button>
                   </DropdownMenuTrigger>
                   
                   <DropdownMenuContent 
