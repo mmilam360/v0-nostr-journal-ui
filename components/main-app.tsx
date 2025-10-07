@@ -103,7 +103,6 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   const [deletedNotes, setDeletedNotes] = useState<{ id: string; deletedAt: Date }[]>([])
   const [showProfile, setShowProfile] = useState(false)
   const [showRelayManager, setShowRelayManager] = useState(false)
-  const [accountDropdownOpen, setAccountDropdownOpen] = useState(false)
   const [showDiagnostics, setShowDiagnostics] = useState(false)
   const [connectionError, setConnectionError] = useState<string | null>(null)
   const [copiedNpub, setCopiedNpub] = useState(false)
@@ -873,18 +872,26 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                   )}
                 </Button>
                 
-                {/* Account dropdown with controlled state */}
-                <DropdownMenu 
-                  open={accountDropdownOpen}
-                  onOpenChange={(open) => {
-                    console.log('[Dropdown] State changing to:', open)
-                    setAccountDropdownOpen(open)
-                  }}
-                >
+                {/* Test dropdown */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm">
+                      Test
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent>
+                    <DropdownMenuItem>Test Item 1</DropdownMenuItem>
+                    <DropdownMenuItem>Test Item 2</DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
+                {/* Account dropdown - minimal test implementation */}
+                <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button 
                       variant="ghost" 
                       size="sm"
+                      onClick={() => console.log('[Dropdown] Button clicked!')}
                     >
                       <User className="w-4 h-4" />
                       <span className="hidden sm:inline ml-2">Account</span>
@@ -893,9 +900,8 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                   
                   <DropdownMenuContent 
                     align="end" 
-                    className="w-64"
+                    className="w-64 z-[9999]"
                     sideOffset={8}
-                    onCloseAutoFocus={(e) => e.preventDefault()}
                   >
                     {/* Profile Section */}
                     <div className="px-3 py-2 border-b border-border">
