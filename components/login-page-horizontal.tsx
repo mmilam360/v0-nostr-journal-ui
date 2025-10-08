@@ -185,7 +185,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
             authMethod: 'remote',
             sessionData: session,
             bunkerUri: bunkerUrl,
-            relays: ['wss://relay.nsec.app', 'wss://relay.getalby.com/v1', 'wss://nostr.mutinywallet.com']
+            relays: ['wss://relay.nsec.app', 'wss://relay.getalby.com/v1', 'wss://nostr.mutinywallet.com', 'wss://relay.damus.io', 'wss://nos.lol']
           })
         }, 1500)
         
@@ -202,7 +202,9 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
         const relays = [
           'wss://relay.nsec.app',
           'wss://relay.getalby.com/v1',
-          'wss://nostr.mutinywallet.com'
+          'wss://nostr.mutinywallet.com',
+          'wss://relay.damus.io',
+          'wss://nos.lol'
         ]
 
         const { connectUri, established } = Nip46RemoteSigner.listenConnectionFromRemote(
@@ -213,11 +215,11 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
         console.log('[BunkerConnect] 📱 Generated connection URI')
         setConnectUri(connectUri)
 
-        // Wait for connection (with timeout)
+        // Wait for connection (with longer timeout for mobile)
         const timeout = setTimeout(() => {
           setConnectionState('error')
-          setError('Connection timeout. Please approve within 60 seconds.')
-        }, 60000)
+          setError('Connection timeout. Please approve within 2 minutes. Make sure your signing app is connected to the internet.')
+        }, 120000)
 
         // Wait for remote signer to connect
         const { signer, session } = await established
@@ -256,14 +258,18 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
       
       if (error instanceof Error) {
         if (error.message.includes('timeout')) {
-          errorMsg += 'Connection timed out. Ensure your signing app is open and connected to the internet.'
+          errorMsg += 'Connection timed out. Make sure your signing app is open, connected to the internet, and try again.'
+        } else if (error.message.includes('blocked') || error.message.includes('rejected')) {
+          errorMsg += 'Relay blocked the connection. Try using a different signing app or check your internet connection.'
         } else if (error.message.includes('relay')) {
-          errorMsg += 'Could not connect to relay. Check your internet connection.'
+          errorMsg += 'Could not connect to relay. Check your internet connection and try again.'
+        } else if (error.message.includes('NIP-46')) {
+          errorMsg += 'NIP-46 connection failed. Make sure your signing app supports remote signing and is connected to the internet.'
         } else {
           errorMsg += error.message
         }
       } else {
-        errorMsg += 'Unknown error occurred.'
+        errorMsg += 'Unknown error occurred. Please try again.'
       }
       
       setError(errorMsg)
@@ -558,14 +564,19 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                           </p>
                         </div>
                         {connectUri ? (
-                          <div className="flex justify-center">
-                            <div className="w-48 h-48 bg-white rounded-lg flex items-center justify-center p-4">
+                          <div className="flex flex-col items-center space-y-4">
+                            <div className="w-64 h-64 bg-white rounded-xl flex items-center justify-center p-6 shadow-lg">
                               <QRCodeSVG 
                                 value={connectUri} 
-                                size={180} 
-                                level="M"
+                                size={240} 
+                                level="L"
                                 includeMargin={true}
                               />
+                            </div>
+                            <div className="text-center">
+                              <p className="text-sm text-muted-foreground">
+                                Scan with your signing app or copy the connection string below
+                              </p>
                             </div>
                           </div>
                         ) : (
@@ -596,12 +607,29 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                                 className="flex-1 px-3 py-2 border rounded-md bg-background text-foreground text-xs font-mono"
                               />
                               <Button
-                                onClick={() => navigator.clipboard.writeText(connectUri)}
+                                onClick={() => {
+                                  navigator.clipboard.writeText(connectUri)
+                                  // Show feedback
+                                  const button = document.querySelector('[data-copy-button]') as HTMLButtonElement
+                                  if (button) {
+                                    const originalText = button.innerHTML
+                                    button.innerHTML = '<Check className="h-4 w-4" />'
+                                    setTimeout(() => {
+                                      button.innerHTML = originalText
+                                    }, 2000)
+                                  }
+                                }}
                                 variant="outline"
                                 size="sm"
+                                data-copy-button
                               >
                                 <Copy className="h-4 w-4" />
                               </Button>
+                            </div>
+                            <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3">
+                              <p className="text-xs text-blue-700 dark:text-blue-300">
+                                <strong>Tip:</strong> If scanning fails, try copying the connection string and pasting it directly into your signing app.
+                              </p>
                             </div>
                           </div>
                         )}
@@ -668,9 +696,29 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                       </div>
                     )}
                     {connectionState === 'error' && (
-                      <div className="flex items-center justify-center space-x-2 text-red-600">
-                        <AlertTriangle className="h-4 w-4" />
-                        <span className="text-sm">{error}</span>
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-center space-x-2 text-red-600">
+                          <AlertTriangle className="h-4 w-4" />
+                          <span className="text-sm">{error}</span>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            onClick={() => {
+                              setConnectionState('idle')
+                              setError('')
+                              if (remoteSignerMode === 'client') {
+                                setConnectUri('')
+                              } else {
+                                setBunkerUrl('')
+                              }
+                            }}
+                            variant="outline"
+                            size="sm"
+                            className="flex-1"
+                          >
+                            Try Again
+                          </Button>
+                        </div>
                       </div>
                     )}
                   </div>
