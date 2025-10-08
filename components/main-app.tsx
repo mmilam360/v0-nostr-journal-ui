@@ -682,6 +682,11 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       : selectedTag === "trash"
         ? []
         : notes.filter((note) => note.tags.includes(selectedTag || ""))
+  
+  // Sort notes by lastModified date (most recent first)
+  const sortedNotes = filteredNotes.sort((a, b) => 
+    new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime()
+  )
 
   const getSyncStatusIcon = () => {
     switch (syncStatus) {
@@ -1196,7 +1201,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
           <div className="flex flex-1 min-w-0">
           <div className="w-full md:w-80 border-r border-border">
             <NoteList
-              notes={filteredNotes}
+              notes={sortedNotes}
               selectedNote={selectedNote}
               onSelectNote={setSelectedNote}
               onCreateNote={handleCreateNote}
