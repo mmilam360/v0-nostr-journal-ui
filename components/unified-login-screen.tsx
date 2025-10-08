@@ -1,11 +1,12 @@
 "use client"
 import { useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { UserPlus, ShieldCheck, Zap, HelpCircle } from "lucide-react"
+import { UserPlus, ShieldCheck, Zap, HelpCircle, Link } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import CreateAccountModal from "@/components/create-account-modal"
 import { NostrConnectManager } from "@/components/nostr-connect-manager"
 import { BunkerLoginPage } from "@/components/bunker-login-page"
+import BunkerUrlInput from "@/components/bunker-url-input"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
 interface UnifiedLoginScreenProps {
@@ -22,6 +23,7 @@ export default function UnifiedLoginScreen({
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showNostrConnectModal, setShowNostrConnectModal] = useState(false)
   const [showBunkerLoginPage, setShowBunkerLoginPage] = useState(false)
+  const [showBunkerUrlInput, setShowBunkerUrlInput] = useState(false)
   const { toast } = useToast()
 
   const handleExtensionLogin = async () => {
@@ -173,6 +175,36 @@ export default function UnifiedLoginScreen({
                 </div>
               </div>
             </button>
+
+            {/* Option 4: Paste Bunker URL */}
+            <button
+              className="w-full p-6 bg-slate-700 hover:bg-slate-600 border border-slate-600 hover:border-slate-500 rounded-lg transition-all text-left"
+              onClick={() => setShowBunkerUrlInput(true)}
+            >
+              <div className="flex items-center space-x-4">
+                <div className="p-3 bg-purple-600 rounded-lg flex-shrink-0">
+                  <Link className="h-6 w-6 text-white" />
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center space-x-2 mb-1">
+                    <h3 className="text-lg font-semibold text-white">Paste Bunker URL</h3>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <HelpCircle className="h-4 w-4 text-slate-400 hover:text-slate-300" />
+                      </TooltipTrigger>
+                      <TooltipContent className="bg-slate-900 border-slate-700 text-white max-w-xs">
+                        <p>
+                          If you already have a bunker:// URL from Nsec.app, paste it here to connect directly.
+                        </p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
+                  <p className="text-sm text-slate-400 mt-1">
+                    For users with existing bunker URLs
+                  </p>
+                </div>
+              </div>
+            </button>
           </CardContent>
         </Card>
 
@@ -183,6 +215,20 @@ export default function UnifiedLoginScreen({
 
         {showNostrConnectModal && (
           <NostrConnectManager onConnectSuccess={onBunkerConnect} onClose={() => setShowNostrConnectModal(false)} />
+        )}
+
+        {showBunkerUrlInput && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
+            <div className="relative w-full max-w-md rounded-lg bg-slate-800 p-6 shadow-lg">
+              <BunkerUrlInput
+                onConnectSuccess={async (result) => {
+                  console.log('[UnifiedLogin] Bunker URL connection successful:', result);
+                  await onBunkerConnect(result);
+                }}
+                onClose={() => setShowBunkerUrlInput(false)}
+              />
+            </div>
+          </div>
         )}
       </div>
     </TooltipProvider>

@@ -2,7 +2,7 @@
 import dynamic from "next/dynamic"
 import { X, Loader2 } from "lucide-react"
 
-const BunkerConnectLogic = dynamic(() => import("./bunker-connect-logic"), {
+const BunkerConnectLogic = dynamic(() => import("./nostrconnect-client-logic"), {
   ssr: false,
   loading: () => (
     <div className="flex flex-col items-center justify-center space-y-4 h-64">
