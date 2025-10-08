@@ -62,37 +62,48 @@ async function encryptData(data: string, pubkey: string): Promise<{ encrypted: s
 }
 
 async function decryptData(encryptedData: string, iv: string, pubkey: string): Promise<string> {
-  const decoder = new TextDecoder()
-  const encoder = new TextEncoder()
+  try {
+    console.log("[DecryptData] Starting decryption process")
+    const decoder = new TextDecoder()
+    const encoder = new TextEncoder()
 
-  // Derive the same encryption key from pubkey
-  const keyMaterial = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(pubkey.slice(0, 32).padEnd(32, "0")),
-    { name: "PBKDF2" },
-    false,
-    ["deriveKey"],
-  )
+    console.log("[DecryptData] Deriving encryption key from pubkey")
+    // Derive the same encryption key from pubkey
+    const keyMaterial = await crypto.subtle.importKey(
+      "raw",
+      encoder.encode(pubkey.slice(0, 32).padEnd(32, "0")),
+      { name: "PBKDF2" },
+      false,
+      ["deriveKey"],
+    )
 
-  const key = await crypto.subtle.deriveKey(
-    {
-      name: "PBKDF2",
-      salt: encoder.encode("nostr-journal-salt"),
-      iterations: 100000,
-      hash: "SHA-256",
-    },
-    keyMaterial,
-    { name: "AES-GCM", length: 256 },
-    false,
-    ["decrypt"],
-  )
+    console.log("[DecryptData] Creating derived key")
+    const key = await crypto.subtle.deriveKey(
+      {
+        name: "PBKDF2",
+        salt: encoder.encode("nostr-journal-salt"),
+        iterations: 100000,
+        hash: "SHA-256",
+      },
+      keyMaterial,
+      { name: "AES-GCM", length: 256 },
+      false,
+      ["decrypt"],
+    )
 
-  const encrypted = Uint8Array.from(atob(encryptedData), (c) => c.charCodeAt(0))
-  const ivArray = Uint8Array.from(atob(iv), (c) => c.charCodeAt(0))
+    console.log("[DecryptData] Converting encrypted data and IV")
+    const encrypted = Uint8Array.from(atob(encryptedData), (c) => c.charCodeAt(0))
+    const ivArray = Uint8Array.from(atob(iv), (c) => c.charCodeAt(0))
 
-  const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv: ivArray }, key, encrypted)
+    console.log("[DecryptData] Performing actual decryption")
+    const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv: ivArray }, key, encrypted)
 
-  return decoder.decode(decrypted)
+    console.log("[DecryptData] Decryption successful")
+    return decoder.decode(decrypted)
+  } catch (error) {
+    console.error("[DecryptData] Error during decryption:", error)
+    throw error
+  }
 }
 
 // Debounced encryption to reduce localStorage operations
