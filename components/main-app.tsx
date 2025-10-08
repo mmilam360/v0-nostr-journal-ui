@@ -134,6 +134,15 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     console.log("[MainApp] 🔄 Processing batch of", operations.length, "operations")
     setSyncStatus("syncing")
 
+    // Update individual note sync statuses to "syncing"
+    setNotes(prevNotes => prevNotes.map(note => {
+      const hasOperation = operations.some(op => 
+        (op.type === 'update' && op.note?.id === note.id) ||
+        (op.type === 'create' && op.note?.id === note.id)
+      )
+      return hasOperation ? { ...note, syncStatus: "syncing" as const } : note
+    }))
+
     try {
       // Group operations by type for efficient processing
       const creates = operations.filter(op => op.type === 'create')
@@ -145,9 +154,22 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
         if (operation.note) {
           try {
             const result = await saveAndSyncNote(operation.note, authData)
-            setNotes(notes.map(n => n.id === operation.note.id ? result.note : n))
+            setNotes(prevNotes => prevNotes.map(n => 
+              n.id === operation.note.id ? {
+                ...result.note,
+                syncStatus: result.success ? "synced" as const : "error" as const,
+                syncError: result.success ? undefined : result.error
+              } : n
+            ))
           } catch (error) {
             console.error("[MainApp] Failed to create note:", error)
+            setNotes(prevNotes => prevNotes.map(n => 
+              n.id === operation.note.id ? {
+                ...n,
+                syncStatus: "error" as const,
+                syncError: error instanceof Error ? error.message : "Sync failed"
+              } : n
+            ))
           }
         }
       }
@@ -157,9 +179,22 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
         if (operation.note) {
           try {
             const result = await saveAndSyncNote(operation.note, authData)
-            setNotes(notes.map(n => n.id === operation.note.id ? result.note : n))
+            setNotes(prevNotes => prevNotes.map(n => 
+              n.id === operation.note.id ? {
+                ...result.note,
+                syncStatus: result.success ? "synced" as const : "error" as const,
+                syncError: result.success ? undefined : result.error
+              } : n
+            ))
           } catch (error) {
             console.error("[MainApp] Failed to update note:", error)
+            setNotes(prevNotes => prevNotes.map(n => 
+              n.id === operation.note.id ? {
+                ...n,
+                syncStatus: "error" as const,
+                syncError: error instanceof Error ? error.message : "Sync failed"
+              } : n
+            ))
           }
         }
       }
@@ -174,10 +209,24 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
           ]
           setDeletedNotes(updatedDeletedNotes)
 
-          // Sync deletions to Nostr
-          const syncResult = await smartSyncNotes(notes, updatedDeletedNotes, authData)
-          setNotes(syncResult.notes)
-          setDeletedNotes(syncResult.deletedNotes)
+          // Process deletions directly without fetching from network
+          // We need to find the notes that were deleted before they were removed from the UI
+          const notesToDelete = notes.filter(note => deletedNoteIds.includes(note.id))
+          
+          for (const noteToDelete of notesToDelete) {
+            try {
+              if (noteToDelete.eventId) {
+                // Import deleteNoteOnNostr directly
+                const { deleteNoteOnNostr } = await import('@/lib/nostr-storage')
+                await deleteNoteOnNostr(noteToDelete, authData)
+                console.log("[MainApp] ✅ Deleted note on Nostr:", noteToDelete.title)
+              } else {
+                console.log("[MainApp] Note has no eventId, skipping Nostr deletion:", noteToDelete.title)
+              }
+            } catch (error) {
+              console.error("[MainApp] Failed to delete note on Nostr:", error)
+            }
+          }
         } catch (error) {
           console.error("[MainApp] Failed to process deletes:", error)
         }
@@ -189,6 +238,19 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     } catch (error) {
       console.error("[MainApp] ❌ Batch processing failed:", error)
       setSyncStatus("error")
+      
+      // Mark all notes in the batch as error
+      setNotes(prevNotes => prevNotes.map(note => {
+        const hasOperation = operations.some(op => 
+          (op.type === 'update' && op.note?.id === note.id) ||
+          (op.type === 'create' && op.note?.id === note.id)
+        )
+        return hasOperation ? { 
+          ...note, 
+          syncStatus: "error" as const,
+          syncError: "Batch processing failed"
+        } : note
+      }))
     }
   }
 
@@ -387,7 +449,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
         console.error("[v0] Background sync failed:", error)
         setSyncStatus("error")
       }
-    }, 60000)
+    }, 120000) // Increased to 2 minutes to reduce interference with batch processing
 
     return () => clearInterval(syncInterval)
   }, [syncStatus, needsSync, authData, notes, deletedNotes]) // Removed notes/deletedNotes from deps to prevent loops
