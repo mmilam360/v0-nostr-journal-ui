@@ -45,7 +45,7 @@ import { saveEncryptedNotes, saveEncryptedNotesImmediate, loadEncryptedNotes } f
 import { createNostrEvent, publishToNostr } from "@/lib/nostr-publish"
 import { cleanupSigner } from "@/lib/signer-manager"
 import { smartSyncNotes, saveAndSyncNote } from "@/lib/nostr-sync-fixed"
-import { loadNotesFromRelays, saveNoteToRelays, deleteNoteFromRelays, syncFromRelays } from "@/lib/simple-nostr-events"
+import { loadNotesFromRelays, saveNoteToRelays, deleteNoteFromRelays, syncFromRelays, verifyEventExists } from "@/lib/simple-nostr-events"
 import { sanitizeNotes } from "@/lib/data-validators"
 import { ErrorBoundary } from "@/components/error-boundary"
 import { RelayManager } from "@/components/relay-manager"
@@ -68,6 +68,7 @@ export interface Note {
   lastSynced?: Date
   eventId?: string // Nostr event ID for verification
   eventKind?: number // Track which kind was used (30078 or 31078)
+  isSynced?: boolean // True if event exists on relays and is verified
 }
 
 export interface AuthData {
@@ -461,12 +462,20 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     // Save to relays using simple event model
     try {
       const result = await saveNoteToRelays(newNote, authData)
-      if (result.success) {
-        // Update with eventId
-        const finalNote = { ...newNote, eventId: result.eventId, lastSynced: new Date() }
+      if (result.success && result.eventId) {
+        // Verify event exists on relays
+        const eventExists = await verifyEventExists(result.eventId, authData)
+        
+        // Update with eventId and sync status
+        const finalNote = { 
+          ...newNote, 
+          eventId: result.eventId, 
+          lastSynced: new Date(),
+          isSynced: eventExists // Add sync status
+        }
         setNotes(notes.map(n => n.id === newNote.id ? finalNote : n))
         setSelectedNote(finalNote)
-        console.log("[v0] ✅ New note saved to relays:", result.eventId)
+        console.log(`[v0] ✅ New note saved to relays: ${result.eventId} (verified: ${eventExists})`)
       } else {
         console.error("[v0] ❌ Failed to save new note to relays:", result.error)
       }
@@ -496,12 +505,20 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     // Save to relays using simple event model
     try {
       const result = await saveNoteToRelays(optimisticNote, authData)
-      if (result.success) {
-        // Update with eventId
-        const finalNote = { ...optimisticNote, eventId: result.eventId, lastSynced: new Date() }
+      if (result.success && result.eventId) {
+        // Verify event exists on relays
+        const eventExists = await verifyEventExists(result.eventId, authData)
+        
+        // Update with eventId and sync status
+        const finalNote = { 
+          ...optimisticNote, 
+          eventId: result.eventId, 
+          lastSynced: new Date(),
+          isSynced: eventExists // Add sync status
+        }
         setNotes(notes.map(n => n.id === updatedNote.id ? finalNote : n))
         setSelectedNote(finalNote)
-        console.log("[v0] ✅ Note saved to relays:", result.eventId)
+        console.log(`[v0] ✅ Note saved to relays: ${result.eventId} (verified: ${eventExists})`)
       } else {
         console.error("[v0] ❌ Failed to save to relays:", result.error)
       }
@@ -959,27 +976,14 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
               {/* Right side */}
               <div className="flex items-center gap-1">
                 {/* Sync status - Desktop */}
-                <div 
-                  className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-secondary/50 text-xs cursor-pointer hover:bg-secondary/70 transition-colors"
-                  onClick={handleManualSync}
-                  title="Click to sync manually"
-                >
-            {getSyncStatusIcon()}
-                  <span className="text-muted-foreground">{getSyncStatusText()}</span>
+                <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-secondary/50 text-xs">
+                  <CheckCircle2 className="h-4 w-4 text-green-500" />
+                  <span className="text-muted-foreground">Events sync instantly</span>
                 </div>
                 
                 {/* Sync status - Mobile (icon only) */}
                 <div className="md:hidden">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleManualSync}
-                    disabled={syncStatus === "syncing"}
-                    className="h-8 w-8 p-0"
-                    title={getSyncStatusText()}
-                  >
-                    {getSyncStatusIcon()}
-                  </Button>
+                  <CheckCircle2 className="h-4 w-4 text-green-500" title="Events sync instantly" />
                 </div>
                 
                 

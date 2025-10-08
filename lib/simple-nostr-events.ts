@@ -341,6 +341,59 @@ async function decryptNoteContent(encryptedData: string, authData: any): Promise
 }
 
 /**
+ * Verify that an event exists on relays
+ */
+export async function verifyEventExists(eventId: string, authData: any): Promise<boolean> {
+  if (!eventId || !authData?.pubkey) return false
+  
+  console.log("[SimpleEvents] Verifying event exists on relays:", eventId)
+  
+  const pool = getPool()
+  
+  try {
+    const events = await new Promise<any[]>((resolve, reject) => {
+      const collectedEvents: any[] = []
+      const sub = pool.sub(RELAYS, [
+        { 
+          kinds: [EVENT_KIND], 
+          authors: [authData.pubkey],
+          ids: [eventId] // Query for specific event ID
+        }
+      ])
+      
+      const timeout = setTimeout(() => {
+        sub.unsub()
+        resolve(collectedEvents)
+      }, 5000) // 5 second timeout for verification
+      
+      sub.on('event', (event: any) => {
+        collectedEvents.push(event)
+      })
+      
+      sub.on('eose', () => {
+        clearTimeout(timeout)
+        sub.unsub()
+        resolve(collectedEvents)
+      })
+      
+      sub.on('error', (error: any) => {
+        clearTimeout(timeout)
+        sub.unsub()
+        reject(error)
+      })
+    })
+    
+    const exists = events.length > 0
+    console.log(`[SimpleEvents] Event ${eventId} ${exists ? 'found' : 'not found'} on relays`)
+    return exists
+    
+  } catch (error) {
+    console.error("[SimpleEvents] Error verifying event:", error)
+    return false
+  }
+}
+
+/**
  * Sync function - just reload from relays (same as loading on startup)
  */
 export async function syncFromRelays(authData: any): Promise<DecryptedNote[]> {

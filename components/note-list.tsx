@@ -31,27 +31,19 @@ export default function NoteList({ notes, selectedNote, onSelectNote, onCreateNo
   )
 
   const getSyncIcon = (note: Note) => {
-    switch (note.syncStatus) {
-      case "synced":
-        return <CheckCircle className="w-3 h-3 status-synced" title="Synced to Nostr" />
-      case "syncing":
-        return <Loader2 className="w-3 h-3 status-syncing animate-spin" title="Syncing..." />
-      case "error":
-        return <AlertCircle className="w-3 h-3 status-error" title={note.syncError || "Sync failed"} />
-      default:
-        return <CloudOff className="w-3 h-3 status-local" title="Local only" />
+    if (note.isSynced && note.eventId) {
+      return <CheckCircle className="w-3 h-3 text-green-500" title="Synced to Nostr" />
+    } else if (note.eventId) {
+      return <AlertCircle className="w-3 h-3 text-yellow-500" title="Published but not verified" />
+    } else {
+      return <CloudOff className="w-3 h-3 text-gray-400" title="Local only" />
     }
   }
 
   const handleNoteClick = (note: Note) => {
-    console.log("[NoteList] Clicking note:", note.title, "syncStatus:", note.syncStatus)
+    console.log("[NoteList] Clicking note:", note.title, "isSynced:", note.isSynced, "eventId:", note.eventId)
 
-    // Check if note is currently syncing
-    if (note.syncStatus === "syncing") {
-      console.log("[NoteList] Note is syncing, showing warning popup")
-      setShowSyncWarning(note.id)
-      return
-    }
+    // No need to check for syncing since events are instant now
 
     // Otherwise, select the note normally
     console.log("[NoteList] Note not syncing, selecting normally")

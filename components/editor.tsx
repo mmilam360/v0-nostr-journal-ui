@@ -399,6 +399,13 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
                   {note.eventId.slice(0, 8)}...
                 </code>
                 
+                {/* Sync status indicator */}
+                {note.isSynced ? (
+                  <CheckCircle className="w-3 h-3 text-green-500" title="Verified on relays" />
+                ) : (
+                  <AlertCircle className="w-3 h-3 text-yellow-500" title="Published but not verified" />
+                )}
+                
                 <Button
                   onClick={() => copyEventId(note.eventId!)}
                   variant="ghost"
