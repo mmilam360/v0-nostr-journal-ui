@@ -51,7 +51,7 @@ import { RelayManager } from "@/components/relay-manager"
 import { ConnectionStatus } from "@/components/connection-status"
 import { DiagnosticPage } from "@/components/diagnostic-page"
 import { ThemeToggle } from "@/components/theme-toggle"
-import { getDefaultRelays } from "@/lib/relay-manager"
+import { getDefaultRelays, initializePersistentRelayPool, shutdownPersistentRelayPool } from "@/lib/relay-manager"
 import { DonationModal } from "@/components/donation-modal-proper"
 import { setActiveSigner } from "@/lib/signer-connector"
 import { createDirectEventManager, type DirectEventManager } from "@/lib/direct-event-manager"
@@ -184,6 +184,15 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     const loadUserNotes = async () => {
       console.log("[v0] Loading notes for user:", authData.pubkey)
       
+      // Initialize persistent relay pool for better performance
+      try {
+        await initializePersistentRelayPool()
+        console.log("[v0] ✅ Persistent relay pool initialized")
+      } catch (error) {
+        console.error("[v0] ❌ Failed to initialize relay pool:", error)
+        // Continue without relay pool - will use individual connections
+      }
+      
       // Set up the active signer for remote authentication
       if (authData.authMethod === 'remote' && authData.sessionData) {
         console.log("[v0] Setting up remote signer from session data")
@@ -278,6 +287,11 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
 
     if (authData.pubkey) {
       loadUserNotes()
+    }
+    
+    // Cleanup relay pool on unmount
+    return () => {
+      shutdownPersistentRelayPool()
     }
   }, [authData]) // Only depend on pubkey, not entire authData object
 

@@ -179,3 +179,57 @@ export function saveRelays(relays: string[]): void {
 export function getDefaultRelays(): string[] {
   return [...RELAY_CONFIG.primary]
 }
+
+// ===================================================================================
+// RELAY POOL INTEGRATION
+// ===================================================================================
+
+// Initialize the persistent relay pool with smart relay selection
+export async function initializePersistentRelayPool(): Promise<void> {
+  try {
+    const { initializeRelayPool } = await import('./relay-pool');
+    const smartRelays = await getSmartRelayList();
+    initializeRelayPool(smartRelays);
+    console.log('[RelayManager] Persistent relay pool initialized with', smartRelays.length, 'relays');
+  } catch (error) {
+    console.error('[RelayManager] Failed to initialize relay pool:', error);
+    // Fallback to default relays
+    const { initializeRelayPool } = await import('./relay-pool');
+    initializeRelayPool(RELAY_CONFIG.primary);
+  }
+}
+
+// Get the persistent relay pool instance
+export async function getPersistentRelayPool() {
+  const { getRelayPool } = await import('./relay-pool');
+  return getRelayPool();
+}
+
+// Publish using the persistent pool
+export async function publishWithPersistentPool(event: any, relays?: string[]) {
+  const { publishToRelays } = await import('./relay-pool');
+  return publishToRelays(event, relays);
+}
+
+// Subscribe using the persistent pool
+export async function subscribeWithPersistentPool(
+  filters: any[],
+  relays?: string[],
+  onEvent?: (event: any) => void,
+  onEose?: () => void
+) {
+  const { subscribeToRelays } = await import('./relay-pool');
+  return subscribeToRelays(filters, relays, onEvent, onEose);
+}
+
+// Get relay pool statistics
+export async function getPersistentPoolStats() {
+  const { getRelayStats } = await import('./relay-pool');
+  return getRelayStats();
+}
+
+// Shutdown the persistent pool (call on app unmount)
+export async function shutdownPersistentRelayPool() {
+  const { shutdownRelayPool } = await import('./relay-pool');
+  shutdownRelayPool();
+}
