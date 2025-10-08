@@ -95,7 +95,40 @@ async function decryptData(encryptedData: string, iv: string, pubkey: string): P
   return decoder.decode(decrypted)
 }
 
+// Debounced encryption to reduce localStorage operations
+let encryptionTimer: NodeJS.Timeout | null = null
+let pendingNotes: DecryptedNote[] | null = null
+let pendingPubkey: string | null = null
+
 export async function saveEncryptedNotes(pubkey: string, notes: DecryptedNote[]): Promise<void> {
+  // Store in memory immediately for instant access
+  pendingNotes = notes
+  pendingPubkey = pubkey
+  
+  // Clear existing timer
+  if (encryptionTimer) {
+    clearTimeout(encryptionTimer)
+  }
+  
+  // Debounce encryption - wait 2 seconds of no changes before encrypting
+  encryptionTimer = setTimeout(async () => {
+    if (pendingNotes && pendingPubkey) {
+      console.log('[Crypto] Encrypting', pendingNotes.length, 'notes after debounce period')
+      try {
+        await saveEncryptedNotesInternal(pendingPubkey, pendingNotes)
+        console.log('[Crypto] ✅ Notes encrypted and saved to localStorage')
+      } catch (error) {
+        console.error('[Crypto] ❌ Error saving encrypted notes:', error)
+      }
+    }
+    encryptionTimer = null
+    pendingNotes = null
+    pendingPubkey = null
+  }, 2000) // 2 second debounce
+}
+
+// Immediate encryption (used by debounced function)
+async function saveEncryptedNotesInternal(pubkey: string, notes: DecryptedNote[]): Promise<void> {
   try {
     const storageKey = generateStorageKey(pubkey)
     const notesData = JSON.stringify(notes)
@@ -110,11 +143,23 @@ export async function saveEncryptedNotes(pubkey: string, notes: DecryptedNote[])
     }
 
     localStorage.setItem(storageKey, JSON.stringify(encryptedStorage))
-    console.log("[v0] Notes encrypted and saved to localStorage")
   } catch (error) {
     console.error("[v0] Error saving encrypted notes:", error)
     throw error
   }
+}
+
+// Force immediate save (for critical operations like logout)
+export async function saveEncryptedNotesImmediate(pubkey: string, notes: DecryptedNote[]): Promise<void> {
+  // Clear any pending debounced saves
+  if (encryptionTimer) {
+    clearTimeout(encryptionTimer)
+    encryptionTimer = null
+  }
+  
+  // Save immediately
+  await saveEncryptedNotesInternal(pubkey, notes)
+  console.log('[Crypto] ✅ Notes saved immediately (bypassing debounce)')
 }
 
 export async function loadEncryptedNotes(pubkey: string): Promise<DecryptedNote[]> {

@@ -41,7 +41,7 @@ import { useTheme } from "@/lib/theme-provider"
 import { Logo } from "./logo"
 import { Input } from "@/components/ui/input"
 import DonationBubble from "@/components/donation-bubble"
-import { saveEncryptedNotes, loadEncryptedNotes } from "@/lib/nostr-crypto"
+import { saveEncryptedNotes, saveEncryptedNotesImmediate, loadEncryptedNotes } from "@/lib/nostr-crypto"
 import { createNostrEvent, publishToNostr } from "@/lib/nostr-publish"
 import { cleanupSigner } from "@/lib/signer-manager"
 import { smartSyncNotes, saveAndSyncNote } from "@/lib/nostr-sync-fixed"
@@ -564,6 +564,14 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
 
   const handleLogout = async () => {
     console.log("[v0] User logging out, cleaning up signer connection...")
+
+    // Force immediate save before logout
+    try {
+      await saveEncryptedNotesImmediate(authData.pubkey, notes)
+      console.log("[v0] ✅ Notes saved immediately before logout")
+    } catch (error) {
+      console.error("[v0] ❌ Failed to save notes before logout:", error)
+    }
 
     // Flush any pending batch operations
     try {
