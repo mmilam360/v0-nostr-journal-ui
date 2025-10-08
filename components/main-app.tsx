@@ -896,10 +896,24 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
               
               {/* Right side */}
               <div className="flex items-center gap-1">
-                {/* Sync status */}
+                {/* Sync status - Desktop */}
                 <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-secondary/50 text-xs">
-            {getSyncStatusIcon()}
+                  {getSyncStatusIcon()}
                   <span className="text-muted-foreground">{getSyncStatusText()}</span>
+                </div>
+                
+                {/* Sync status - Mobile (icon only) */}
+                <div className="md:hidden">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleManualSync}
+                    disabled={syncStatus === "syncing"}
+                    className="h-8 w-8 p-0"
+                    title={getSyncStatusText()}
+                  >
+                    {getSyncStatusIcon()}
+                  </Button>
                 </div>
                 
                 
