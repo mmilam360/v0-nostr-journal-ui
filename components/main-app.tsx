@@ -1092,6 +1092,17 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                     
                     <DropdownMenuItem 
                       onClick={() => {
+                        console.log('[Dropdown] Support clicked')
+                        setShowDonationModal(true)
+                      }}
+                      className="text-amber-600 focus:text-amber-600"
+                    >
+                      <Zap className="w-4 h-4 mr-2" />
+                      Support
+                    </DropdownMenuItem>
+                    
+                    <DropdownMenuItem 
+                      onClick={() => {
                         console.log('[Dropdown] Logout clicked')
                         handleLogout()
                       }}

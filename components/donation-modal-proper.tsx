@@ -118,7 +118,7 @@ export function DonationModal({ open, onOpenChange }: DonationModalProps) {
   
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-md max-w-[95vw] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Zap className="w-5 h-5 text-amber-500" />
@@ -160,7 +160,7 @@ export function DonationModal({ open, onOpenChange }: DonationModalProps) {
           {/* QR Code Display */}
           <div className="flex flex-col items-center">
             {isGenerating && (
-              <div className="w-[300px] h-[300px] flex flex-col items-center justify-center bg-secondary rounded-lg">
+              <div className="w-64 h-64 sm:w-80 sm:h-80 flex flex-col items-center justify-center bg-secondary rounded-lg">
                 <Loader2 className="w-8 h-8 animate-spin text-primary mb-2" />
                 <p className="text-sm text-muted-foreground">Generating invoice...</p>
               </div>
@@ -182,7 +182,7 @@ export function DonationModal({ open, onOpenChange }: DonationModalProps) {
                   <img 
                     src={qrDataURL} 
                     alt="Lightning Invoice QR Code" 
-                    className="w-[300px] h-[300px]"
+                    className="w-64 h-64 sm:w-80 sm:h-80"
                   />
                 </div>
                 
