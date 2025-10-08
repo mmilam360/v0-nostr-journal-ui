@@ -1024,9 +1024,18 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
         return null
 
       case 'connect':
-        if (selectedPath === 'new' && generatedKeys) {
-          return (
-            <div className="space-y-8">
+        return (
+          <div className="space-y-8">
+            <div className="text-center">
+              <h2 className="text-3xl font-bold text-foreground mb-2">Connecting...</h2>
+              <p className="text-muted-foreground">Please wait while we set up your connection</p>
+            </div>
+          </div>
+        )
+
+      case 'complete':
+        return (
+          <div className="space-y-8">
               <div className="text-center">
                 <h2 className="text-3xl font-bold text-foreground mb-2">Save Your Keys</h2>
                 <p className="text-muted-foreground">Important: Save these keys securely</p>
@@ -1356,6 +1365,8 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
             </div>
           )
         }
+
+        return null
 
       case 'complete':
         return (
