@@ -6,7 +6,7 @@ import { SimplePool } from 'nostr-tools/pool';
 import { nip04 } from 'nostr-tools';
 import { finalizeEvent } from 'nostr-tools/pure';
 import { QRCodeSVG } from 'qrcode.react';
-import { Loader2, CheckCircle, AlertTriangle, ExternalLink } from 'lucide-react';
+import { Loader2, CheckCircle, AlertTriangle, ExternalLink, Copy, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 interface SimpleNostrConnectProps {
@@ -23,6 +23,7 @@ export default function SimpleNostrConnect({ onConnectSuccess, onClose }: Simple
   const [connectUri, setConnectUri] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [pool, setPool] = useState<SimplePool | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const RELAY = 'wss://relay.nostr.band'; // Simple, reliable relay
 
@@ -51,12 +52,11 @@ export default function SimpleNostrConnect({ onConnectSuccess, onClose }: Simple
       const newPool = new SimplePool();
       setPool(newPool);
       
-      // Create the nostrconnect:// URI - this is the key part from nostrudel
-      const connectUri = `nostrconnect://${appPublicKey}?relay=${encodeURIComponent(RELAY)}&metadata=${encodeURIComponent(JSON.stringify({
-        name: 'Nostr Journal',
-        url: 'https://nostrjournal.app',
-        description: 'Private encrypted journal on Nostr'
-      }))}`;
+      // Generate secret for the connection
+      const secret = Math.random().toString(36).substring(2, 15);
+      
+      // Create the nostrconnect:// URI exactly like nostrudel
+      const connectUri = `nostrconnect://${appPublicKey}?secret=${secret}&name=${encodeURIComponent('Nostr Journal')}&url=${encodeURIComponent('https://nostrjournal.app')}&relay=${encodeURIComponent(RELAY)}`;
       
       setConnectUri(connectUri);
       setStatus('awaiting');
@@ -144,14 +144,37 @@ export default function SimpleNostrConnect({ onConnectSuccess, onClose }: Simple
     }
   };
 
+  const handleCopyLink = async () => {
+    if (connectUri) {
+      try {
+        await navigator.clipboard.writeText(connectUri);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      } catch (error) {
+        console.error('Failed to copy:', error);
+      }
+    }
+  };
+
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="text-center">
-        <h3 className="text-xl font-bold text-white mb-2">Connect with Signing App</h3>
-        <p className="text-sm text-slate-400">
-          Use Nsec.app, Alby, Amethyst, or other compatible apps
-        </p>
+      {/* Header with Back Button */}
+      <div className="flex items-center justify-between">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onClose}
+          className="text-slate-400 hover:text-white p-2"
+        >
+          <ArrowLeft className="h-4 w-4" />
+        </Button>
+        <div className="text-center flex-1">
+          <h3 className="text-lg font-bold text-white">Connect with Signing App</h3>
+          <p className="text-xs text-slate-400">
+            Use Nsec.app, Alby, Amethyst, or other compatible apps
+          </p>
+        </div>
+        <div className="w-10"></div> {/* Spacer for centering */}
       </div>
 
       {/* GENERATING STATE */}
@@ -164,45 +187,75 @@ export default function SimpleNostrConnect({ onConnectSuccess, onClose }: Simple
 
       {/* AWAITING STATE */}
       {status === 'awaiting' && (
-        <div className="space-y-6">
+        <div className="space-y-4">
           {/* QR Code */}
           <div className="flex justify-center">
-            <div className="w-64 h-64 bg-white rounded-lg flex items-center justify-center p-4">
+            <div className="w-48 h-48 sm:w-64 sm:h-64 bg-white rounded-lg flex items-center justify-center p-3 sm:p-4">
               <QRCodeSVG 
                 value={connectUri} 
-                size={200} 
+                size={180} 
                 level="M"
                 includeMargin={true}
               />
             </div>
           </div>
 
+          {/* Connection Link */}
+          <div className="bg-slate-700/50 rounded-lg p-3">
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <label className="text-xs text-slate-300 font-medium">Connection Link:</label>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={handleCopyLink}
+                className="h-6 px-2 text-xs text-slate-400 hover:text-white"
+              >
+                {copied ? <CheckCircle className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                {copied ? 'Copied!' : 'Copy'}
+              </Button>
+            </div>
+            <code className="text-xs text-slate-400 font-mono break-all bg-slate-800/50 p-2 rounded block">
+              {connectUri}
+            </code>
+          </div>
+
           {/* Instructions */}
-          <div className="bg-slate-700/50 rounded-lg p-4">
-            <p className="text-sm text-slate-300 mb-2">
-              <strong>How to connect:</strong>
+          <div className="bg-slate-700/50 rounded-lg p-3">
+            <p className="text-xs text-slate-300 mb-2 font-medium">
+              How to connect:
             </p>
             <ol className="text-xs text-slate-400 space-y-1 list-decimal list-inside">
               <li>Open your signing app (Nsec.app, Alby, etc.)</li>
               <li>Look for "Connect" or "Scan QR" option</li>
-              <li>Scan the QR code above</li>
+              <li>Scan the QR code or paste the link above</li>
               <li>Approve the connection in your app</li>
             </ol>
           </div>
 
-          {/* Open in App Button */}
-          <Button
-            onClick={handleOpenInApp}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-          >
-            <ExternalLink className="mr-2 h-4 w-4" />
-            Open in Signing App
-          </Button>
+          {/* Action Buttons */}
+          <div className="space-y-2">
+            <Button
+              onClick={handleOpenInApp}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm py-2"
+            >
+              <ExternalLink className="mr-2 h-4 w-4" />
+              Open in Signing App
+            </Button>
+            
+            <Button
+              onClick={handleCopyLink}
+              variant="outline"
+              className="w-full border-slate-600 text-slate-300 hover:bg-slate-700 text-sm py-2"
+            >
+              <Copy className="mr-2 h-4 w-4" />
+              Copy Connection Link
+            </Button>
+          </div>
 
           {/* Waiting indicator */}
-          <div className="flex items-center justify-center space-x-2 text-slate-400">
+          <div className="flex items-center justify-center space-x-2 text-slate-400 py-2">
             <Loader2 className="h-4 w-4 animate-spin" />
-            <span className="text-sm">Waiting for approval...</span>
+            <span className="text-xs">Waiting for approval...</span>
           </div>
         </div>
       )}
@@ -243,9 +296,9 @@ export default function SimpleNostrConnect({ onConnectSuccess, onClose }: Simple
             <Button 
               variant="outline" 
               onClick={onClose} 
-              className="flex-1 border-slate-600"
+              className="flex-1 border-slate-600 text-slate-300"
             >
-              Cancel
+              Go Back
             </Button>
             <Button 
               onClick={initializeConnection}
