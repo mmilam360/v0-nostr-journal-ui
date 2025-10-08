@@ -45,7 +45,7 @@ import { saveEncryptedNotes, saveEncryptedNotesImmediate, loadEncryptedNotes } f
 import { createNostrEvent, publishToNostr } from "@/lib/nostr-publish"
 import { cleanupSigner } from "@/lib/signer-manager"
 import { smartSyncNotes, saveAndSyncNote } from "@/lib/nostr-sync-fixed"
-import { loadAllNotesFromRelays } from "@/lib/instant-nostr"
+import { loadNotesFromRelays, saveNoteToRelays, deleteNoteFromRelays } from "@/lib/simple-nostr-events"
 import { sanitizeNotes } from "@/lib/data-validators"
 import { ErrorBoundary } from "@/components/error-boundary"
 import { RelayManager } from "@/components/relay-manager"
@@ -239,11 +239,11 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
           }
         }
 
-        // Try to load from relays first (instant approach)
+        // Load notes from relays using simple event model
         console.log("[v0] Loading notes from relays...")
         let relayNotes: any[] = []
         try {
-          relayNotes = await loadAllNotesFromRelays(authData)
+          relayNotes = await loadNotesFromRelays(authData)
           console.log("[v0] ✅ Loaded", relayNotes.length, "notes from relays")
         } catch (error) {
           console.error("[v0] ❌ Failed to load from relays:", error)
@@ -425,10 +425,6 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   const handleCreateNote = async () => {
     console.log("[v0] Creating new note...")
     
-    // Clear cache since we're creating new data
-    const { clearUserCache } = await import('@/lib/nostr-storage')
-    clearUserCache(authData)
-    
     const now = new Date()
 
     const dateTitle = now.toLocaleDateString("en-US", {
@@ -451,18 +447,24 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     setNotes(updatedNotes)
     setSelectedNote(newNote)
 
-    // Save locally immediately
+    // Save locally
     await saveEncryptedNotes(authData.pubkey, updatedNotes)
 
-    // Queue for background sync (non-blocking)
-    addSyncTask({
-      id: newNote.id,
-      type: 'save',
-      note: newNote,
-      authData
-    })
-    
-    console.log("[v0] ✅ New note queued for background sync:", newNote.title)
+    // Save to relays using simple event model
+    try {
+      const result = await saveNoteToRelays(newNote, authData)
+      if (result.success) {
+        // Update with eventId
+        const finalNote = { ...newNote, eventId: result.eventId, lastSynced: new Date() }
+        setNotes(notes.map(n => n.id === newNote.id ? finalNote : n))
+        setSelectedNote(finalNote)
+        console.log("[v0] ✅ New note saved to relays:", result.eventId)
+      } else {
+        console.error("[v0] ❌ Failed to save new note to relays:", result.error)
+      }
+    } catch (error) {
+      console.error("[v0] ❌ Error saving new note to relays:", error)
+    }
 
     console.log("[v0] New note created:", newNote.id)
   }
@@ -470,56 +472,34 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   const handleUpdateNote = async (updatedNote: Note) => {
     console.log("[v0] Updating note:", updatedNote.id)
 
-    // Clear cache since we're updating data
-    const { clearUserCache } = await import('@/lib/nostr-storage')
-    clearUserCache(authData)
-
-    // Optimistic update - show changes immediately
+    // Update local state immediately
     const optimisticNote = {
       ...updatedNote,
       lastModified: new Date(),
     }
 
-    setNotes(notes.map((note) => {
-      if (note.id === updatedNote.id) {
-        return {
-          ...optimisticNote,
-          eventId: optimisticNote.eventId || note.eventId, // Preserve existing eventId
-          eventKind: optimisticNote.eventKind || note.eventKind // Preserve existing eventKind
-        }
-      }
-      return note
-    }))
-    setSelectedNote({
-      ...optimisticNote,
-      eventId: optimisticNote.eventId || updatedNote.eventId, // Preserve existing eventId
-      eventKind: optimisticNote.eventKind || updatedNote.eventKind // Preserve existing eventKind
-    })
+    setNotes(notes.map((note) => note.id === updatedNote.id ? optimisticNote : note))
+    setSelectedNote(optimisticNote)
 
-    // Save to local storage immediately, preserving any existing eventId
-    const updatedNotes = notes.map((note) => {
-      if (note.id === updatedNote.id) {
-        return {
-          ...optimisticNote,
-          eventId: optimisticNote.eventId || note.eventId, // Preserve existing eventId
-          eventKind: optimisticNote.eventKind || note.eventKind // Preserve existing eventKind
-        }
-      }
-      return note
-    })
+    // Save to local storage
+    const updatedNotes = notes.map((note) => note.id === updatedNote.id ? optimisticNote : note)
     await saveEncryptedNotes(authData.pubkey, updatedNotes)
 
-    // Queue for background sync (non-blocking)
-    addSyncTask({
-      id: optimisticNote.id,
-      type: 'save',
-      note: optimisticNote,
-      authData
-    })
-    
-    console.log("[v0] ✅ Note queued for background sync:", optimisticNote.title)
-
-    console.log("[v0] ✅ Note updated and queued for batch sync")
+    // Save to relays using simple event model
+    try {
+      const result = await saveNoteToRelays(optimisticNote, authData)
+      if (result.success) {
+        // Update with eventId
+        const finalNote = { ...optimisticNote, eventId: result.eventId, lastSynced: new Date() }
+        setNotes(notes.map(n => n.id === updatedNote.id ? finalNote : n))
+        setSelectedNote(finalNote)
+        console.log("[v0] ✅ Note saved to relays:", result.eventId)
+      } else {
+        console.error("[v0] ❌ Failed to save to relays:", result.error)
+      }
+    } catch (error) {
+      console.error("[v0] ❌ Error saving to relays:", error)
+    }
 
     // Update tags
     const allTags = new Set<string>()
@@ -612,23 +592,31 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
 
     console.log("[v0] Deleting note:", noteToDelete.id, noteToDelete.title)
 
-    // Step 1: Add to deleted notes FIRST (before UI update)
-    const deletedNote = {
-      id: noteToDelete.id,
-      deletedAt: new Date(),
-    }
-    const newDeletedNotes = [...deletedNotes, deletedNote]
-    setDeletedNotes(newDeletedNotes)
-
-    // Step 2: Optimistically update the UI IMMEDIATELY
+    // Remove from local state immediately
     const updatedNotes = notes.filter((note) => note.id !== noteToDelete.id)
-    console.log("[v0] Notes before delete:", notes.length, "after delete:", updatedNotes.length)
-
     setNotes(updatedNotes)
 
     if (selectedNote?.id === noteToDelete.id) {
-      console.log("[v0] Clearing selected note as it was deleted")
       setSelectedNote(null)
+    }
+
+    // Save to local storage
+    await saveEncryptedNotes(authData.pubkey, updatedNotes)
+
+    // Delete from relays using simple event model
+    if (noteToDelete.eventId) {
+      try {
+        const result = await deleteNoteFromRelays(noteToDelete, authData)
+        if (result.success) {
+          console.log("[v0] ✅ Note deleted from relays")
+        } else {
+          console.error("[v0] ❌ Failed to delete from relays:", result.error)
+        }
+      } catch (error) {
+        console.error("[v0] ❌ Error deleting from relays:", error)
+      }
+    } else {
+      console.log("[v0] Note has no eventId, skipping relay deletion")
     }
 
     // Update tags
@@ -638,32 +626,10 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     })
     setTags(Array.from(allTags))
 
-    // Step 3: Save the updated state to localStorage IMMEDIATELY
-    try {
-      await saveEncryptedNotes(authData.pubkey, updatedNotes)
-      console.log("[v0] Saved updated notes to localStorage")
-    } catch (error) {
-      console.error("[v0] Failed to save to localStorage:", error)
-    }
-
-    // TEMPORARILY DISABLED - Queue deletion for background processing (non-blocking)
-    // if (noteToDelete.eventId) {
-    //   addHighPrioritySyncTask({
-    //     id: noteToDelete.id,
-    //     type: 'delete',
-    //     note: noteToDelete,
-    //     authData
-    //   })
-    //   console.log("[v0] ✅ Note deletion queued for background sync:", noteToDelete.title)
-    // } else {
-    //   console.log("[v0] Note has no eventId, skipping Nostr deletion:", noteToDelete.title)
-    // }
-    console.log("[v0] ✅ Note deleted locally:", noteToDelete.title)
-
     setShowDeleteConfirmation(false)
     setNoteToDelete(null)
     
-    console.log("[v0] ✅ Note deleted and processed")
+    console.log("[v0] ✅ Note deleted")
   }
 
   // Helper function to delete on Nostr asynchronously
