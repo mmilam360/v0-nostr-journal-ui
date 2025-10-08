@@ -182,9 +182,9 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
         setConnectionState('success')
         
         // Convert session to the format expected by main app
-        const clientSecretKeyHex = session?.clientSecretKey ? 
-          Array.from(session.clientSecretKey).map(b => b.toString(16).padStart(2, '0')).join('') : 
-          Array.from(await generateSecretKey()).map(b => b.toString(16).padStart(2, '0')).join('')
+        const clientSecretKeyHex = (session as any)?.clientSecretKey ? 
+          Array.from((session as any).clientSecretKey as Uint8Array).map((b: number) => b.toString(16).padStart(2, '0')).join('') : 
+          Array.from(await generateSecretKey()).map((b: number) => b.toString(16).padStart(2, '0')).join('')
 
         setTimeout(() => {
           onLoginSuccess({
@@ -239,7 +239,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
         console.log('[BunkerConnect] ✅ Connected! Getting user pubkey...')
 
         // Get actual user pubkey
-        const userPubkey = await signer.getPublicKey()
+      const userPubkey = await signer.getPublicKey()
 
         console.log('[BunkerConnect] 👤 User pubkey:', userPubkey)
 
@@ -250,22 +250,22 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
         setConnectionState('success')
 
         // Convert session to the format expected by main app
-        const clientSecretKeyHex = session?.clientSecretKey ? 
-          Array.from(session.clientSecretKey).map(b => b.toString(16).padStart(2, '0')).join('') : 
-          Array.from(await generateSecretKey()).map(b => b.toString(16).padStart(2, '0')).join('')
+        const clientSecretKeyHex = (session as any)?.clientSecretKey ? 
+          Array.from((session as any).clientSecretKey as Uint8Array).map((b: number) => b.toString(16).padStart(2, '0')).join('') : 
+          Array.from(await generateSecretKey()).map((b: number) => b.toString(16).padStart(2, '0')).join('')
 
-        setTimeout(() => {
-          onLoginSuccess({
-            pubkey: userPubkey,
-            authMethod: 'remote',
+      setTimeout(() => {
+        onLoginSuccess({
+          pubkey: userPubkey,
+          authMethod: 'remote',
             bunkerUri: connectUri,
-            clientSecretKey: clientSecretKeyHex,
+          clientSecretKey: clientSecretKeyHex,
             bunkerPubkey: userPubkey, // This is the user's pubkey, not signer's
             relays: relays,
             // Store session data for nostr-signer-connector
             sessionData: session
-          })
-        }, 1500)
+        })
+      }, 1500)
       }
 
     } catch (error) {
@@ -590,12 +590,12 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                         {connectUri ? (
                           <div className="flex flex-col items-center space-y-4">
                             <div className="w-64 h-64 bg-white rounded-xl flex items-center justify-center p-6 shadow-lg">
-                              <QRCodeSVG 
+                        <QRCodeSVG 
                                 value={connectUri} 
                                 size={240} 
                                 level="L"
-                                includeMargin={true}
-                              />
+                          includeMargin={true}
+                        />
                             </div>
                             <div className="text-center">
                               <p className="text-sm text-muted-foreground">
@@ -661,6 +661,12 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                                 <li>Return to this app and approve the connection</li>
                               </ol>
                             </div>
+                            
+                            <div className="bg-amber-50 dark:bg-amber-900/20 rounded-lg p-3 mt-2">
+                              <p className="text-xs text-amber-700 dark:text-amber-300">
+                                <strong>⚠️ Important:</strong> You may need to approve additional permissions in your signing app for creating, editing, and deleting notes. Keep your signing app open for the best experience.
+                              </p>
+                            </div>
                           </div>
                         )}
                       </div>
@@ -671,32 +677,32 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                           <p className="text-sm text-muted-foreground mb-4">
                             Paste the bunker:// URL from your signing app
                           </p>
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-sm text-muted-foreground">
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm text-muted-foreground">
                             Bunker URL:
-                          </label>
-                          <div className="flex gap-2">
-                            <input
-                              type="text"
-                              value={bunkerUrl}
-                              onChange={(e) => setBunkerUrl(e.target.value)}
+                      </label>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={bunkerUrl}
+                          onChange={(e) => setBunkerUrl(e.target.value)}
                               placeholder="bunker://...?relay=...&secret=..."
                               className="flex-1 px-3 py-2 border rounded-md bg-background text-foreground font-mono text-sm"
-                            />
-                            <Button
-                              onClick={handleBunkerConnect}
-                              disabled={!bunkerUrl || connectionState === 'connecting'}
+                        />
+                        <Button
+                          onClick={handleBunkerConnect}
+                          disabled={!bunkerUrl || connectionState === 'connecting'}
                               className="bg-purple-600 hover:bg-purple-700 text-white"
-                            >
-                              {connectionState === 'connecting' ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                              ) : (
-                                'Connect'
-                              )}
-                            </Button>
-                          </div>
-                        </div>
+                        >
+                          {connectionState === 'connecting' ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            'Connect'
+                          )}
+                        </Button>
+                      </div>
+                    </div>
                         <div className="bg-muted/50 rounded-lg p-3">
                           <p className="text-xs text-muted-foreground mb-2">
                             <strong>How to get your bunker URL:</strong>
@@ -709,6 +715,12 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                             <li>Paste it above and click Connect</li>
                             <li>Return to nsec.app to approve the connection</li>
                           </ol>
+                        </div>
+                        
+                        <div className="bg-amber-50 dark:bg-amber-900/20 rounded-lg p-3 mt-2">
+                          <p className="text-xs text-amber-700 dark:text-amber-300">
+                            <strong>⚠️ Important:</strong> You may need to approve additional permissions in your signing app for creating, editing, and deleting notes. Keep your signing app open for the best experience.
+                          </p>
                         </div>
                       </div>
                     )}
@@ -728,9 +740,9 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                     )}
                     {connectionState === 'error' && (
                       <div className="space-y-3">
-                        <div className="flex items-center justify-center space-x-2 text-red-600">
-                          <AlertTriangle className="h-4 w-4" />
-                          <span className="text-sm">{error}</span>
+                      <div className="flex items-center justify-center space-x-2 text-red-600">
+                        <AlertTriangle className="h-4 w-4" />
+                        <span className="text-sm">{error}</span>
                         </div>
                         <div className="flex gap-2">
                           <Button

@@ -54,6 +54,7 @@ import { ThemeToggle } from "@/components/theme-toggle"
 import { getDefaultRelays } from "@/lib/relay-manager"
 import { DonationModal } from "@/components/donation-modal-proper"
 import { setActiveSigner } from "@/lib/signer-connector"
+import { createBatchOperationsManager, type BatchOperation } from "@/lib/batch-operations"
 
 export interface Note {
   id: string
@@ -117,6 +118,79 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   const [profilePicture, setProfilePicture] = useState<string>("")
   const [displayName, setDisplayName] = useState<string>("")
   const [showDonationModal, setShowDonationModal] = useState(false)
+  
+  // Batch operations manager
+  const [batchManager] = useState(() => 
+    createBatchOperationsManager(async (operations: BatchOperation[]) => {
+      console.log("[MainApp] Processing batch of operations:", operations)
+      await processBatchOperations(operations)
+    })
+  )
+
+  /**
+   * Process a batch of operations
+   */
+  const processBatchOperations = async (operations: BatchOperation[]) => {
+    console.log("[MainApp] 🔄 Processing batch of", operations.length, "operations")
+    setSyncStatus("syncing")
+
+    try {
+      // Group operations by type for efficient processing
+      const creates = operations.filter(op => op.type === 'create')
+      const updates = operations.filter(op => op.type === 'update')
+      const deletes = operations.filter(op => op.type === 'delete')
+
+      // Process creates
+      for (const operation of creates) {
+        if (operation.note) {
+          try {
+            const result = await saveAndSyncNote(operation.note, authData)
+            setNotes(notes.map(n => n.id === operation.note.id ? result.note : n))
+          } catch (error) {
+            console.error("[MainApp] Failed to create note:", error)
+          }
+        }
+      }
+
+      // Process updates
+      for (const operation of updates) {
+        if (operation.note) {
+          try {
+            const result = await saveAndSyncNote(operation.note, authData)
+            setNotes(notes.map(n => n.id === operation.note.id ? result.note : n))
+          } catch (error) {
+            console.error("[MainApp] Failed to update note:", error)
+          }
+        }
+      }
+
+      // Process deletes
+      if (deletes.length > 0) {
+        try {
+          const deletedNoteIds = deletes.map(op => op.noteId).filter(Boolean)
+          const updatedDeletedNotes = [
+            ...deletedNotes,
+            ...deletedNoteIds.map(id => ({ id, deletedAt: new Date() }))
+          ]
+          setDeletedNotes(updatedDeletedNotes)
+
+          // Sync deletions to Nostr
+          const syncResult = await smartSyncNotes(notes, updatedDeletedNotes, authData)
+          setNotes(syncResult.notes)
+          setDeletedNotes(syncResult.deletedNotes)
+        } catch (error) {
+          console.error("[MainApp] Failed to process deletes:", error)
+        }
+      }
+
+      setSyncStatus("synced")
+      setLastSyncTime(new Date())
+      console.log("[MainApp] ✅ Batch processing complete")
+    } catch (error) {
+      console.error("[MainApp] ❌ Batch processing failed:", error)
+      setSyncStatus("error")
+    }
+  }
 
   const retryConnection = async () => {
     console.log("[v0] 🔄 Retrying connection...")
@@ -415,34 +489,11 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     // Save locally immediately
     await saveEncryptedNotes(authData.pubkey, updatedNotes)
 
-    // Sync to Nostr in background
-    try {
-      console.log("[v0] 🔄 Starting sync for new note:", newNote.id)
-      const result = await saveAndSyncNote(newNote, authData)
-      console.log("[v0] 📊 Sync result:", { success: result.success, eventId: result.note.eventId })
-
-      setNotes([result.note, ...notes])
-      setSelectedNote(result.note)
-
-      if (result.success) {
-        console.log("[v0] ✅ Note synced successfully with event ID:", result.note.eventId)
-        const syncedNotes = [result.note, ...notes]
-        await saveEncryptedNotes(authData.pubkey, syncedNotes)
-        setLastSyncTime(new Date())
-      } else {
-        console.error("[v0] ❌ Sync failed:", result.error)
-        setConnectionError(result.error || "Failed to sync new note")
-      }
-    } catch (error) {
-      console.error("[v0] Error syncing new note:", error)
-      const errorNote = {
-        ...newNote,
-        syncStatus: "error" as const,
-        syncError: error instanceof Error ? error.message : "Sync failed",
-      }
-      setNotes([errorNote, ...notes])
-      setSelectedNote(errorNote)
-    }
+    // Add to batch operations for sync
+    batchManager.addOperation({
+      type: 'create',
+      note: newNote
+    })
 
     console.log("[v0] New note created:", newNote.id)
   }
@@ -464,36 +515,13 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     const updatedNotes = notes.map((note) => (note.id === updatedNote.id ? optimisticNote : note))
     await saveEncryptedNotes(authData.pubkey, updatedNotes)
 
-    // Sync to Nostr in background
-    try {
-      console.log("[v0] 🔄 Starting sync for updated note:", updatedNote.id)
-      const result = await saveAndSyncNote(optimisticNote, authData)
-      console.log("[v0] 📊 Update sync result:", { success: result.success, eventId: result.note.eventId })
+    // Add to batch operations for sync
+    batchManager.addOperation({
+      type: 'update',
+      note: optimisticNote
+    })
 
-      // Update with final sync status
-      setNotes(notes.map((note) => (note.id === updatedNote.id ? result.note : note)))
-      setSelectedNote(result.note)
-
-      if (result.success) {
-        console.log("[v0] ✅ Note update synced successfully with event ID:", result.note.eventId)
-        // Save successful sync to local storage
-        const syncedNotes = notes.map((note) => (note.id === updatedNote.id ? result.note : note))
-        await saveEncryptedNotes(authData.pubkey, syncedNotes)
-        setLastSyncTime(new Date())
-      } else {
-        console.error("[v0] ❌ Update sync failed:", result.error)
-        setConnectionError(result.error || "Failed to sync note")
-      }
-    } catch (error) {
-      console.error("[v0] Error syncing note:", error)
-      const errorNote = {
-        ...optimisticNote,
-        syncStatus: "error" as const,
-        syncError: error instanceof Error ? error.message : "Sync failed",
-      }
-      setNotes(notes.map((note) => (note.id === updatedNote.id ? errorNote : note)))
-      setSelectedNote(errorNote)
-    }
+    console.log("[v0] ✅ Note updated and queued for batch sync")
 
     // Update tags
     const allTags = new Set<string>()
@@ -545,6 +573,14 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
 
   const handleLogout = async () => {
     console.log("[v0] User logging out, cleaning up signer connection...")
+
+    // Flush any pending batch operations
+    try {
+      await batchManager.flush()
+      console.log("[v0] Flushed pending batch operations")
+    } catch (error) {
+      console.error("[v0] Error flushing batch operations:", error)
+    }
 
     // Clean up the remote signer connection
     await cleanupSigner()
@@ -600,11 +636,16 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       console.error("[v0] Failed to save to localStorage:", error)
     }
 
-    // Step 4: Publish deletion event to Nostr (async, don't wait)
-    deleteNoteOnNostrAsync(noteToDelete, authData)
+    // Step 4: Add to batch operations for sync
+    batchManager.addOperation({
+      type: 'delete',
+      noteId: noteToDelete.id
+    })
 
     setShowDeleteConfirmation(false)
     setNoteToDelete(null)
+    
+    console.log("[v0] ✅ Note deleted and queued for batch sync")
   }
 
   // Helper function to delete on Nostr asynchronously
