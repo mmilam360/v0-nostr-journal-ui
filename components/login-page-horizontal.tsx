@@ -23,6 +23,7 @@ import {
 } from 'lucide-react'
 import { generateSecretKey, getPublicKey, nip19 } from 'nostr-tools'
 import Nip46Connect from './nip46-connect'
+import BunkerConnect from './bunker-connect'
 import { bytesToHex } from '@noble/hashes/utils'
 import { QRCodeSVG } from 'qrcode.react'
 import InfoModal from './info-modal'
@@ -61,6 +62,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
   const [showNsec, setShowNsec] = useState(false)
   const [copied, setCopied] = useState(false)
   const [showNip46Connect, setShowNip46Connect] = useState(false)
+  const [showBunkerConnect, setShowBunkerConnect] = useState(false)
   
   // Cache keypair for session to avoid generating new npub each time
   const [sessionKeypair, setSessionKeypair] = useState<{
@@ -1092,12 +1094,19 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                             Legacy QR Code (nsec.app)
                           </Button>
                           <Button 
+                            onClick={() => setShowBunkerConnect(true)}
+                            className="w-full bg-purple-600 hover:bg-purple-700 text-white"
+                          >
+                            <Link className="w-5 h-5 mr-2" />
+                            Paste Bunker URL
+                          </Button>
+                          <Button 
                             onClick={() => setRemoteSignerMode('nostrconnect')}
                             variant="outline"
                             className="w-full"
                           >
                             <Link2 className="w-5 h-5 mr-2" />
-                            Paste Connection String
+                            Legacy Connection String
                           </Button>
                         </div>
                       </>
@@ -1315,6 +1324,29 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                 });
               }}
               onClose={() => setShowNip46Connect(false)}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Bunker Connect Modal */}
+      {showBunkerConnect && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
+          <div className="relative w-full max-w-md rounded-lg bg-slate-800 p-6 shadow-lg">
+            <BunkerConnect
+              onConnectSuccess={async (result) => {
+                console.log('[LoginPage] Bunker connection successful:', result);
+                
+                onLoginSuccess({
+                  pubkey: result.pubkey,
+                  authMethod: 'remote',
+                  clientSecretKey: result.clientSecretKey,
+                  bunkerUri: result.bunkerUri,
+                  bunkerPubkey: result.pubkey,
+                  relays: ['wss://relay.nsec.app', 'wss://relay.damus.io', 'wss://nos.lol']
+                });
+              }}
+              onClose={() => setShowBunkerConnect(false)}
             />
           </div>
         </div>

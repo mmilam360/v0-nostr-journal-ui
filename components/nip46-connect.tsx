@@ -206,7 +206,7 @@ export default function Nip46Connect({ onConnectSuccess, onClose }: Nip46Connect
           <div className="text-center mb-4">
             <h3 className="text-white font-medium mb-2">Connect with Signing App</h3>
             <p className="text-sm text-slate-400">
-              Use 0xchat, Nsec.app, Alby, or Amethyst
+              Use Nsec.app, Alby, Amethyst, or other NIP-46 compatible apps
             </p>
           </div>
 
@@ -251,7 +251,7 @@ export default function Nip46Connect({ onConnectSuccess, onClose }: Nip46Connect
           <div className="bg-slate-700/50 rounded-lg p-4 text-xs text-slate-400">
             <p className="font-medium text-slate-300 mb-2">Instructions:</p>
             <ol className="list-decimal list-inside space-y-1">
-              <li>Open your signing app (0xchat, Nsec.app, etc.)</li>
+              <li>Open your signing app (Nsec.app, Alby, Amethyst, etc.)</li>
               <li>Tap "Connect" or scan the QR code</li>
               <li>Paste the connection string if scanning doesn't work</li>
               <li>Approve the connection in your signing app</li>
