@@ -131,6 +131,10 @@ export async function saveEncryptedNotes(pubkey: string, notes: DecryptedNote[])
 async function saveEncryptedNotesInternal(pubkey: string, notes: DecryptedNote[]): Promise<void> {
   try {
     const storageKey = generateStorageKey(pubkey)
+    console.log("[v0] Saving notes with storage key:", storageKey)
+    console.log("[v0] Saving notes count:", notes.length)
+    console.log("[v0] Saving note IDs:", notes.map(n => n.id))
+    
     const notesData = JSON.stringify(notes)
 
     const { encrypted, iv } = await encryptData(notesData, pubkey)
@@ -143,6 +147,7 @@ async function saveEncryptedNotesInternal(pubkey: string, notes: DecryptedNote[]
     }
 
     localStorage.setItem(storageKey, JSON.stringify(encryptedStorage))
+    console.log("[v0] ✅ Successfully saved to localStorage at:", new Date().toLocaleString())
   } catch (error) {
     console.error("[v0] Error saving encrypted notes:", error)
     throw error
@@ -165,6 +170,7 @@ export async function saveEncryptedNotesImmediate(pubkey: string, notes: Decrypt
 export async function loadEncryptedNotes(pubkey: string): Promise<DecryptedNote[]> {
   try {
     const storageKey = generateStorageKey(pubkey)
+    console.log("[v0] Loading notes with storage key:", storageKey)
     const stored = localStorage.getItem(storageKey)
 
     if (!stored) {
@@ -172,9 +178,15 @@ export async function loadEncryptedNotes(pubkey: string): Promise<DecryptedNote[
       return []
     }
 
+    console.log("[v0] Found stored data, length:", stored.length)
     const encryptedStorage = JSON.parse(stored)
+    console.log("[v0] Encrypted storage timestamp:", new Date(encryptedStorage.timestamp).toLocaleString())
+    
     const decryptedData = await decryptData(encryptedStorage.data, encryptedStorage.iv, pubkey)
     const notes = JSON.parse(decryptedData)
+
+    console.log("[v0] Raw decrypted notes:", notes.length)
+    console.log("[v0] Raw note IDs:", notes.map((n: any) => n.id))
 
     // Convert date strings back to Date objects
     const processedNotes = notes.map((note: any) => ({
