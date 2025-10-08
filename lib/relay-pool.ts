@@ -18,9 +18,9 @@ class RelayPool {
   private connections = new Map<string, RelayConnection>();
   private reconnectTimers = new Map<string, NodeJS.Timeout>();
   private healthCheckInterval: NodeJS.Timeout | null = null;
-  private readonly RECONNECT_DELAY = 5000; // 5 seconds
-  private readonly HEALTH_CHECK_INTERVAL = 30000; // 30 seconds
-  private readonly MAX_RECONNECT_ATTEMPTS = 5;
+  private readonly RECONNECT_DELAY = 10000; // 10 seconds (increased from 5s)
+  private readonly HEALTH_CHECK_INTERVAL = 60000; // 60 seconds (increased from 30s)
+  private readonly MAX_RECONNECT_ATTEMPTS = 3; // Reduced from 5 to 3
 
   initialize(relays: string[]) {
     if (!this.pool) {
@@ -89,10 +89,11 @@ class RelayPool {
       clearTimeout(existingTimer);
     }
 
-    // Schedule reconnect attempt
+    // Schedule reconnect attempt with longer delays to reduce network spam
+    const delay = Math.min(this.RECONNECT_DELAY * Math.pow(2, connection.reconnectAttempts), 60000); // Max 60 seconds
     const timer = setTimeout(() => {
       this.forceReconnect(relayUrl);
-    }, this.RECONNECT_DELAY * connection.reconnectAttempts); // Exponential backoff
+    }, delay);
 
     this.reconnectTimers.set(relayUrl, timer);
   }
