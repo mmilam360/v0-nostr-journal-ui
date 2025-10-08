@@ -21,6 +21,8 @@ import { generateSecretKey, getPublicKey, nip19 } from 'nostr-tools'
 import { bytesToHex } from '@noble/hashes/utils'
 import { QRCodeSVG } from 'qrcode.react'
 import { Logo } from './logo'
+import { Nip46RemoteSigner } from 'nostr-signer-connector'
+import { setActiveSigner } from '@/lib/signer-connector'
 
 interface LoginPageHorizontalProps {
   onLoginSuccess: (data: any) => void
@@ -43,8 +45,10 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
   const [connectionState, setConnectionState] = useState<'idle' | 'connecting' | 'success' | 'error'>('idle')
   const [error, setError] = useState('')
   const [bunkerUrl, setBunkerUrl] = useState('')
+  const [connectUri, setConnectUri] = useState('')
   const [nsecInput, setNsecInput] = useState('')
   const [showNsec, setShowNsec] = useState(false)
+  const [remoteSignerMode, setRemoteSignerMode] = useState<'client' | 'signer'>('client')
   const [sessionKeypair, setSessionKeypair] = useState<{
     appSecretKey: Uint8Array
     appPublicKey: string
@@ -150,53 +154,99 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
   }
 
   const handleBunkerConnect = async () => {
-    if (!bunkerUrl) return
+    if (remoteSignerMode === 'signer' && !bunkerUrl) return
 
     setConnectionState('connecting')
     setError('')
 
     try {
-      console.log('[BunkerConnect] 🔌 Starting Plebeian Market style connection...')
-
-      let appSecretKey: Uint8Array
-      if (sessionKeypair?.appSecretKey) {
-        appSecretKey = sessionKeypair.appSecretKey
+      if (remoteSignerMode === 'signer') {
+        // Signer-initiated flow: user pastes bunker:// URL from nsec.app
+        console.log('[BunkerConnect] 🔌 Connecting with bunker URL...')
+        
+        const { signer, session } = await Nip46RemoteSigner.connectToRemote(bunkerUrl)
+        
+        console.log('[BunkerConnect] ✅ Connected! Getting user pubkey...')
+        
+        // Get the actual user pubkey (not signer pubkey)
+        const userPubkey = await signer.getPublicKey()
+        
+        console.log('[BunkerConnect] 👤 User pubkey:', userPubkey)
+        
+        // Store session for reconnection
+        localStorage.setItem('nostr_connect_session', JSON.stringify(session))
+        setActiveSigner(session)
+        
+        setConnectionState('success')
+        
+        setTimeout(() => {
+          onLoginSuccess({
+            pubkey: userPubkey,
+            authMethod: 'remote',
+            sessionData: session,
+            bunkerUri: bunkerUrl,
+            relays: ['wss://relay.nsec.app', 'wss://relay.getalby.com/v1', 'wss://nostr.mutinywallet.com']
+          })
+        }, 1500)
+        
       } else {
-        const { generateSecretKey } = await import("nostr-tools/pure")
-        appSecretKey = generateSecretKey()
-      }
-
-      const { BunkerSigner } = await import("nostr-tools/nip46")
-      const { SimplePool } = await import("nostr-tools/pool")
-
-      const pool = new SimplePool()
-      
-      const signer = await BunkerSigner.fromURI(
-        appSecretKey,
-        bunkerUrl,
-        {
-          pool,
-          timeout: 60000
+        // Client-initiated flow: generate nostrconnect:// URI
+        console.log('[BunkerConnect] 🚀 Starting client-initiated connection...')
+        
+        const clientMetadata = {
+          name: 'Nostr Journal',
+          url: typeof window !== 'undefined' ? window.location.origin : 'https://nostrjournal.app',
+          description: 'Private journaling on Nostr'
         }
-      )
 
-      const userPubkey = await signer.getPublicKey()
-      setConnectionState('success')
+        const relays = [
+          'wss://relay.nsec.app',
+          'wss://relay.getalby.com/v1',
+          'wss://nostr.mutinywallet.com'
+        ]
 
-      const clientSecretKeyHex = Array.from(appSecretKey)
-        .map(b => b.toString(16).padStart(2, '0'))
-        .join('')
+        const { connectUri, established } = Nip46RemoteSigner.listenConnectionFromRemote(
+          relays,
+          clientMetadata
+        )
 
-      setTimeout(() => {
-        onLoginSuccess({
-          pubkey: userPubkey,
-          authMethod: 'remote',
-          clientSecretKey: clientSecretKeyHex,
-          bunkerUri: bunkerUrl,
-          bunkerPubkey: userPubkey,
-          relays: ['wss://relay.nostr.band', 'wss://relay.damus.io', 'wss://nos.lol']
-        })
-      }, 1500)
+        console.log('[BunkerConnect] 📱 Generated connection URI')
+        setConnectUri(connectUri)
+
+        // Wait for connection (with timeout)
+        const timeout = setTimeout(() => {
+          setConnectionState('error')
+          setError('Connection timeout. Please approve within 60 seconds.')
+        }, 60000)
+
+        // Wait for remote signer to connect
+        const { signer, session } = await established
+
+        clearTimeout(timeout)
+
+        console.log('[BunkerConnect] ✅ Connected! Getting user pubkey...')
+
+        // Get actual user pubkey
+        const userPubkey = await signer.getPublicKey()
+
+        console.log('[BunkerConnect] 👤 User pubkey:', userPubkey)
+
+        // Store session
+        localStorage.setItem('nostr_connect_session', JSON.stringify(session))
+        setActiveSigner(session)
+
+        setConnectionState('success')
+
+        setTimeout(() => {
+          onLoginSuccess({
+            pubkey: userPubkey,
+            authMethod: 'remote',
+            sessionData: session,
+            bunkerUri: connectUri,
+            relays: relays
+          })
+        }, 1500)
+      }
 
     } catch (error) {
       console.error('[BunkerConnect] ❌ Connection failed:', error)
@@ -209,8 +259,6 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
           errorMsg += 'Connection timed out. Ensure your signing app is open and connected to the internet.'
         } else if (error.message.includes('relay')) {
           errorMsg += 'Could not connect to relay. Check your internet connection.'
-        } else if (error.message.includes('secret')) {
-          errorMsg += 'Invalid bunker URL or secret. Please generate a new one in your signing app.'
         } else {
           errorMsg += error.message
         }
@@ -324,22 +372,11 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                   </p>
                 </button>
                 <button
-                  onClick={async () => {
+                  onClick={() => {
                     setSelectedMethod('remote')
-                    try {
-                      const { generateSecretKey, getPublicKey } = await import("nostr-tools/pure")
-                      const appSecretKey = generateSecretKey()
-                      const appPublicKey = getPublicKey(appSecretKey)
-                      const bunkerURI = `bunker://${appPublicKey}?relay=${encodeURIComponent('wss://relay.nostr.band')}`
-                      setBunkerUrl(bunkerURI)
-                      setSessionKeypair({
-                        appSecretKey,
-                        appPublicKey,
-                        secret: Math.random().toString(36).substring(2, 15)
-                      })
-                    } catch (error) {
-                      console.error('Failed to generate bunker URL:', error)
-                    }
+                    setRemoteSignerMode('client') // Default to client-initiated
+                    setBunkerUrl('')
+                    setConnectUri('')
                     goNext()
                   }}
                   className="p-4 sm:p-6 rounded-lg border-2 border-border hover:border-primary text-left bg-card hover:bg-card/80 group"
@@ -494,45 +531,134 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
 
                 {selectedMethod === 'remote' && (
                   <div className="space-y-4">
-                    <div className="flex justify-center">
-                      <div className="w-48 h-48 bg-white rounded-lg flex items-center justify-center p-4">
-                        <QRCodeSVG 
-                          value={bunkerUrl} 
-                          size={180} 
-                          level="M"
-                          includeMargin={true}
-                        />
-                      </div>
+                    {/* Connection Mode Selection */}
+                    <div className="flex gap-2 mb-4">
+                      <Button
+                        variant={remoteSignerMode === 'client' ? 'default' : 'outline'}
+                        onClick={() => setRemoteSignerMode('client')}
+                        className="flex-1"
+                      >
+                        Generate QR Code
+                      </Button>
+                      <Button
+                        variant={remoteSignerMode === 'signer' ? 'default' : 'outline'}
+                        onClick={() => setRemoteSignerMode('signer')}
+                        className="flex-1"
+                      >
+                        Paste Bunker URL
+                      </Button>
                     </div>
-                    <div className="space-y-2">
-                      <label className="text-sm text-muted-foreground">
-                        Or paste bunker:// URL:
-                      </label>
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          value={bunkerUrl}
-                          onChange={(e) => setBunkerUrl(e.target.value)}
-                          placeholder="bunker://..."
-                          className="flex-1 px-3 py-2 border rounded-md bg-background text-foreground"
-                        />
-                        <Button
-                          onClick={handleBunkerConnect}
-                          disabled={!bunkerUrl || connectionState === 'connecting'}
-                          className="bg-blue-600 hover:bg-blue-700 text-white"
-                        >
-                          {connectionState === 'connecting' ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            'Connect'
-                          )}
-                        </Button>
+
+                    {remoteSignerMode === 'client' ? (
+                      /* Client-initiated flow: Generate nostrconnect:// URI */
+                      <div className="space-y-4">
+                        <div className="text-center">
+                          <p className="text-sm text-muted-foreground mb-4">
+                            Scan with nsec.app, Alby, or Amethyst to connect
+                          </p>
+                        </div>
+                        {connectUri ? (
+                          <div className="flex justify-center">
+                            <div className="w-48 h-48 bg-white rounded-lg flex items-center justify-center p-4">
+                              <QRCodeSVG 
+                                value={connectUri} 
+                                size={180} 
+                                level="M"
+                                includeMargin={true}
+                              />
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex justify-center">
+                            <Button
+                              onClick={handleBunkerConnect}
+                              disabled={connectionState === 'connecting'}
+                              className="bg-green-600 hover:bg-green-700 text-white"
+                            >
+                              {connectionState === 'connecting' ? (
+                                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                              ) : null}
+                              Generate Connection
+                            </Button>
+                          </div>
+                        )}
+                        
+                        {connectUri && (
+                          <div className="space-y-2">
+                            <label className="text-sm text-muted-foreground">
+                              Or copy connection string:
+                            </label>
+                            <div className="flex gap-2">
+                              <input
+                                type="text"
+                                value={connectUri}
+                                readOnly
+                                className="flex-1 px-3 py-2 border rounded-md bg-background text-foreground text-xs font-mono"
+                              />
+                              <Button
+                                onClick={() => navigator.clipboard.writeText(connectUri)}
+                                variant="outline"
+                                size="sm"
+                              >
+                                <Copy className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        )}
                       </div>
-                    </div>
-                    {connectionState === 'waiting' && (
+                    ) : (
+                      /* Signer-initiated flow: User pastes bunker:// URL */
+                      <div className="space-y-4">
+                        <div className="text-center">
+                          <p className="text-sm text-muted-foreground mb-4">
+                            Paste the bunker:// URL from your signing app
+                          </p>
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-sm text-muted-foreground">
+                            Bunker URL:
+                          </label>
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              value={bunkerUrl}
+                              onChange={(e) => setBunkerUrl(e.target.value)}
+                              placeholder="bunker://...?relay=...&secret=..."
+                              className="flex-1 px-3 py-2 border rounded-md bg-background text-foreground font-mono text-sm"
+                            />
+                            <Button
+                              onClick={handleBunkerConnect}
+                              disabled={!bunkerUrl || connectionState === 'connecting'}
+                              className="bg-purple-600 hover:bg-purple-700 text-white"
+                            >
+                              {connectionState === 'connecting' ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                'Connect'
+                              )}
+                            </Button>
+                          </div>
+                        </div>
+                        <div className="bg-muted/50 rounded-lg p-3">
+                          <p className="text-xs text-muted-foreground mb-2">
+                            <strong>How to get your bunker URL:</strong>
+                          </p>
+                          <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside">
+                            <li>Open nsec.app on your device</li>
+                            <li>Go to "Connections" or "Apps"</li>
+                            <li>Create new connection</li>
+                            <li>Copy the bunker:// URL</li>
+                            <li>Paste it above</li>
+                          </ol>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Connection Status */}
+                    {connectionState === 'connecting' && (
                       <div className="flex items-center justify-center space-x-2 text-muted-foreground">
                         <Loader2 className="h-4 w-4 animate-spin" />
-                        <span className="text-sm">Waiting for connection...</span>
+                        <span className="text-sm">Connecting...</span>
                       </div>
                     )}
                     {connectionState === 'success' && (
