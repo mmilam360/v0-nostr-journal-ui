@@ -183,35 +183,36 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   }
 
   useEffect(() => {
+    // TEMPORARILY DISABLED to fix loading issue
     // Set up sync queue event handlers
-    onSyncTaskCompleted((result) => {
-      console.log('[SyncQueue] Task completed:', result.taskId, result.success ? 'SUCCESS' : 'FAILED');
-      
-      if (result.success && result.eventId) {
-        // Update note with eventId
-        setNotes(prevNotes => 
-          prevNotes.map(note => 
-            note.id === result.taskId 
-              ? { ...note, eventId: result.eventId }
-              : note
-          )
-        );
-      }
-    });
+    // onSyncTaskCompleted((result) => {
+    //   console.log('[SyncQueue] Task completed:', result.taskId, result.success ? 'SUCCESS' : 'FAILED');
+    //   
+    //   if (result.success && result.eventId) {
+    //     // Update note with eventId
+    //     setNotes(prevNotes => 
+    //       prevNotes.map(note => 
+    //         note.id === result.taskId 
+    //           ? { ...note, eventId: result.eventId }
+    //           : note
+    //       )
+    //     );
+    //   }
+    // });
 
-    onSyncTaskFailed((task, error) => {
-      console.error('[SyncQueue] Task failed:', task.id, error);
-      // Could show user notification here
-    });
+    // onSyncTaskFailed((task, error) => {
+    //   console.error('[SyncQueue] Task failed:', task.id, error);
+    //   // Could show user notification here
+    // });
 
     // Update sync queue stats periodically
-    const statsInterval = setInterval(() => {
-      setSyncQueueStats(getSyncQueueStats());
-    }, 1000);
+    // const statsInterval = setInterval(() => {
+    //   setSyncQueueStats(getSyncQueueStats());
+    // }, 1000);
 
-    return () => {
-      clearInterval(statsInterval);
-    };
+    // return () => {
+    //   clearInterval(statsInterval);
+    // };
 
     const loadUserNotes = async () => {
       console.log("[v0] Loading notes for user:", authData.pubkey)
@@ -221,13 +222,14 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       
       try {
         // Initialize persistent relay pool for better performance
-        try {
-          await initializePersistentRelayPool()
-          console.log("[v0] ✅ Persistent relay pool initialized")
-        } catch (error) {
-          console.error("[v0] ❌ Failed to initialize relay pool:", error)
-          // Continue without relay pool - will use individual connections
-        }
+        // TEMPORARILY DISABLED to fix loading issue
+        // try {
+        //   await initializePersistentRelayPool()
+        //   console.log("[v0] ✅ Persistent relay pool initialized")
+        // } catch (error) {
+        //   console.error("[v0] ❌ Failed to initialize relay pool:", error)
+        //   // Continue without relay pool - will use individual connections
+        // }
         
         // Set up the active signer for remote authentication
         if (authData.authMethod === 'remote' && authData.sessionData) {
@@ -481,15 +483,15 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     // Save locally immediately
     await saveEncryptedNotes(authData.pubkey, updatedNotes)
 
-    // Queue for background sync (non-blocking)
-    addSyncTask({
-      id: newNote.id,
-      type: 'save',
-      note: newNote,
-      authData
-    })
+    // TEMPORARILY DISABLED - Queue for background sync (non-blocking)
+    // addSyncTask({
+    //   id: newNote.id,
+    //   type: 'save',
+    //   note: newNote,
+    //   authData
+    // })
     
-    console.log("[v0] ✅ New note queued for background sync:", newNote.title)
+    console.log("[v0] ✅ New note created:", newNote.title)
 
     console.log("[v0] New note created:", newNote.id)
   }
@@ -514,15 +516,15 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     const updatedNotes = notes.map((note) => (note.id === updatedNote.id ? optimisticNote : note))
     await saveEncryptedNotes(authData.pubkey, updatedNotes)
 
-    // Queue for background sync (non-blocking)
-    addSyncTask({
-      id: optimisticNote.id,
-      type: 'save',
-      note: optimisticNote,
-      authData
-    })
+    // TEMPORARILY DISABLED - Queue for background sync (non-blocking)
+    // addSyncTask({
+    //   id: optimisticNote.id,
+    //   type: 'save',
+    //   note: optimisticNote,
+    //   authData
+    // })
     
-    console.log("[v0] ✅ Note queued for background sync:", optimisticNote.title)
+    console.log("[v0] ✅ Note updated:", optimisticNote.title)
 
     console.log("[v0] ✅ Note updated and queued for batch sync")
 
@@ -651,18 +653,19 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       console.error("[v0] Failed to save to localStorage:", error)
     }
 
-    // Step 4: Queue deletion for background processing (non-blocking)
-    if (noteToDelete.eventId) {
-      addHighPrioritySyncTask({
-        id: noteToDelete.id,
-        type: 'delete',
-        note: noteToDelete,
-        authData
-      })
-      console.log("[v0] ✅ Note deletion queued for background sync:", noteToDelete.title)
-    } else {
-      console.log("[v0] Note has no eventId, skipping Nostr deletion:", noteToDelete.title)
-    }
+    // TEMPORARILY DISABLED - Queue deletion for background processing (non-blocking)
+    // if (noteToDelete.eventId) {
+    //   addHighPrioritySyncTask({
+    //     id: noteToDelete.id,
+    //     type: 'delete',
+    //     note: noteToDelete,
+    //     authData
+    //   })
+    //   console.log("[v0] ✅ Note deletion queued for background sync:", noteToDelete.title)
+    // } else {
+    //   console.log("[v0] Note has no eventId, skipping Nostr deletion:", noteToDelete.title)
+    // }
+    console.log("[v0] ✅ Note deleted locally:", noteToDelete.title)
 
     setShowDeleteConfirmation(false)
     setNoteToDelete(null)
@@ -759,24 +762,26 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   )
 
   const getSyncStatusText = () => {
-    const queueText = syncQueueStats.queueLength > 0 ? ` (${syncQueueStats.queueLength} queued)` : '';
+    // TEMPORARILY DISABLED queue stats
+    // const queueText = syncQueueStats.queueLength > 0 ? ` (${syncQueueStats.queueLength} queued)` : '';
     
     switch (syncStatus) {
       case "synced":
-        return lastSyncTime ? `Synced ${lastSyncTime.toLocaleTimeString()}${queueText}` : `Synced${queueText}`
+        return lastSyncTime ? `Synced ${lastSyncTime.toLocaleTimeString()}` : `Synced`
       case "syncing":
-        return `Syncing...${queueText}`
+        return `Syncing...`
       case "error":
-        return `Sync failed${queueText}`
+        return `Sync failed`
       default:
         return "Local only"
     }
   }
 
   const getSyncStatusIcon = () => {
-    if (syncQueueStats.processing || syncQueueStats.queueLength > 0) {
-      return <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
-    }
+    // TEMPORARILY DISABLED queue stats
+    // if (syncQueueStats.processing || syncQueueStats.queueLength > 0) {
+    //   return <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+    // }
     
     switch (syncStatus) {
       case "synced":
