@@ -17,6 +17,7 @@ import {
   Loader2,
   QrCode,
   Link2,
+  Link,
   Eye,
   EyeOff,
   Check
