@@ -199,7 +199,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
         }
       }
 
-      // Process deletes
+      // Process deletes (these are fallback deletions that failed immediate processing)
       if (deletes.length > 0) {
         try {
           const deletedNoteIds = deletes.map(op => op.noteId).filter(Boolean)
@@ -209,8 +209,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
           ]
           setDeletedNotes(updatedDeletedNotes)
 
-          // Process deletions directly without fetching from network
-          // We need to find the notes that were deleted before they were removed from the UI
+          // Process remaining deletions that failed immediate processing
           const notesToDelete = notes.filter(note => deletedNoteIds.includes(note.id))
           
           for (const noteToDelete of notesToDelete) {
@@ -219,7 +218,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                 // Import deleteNoteOnNostr directly
                 const { deleteNoteOnNostr } = await import('@/lib/nostr-storage')
                 await deleteNoteOnNostr(noteToDelete, authData)
-                console.log("[MainApp] ✅ Deleted note on Nostr:", noteToDelete.title)
+                console.log("[MainApp] ✅ Deleted fallback note on Nostr:", noteToDelete.title)
               } else {
                 console.log("[MainApp] Note has no eventId, skipping Nostr deletion:", noteToDelete.title)
               }
@@ -260,6 +259,11 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     setSyncStatus("syncing")
 
     try {
+      // CRITICAL: Flush any pending batch operations (especially deletes) before syncing
+      console.log("[v0] Flushing pending batch operations before retry...")
+      await batchManager.flush()
+      console.log("[v0] Batch operations flushed, proceeding with retry")
+
       const syncResult = await smartSyncNotes(notes, deletedNotes, authData)
 
       setNotes(syncResult.notes)
@@ -698,16 +702,28 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       console.error("[v0] Failed to save to localStorage:", error)
     }
 
-    // Step 4: Add to batch operations for sync
-    batchManager.addOperation({
-      type: 'delete',
-      noteId: noteToDelete.id
-    })
+    // Step 4: Process deletion immediately to prevent reappearing
+    try {
+      if (noteToDelete.eventId) {
+        const { deleteNoteOnNostr } = await import('@/lib/nostr-storage')
+        await deleteNoteOnNostr(noteToDelete, authData)
+        console.log("[v0] ✅ Note deleted on Nostr immediately:", noteToDelete.title)
+      } else {
+        console.log("[v0] Note has no eventId, skipping immediate Nostr deletion:", noteToDelete.title)
+      }
+    } catch (error) {
+      console.error("[v0] Failed to delete note on Nostr immediately:", error)
+      // Fallback to batch processing if immediate deletion fails
+      batchManager.addOperation({
+        type: 'delete',
+        noteId: noteToDelete.id
+      })
+    }
 
     setShowDeleteConfirmation(false)
     setNoteToDelete(null)
     
-    console.log("[v0] ✅ Note deleted and queued for batch sync")
+    console.log("[v0] ✅ Note deleted and processed")
   }
 
   // Helper function to delete on Nostr asynchronously
@@ -829,6 +845,11 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     setSyncStatus("syncing")
 
     try {
+      // CRITICAL: Flush any pending batch operations (especially deletes) before syncing
+      console.log("[v0] Flushing pending batch operations before sync...")
+      await batchManager.flush()
+      console.log("[v0] Batch operations flushed, proceeding with sync")
+
       const syncResult = await smartSyncNotes(notes, deletedNotes, authData)
 
       // Validate results
