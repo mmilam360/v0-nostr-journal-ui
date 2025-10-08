@@ -393,6 +393,11 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
 
   const handleCreateNote = async () => {
     console.log("[v0] Creating new note...")
+    
+    // Clear cache since we're creating new data
+    const { clearUserCache } = await import('@/lib/nostr-storage')
+    clearUserCache(authData)
+    
     const now = new Date()
 
     const dateTitle = now.toLocaleDateString("en-US", {
@@ -430,6 +435,10 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
 
   const handleUpdateNote = async (updatedNote: Note) => {
     console.log("[v0] Updating note:", updatedNote.id)
+
+    // Clear cache since we're updating data
+    const { clearUserCache } = await import('@/lib/nostr-storage')
+    clearUserCache(authData)
 
     // Optimistic update - show changes immediately
     const optimisticNote = {
@@ -521,6 +530,10 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
 
   const handleDeleteNote = async (noteToDelete: Note) => {
     console.log("[v0] Delete requested for note:", noteToDelete.id)
+
+    // Clear cache since we're deleting data
+    const { clearUserCache } = await import('@/lib/nostr-storage')
+    clearUserCache(authData)
 
     // Show confirmation modal instead of deleting immediately
     setNoteToDelete(noteToDelete)

@@ -5,6 +5,7 @@ import * as nostrTools from "nostr-tools"
 import type { DecryptedNote } from "./nostr-crypto"
 import { getSmartRelayList, getRelays } from "./relay-manager"
 import { signEventWithRemote } from "./signer-manager"
+import { eventCache, getCachedOrFetchBatch } from "./event-cache"
 
 // ===================================================================================
 // RELAY PUBLISHING: Proper WebSocket handling with OK response verification
@@ -320,21 +321,41 @@ export const fetchAllNotesFromNostr = async (authData: any): Promise<DecryptedNo
     const relays = await getCurrentRelays()
     console.log("[v0] 📡 Fetching notes from relays:", relays)
 
-    // Step 1: Fetch note events (kind 30078)
-    const events = await fetcher.fetchAllEvents(
-      relays,
-      { kinds: [30078], authors: [authData.pubkey] },
-      { sort: true }, // Sort by created_at descending
-    )
+    // Step 1: Fetch note events (kind 30078) with caching
+    const cacheKey = `events_${authData.pubkey}_30078`
+    let events = eventCache.get(cacheKey)
+    
+    if (!events) {
+      console.log("[v0] Cache MISS - fetching events from relays")
+      events = await fetcher.fetchAllEvents(
+        relays,
+        { kinds: [30078], authors: [authData.pubkey] },
+        { sort: true }, // Sort by created_at descending
+      )
+      // Cache for 5 minutes
+      eventCache.set(cacheKey, events)
+    } else {
+      console.log("[v0] Cache HIT - using cached events")
+    }
 
     console.log(`[v0] Found ${events.length} note events`)
 
-    // Step 2: Fetch deletion events (kind 5) to filter out deleted notes
-    const deletionEvents = await fetcher.fetchAllEvents(
-      relays,
-      { kinds: [5], authors: [authData.pubkey] },
-      { sort: true }, // Sort by created_at descending
-    )
+    // Step 2: Fetch deletion events (kind 5) to filter out deleted notes with caching
+    const deletionCacheKey = `events_${authData.pubkey}_5`
+    let deletionEvents = eventCache.get(deletionCacheKey)
+    
+    if (!deletionEvents) {
+      console.log("[v0] Cache MISS - fetching deletion events from relays")
+      deletionEvents = await fetcher.fetchAllEvents(
+        relays,
+        { kinds: [5], authors: [authData.pubkey] },
+        { sort: true }, // Sort by created_at descending
+      )
+      // Cache for 5 minutes
+      eventCache.set(deletionCacheKey, deletionEvents)
+    } else {
+      console.log("[v0] Cache HIT - using cached deletion events")
+    }
 
     console.log(`[v0] Found ${deletionEvents.length} deletion events`)
 
@@ -375,10 +396,22 @@ export const fetchAllNotesFromNostr = async (authData: any): Promise<DecryptedNo
 
     console.log(`[v0] Filtered to ${appEvents.length} app-specific events (excluding deleted)`)
 
+    // Use cache for decryption - much faster for repeated fetches
     const notes = await Promise.all(
       appEvents.map(async (event) => {
         try {
-          const note = await decryptNote(event.content, authData)
+          // Check cache first for decrypted note
+          const cacheKey = `decrypted_${event.id}_${authData.pubkey}`
+          let note = eventCache.get(cacheKey)
+          
+          if (!note) {
+            // Cache miss - decrypt and cache
+            note = await decryptNote(event.content, authData)
+            eventCache.set(cacheKey, note)
+          } else {
+            console.log(`[v0] Cache HIT for decrypted note: ${event.id.substring(0, 8)}`)
+          }
+          
           // Store the event ID and kind on the note object to enable deletion later
           note.eventId = event.id
           note.eventKind = event.kind // Store the kind used (30078 or 31078)
@@ -416,7 +449,18 @@ export const fetchAllNotesFromNostr = async (authData: any): Promise<DecryptedNo
         const fallbackNotes = await Promise.all(
           fallbackAppEvents.map(async (event) => {
             try {
-              const note = await decryptNote(event.content, authData)
+              // Check cache first for decrypted note
+              const cacheKey = `decrypted_${event.id}_${authData.pubkey}`
+              let note = eventCache.get(cacheKey)
+              
+              if (!note) {
+                // Cache miss - decrypt and cache
+                note = await decryptNote(event.content, authData)
+                eventCache.set(cacheKey, note)
+              } else {
+                console.log(`[v0] Cache HIT for fallback decrypted note: ${event.id.substring(0, 8)}`)
+              }
+              
               note.eventId = event.id
               note.eventKind = event.kind // Store the kind used (30078 or 31078)
               return note
@@ -789,4 +833,17 @@ export async function loadNotesFromNostr(
       deletedNotes: [],
     }
   }
+}
+
+/**
+ * Clear cache for a specific user when notes are updated
+ * This ensures fresh data after create/update/delete operations
+ */
+export const clearUserCache = (authData: any) => {
+  if (!authData?.pubkey) return
+  
+  // For now, clear the entire cache when user data changes
+  // TODO: Implement more granular cache invalidation
+  eventCache.clear()
+  console.log('[v0] User cache cleared after update')
 }
