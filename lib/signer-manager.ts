@@ -6,6 +6,16 @@
 import type { AuthData } from "@/components/main-app"
 import { getActiveSigner, signWithActiveSigner, resumeNip46Session, setActiveSigner } from './signer-connector'
 
+// Declare window.nostr for TypeScript
+declare global {
+  interface Window {
+    nostr?: {
+      signEvent: (event: any) => Promise<any>
+      getPublicKey: () => Promise<string>
+    }
+  }
+}
+
 /**
  * Initialize or get the persistent remote signer
  */
@@ -35,17 +45,52 @@ export async function getRemoteSigner(authData: AuthData) {
 }
 
 /**
- * Sign an event using the remote signer
+ * Sign an event using the appropriate signer based on auth method
  */
 export async function signEventWithRemote(unsignedEvent: any, authData: AuthData) {
-  console.log("[SignerManager] 📝 Signing event with remote signer...")
+  console.log("[SignerManager] 📝 Signing event with auth method:", authData.authMethod)
   
   try {
-    // Use the active signer from nostr-signer-connector
-    const signedEvent = await signWithActiveSigner(unsignedEvent)
-    
-    console.log("[SignerManager] ✅ Event signed successfully")
-    return signedEvent
+    if (authData.authMethod === "extension") {
+      // Use browser extension for signing
+      console.log("[SignerManager] Using browser extension for signing")
+      const { nip07 } = await import("nostr-tools")
+      
+      if (!window.nostr) {
+        throw new Error("Nostr extension not found")
+      }
+      
+      const signedEvent = await window.nostr.signEvent(unsignedEvent)
+      console.log("[SignerManager] ✅ Event signed with extension")
+      return signedEvent
+      
+    } else if (authData.authMethod === "nsec") {
+      // Use private key for signing
+      console.log("[SignerManager] Using private key for signing")
+      const { finalizeEvent } = await import("nostr-tools")
+      
+      if (!authData.privateKey) {
+        throw new Error("Private key not available")
+      }
+      
+      const pkBytes = new Uint8Array(
+        authData.privateKey.match(/.{1,2}/g)?.map((byte: string) => Number.parseInt(byte, 16)) || []
+      )
+      
+      const signedEvent = finalizeEvent(unsignedEvent, pkBytes)
+      console.log("[SignerManager] ✅ Event signed with private key")
+      return signedEvent
+      
+    } else if (authData.authMethod === "remote") {
+      // Use the active remote signer
+      console.log("[SignerManager] Using remote signer for signing")
+      const signedEvent = await signWithActiveSigner(unsignedEvent)
+      console.log("[SignerManager] ✅ Event signed with remote signer")
+      return signedEvent
+      
+    } else {
+      throw new Error(`Unsupported auth method: ${authData.authMethod}`)
+    }
   } catch (error) {
     console.error("[SignerManager] ❌ Failed to sign event:", error)
     throw error
