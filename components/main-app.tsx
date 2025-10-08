@@ -208,14 +208,30 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       console.warn('[SyncQueue] Error setting up event handlers:', error);
     }
 
-    // DISABLED - This causes loading issues
-    // const statsInterval = setInterval(() => {
-    //   setSyncQueueStats(getSyncQueueStats());
-    // }, 1000);
+    // Start sync queue stats updates only after initial load is complete
+    let statsInterval: NodeJS.Timeout | null = null;
+    
+    const startStatsUpdates = () => {
+      if (statsInterval) return; // Already started
+      
+      statsInterval = setInterval(() => {
+        try {
+          setSyncQueueStats(getSyncQueueStats());
+        } catch (error) {
+          console.warn('[SyncQueue] Error updating stats:', error);
+        }
+      }, 1000);
+    };
 
-    // return () => {
-    //   clearInterval(statsInterval);
-    // };
+    // Start stats updates after a delay to ensure app is fully loaded
+    const delayedStart = setTimeout(startStatsUpdates, 2000);
+
+    return () => {
+      clearTimeout(delayedStart);
+      if (statsInterval) {
+        clearInterval(statsInterval);
+      }
+    };
 
     const loadUserNotes = async () => {
       console.log("[v0] Loading notes for user:", authData.pubkey)
@@ -764,26 +780,24 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   )
 
   const getSyncStatusText = () => {
-    // DISABLED - This causes loading issues
-    // const queueText = syncQueueStats.queueLength > 0 ? ` (${syncQueueStats.queueLength} queued)` : '';
+    const queueText = syncQueueStats.queueLength > 0 ? ` (${syncQueueStats.queueLength} queued)` : '';
     
     switch (syncStatus) {
       case "synced":
-        return lastSyncTime ? `Synced ${lastSyncTime.toLocaleTimeString()}` : `Synced`
+        return lastSyncTime ? `Synced ${lastSyncTime.toLocaleTimeString()}${queueText}` : `Synced${queueText}`
       case "syncing":
-        return `Syncing...`
+        return `Syncing...${queueText}`
       case "error":
-        return `Sync failed`
+        return `Sync failed${queueText}`
       default:
         return "Local only"
     }
   }
 
   const getSyncStatusIcon = () => {
-    // DISABLED - This causes loading issues
-    // if (syncQueueStats.processing || syncQueueStats.queueLength > 0) {
-    //   return <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
-    // }
+    if (syncQueueStats.processing || syncQueueStats.queueLength > 0) {
+      return <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+    }
     
     switch (syncStatus) {
       case "synced":
