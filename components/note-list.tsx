@@ -17,6 +17,10 @@ interface NoteListProps {
 }
 
 export default function NoteList({ notes, selectedNote, onSelectNote, onCreateNote, onDeleteNote, authData }: NoteListProps) {
+  console.log("[NoteList] Received notes:", notes.length)
+  console.log("[NoteList] Note IDs:", notes.map(n => n.id))
+  console.log("[NoteList] Note titles:", notes.map(n => n.title))
+  
   const [searchQuery, setSearchQuery] = useState("")
   const [showSyncWarning, setShowSyncWarning] = useState<string | null>(null)
 

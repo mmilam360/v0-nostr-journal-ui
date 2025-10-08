@@ -259,6 +259,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
         // CRITICAL: Show local notes immediately (don't wait for sync)
         setNotes(validatedNotes)
         console.log("[v0] Notes set in React state:", validatedNotes.length)
+        console.log("[v0] Notes in React state:", validatedNotes.map(n => ({ id: n.id, title: n.title, eventId: n.eventId })))
 
         // Extract tags
         const allTags = new Set<string>()
