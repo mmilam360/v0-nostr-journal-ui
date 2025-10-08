@@ -154,13 +154,23 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
         if (operation.note) {
           try {
             const result = await saveAndSyncNote(operation.note, authData)
+            console.log("[MainApp] Create result:", result.success, result.note.eventId)
             setNotes(prevNotes => prevNotes.map(n => 
               n.id === operation.note.id ? {
-                ...result.note,
+                ...result.note, // Use the complete result.note which includes eventId and proper syncStatus
                 syncStatus: result.success ? "synced" as const : "error" as const,
                 syncError: result.success ? undefined : result.error
               } : n
             ))
+            
+            // Update selectedNote if it's the same note
+            if (selectedNote && selectedNote.id === operation.note.id) {
+              setSelectedNote({
+                ...result.note,
+                syncStatus: result.success ? "synced" as const : "error" as const,
+                syncError: result.success ? undefined : result.error
+              })
+            }
           } catch (error) {
             console.error("[MainApp] Failed to create note:", error)
             setNotes(prevNotes => prevNotes.map(n => 
@@ -179,13 +189,23 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
         if (operation.note) {
           try {
             const result = await saveAndSyncNote(operation.note, authData)
+            console.log("[MainApp] Update result:", result.success, result.note.eventId)
             setNotes(prevNotes => prevNotes.map(n => 
               n.id === operation.note.id ? {
-                ...result.note,
+                ...result.note, // Use the complete result.note which includes eventId and proper syncStatus
                 syncStatus: result.success ? "synced" as const : "error" as const,
                 syncError: result.success ? undefined : result.error
               } : n
             ))
+            
+            // Update selectedNote if it's the same note
+            if (selectedNote && selectedNote.id === operation.note.id) {
+              setSelectedNote({
+                ...result.note,
+                syncStatus: result.success ? "synced" as const : "error" as const,
+                syncError: result.success ? undefined : result.error
+              })
+            }
           } catch (error) {
             console.error("[MainApp] Failed to update note:", error)
             setNotes(prevNotes => prevNotes.map(n => 
@@ -702,17 +722,41 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       console.error("[v0] Failed to save to localStorage:", error)
     }
 
-    // Step 4: Process deletion immediately to prevent reappearing
+    // Step 4: Process deletion immediately and trigger sync
+    setSyncStatus("syncing") // Disable manual sync button
+    
     try {
       if (noteToDelete.eventId) {
         const { deleteNoteOnNostr } = await import('@/lib/nostr-storage')
         await deleteNoteOnNostr(noteToDelete, authData)
         console.log("[v0] ✅ Note deleted on Nostr immediately:", noteToDelete.title)
+        
+        // Trigger immediate sync to ensure deletion is reflected
+        console.log("[v0] Triggering immediate sync after deletion...")
+        const syncResult = await smartSyncNotes(notes, updatedDeletedNotes, authData)
+        
+        // Update notes and sync status
+        const validatedNotes = sanitizeNotes(syncResult.notes)
+        if (validatedNotes.length > 0) {
+          setNotes(validatedNotes)
+          setDeletedNotes(syncResult.deletedNotes)
+        }
+        
+        setSyncStatus(syncResult.synced ? "synced" : "error")
+        if (syncResult.synced) {
+          setLastSyncTime(new Date())
+          await saveEncryptedNotes(authData.pubkey, validatedNotes)
+        }
+        
+        console.log("[v0] ✅ Sync completed after deletion")
       } else {
         console.log("[v0] Note has no eventId, skipping immediate Nostr deletion:", noteToDelete.title)
+        setSyncStatus("synced") // Re-enable sync button
       }
     } catch (error) {
       console.error("[v0] Failed to delete note on Nostr immediately:", error)
+      setSyncStatus("error")
+      
       // Fallback to batch processing if immediate deletion fails
       batchManager.addOperation({
         type: 'delete',

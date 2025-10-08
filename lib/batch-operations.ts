@@ -16,7 +16,7 @@ export interface BatchOperation {
 export class BatchOperationsManager {
   private operations: BatchOperation[] = []
   private batchTimeout: NodeJS.Timeout | null = null
-  private readonly BATCH_DELAY = 1000 // 1 second
+  private readonly BATCH_DELAY = 500 // 0.5 seconds for faster sync
   private readonly MAX_BATCH_SIZE = 10 // Maximum operations per batch
 
   constructor(
