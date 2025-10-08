@@ -340,22 +340,31 @@ export const fetchAllNotesFromNostr = async (authData: any): Promise<DecryptedNo
 
     // Step 3: Create a set of deleted event IDs
     const deletedEventIds = new Set<string>()
-    deletionEvents.forEach(deletionEvent => {
+    deletionEvents.forEach((deletionEvent, index) => {
+      console.log(`[v0] Deletion event ${index + 1}:`, {
+        id: deletionEvent.id,
+        tags: deletionEvent.tags,
+        content: deletionEvent.content
+      })
+      
       // NIP-09 deletion events have 'e' tags with the event IDs being deleted
       deletionEvent.tags.forEach(tag => {
         if (tag[0] === 'e' && tag[1]) {
+          console.log(`[v0] Found deleted event ID: ${tag[1]}`)
           deletedEventIds.add(tag[1])
         }
       })
     })
 
-    console.log(`[v0] Found ${deletedEventIds.size} deleted event IDs`)
+    console.log(`[v0] Found ${deletedEventIds.size} deleted event IDs:`, Array.from(deletedEventIds))
 
     // Step 4: Filter events that have our app's d tag prefix AND are not deleted
     const appEvents = events.filter((event) => {
       const dTag = event.tags.find((tag) => tag[0] === "d")
       const isAppEvent = dTag && dTag[1]?.startsWith(APP_D_TAG_PREFIX)
       const isDeleted = deletedEventIds.has(event.id)
+      
+      console.log(`[v0] Event ${event.id}: isApp=${isAppEvent}, isDeleted=${isDeleted}`)
       
       if (isDeleted) {
         console.log(`[v0] 🗑️ Skipping deleted event: ${event.id}`)

@@ -48,7 +48,13 @@ export async function smartSyncNotes(
     const filteredLocalNotes = localNotes.filter(note => !deletedNoteIds.has(note.id))
     console.log("[SmartSync] 🗑️ Filtered local notes (removed deleted):", filteredLocalNotes.length)
 
-    // Step 3: Merge local and remote (keep most recent version)
+    // Step 3: Debug remote notes to understand the issue
+    console.log("[SmartSync] 🔍 Remote notes debug:")
+    remoteNotes.forEach(note => {
+      console.log(`  - "${note.title}" eventId: ${note.eventId || 'MISSING'}`)
+    })
+
+    // Step 4: Merge local and remote (keep most recent version)
     const mergedNotes = mergeNotes(filteredLocalNotes, remoteNotes)
     console.log("[SmartSync] 🔀 Merged to:", mergedNotes.length, "notes")
 
@@ -204,6 +210,7 @@ function mergeNotes(localNotes: DecryptedNote[], remoteNotes: DecryptedNote[]): 
   // Merge with remote notes (prefer remote if it's newer)
   for (const remoteNote of remoteNotes) {
     const localNote = noteMap.get(remoteNote.id)
+    console.log(`[Merge] Processing remote note: "${remoteNote.title}" eventId: ${remoteNote.eventId || 'MISSING'}`)
     
     if (!localNote) {
       // New note from remote - use it completely
@@ -247,6 +254,8 @@ function mergeNotes(localNotes: DecryptedNote[], remoteNotes: DecryptedNote[]): 
         console.log("[SmartSync] ⚖️ Same timestamp, using remote:", remoteNote.title)
         noteMap.set(remoteNote.id, {
           ...remoteNote,
+          eventId: remoteNote.eventId,        // ⭐ CRITICAL: Preserve eventId from remote
+          eventKind: remoteNote.eventKind,    // ⭐ CRITICAL: Preserve eventKind from remote
           lastSynced: new Date()
         })
       }
