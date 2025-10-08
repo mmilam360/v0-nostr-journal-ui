@@ -55,6 +55,7 @@ import { getDefaultRelays, initializePersistentRelayPool, shutdownPersistentRela
 import { DonationModal } from "@/components/donation-modal-proper"
 import { setActiveSigner } from "@/lib/signer-connector"
 import { createDirectEventManager, type DirectEventManager } from "@/lib/direct-event-manager"
+import { addSyncTask, addHighPrioritySyncTask, onSyncTaskCompleted, onSyncTaskFailed, getSyncQueueStats } from "@/lib/sync-queue"
 
 export interface Note {
   id: string
@@ -100,6 +101,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
   const [syncStatus, setSyncStatus] = useState<"synced" | "syncing" | "offline" | "error">("offline")
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null)
+  const [syncQueueStats, setSyncQueueStats] = useState({ queueLength: 0, processing: false })
   const [needsSync, setNeedsSync] = useState(false)
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false)
   const [noteToDelete, setNoteToDelete] = useState<Note | null>(null)
@@ -181,6 +183,36 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   }
 
   useEffect(() => {
+    // Set up sync queue event handlers
+    onSyncTaskCompleted((result) => {
+      console.log('[SyncQueue] Task completed:', result.taskId, result.success ? 'SUCCESS' : 'FAILED');
+      
+      if (result.success && result.eventId) {
+        // Update note with eventId
+        setNotes(prevNotes => 
+          prevNotes.map(note => 
+            note.id === result.taskId 
+              ? { ...note, eventId: result.eventId }
+              : note
+          )
+        );
+      }
+    });
+
+    onSyncTaskFailed((task, error) => {
+      console.error('[SyncQueue] Task failed:', task.id, error);
+      // Could show user notification here
+    });
+
+    // Update sync queue stats periodically
+    const statsInterval = setInterval(() => {
+      setSyncQueueStats(getSyncQueueStats());
+    }, 1000);
+
+    return () => {
+      clearInterval(statsInterval);
+    };
+
     const loadUserNotes = async () => {
       console.log("[v0] Loading notes for user:", authData.pubkey)
       
@@ -437,12 +469,15 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     // Save locally immediately
     await saveEncryptedNotes(authData.pubkey, updatedNotes)
 
-    // Queue for direct event processing
-    eventManager.queueOperation({
-      type: 'create',
-      note: newNote
+    // Queue for background sync (non-blocking)
+    addSyncTask({
+      id: newNote.id,
+      type: 'save',
+      note: newNote,
+      authData
     })
-    setNeedsSync(true)
+    
+    console.log("[v0] ✅ New note queued for background sync:", newNote.title)
 
     console.log("[v0] New note created:", newNote.id)
   }
@@ -467,12 +502,15 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     const updatedNotes = notes.map((note) => (note.id === updatedNote.id ? optimisticNote : note))
     await saveEncryptedNotes(authData.pubkey, updatedNotes)
 
-    // Queue for direct event processing
-    eventManager.queueOperation({
-      type: 'update',
-      note: optimisticNote
+    // Queue for background sync (non-blocking)
+    addSyncTask({
+      id: optimisticNote.id,
+      type: 'save',
+      note: optimisticNote,
+      authData
     })
-    setNeedsSync(true)
+    
+    console.log("[v0] ✅ Note queued for background sync:", optimisticNote.title)
 
     console.log("[v0] ✅ Note updated and queued for batch sync")
 
@@ -593,47 +631,17 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       console.error("[v0] Failed to save to localStorage:", error)
     }
 
-    // Step 4: Process deletion immediately and trigger sync
-    setSyncStatus("syncing") // Disable manual sync button
-    
-    try {
-      if (noteToDelete.eventId) {
-        const { deleteNoteOnNostr } = await import('@/lib/nostr-storage')
-        await deleteNoteOnNostr(noteToDelete, authData)
-        console.log("[v0] ✅ Note deleted on Nostr immediately:", noteToDelete.title)
-        
-        // Trigger immediate sync to ensure deletion is reflected
-        console.log("[v0] Triggering immediate sync after deletion...")
-        const syncResult = await smartSyncNotes(notes, deletedNotes, authData)
-        
-        // Update notes and sync status
-        const validatedNotes = sanitizeNotes(syncResult.notes)
-        if (validatedNotes.length > 0) {
-          setNotes(validatedNotes)
-          setDeletedNotes(syncResult.deletedNotes)
-        }
-        
-        setSyncStatus(syncResult.synced ? "synced" : "error")
-        if (syncResult.synced) {
-          setLastSyncTime(new Date())
-          await saveEncryptedNotes(authData.pubkey, validatedNotes)
-        }
-        
-        console.log("[v0] ✅ Sync completed after deletion")
-      } else {
-        console.log("[v0] Note has no eventId, skipping immediate Nostr deletion:", noteToDelete.title)
-        setSyncStatus("synced") // Re-enable sync button
-      }
-    } catch (error) {
-      console.error("[v0] Failed to delete note on Nostr immediately:", error)
-      setSyncStatus("error")
-      
-      // Fallback to direct event manager if immediate deletion fails
-      eventManager.queueOperation({
+    // Step 4: Queue deletion for background processing (non-blocking)
+    if (noteToDelete.eventId) {
+      addHighPrioritySyncTask({
+        id: noteToDelete.id,
         type: 'delete',
-        noteId: noteToDelete.id
+        note: noteToDelete,
+        authData
       })
-      setNeedsSync(true)
+      console.log("[v0] ✅ Note deletion queued for background sync:", noteToDelete.title)
+    } else {
+      console.log("[v0] Note has no eventId, skipping Nostr deletion:", noteToDelete.title)
     }
 
     setShowDeleteConfirmation(false)
@@ -744,15 +752,36 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   }
 
   const getSyncStatusText = () => {
+    const queueText = syncQueueStats.queueLength > 0 ? ` (${syncQueueStats.queueLength} queued)` : '';
+    
     switch (syncStatus) {
       case "synced":
-        return lastSyncTime ? `Synced ${lastSyncTime.toLocaleTimeString()}` : "Synced"
+        return lastSyncTime ? `Synced ${lastSyncTime.toLocaleTimeString()}${queueText}` : `Synced${queueText}`
       case "syncing":
-        return "Syncing..."
+        return `Syncing...${queueText}`
       case "error":
-        return "Sync failed"
+        return `Sync failed${queueText}`
       default:
         return "Local only"
+    }
+  }
+
+  const getSyncStatusIcon = () => {
+    if (syncQueueStats.processing || syncQueueStats.queueLength > 0) {
+      return <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+    }
+    
+    switch (syncStatus) {
+      case "synced":
+        return <CheckCircle2 className="h-4 w-4 text-green-500" />
+      case "syncing":
+        return <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+      case "error":
+        return <AlertCircle className="h-4 w-4 text-red-500" />
+      case "offline":
+        return <CloudOff className="h-4 w-4 text-gray-500" />
+      default:
+        return <RefreshCw className="h-4 w-4 text-gray-500" />
     }
   }
 
