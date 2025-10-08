@@ -187,8 +187,10 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     try {
       onSyncTaskCompleted((result) => {
         console.log('[SyncQueue] Task completed:', result.taskId, result.success ? 'SUCCESS' : 'FAILED');
+        console.log('[SyncQueue] EventId:', result.eventId);
         
         if (result.success && result.eventId) {
+          console.log('[SyncQueue] Updating note with eventId:', result.eventId);
           // Update note with eventId
           setNotes(prevNotes => 
             prevNotes.map(note => 
@@ -197,6 +199,8 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                 : note
             )
           );
+        } else {
+          console.log('[SyncQueue] Not updating note - success:', result.success, 'eventId:', result.eventId);
         }
       });
 
@@ -219,7 +223,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       
       setIsLoading(true)
       setSyncStatus("syncing")
-      
+
       try {
         // Initialize persistent relay pool for better performance
         try {
@@ -754,7 +758,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       : selectedTag === "trash"
         ? []
         : notes.filter((note) => note.tags.includes(selectedTag || ""))
-  
+
   // Sort notes by lastModified date (most recent first)
   const sortedNotes = filteredNotes.sort((a, b) => 
     new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime()
@@ -1002,7 +1006,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                   onClick={handleManualSync}
                   title="Click to sync manually"
                 >
-                  {getSyncStatusIcon()}
+            {getSyncStatusIcon()}
                   <span className="text-muted-foreground">{getSyncStatusText()}</span>
                 </div>
                 
