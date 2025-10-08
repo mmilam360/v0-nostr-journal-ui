@@ -193,10 +193,44 @@ export async function saveNoteToRelays(note: DecryptedNote, authData: any): Prom
     const signedEvent = await signEventWithRemote(unsignedEvent, authData)
     console.log("[SimpleEvents] Event signed:", signedEvent.id)
     
-    // Publish to relays
+    // Publish to relays and wait for confirmation
     const pool = getPool()
     const relays = await pool.publish(RELAYS, signedEvent)
-    console.log(`[SimpleEvents] Published to ${relays.length} relays`)
+    console.log(`[SimpleEvents] Publishing to ${relays.length} relays`)
+    
+    // Wait for at least one relay to confirm
+    let confirmedRelays = 0
+    let failedRelays = 0
+    
+    const publishPromises = relays.map(relay => 
+      new Promise<void>((resolve) => {
+        relay.on('ok', () => {
+          confirmedRelays++
+          console.log(`[SimpleEvents] ✅ Event confirmed by ${relay.relay.url}`)
+          resolve()
+        })
+        
+        relay.on('failed', (reason: any) => {
+          failedRelays++
+          console.error(`[SimpleEvents] ❌ Event rejected by ${relay.relay.url}:`, reason)
+          resolve()
+        })
+        
+        // Timeout after 10 seconds
+        setTimeout(() => {
+          console.warn(`[SimpleEvents] ⏰ Timeout waiting for ${relay.relay.url}`)
+          resolve()
+        }, 10000)
+      })
+    )
+    
+    await Promise.all(publishPromises)
+    
+    console.log(`[SimpleEvents] Publishing complete: ${confirmedRelays} confirmed, ${failedRelays} failed`)
+    
+    if (confirmedRelays === 0) {
+      throw new Error(`Failed to publish to any relay. ${failedRelays} relays rejected the event.`)
+    }
     
     return {
       success: true,
@@ -238,7 +272,41 @@ export async function deleteNoteFromRelays(note: DecryptedNote, authData: any): 
     
     const pool = getPool()
     const relays = await pool.publish(RELAYS, signedEvent)
-    console.log(`[SimpleEvents] Deletion published to ${relays.length} relays`)
+    console.log(`[SimpleEvents] Publishing deletion to ${relays.length} relays`)
+    
+    // Wait for at least one relay to confirm deletion
+    let confirmedRelays = 0
+    let failedRelays = 0
+    
+    const publishPromises = relays.map(relay => 
+      new Promise<void>((resolve) => {
+        relay.on('ok', () => {
+          confirmedRelays++
+          console.log(`[SimpleEvents] ✅ Deletion confirmed by ${relay.relay.url}`)
+          resolve()
+        })
+        
+        relay.on('failed', (reason: any) => {
+          failedRelays++
+          console.error(`[SimpleEvents] ❌ Deletion rejected by ${relay.relay.url}:`, reason)
+          resolve()
+        })
+        
+        // Timeout after 10 seconds
+        setTimeout(() => {
+          console.warn(`[SimpleEvents] ⏰ Timeout waiting for deletion confirmation from ${relay.relay.url}`)
+          resolve()
+        }, 10000)
+      })
+    )
+    
+    await Promise.all(publishPromises)
+    
+    console.log(`[SimpleEvents] Deletion complete: ${confirmedRelays} confirmed, ${failedRelays} failed`)
+    
+    if (confirmedRelays === 0) {
+      throw new Error(`Failed to publish deletion to any relay. ${failedRelays} relays rejected the event.`)
+    }
     
     return { success: true }
     

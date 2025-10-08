@@ -258,16 +258,26 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
           console.error("[v0] ❌ Failed to load from relays:", error)
         }
 
-        // Fallback to local storage if no relay notes
-        let localNotes: any[] = []
-        if (relayNotes.length === 0) {
-          console.log("[v0] No relay notes, loading from local storage...")
-          localNotes = await loadEncryptedNotes(authData.pubkey)
-          console.log("[v0] Loaded", localNotes.length, "notes from local storage")
-        }
+        // Always load from local storage as well to merge
+        console.log("[v0] Loading notes from local storage...")
+        const localNotes = await loadEncryptedNotes(authData.pubkey)
+        console.log("[v0] Loaded", localNotes.length, "notes from local storage")
 
-        // Use relay notes if available, otherwise use local notes
-        const allNotes = relayNotes.length > 0 ? relayNotes : localNotes
+        // Merge relay and local notes, preferring relay notes when available
+        const noteMap = new Map()
+        
+        // Add local notes first
+        localNotes.forEach(note => {
+          noteMap.set(note.id, { ...note, source: 'local' })
+        })
+        
+        // Override with relay notes if they exist
+        relayNotes.forEach(note => {
+          noteMap.set(note.id, { ...note, source: 'relay' })
+        })
+        
+        const allNotes = Array.from(noteMap.values())
+        console.log("[v0] Merged notes:", allNotes.length, "(local:", localNotes.length, "relay:", relayNotes.length, ")")
         
         // Validate and sanitize all notes
         const validatedNotes = sanitizeNotes(allNotes)
@@ -476,11 +486,34 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
         setNotes(prevNotes => prevNotes.map(n => n.id === newNote.id ? finalNote : n))
         setSelectedNote(finalNote)
         console.log(`[v0] ✅ New note saved to relays: ${result.eventId} (verified: ${eventExists})`)
+        
+        // Show success message to user
+        if (eventExists) {
+          console.log(`[v0] 🎉 Note successfully published and verified on relays!`)
+        } else {
+          console.warn(`[v0] ⚠️ Note published but verification failed - may not be available on other devices`)
+        }
       } else {
         console.error("[v0] ❌ Failed to save new note to relays:", result.error)
+        // Update note to show it failed to sync
+        const failedNote = { 
+          ...newNote, 
+          eventId: undefined,
+          isSynced: false
+        }
+        setNotes(prevNotes => prevNotes.map(n => n.id === newNote.id ? failedNote : n))
+        setSelectedNote(failedNote)
       }
     } catch (error) {
       console.error("[v0] ❌ Error saving new note to relays:", error)
+      // Update note to show it failed to sync
+      const failedNote = { 
+        ...newNote, 
+        eventId: undefined,
+        isSynced: false
+      }
+      setNotes(prevNotes => prevNotes.map(n => n.id === newNote.id ? failedNote : n))
+      setSelectedNote(failedNote)
     }
 
     console.log("[v0] New note created:", newNote.id)
