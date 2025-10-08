@@ -179,11 +179,34 @@ export async function loadEncryptedNotes(pubkey: string): Promise<DecryptedNote[
     }
 
     console.log("[v0] Found stored data, length:", stored.length)
-    const encryptedStorage = JSON.parse(stored)
-    console.log("[v0] Encrypted storage timestamp:", new Date(encryptedStorage.timestamp).toLocaleString())
     
-    const decryptedData = await decryptData(encryptedStorage.data, encryptedStorage.iv, pubkey)
-    const notes = JSON.parse(decryptedData)
+    let encryptedStorage
+    try {
+      encryptedStorage = JSON.parse(stored)
+      console.log("[v0] Encrypted storage timestamp:", new Date(encryptedStorage.timestamp).toLocaleString())
+    } catch (parseError) {
+      console.error("[v0] Error parsing stored data:", parseError)
+      return []
+    }
+    
+    let decryptedData
+    try {
+      console.log("[v0] Attempting to decrypt data...")
+      decryptedData = await decryptData(encryptedStorage.data, encryptedStorage.iv, pubkey)
+      console.log("[v0] Decryption successful, data length:", decryptedData.length)
+    } catch (decryptError) {
+      console.error("[v0] Error decrypting data:", decryptError)
+      return []
+    }
+    
+    let notes
+    try {
+      notes = JSON.parse(decryptedData)
+      console.log("[v0] JSON parsing successful")
+    } catch (jsonError) {
+      console.error("[v0] Error parsing decrypted JSON:", jsonError)
+      return []
+    }
 
     console.log("[v0] Raw decrypted notes:", notes.length)
     console.log("[v0] Raw note IDs:", notes.map((n: any) => n.id))
