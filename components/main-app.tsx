@@ -183,27 +183,30 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   }
 
   useEffect(() => {
-    // TEMPORARILY DISABLED to fix loading issue
-    // Set up sync queue event handlers
-    // onSyncTaskCompleted((result) => {
-    //   console.log('[SyncQueue] Task completed:', result.taskId, result.success ? 'SUCCESS' : 'FAILED');
-    //   
-    //   if (result.success && result.eventId) {
-    //     // Update note with eventId
-    //     setNotes(prevNotes => 
-    //       prevNotes.map(note => 
-    //         note.id === result.taskId 
-    //           ? { ...note, eventId: result.eventId }
-    //           : note
-    //       )
-    //     );
-    //   }
-    // });
+    // Set up sync queue event handlers with error protection
+    try {
+      onSyncTaskCompleted((result) => {
+        console.log('[SyncQueue] Task completed:', result.taskId, result.success ? 'SUCCESS' : 'FAILED');
+        
+        if (result.success && result.eventId) {
+          // Update note with eventId
+          setNotes(prevNotes => 
+            prevNotes.map(note => 
+              note.id === result.taskId 
+                ? { ...note, eventId: result.eventId }
+                : note
+            )
+          );
+        }
+      });
 
-    // onSyncTaskFailed((task, error) => {
-    //   console.error('[SyncQueue] Task failed:', task.id, error);
-    //   // Could show user notification here
-    // });
+      onSyncTaskFailed((task, error) => {
+        console.error('[SyncQueue] Task failed:', task.id, error);
+        // Could show user notification here
+      });
+    } catch (error) {
+      console.warn('[SyncQueue] Error setting up event handlers:', error);
+    }
 
     // DISABLED - This causes loading issues
     // const statsInterval = setInterval(() => {
@@ -222,14 +225,13 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       
       try {
         // Initialize persistent relay pool for better performance
-        // TEMPORARILY DISABLED to fix loading issue
-        // try {
-        //   await initializePersistentRelayPool()
-        //   console.log("[v0] ✅ Persistent relay pool initialized")
-        // } catch (error) {
-        //   console.error("[v0] ❌ Failed to initialize relay pool:", error)
-        //   // Continue without relay pool - will use individual connections
-        // }
+        try {
+          await initializePersistentRelayPool()
+          console.log("[v0] ✅ Persistent relay pool initialized")
+        } catch (error) {
+          console.error("[v0] ❌ Failed to initialize relay pool:", error)
+          // Continue without relay pool - will use individual connections
+        }
         
         // Set up the active signer for remote authentication
         if (authData.authMethod === 'remote' && authData.sessionData) {
@@ -483,15 +485,15 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     // Save locally immediately
     await saveEncryptedNotes(authData.pubkey, updatedNotes)
 
-    // TEMPORARILY DISABLED - Queue for background sync (non-blocking)
-    // addSyncTask({
-    //   id: newNote.id,
-    //   type: 'save',
-    //   note: newNote,
-    //   authData
-    // })
+    // Queue for background sync (non-blocking)
+    addSyncTask({
+      id: newNote.id,
+      type: 'save',
+      note: newNote,
+      authData
+    })
     
-    console.log("[v0] ✅ New note created:", newNote.title)
+    console.log("[v0] ✅ New note queued for background sync:", newNote.title)
 
     console.log("[v0] New note created:", newNote.id)
   }
@@ -516,15 +518,15 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     const updatedNotes = notes.map((note) => (note.id === updatedNote.id ? optimisticNote : note))
     await saveEncryptedNotes(authData.pubkey, updatedNotes)
 
-    // TEMPORARILY DISABLED - Queue for background sync (non-blocking)
-    // addSyncTask({
-    //   id: optimisticNote.id,
-    //   type: 'save',
-    //   note: optimisticNote,
-    //   authData
-    // })
+    // Queue for background sync (non-blocking)
+    addSyncTask({
+      id: optimisticNote.id,
+      type: 'save',
+      note: optimisticNote,
+      authData
+    })
     
-    console.log("[v0] ✅ Note updated:", optimisticNote.title)
+    console.log("[v0] ✅ Note queued for background sync:", optimisticNote.title)
 
     console.log("[v0] ✅ Note updated and queued for batch sync")
 
