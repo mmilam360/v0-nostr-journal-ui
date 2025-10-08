@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
+// import { Badge } from "@/components/ui/badge" // Badge component doesn't exist
 import { 
   Plus, 
   Save, 
@@ -32,10 +32,18 @@ export function InstantMainApp({ authData, onLogout }: InstantMainAppProps) {
   const [isLoading, setIsLoading] = useState(true)
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
   const [lastLoadTime, setLastLoadTime] = useState<Date | null>(null)
+  const [autoSaveTimer, setAutoSaveTimer] = useState<NodeJS.Timeout | null>(null)
 
   // Load ALL notes from relays instantly on startup - like nostrudel
   useEffect(() => {
     loadAllNotesInstantly()
+    
+    // Cleanup timer on unmount
+    return () => {
+      if (autoSaveTimer) {
+        clearTimeout(autoSaveTimer)
+      }
+    }
   }, [authData])
 
   const loadAllNotesInstantly = async () => {
@@ -99,22 +107,32 @@ export function InstantMainApp({ authData, onLogout }: InstantMainAppProps) {
     setNotes(updatedNotes)
     setSelectedNote(updatedNote)
     
-    // Save to relays instantly (like nostrudel)
-    try {
-      const result = await saveNoteInstantly(updatedNote, authData)
-      if (result.success) {
-        // Update with eventId
-        const finalNote = { ...updatedNote, eventId: result.eventId, lastSynced: new Date() }
-        const finalNotes = notes.map(n => n.id === updatedNote.id ? finalNote : n)
-        setNotes(finalNotes)
-        setSelectedNote(finalNote)
-        console.log("[InstantApp] ✅ Note saved to relays instantly")
-      } else {
-        console.error("[InstantApp] Failed to save to relays:", result.error)
-      }
-    } catch (error) {
-      console.error("[InstantApp] Error saving to relays:", error)
+    // Clear existing timer
+    if (autoSaveTimer) {
+      clearTimeout(autoSaveTimer)
     }
+    
+    // Set new timer for 3-second debounced save
+    const timer = setTimeout(async () => {
+      try {
+        console.log("[InstantApp] Auto-saving after 3 seconds of inactivity...")
+        const result = await saveNoteInstantly(updatedNote, authData)
+        if (result.success) {
+          // Update with eventId
+          const finalNote = { ...updatedNote, eventId: result.eventId, lastSynced: new Date() }
+          const finalNotes = notes.map(n => n.id === updatedNote.id ? finalNote : n)
+          setNotes(finalNotes)
+          setSelectedNote(finalNote)
+          console.log("[InstantApp] ✅ Note auto-saved to relays")
+        } else {
+          console.error("[InstantApp] Failed to auto-save to relays:", result.error)
+        }
+      } catch (error) {
+        console.error("[InstantApp] Error auto-saving to relays:", error)
+      }
+    }, 3000) // 3 seconds
+    
+    setAutoSaveTimer(timer)
   }
 
   const deleteNote = async (noteToDelete: Note) => {
@@ -140,6 +158,32 @@ export function InstantMainApp({ authData, onLogout }: InstantMainAppProps) {
   const refreshFromRelays = async () => {
     console.log("[InstantApp] Refreshing from relays...")
     await loadAllNotesInstantly()
+  }
+
+  const saveNow = async () => {
+    if (!selectedNote) return
+    
+    // Clear timer and save immediately
+    if (autoSaveTimer) {
+      clearTimeout(autoSaveTimer)
+      setAutoSaveTimer(null)
+    }
+    
+    try {
+      console.log("[InstantApp] Manual save requested...")
+      const result = await saveNoteInstantly(selectedNote, authData)
+      if (result.success) {
+        const finalNote = { ...selectedNote, eventId: result.eventId, lastSynced: new Date() }
+        const finalNotes = notes.map(n => n.id === selectedNote.id ? finalNote : n)
+        setNotes(finalNotes)
+        setSelectedNote(finalNote)
+        console.log("[InstantApp] ✅ Note manually saved to relays")
+      } else {
+        console.error("[InstantApp] Failed to manually save to relays:", result.error)
+      }
+    } catch (error) {
+      console.error("[InstantApp] Error manually saving to relays:", error)
+    }
   }
 
   if (isLoading) {
@@ -264,11 +308,20 @@ export function InstantMainApp({ authData, onLogout }: InstantMainAppProps) {
                   
                   <div className="flex items-center gap-2">
                     {selectedNote.eventId && (
-                      <Badge variant="secondary" className="text-xs">
+                      <div className="inline-flex items-center px-2 py-1 rounded-md bg-secondary text-secondary-foreground text-xs">
                         <Cloud className="h-3 w-3 mr-1" />
                         On Relays
-                      </Badge>
+                      </div>
                     )}
+                    
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={saveNow}
+                      title="Save now (auto-saves after 3 seconds)"
+                    >
+                      <Save className="h-4 w-4" />
+                    </Button>
                     
                     <Button
                       size="sm"
