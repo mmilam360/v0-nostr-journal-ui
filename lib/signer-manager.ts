@@ -4,53 +4,32 @@
  */
 
 import type { AuthData } from "@/components/main-app"
-
-let remoteSigner: any = null
-let signerPool: any = null
-let currentAuthData: AuthData | null = null
+import { getActiveSigner, signWithActiveSigner, resumeNip46Session, setActiveSigner } from './signer-connector'
 
 /**
  * Initialize or get the persistent remote signer
  */
 export async function getRemoteSigner(authData: AuthData) {
-  // If we already have a signer for this user, return it
-  if (remoteSigner && currentAuthData?.pubkey === authData.pubkey) {
-    console.log("[SignerManager] ✅ Using existing signer connection")
-    return remoteSigner
-  }
-
-  // Clean up old signer if user changed
-  if (remoteSigner) {
-    console.log("[SignerManager] 🔄 User changed, cleaning up old signer")
-    await cleanupSigner()
-  }
-
-  console.log("[SignerManager] 🔌 Initializing new remote signer connection...")
-
-  const { SimplePool } = await import("nostr-tools/pool")
-  const { BunkerSigner } = await import("nostr-tools/nip46")
-
-  // Create persistent pool
-  signerPool = new SimplePool()
-
+  console.log("[SignerManager] 🔌 Getting remote signer...")
+  
   try {
-    // Create signer from stored URI - this automatically connects
-    remoteSigner = await BunkerSigner.fromURI(
-      authData.clientSecretKey!,
-      authData.bunkerUri!,
-      {
-        pool: signerPool,
-        timeout: 60000,
-      }
-    )
-
-    currentAuthData = authData
-    console.log("[SignerManager] ✅ Remote signer connected and ready")
-
-    return remoteSigner
+    // Try to get existing active signer first
+    let signer = getActiveSigner()
+    
+    if (!signer && authData.sessionData) {
+      // Try to resume from saved session
+      console.log("[SignerManager] 🔄 Resuming from saved session...")
+      signer = await resumeNip46Session(authData.sessionData)
+    }
+    
+    if (!signer) {
+      throw new Error('No active signer available. Please reconnect.')
+    }
+    
+    console.log("[SignerManager] ✅ Remote signer ready")
+    return signer
   } catch (error) {
-    console.error("[SignerManager] ❌ Failed to initialize signer:", error)
-    await cleanupSigner()
+    console.error("[SignerManager] ❌ Failed to get signer:", error)
     throw new Error(`Failed to connect to remote signer: ${error instanceof Error ? error.message : "Unknown error"}`)
   }
 }
@@ -59,11 +38,12 @@ export async function getRemoteSigner(authData: AuthData) {
  * Sign an event using the remote signer
  */
 export async function signEventWithRemote(unsignedEvent: any, authData: AuthData) {
-  console.log("[SignerManager] 📝 Signing event...")
+  console.log("[SignerManager] 📝 Signing event with remote signer...")
   
   try {
-    const signer = await getRemoteSigner(authData)
-    const signedEvent = await signer.signEvent(unsignedEvent)
+    // Use the active signer from nostr-signer-connector
+    const signedEvent = await signWithActiveSigner(unsignedEvent)
+    
     console.log("[SignerManager] ✅ Event signed successfully")
     return signedEvent
   } catch (error) {
@@ -142,32 +122,18 @@ export async function decryptWithRemote(ciphertext: string, senderPubkey: string
  * Clean up signer connection
  */
 export async function cleanupSigner() {
-  console.log("[SignerManager] 🧹 Cleaning up signer connection...")
+  console.log("[SignerManager] 🧹 Cleaning up signer...")
   
-  if (remoteSigner) {
-    try {
-      await remoteSigner.close()
-    } catch (e) {
-      console.warn("[SignerManager] ⚠️ Error closing signer:", e)
-    }
-    remoteSigner = null
-  }
-
-  if (signerPool && currentAuthData?.relays) {
-    try {
-      signerPool.close(currentAuthData.relays)
-    } catch (e) {
-      console.warn("[SignerManager] ⚠️ Error closing pool:", e)
-    }
-    signerPool = null
-  }
-
-  currentAuthData = null
+  // The nostr-signer-connector handles cleanup automatically
+  // Just clear from memory
+  const { clearActiveSigner } = await import('./signer-connector');
+  clearActiveSigner();
 }
 
 /**
  * Check if signer is ready
  */
 export function isSignerReady(): boolean {
-  return remoteSigner !== null && currentAuthData !== null
+  const signer = getActiveSigner();
+  return signer !== null;
 }

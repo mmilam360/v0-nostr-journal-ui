@@ -6,7 +6,8 @@ import { useToast } from "@/hooks/use-toast"
 import CreateAccountModal from "@/components/create-account-modal"
 import { NostrConnectManager } from "@/components/nostr-connect-manager"
 import { BunkerLoginPage } from "@/components/bunker-login-page"
-import BunkerUrlInput from "@/components/bunker-url-input"
+import BunkerUrlConnector from "@/components/bunker-url-connector"
+import { setActiveSigner } from "@/lib/signer-connector"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
 interface UnifiedLoginScreenProps {
@@ -219,11 +220,13 @@ export default function UnifiedLoginScreen({
 
         {showBunkerUrlInput && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
-            <div className="relative w-full max-w-md rounded-lg bg-slate-800 p-6 shadow-lg">
-              <BunkerUrlInput
+            <div className="relative w-full max-w-md rounded-lg bg-slate-800 shadow-lg">
+              <BunkerUrlConnector
                 onConnectSuccess={async (result) => {
-                  console.log('[UnifiedLogin] Bunker URL connection successful:', result);
-                  await onBunkerConnect(result);
+                  console.log('[UnifiedLogin] Bunker URL connection successful:', result.pubkey);
+                  // Set the active signer for the session
+                  setActiveSigner(result.sessionData);
+                  await onBunkerConnect({ pubkey: result.pubkey });
                 }}
                 onClose={() => setShowBunkerUrlInput(false)}
               />
