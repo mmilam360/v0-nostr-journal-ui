@@ -388,12 +388,7 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
                 </div>
               )}
               
-              {note.syncStatus === 'syncing' && (
-                <div className="flex items-center gap-1 text-blue-600 dark:text-blue-400">
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                  <span>Syncing...</span>
-                </div>
-              )}
+              {/* Individual note sync status removed - using global sync */}
             </div>
             
             {/* Event ID with actions - Show for notes WITH eventId */}

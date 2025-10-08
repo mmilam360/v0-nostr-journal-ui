@@ -54,7 +54,7 @@ import { ThemeToggle } from "@/components/theme-toggle"
 import { getDefaultRelays } from "@/lib/relay-manager"
 import { DonationModal } from "@/components/donation-modal-proper"
 import { setActiveSigner } from "@/lib/signer-connector"
-import { createBatchOperationsManager, type BatchOperation } from "@/lib/batch-operations"
+import { createGlobalSyncManager, type GlobalSyncManager } from "@/lib/global-sync-manager"
 
 export interface Note {
   id: string
@@ -64,8 +64,6 @@ export interface Note {
   createdAt: Date
   lastModified: Date
   lastSynced?: Date
-  syncStatus?: "local" | "syncing" | "synced" | "error"
-  syncError?: string
   eventId?: string // Nostr event ID for verification
   eventKind?: number // Track which kind was used (30078 or 31078)
 }
@@ -119,159 +117,17 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   const [displayName, setDisplayName] = useState<string>("")
   const [showDonationModal, setShowDonationModal] = useState(false)
   
-  // Batch operations manager
-  const [batchManager] = useState(() => 
-    createBatchOperationsManager(async (operations: BatchOperation[]) => {
-      console.log("[MainApp] Processing batch of operations:", operations)
-      await processBatchOperations(operations)
-    })
+  // Global sync manager
+  const [globalSyncManager] = useState<GlobalSyncManager>(() => 
+    createGlobalSyncManager(
+      authData,
+      (updatedNotes) => setNotes(updatedNotes),
+      (updatedDeletedNotes) => setDeletedNotes(updatedDeletedNotes),
+      (status) => setSyncStatus(status as any)
+    )
   )
 
-  /**
-   * Process a batch of operations
-   */
-  const processBatchOperations = async (operations: BatchOperation[]) => {
-    console.log("[MainApp] 🔄 Processing batch of", operations.length, "operations")
-    setSyncStatus("syncing")
-
-    // Update individual note sync statuses to "syncing"
-    setNotes(prevNotes => prevNotes.map(note => {
-      const hasOperation = operations.some(op => 
-        (op.type === 'update' && op.note?.id === note.id) ||
-        (op.type === 'create' && op.note?.id === note.id)
-      )
-      return hasOperation ? { ...note, syncStatus: "syncing" as const } : note
-    }))
-
-    try {
-      // Group operations by type for efficient processing
-      const creates = operations.filter(op => op.type === 'create')
-      const updates = operations.filter(op => op.type === 'update')
-      const deletes = operations.filter(op => op.type === 'delete')
-
-      // Process creates
-      for (const operation of creates) {
-        if (operation.note) {
-          try {
-            const result = await saveAndSyncNote(operation.note, authData)
-            console.log("[MainApp] Create result:", result.success, result.note.eventId)
-            setNotes(prevNotes => prevNotes.map(n => 
-              n.id === operation.note.id ? {
-                ...result.note, // Use the complete result.note which includes eventId and proper syncStatus
-                syncStatus: result.success ? "synced" as const : "error" as const,
-                syncError: result.success ? undefined : result.error
-              } : n
-            ))
-            
-            // Update selectedNote if it's the same note
-            if (selectedNote && selectedNote.id === operation.note.id) {
-              setSelectedNote({
-                ...result.note,
-                syncStatus: result.success ? "synced" as const : "error" as const,
-                syncError: result.success ? undefined : result.error
-              })
-            }
-          } catch (error) {
-            console.error("[MainApp] Failed to create note:", error)
-            setNotes(prevNotes => prevNotes.map(n => 
-              n.id === operation.note.id ? {
-                ...n,
-                syncStatus: "error" as const,
-                syncError: error instanceof Error ? error.message : "Sync failed"
-              } : n
-            ))
-          }
-        }
-      }
-
-      // Process updates
-      for (const operation of updates) {
-        if (operation.note) {
-          try {
-            const result = await saveAndSyncNote(operation.note, authData)
-            console.log("[MainApp] Update result:", result.success, result.note.eventId)
-            setNotes(prevNotes => prevNotes.map(n => 
-              n.id === operation.note.id ? {
-                ...result.note, // Use the complete result.note which includes eventId and proper syncStatus
-                syncStatus: result.success ? "synced" as const : "error" as const,
-                syncError: result.success ? undefined : result.error
-              } : n
-            ))
-            
-            // Update selectedNote if it's the same note
-            if (selectedNote && selectedNote.id === operation.note.id) {
-              setSelectedNote({
-                ...result.note,
-                syncStatus: result.success ? "synced" as const : "error" as const,
-                syncError: result.success ? undefined : result.error
-              })
-            }
-          } catch (error) {
-            console.error("[MainApp] Failed to update note:", error)
-            setNotes(prevNotes => prevNotes.map(n => 
-              n.id === operation.note.id ? {
-                ...n,
-                syncStatus: "error" as const,
-                syncError: error instanceof Error ? error.message : "Sync failed"
-              } : n
-            ))
-          }
-        }
-      }
-
-      // Process deletes (these are fallback deletions that failed immediate processing)
-      if (deletes.length > 0) {
-        try {
-          const deletedNoteIds = deletes.map(op => op.noteId).filter(Boolean)
-          const updatedDeletedNotes = [
-            ...deletedNotes,
-            ...deletedNoteIds.map(id => ({ id, deletedAt: new Date() }))
-          ]
-          setDeletedNotes(updatedDeletedNotes)
-
-          // Process remaining deletions that failed immediate processing
-          const notesToDelete = notes.filter(note => deletedNoteIds.includes(note.id))
-          
-          for (const noteToDelete of notesToDelete) {
-            try {
-              if (noteToDelete.eventId) {
-                // Import deleteNoteOnNostr directly
-                const { deleteNoteOnNostr } = await import('@/lib/nostr-storage')
-                await deleteNoteOnNostr(noteToDelete, authData)
-                console.log("[MainApp] ✅ Deleted fallback note on Nostr:", noteToDelete.title)
-              } else {
-                console.log("[MainApp] Note has no eventId, skipping Nostr deletion:", noteToDelete.title)
-              }
-            } catch (error) {
-              console.error("[MainApp] Failed to delete note on Nostr:", error)
-            }
-          }
-        } catch (error) {
-          console.error("[MainApp] Failed to process deletes:", error)
-        }
-      }
-
-      setSyncStatus("synced")
-      setLastSyncTime(new Date())
-      console.log("[MainApp] ✅ Batch processing complete")
-    } catch (error) {
-      console.error("[MainApp] ❌ Batch processing failed:", error)
-      setSyncStatus("error")
-      
-      // Mark all notes in the batch as error
-      setNotes(prevNotes => prevNotes.map(note => {
-        const hasOperation = operations.some(op => 
-          (op.type === 'update' && op.note?.id === note.id) ||
-          (op.type === 'create' && op.note?.id === note.id)
-        )
-        return hasOperation ? { 
-          ...note, 
-          syncStatus: "error" as const,
-          syncError: "Batch processing failed"
-        } : note
-      }))
-    }
-  }
+  // Simplified sync operations using global sync manager
 
   const retryConnection = async () => {
     console.log("[v0] 🔄 Retrying connection...")
@@ -279,10 +135,10 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     setSyncStatus("syncing")
 
     try {
-      // CRITICAL: Flush any pending batch operations (especially deletes) before syncing
-      console.log("[v0] Flushing pending batch operations before retry...")
-      await batchManager.flush()
-      console.log("[v0] Batch operations flushed, proceeding with retry")
+      // CRITICAL: Process any pending global sync operations before syncing
+      console.log("[v0] Processing pending global sync operations before retry...")
+      await globalSyncManager.processSync()
+      console.log("[v0] Global sync operations processed, proceeding with retry")
 
       const syncResult = await smartSyncNotes(notes, deletedNotes, authData)
 
@@ -564,7 +420,6 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       tags: [],
       createdAt: now,
       lastModified: now,
-      syncStatus: "syncing",
     }
 
     // Add to UI immediately
@@ -575,8 +430,8 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     // Save locally immediately
     await saveEncryptedNotes(authData.pubkey, updatedNotes)
 
-    // Add to batch operations for sync
-    batchManager.addOperation({
+    // Add to global sync manager
+    globalSyncManager.addOperation({
       type: 'create',
       note: newNote
     })
@@ -591,7 +446,6 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     const optimisticNote = {
       ...updatedNote,
       lastModified: new Date(),
-      syncStatus: "syncing" as const,
     }
 
     setNotes(notes.map((note) => (note.id === updatedNote.id ? optimisticNote : note)))
@@ -601,8 +455,8 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     const updatedNotes = notes.map((note) => (note.id === updatedNote.id ? optimisticNote : note))
     await saveEncryptedNotes(authData.pubkey, updatedNotes)
 
-    // Add to batch operations for sync
-    batchManager.addOperation({
+    // Add to global sync manager
+    globalSyncManager.addOperation({
       type: 'update',
       note: optimisticNote
     })
@@ -662,7 +516,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
 
     // Flush any pending batch operations
     try {
-      await batchManager.flush()
+      await globalSyncManager.processSync()
       console.log("[v0] Flushed pending batch operations")
     } catch (error) {
       console.error("[v0] Error flushing batch operations:", error)
@@ -757,8 +611,8 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       console.error("[v0] Failed to delete note on Nostr immediately:", error)
       setSyncStatus("error")
       
-      // Fallback to batch processing if immediate deletion fails
-      batchManager.addOperation({
+      // Fallback to global sync manager if immediate deletion fails
+      globalSyncManager.addOperation({
         type: 'delete',
         noteId: noteToDelete.id
       })
@@ -889,10 +743,10 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     setSyncStatus("syncing")
 
     try {
-      // CRITICAL: Flush any pending batch operations (especially deletes) before syncing
-      console.log("[v0] Flushing pending batch operations before sync...")
-      await batchManager.flush()
-      console.log("[v0] Batch operations flushed, proceeding with sync")
+      // CRITICAL: Process any pending global sync operations before syncing
+      console.log("[v0] Processing pending global sync operations before sync...")
+      await globalSyncManager.processSync()
+      console.log("[v0] Global sync operations processed, proceeding with sync")
 
       const syncResult = await smartSyncNotes(notes, deletedNotes, authData)
 
