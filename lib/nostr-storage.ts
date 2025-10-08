@@ -6,6 +6,7 @@ import type { DecryptedNote } from "./nostr-crypto"
 import { getSmartRelayList, getRelays } from "./relay-manager"
 import { signEventWithRemote } from "./signer-manager"
 import { eventCache, getCachedOrFetchBatch } from "./event-cache"
+import { dedupeRelayFetch } from "./request-deduplicator"
 
 // ===================================================================================
 // RELAY PUBLISHING: Proper WebSocket handling with OK response verification
@@ -316,10 +317,15 @@ async function getCurrentRelays(): Promise<string[]> {
 export const fetchAllNotesFromNostr = async (authData: any): Promise<DecryptedNote[]> => {
   if (!authData?.pubkey) return []
 
-  const fetcher = NostrFetcher.init()
-  try {
-    const relays = await getCurrentRelays()
-    console.log("[v0] 📡 Fetching notes from relays:", relays)
+  // Use request deduplication to avoid duplicate fetches
+  return dedupeRelayFetch(
+    await getCurrentRelays(),
+    [{ kinds: [30078], authors: [authData.pubkey] }],
+    async () => {
+      const fetcher = NostrFetcher.init()
+      try {
+        const relays = await getCurrentRelays()
+        console.log("[v0] 📡 Fetching notes from relays:", relays)
 
     // Step 1: Fetch note events (kind 30078) with caching
     const cacheKey = `events_${authData.pubkey}_30078`
@@ -478,15 +484,17 @@ export const fetchAllNotesFromNostr = async (authData: any): Promise<DecryptedNo
       }
     }
 
-    return []
-  } finally {
-    try {
-      fetcher.shutdown()
-    } catch (shutdownError) {
-      // Silently ignore shutdown errors - relay may already be disconnected
-      // This prevents "failed to close subscription" errors from polluting logs
+        return []
+      } finally {
+        try {
+          fetcher.shutdown()
+        } catch (shutdownError) {
+          // Silently ignore shutdown errors - relay may already be disconnected
+          // This prevents "failed to close subscription" errors from polluting logs
+        }
+      }
     }
-  }
+  )
 }
 
 // Saves a SINGLE note as its own event
