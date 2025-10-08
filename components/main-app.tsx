@@ -216,32 +216,32 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     const loadUserNotes = async () => {
       console.log("[v0] Loading notes for user:", authData.pubkey)
       
-      // Initialize persistent relay pool for better performance
-      try {
-        await initializePersistentRelayPool()
-        console.log("[v0] ✅ Persistent relay pool initialized")
-      } catch (error) {
-        console.error("[v0] ❌ Failed to initialize relay pool:", error)
-        // Continue without relay pool - will use individual connections
-      }
-      
-      // Set up the active signer for remote authentication
-      if (authData.authMethod === 'remote' && authData.sessionData) {
-        console.log("[v0] Setting up remote signer from session data")
-        try {
-          const { resumeNip46Session } = await import('@/lib/signer-connector')
-          await resumeNip46Session(authData.sessionData)
-          console.log("[v0] ✅ Remote signer resumed successfully")
-        } catch (error) {
-          console.error("[v0] ❌ Failed to resume remote signer:", error)
-          // Continue without remote signer - user can reconnect
-        }
-      }
-      
       setIsLoading(true)
       setSyncStatus("syncing")
-
+      
       try {
+        // Initialize persistent relay pool for better performance
+        try {
+          await initializePersistentRelayPool()
+          console.log("[v0] ✅ Persistent relay pool initialized")
+        } catch (error) {
+          console.error("[v0] ❌ Failed to initialize relay pool:", error)
+          // Continue without relay pool - will use individual connections
+        }
+        
+        // Set up the active signer for remote authentication
+        if (authData.authMethod === 'remote' && authData.sessionData) {
+          console.log("[v0] Setting up remote signer from session data")
+          try {
+            const { resumeNip46Session } = await import('@/lib/signer-connector')
+            await resumeNip46Session(authData.sessionData)
+            console.log("[v0] ✅ Remote signer resumed successfully")
+          } catch (error) {
+            console.error("[v0] ❌ Failed to resume remote signer:", error)
+            // Continue without remote signer - user can reconnect
+          }
+        }
+
         // Load from local storage first
         const rawLocalNotes = await loadEncryptedNotes(authData.pubkey)
         console.log("[v0] Raw local notes loaded:", rawLocalNotes.length)
@@ -272,7 +272,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
           const validatedSyncNotes = sanitizeNotes(syncResult.notes)
 
           // CRITICAL: Only update if we got valid notes
-          if (validatedSyncNotes.length > 0 || notesWithStatus.length === 0) {
+          if (validatedSyncNotes.length > 0 || validatedNotes.length === 0) {
             setNotes(validatedSyncNotes)
         setDeletedNotes(syncResult.deletedNotes)
         setSyncStatus(syncResult.synced ? "synced" : "error")
@@ -317,8 +317,20 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       }
     }
 
+    // Add timeout to prevent infinite loading
+    const loadTimeout = setTimeout(() => {
+      console.warn("[v0] Load timeout reached, forcing completion")
+      setIsLoading(false)
+      setSyncStatus("error")
+      setConnectionError("Loading timeout - please refresh")
+    }, 30000) // 30 second timeout
+
     if (authData.pubkey) {
-      loadUserNotes()
+      loadUserNotes().finally(() => {
+        clearTimeout(loadTimeout)
+      })
+    } else {
+      clearTimeout(loadTimeout)
     }
     
     // Cleanup relay pool on unmount
