@@ -22,6 +22,7 @@ import {
   Check
 } from 'lucide-react'
 import { generateSecretKey, getPublicKey, nip19 } from 'nostr-tools'
+import Nip46Connect from './nip46-connect'
 import { bytesToHex } from '@noble/hashes/utils'
 import { QRCodeSVG } from 'qrcode.react'
 import InfoModal from './info-modal'
@@ -59,6 +60,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
   const [nsecInput, setNsecInput] = useState<string>("")
   const [showNsec, setShowNsec] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [showNip46Connect, setShowNip46Connect] = useState(false)
   
   // Cache keypair for session to avoid generating new npub each time
   const [sessionKeypair, setSessionKeypair] = useState<{
@@ -1076,11 +1078,18 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                         </p>
                         <div className="space-y-3">
                           <Button 
+                            onClick={() => setShowNip46Connect(true)}
+                            className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                          >
+                            <QrCode className="w-5 h-5 mr-2" />
+                            Connect with Signing App
+                          </Button>
+                          <Button 
                             onClick={startBunkerLogin}
                             className="w-full bg-purple-600 hover:bg-purple-700 text-white"
                           >
                             <QrCode className="w-5 h-5 mr-2" />
-                            Scan QR Code (nsec.app, Amber)
+                            Legacy QR Code (nsec.app)
                           </Button>
                           <Button 
                             onClick={() => setRemoteSignerMode('nostrconnect')}
@@ -1282,6 +1291,33 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
           setSelectedPath('new')
           setCurrentStep('method')
         }} />
+      )}
+
+      {/* NIP-46 Connect Modal */}
+      {showNip46Connect && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
+          <div className="relative w-full max-w-md rounded-lg bg-slate-800 p-6 shadow-lg">
+            <Nip46Connect
+              onConnectSuccess={async (result) => {
+                console.log('[LoginPage] NIP-46 connection successful:', result);
+                // Convert Uint8Array to hex string for storage
+                const clientSecretKeyHex = Array.from(result.clientSecretKey)
+                  .map(b => b.toString(16).padStart(2, '0'))
+                  .join('');
+                
+                onLoginSuccess({
+                  pubkey: result.pubkey,
+                  authMethod: 'remote',
+                  clientSecretKey: clientSecretKeyHex,
+                  bunkerUri: result.bunkerUri,
+                  bunkerPubkey: result.pubkey,
+                  relays: ['wss://relay.nsec.app', 'wss://relay.damus.io', 'wss://nos.lol']
+                });
+              }}
+              onClose={() => setShowNip46Connect(false)}
+            />
+          </div>
+        </div>
       )}
     </>
   )
