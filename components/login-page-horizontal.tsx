@@ -50,6 +50,93 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
   const [selectedPath, setSelectedPath] = useState<'existing' | 'new' | null>(null)
   const [selectedMethod, setSelectedMethod] = useState<'extension' | 'remote' | 'nsec' | null>(null)
   const [showInfo, setShowInfo] = useState(false)
+
+  // Plebeian Market style bunker connection
+  const handleBunkerConnect = async () => {
+    if (!bunkerUrl) return
+
+    setConnectionState('connecting')
+    setError('')
+
+    try {
+      console.log('[BunkerConnect] 🔌 Starting Plebeian Market style connection...')
+      console.log('[BunkerConnect] 📱 Bunker URL:', bunkerUrl.substring(0, 50) + '...')
+
+      // Generate client keypair if not already done
+      let appSecretKey: Uint8Array
+      if (sessionKeypair?.appSecretKey) {
+        appSecretKey = sessionKeypair.appSecretKey
+      } else {
+        const { generateSecretKey } = await import("nostr-tools/pure")
+        appSecretKey = generateSecretKey()
+      }
+
+      // Use Plebeian Market's approach with BunkerSigner.fromURI
+      const { BunkerSigner } = await import("nostr-tools/nip46")
+      const { SimplePool } = await import("nostr-tools/pool")
+
+      console.log('[BunkerConnect] 🔑 Using BunkerSigner.fromURI...')
+      
+      const pool = new SimplePool()
+      
+      // This is the key - use BunkerSigner.fromURI like Plebeian Market
+      const signer = await BunkerSigner.fromURI(
+        appSecretKey,
+        bunkerUrl,
+        {
+          pool,
+          timeout: 60000  // 60 seconds timeout
+        }
+      )
+
+      console.log('[BunkerConnect] ✅ BunkerSigner connected!')
+
+      // Get the user's public key
+      const userPubkey = await signer.getPublicKey()
+      console.log('[BunkerConnect] 👤 Got user pubkey:', userPubkey)
+
+      setConnectionState('success')
+
+      // Convert Uint8Array to hex string for storage
+      const clientSecretKeyHex = Array.from(appSecretKey)
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('')
+
+      // Call success callback with Plebeian Market style data
+      setTimeout(() => {
+        onLoginSuccess({
+          pubkey: userPubkey,
+          authMethod: 'remote',
+          clientSecretKey: clientSecretKeyHex,
+          bunkerUri: bunkerUrl,
+          bunkerPubkey: userPubkey,
+          relays: ['wss://relay.nostr.band', 'wss://relay.damus.io', 'wss://nos.lol']
+        })
+      }, 1500)
+
+    } catch (error) {
+      console.error('[BunkerConnect] ❌ Connection failed:', error)
+      setConnectionState('error')
+      
+      let errorMsg = 'Failed to connect. '
+      
+      if (error instanceof Error) {
+        if (error.message.includes('timeout')) {
+          errorMsg += 'Connection timed out. Ensure your signing app is open and connected to the internet.'
+        } else if (error.message.includes('relay')) {
+          errorMsg += 'Could not connect to relay. Check your internet connection.'
+        } else if (error.message.includes('secret')) {
+          errorMsg += 'Invalid bunker URL or secret. Please generate a new one in your signing app.'
+        } else {
+          errorMsg += error.message
+        }
+      } else {
+        errorMsg += 'Unknown error occurred.'
+      }
+      
+      setError(errorMsg)
+    }
+  }
   const [generatedKeys, setGeneratedKeys] = useState<GeneratedKeys | null>(null)
   const [hasConfirmedSave, setHasConfirmedSave] = useState(false)
   
@@ -1046,7 +1133,9 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
               </div>
             </div>
           )
-        } else if (selectedPath === 'existing' && selectedMethod) {
+        }
+
+        if (selectedPath === 'existing' && selectedMethod) {
           return (
             <div className="space-y-8">
               <div className="text-center">
@@ -1087,70 +1176,70 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
 
                 {selectedMethod === 'remote' && (
                   <div className="space-y-4">
-                    <div className="space-y-4">
-                      {/* QR Code */}
-                      <div className="flex justify-center">
-                        <div className="w-48 h-48 bg-white rounded-lg flex items-center justify-center p-4">
-                          <QRCodeSVG 
-                            value={bunkerUrl} 
-                            size={180} 
-                            level="M"
-                            includeMargin={true}
-                          />
-                        </div>
+                    {/* QR Code */}
+                    <div className="flex justify-center">
+                      <div className="w-48 h-48 bg-white rounded-lg flex items-center justify-center p-4">
+                        <QRCodeSVG 
+                          value={bunkerUrl} 
+                          size={180} 
+                          level="M"
+                          includeMargin={true}
+                        />
                       </div>
-
-                      {/* Bunker URI Input */}
-                      <div className="space-y-2">
-                        <label className="text-sm text-muted-foreground">
-                          Or paste bunker:// URL:
-                        </label>
-                        <div className="flex gap-2">
-                          <input
-                            type="text"
-                            value={bunkerUrl}
-                            onChange={(e) => setBunkerUrl(e.target.value)}
-                            placeholder="bunker://..."
-                            className="flex-1 px-3 py-2 border rounded-md bg-background text-foreground"
-                          />
-                          <Button
-                            onClick={startBunkerLogin}
-                            disabled={!bunkerUrl || connectionState === 'connecting'}
-                            className="bg-blue-600 hover:bg-blue-700 text-white"
-                          >
-                            {connectionState === 'connecting' ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              'Connect'
-                            )}
-                          </Button>
-                        </div>
-                      </div>
-
-                      {/* Connection Status */}
-                      {connectionState === 'waiting' && (
-                        <div className="flex items-center justify-center space-x-2 text-muted-foreground">
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          <span className="text-sm">Waiting for connection...</span>
-                        </div>
-                      )}
-
-                      {connectionState === 'success' && (
-                        <div className="flex items-center justify-center space-x-2 text-green-600">
-                          <CheckCircle className="h-4 w-4" />
-                          <span className="text-sm">Connected successfully!</span>
-                        </div>
-                      )}
-
-                      {connectionState === 'error' && (
-                        <div className="flex items-center justify-center space-x-2 text-red-600">
-                          <AlertTriangle className="h-4 w-4" />
-                          <span className="text-sm">{error}</span>
-                        </div>
-                      )}
                     </div>
 
-                    {remoteSignerMode === 'bunker' && connectionState === 'waiting' && bunkerUrl && (
+                    {/* Bunker URI Input */}
+                    <div className="space-y-2">
+                      <label className="text-sm text-muted-foreground">
+                        Or paste bunker:// URL:
+                      </label>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={bunkerUrl}
+                          onChange={(e) => setBunkerUrl(e.target.value)}
+                          placeholder="bunker://..."
+                          className="flex-1 px-3 py-2 border rounded-md bg-background text-foreground"
+                        />
+                        <Button
+                          onClick={handleBunkerConnect}
+                          disabled={!bunkerUrl || connectionState === 'connecting'}
+                          className="bg-blue-600 hover:bg-blue-700 text-white"
+                        >
+                          {connectionState === 'connecting' ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            'Connect'
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Connection Status */}
+                    {connectionState === 'waiting' && (
+                      <div className="flex items-center justify-center space-x-2 text-muted-foreground">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span className="text-sm">Waiting for connection...</span>
+                      </div>
+                    )}
+
+                    {connectionState === 'success' && (
+                      <div className="flex items-center justify-center space-x-2 text-green-600">
+                        <CheckCircle className="h-4 w-4" />
+                        <span className="text-sm">Connected successfully!</span>
+                      </div>
+                    )}
+
+                    {connectionState === 'error' && (
+                      <div className="flex items-center justify-center space-x-2 text-red-600">
+                        <AlertTriangle className="h-4 w-4" />
+                        <span className="text-sm">{error}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {selectedMethod === 'nsec' && (
                       <div className="space-y-4">
                         <div className="text-center space-y-2">
                           <p className="text-sm text-muted-foreground">
@@ -1264,6 +1353,8 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
             </div>
           )
         }
+
+        return null
 
       case 'complete':
         return (
