@@ -238,7 +238,19 @@ export const addHighPrioritySyncTask = (task: Omit<SyncTask, 'timestamp' | 'retr
 };
 
 export const getSyncQueueStats = () => {
-  return syncQueue.getStats();
+  try {
+    return syncQueue.getStats();
+  } catch (error) {
+    console.warn('[SyncQueue] Error getting stats:', error);
+    return {
+      queueLength: 0,
+      processing: false,
+      highPriority: 0,
+      normalPriority: 0,
+      lowPriority: 0,
+      retryTasks: 0
+    };
+  }
 };
 
 export const clearSyncQueue = () => {
