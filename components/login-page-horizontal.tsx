@@ -644,8 +644,14 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                             </div>
                             <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3">
                               <p className="text-xs text-blue-700 dark:text-blue-300">
-                                <strong>Tip:</strong> If scanning fails, try copying the connection string and pasting it directly into your signing app.
+                                <strong>Instructions:</strong>
                               </p>
+                              <ol className="text-xs text-blue-700 dark:text-blue-300 space-y-1 list-decimal list-inside mt-1">
+                                <li>Scan QR code or copy connection string</li>
+                                <li>Open your signing app (nsec.app, Alby, etc.)</li>
+                                <li>Paste the connection string if scanning fails</li>
+                                <li>Return to this app and approve the connection</li>
+                              </ol>
                             </div>
                           </div>
                         )}
@@ -692,7 +698,8 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                             <li>Go to "Connections" or "Apps"</li>
                             <li>Create new connection</li>
                             <li>Copy the bunker:// URL</li>
-                            <li>Paste it above</li>
+                            <li>Paste it above and click Connect</li>
+                            <li>Return to nsec.app to approve the connection</li>
                           </ol>
                         </div>
                       </div>

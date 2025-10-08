@@ -53,6 +53,7 @@ import { DiagnosticPage } from "@/components/diagnostic-page"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { getDefaultRelays } from "@/lib/relay-manager"
 import { DonationModal } from "@/components/donation-modal-proper"
+import { setActiveSigner } from "@/lib/signer-connector"
 
 export interface Note {
   id: string
@@ -173,6 +174,13 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   useEffect(() => {
     const loadUserNotes = async () => {
       console.log("[v0] Loading notes for user:", authData.pubkey)
+      
+      // Set up the active signer for remote authentication
+      if (authData.authMethod === 'remote' && authData.sessionData) {
+        console.log("[v0] Setting up remote signer from session data")
+        setActiveSigner(authData.sessionData)
+      }
+      
       setIsLoading(true)
       setSyncStatus("syncing")
 
@@ -897,7 +905,11 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
               {/* Right side */}
               <div className="flex items-center gap-1">
                 {/* Sync status - Desktop */}
-                <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-secondary/50 text-xs">
+                <div 
+                  className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-secondary/50 text-xs cursor-pointer hover:bg-secondary/70 transition-colors"
+                  onClick={handleManualSync}
+                  title="Click to sync manually"
+                >
                   {getSyncStatusIcon()}
                   <span className="text-muted-foreground">{getSyncStatusText()}</span>
                 </div>
