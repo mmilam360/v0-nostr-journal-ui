@@ -23,7 +23,7 @@ import {
   Check
 } from 'lucide-react'
 import { generateSecretKey, getPublicKey, nip19 } from 'nostr-tools'
-import SimpleNostrConnect from './simple-nostr-connect'
+import RemoteSignerConnect from './remote-signer-connect'
 import { bytesToHex } from '@noble/hashes/utils'
 import { QRCodeSVG } from 'qrcode.react'
 import InfoModal from './info-modal'
@@ -61,7 +61,6 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
   const [nsecInput, setNsecInput] = useState<string>("")
   const [showNsec, setShowNsec] = useState(false)
   const [copied, setCopied] = useState(false)
-  const [showSimpleConnect, setShowSimpleConnect] = useState(false)
   
   // Cache keypair for session to avoid generating new npub each time
   const [sessionKeypair, setSessionKeypair] = useState<{
@@ -1079,7 +1078,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                         </p>
                         <div className="space-y-3">
                           <Button 
-                            onClick={() => setShowSimpleConnect(true)}
+                            onClick={() => setRemoteSignerMode('connect')}
                             className="w-full bg-blue-600 hover:bg-blue-700 text-white"
                           >
                             <QrCode className="w-5 h-5 mr-2" />
@@ -1087,6 +1086,22 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                           </Button>
                         </div>
                       </>
+                    )}
+
+                    {remoteSignerMode === 'connect' && (
+                      <RemoteSignerConnect 
+                        onSuccess={(result) => {
+                          onLoginSuccess({
+                            pubkey: result.pubkey,
+                            authMethod: 'remote',
+                            clientSecretKey: result.clientSecretKey,
+                            bunkerUri: result.bunkerUri,
+                            bunkerPubkey: result.pubkey,
+                            relays: ['wss://relay.nostr.band', 'wss://relay.damus.io', 'wss://nos.lol']
+                          });
+                        }}
+                        onBack={() => setRemoteSignerMode('select')}
+                      />
                     )}
 
                     {remoteSignerMode === 'bunker' && connectionState === 'waiting' && bunkerUrl && (
@@ -1279,28 +1294,6 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
         }} />
       )}
 
-      {/* Simple Nostr Connect Modal */}
-      {showSimpleConnect && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
-          <div className="relative w-full max-w-md rounded-lg bg-slate-800 p-6 shadow-lg">
-            <SimpleNostrConnect
-              onConnectSuccess={async (result) => {
-                console.log('[LoginPage] Simple connection successful:', result);
-                
-                onLoginSuccess({
-                  pubkey: result.pubkey,
-                  authMethod: 'remote',
-                  clientSecretKey: result.clientSecretKey,
-                  bunkerUri: result.bunkerUri,
-                  bunkerPubkey: result.pubkey,
-                  relays: ['wss://relay.nostr.band', 'wss://relay.damus.io', 'wss://nos.lol']
-                });
-              }}
-              onClose={() => setShowSimpleConnect(false)}
-            />
-          </div>
-        </div>
-      )}
     </>
   )
 }
