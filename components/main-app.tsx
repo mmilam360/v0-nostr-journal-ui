@@ -74,10 +74,11 @@ export interface AuthData {
   nsec?: string
   privateKey?: string // Hex string of private key (for nsec method)
   signer?: any
-  clientSecretKey?: Uint8Array // For remote signer
+  clientSecretKey?: Uint8Array | string // For remote signer (can be Uint8Array or hex string)
   bunkerPubkey?: string // For remote signer
   bunkerUri?: string // For remote signer
   relays?: string[] // For remote signer
+  sessionData?: any // For nostr-signer-connector session management
 }
 
 interface MainAppProps {

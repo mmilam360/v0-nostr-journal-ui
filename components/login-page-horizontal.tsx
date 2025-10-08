@@ -179,13 +179,21 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
         
         setConnectionState('success')
         
+        // Convert session to the format expected by main app
+        const clientSecretKeyHex = session?.clientSecretKey ? 
+          Array.from(session.clientSecretKey).map(b => b.toString(16).padStart(2, '0')).join('') : 
+          Array.from(await generateSecretKey()).map(b => b.toString(16).padStart(2, '0')).join('')
+
         setTimeout(() => {
           onLoginSuccess({
             pubkey: userPubkey,
             authMethod: 'remote',
-            sessionData: session,
             bunkerUri: bunkerUrl,
-            relays: ['wss://relay.nsec.app', 'wss://relay.getalby.com/v1', 'wss://nostr.mutinywallet.com', 'wss://relay.damus.io', 'wss://nos.lol']
+            clientSecretKey: clientSecretKeyHex,
+            bunkerPubkey: userPubkey, // This is the user's pubkey, not signer's
+            relays: ['wss://relay.nsec.app', 'wss://relay.getalby.com/v1', 'wss://nostr.mutinywallet.com', 'wss://relay.damus.io', 'wss://nos.lol'],
+            // Store session data for nostr-signer-connector
+            sessionData: session
           })
         }, 1500)
         
@@ -239,13 +247,21 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
 
         setConnectionState('success')
 
+        // Convert session to the format expected by main app
+        const clientSecretKeyHex = session?.clientSecretKey ? 
+          Array.from(session.clientSecretKey).map(b => b.toString(16).padStart(2, '0')).join('') : 
+          Array.from(await generateSecretKey()).map(b => b.toString(16).padStart(2, '0')).join('')
+
         setTimeout(() => {
           onLoginSuccess({
             pubkey: userPubkey,
             authMethod: 'remote',
-            sessionData: session,
             bunkerUri: connectUri,
-            relays: relays
+            clientSecretKey: clientSecretKeyHex,
+            bunkerPubkey: userPubkey, // This is the user's pubkey, not signer's
+            relays: relays,
+            // Store session data for nostr-signer-connector
+            sessionData: session
           })
         }, 1500)
       }
