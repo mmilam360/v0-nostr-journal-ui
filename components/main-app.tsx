@@ -512,11 +512,33 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       lastModified: new Date(),
     }
 
-    setNotes(notes.map((note) => (note.id === updatedNote.id ? optimisticNote : note)))
-    setSelectedNote(optimisticNote)
+    setNotes(notes.map((note) => {
+      if (note.id === updatedNote.id) {
+        return {
+          ...optimisticNote,
+          eventId: optimisticNote.eventId || note.eventId, // Preserve existing eventId
+          eventKind: optimisticNote.eventKind || note.eventKind // Preserve existing eventKind
+        }
+      }
+      return note
+    }))
+    setSelectedNote({
+      ...optimisticNote,
+      eventId: optimisticNote.eventId || updatedNote.eventId, // Preserve existing eventId
+      eventKind: optimisticNote.eventKind || updatedNote.eventKind // Preserve existing eventKind
+    })
 
-    // Save to local storage immediately
-    const updatedNotes = notes.map((note) => (note.id === updatedNote.id ? optimisticNote : note))
+    // Save to local storage immediately, preserving any existing eventId
+    const updatedNotes = notes.map((note) => {
+      if (note.id === updatedNote.id) {
+        return {
+          ...optimisticNote,
+          eventId: optimisticNote.eventId || note.eventId, // Preserve existing eventId
+          eventKind: optimisticNote.eventKind || note.eventKind // Preserve existing eventKind
+        }
+      }
+      return note
+    })
     await saveEncryptedNotes(authData.pubkey, updatedNotes)
 
     // Queue for background sync (non-blocking)
