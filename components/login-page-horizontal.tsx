@@ -1078,7 +1078,24 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                         </p>
                         <div className="space-y-3">
                           <Button 
-                            onClick={() => setRemoteSignerMode('connect')}
+                            onClick={async () => {
+                              // Generate bunker URL when entering connect mode
+                              try {
+                                const { generateSecretKey, getPublicKey } = await import("nostr-tools/pure")
+                                const appSecretKey = generateSecretKey()
+                                const appPublicKey = getPublicKey(appSecretKey)
+                                const bunkerURI = `bunker://${appPublicKey}?relay=${encodeURIComponent('wss://relay.nostr.band')}`
+                                setBunkerUrl(bunkerURI)
+                                setSessionKeypair({
+                                  appSecretKey,
+                                  appPublicKey,
+                                  secret: Math.random().toString(36).substring(2, 15)
+                                })
+                                setRemoteSignerMode('connect')
+                              } catch (error) {
+                                console.error('Failed to generate bunker URL:', error)
+                              }
+                            }}
                             className="w-full bg-blue-600 hover:bg-blue-700 text-white"
                           >
                             <QrCode className="w-5 h-5 mr-2" />
@@ -1089,19 +1106,79 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                     )}
 
                     {remoteSignerMode === 'connect' && (
-                      <RemoteSignerConnect 
-                        onSuccess={(result) => {
-                          onLoginSuccess({
-                            pubkey: result.pubkey,
-                            authMethod: 'remote',
-                            clientSecretKey: result.clientSecretKey,
-                            bunkerUri: result.bunkerUri,
-                            bunkerPubkey: result.pubkey,
-                            relays: ['wss://relay.nostr.band', 'wss://relay.damus.io', 'wss://nos.lol']
-                          });
-                        }}
-                        onBack={() => setRemoteSignerMode('select')}
-                      />
+                      <div className="space-y-4">
+                        {/* Back Button */}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setRemoteSignerMode('select')}
+                          className="text-muted-foreground hover:text-foreground p-2 -ml-2"
+                        >
+                          <ArrowLeft className="h-4 w-4 mr-1" />
+                          Back
+                        </Button>
+
+                        {/* QR Code */}
+                        <div className="flex justify-center">
+                          <div className="w-48 h-48 bg-white rounded-lg flex items-center justify-center p-4">
+                            <QRCodeSVG 
+                              value={bunkerUrl} 
+                              size={180} 
+                              level="M"
+                              includeMargin={true}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Bunker URI Input */}
+                        <div className="space-y-2">
+                          <label className="text-sm text-muted-foreground">
+                            Or paste bunker:// URL:
+                          </label>
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              value={bunkerUrl}
+                              onChange={(e) => setBunkerUrl(e.target.value)}
+                              placeholder="bunker://..."
+                              className="flex-1 px-3 py-2 border rounded-md bg-background text-foreground"
+                            />
+                            <Button
+                              onClick={startBunkerLogin}
+                              disabled={!bunkerUrl || connectionState === 'connecting'}
+                              className="bg-blue-600 hover:bg-blue-700 text-white"
+                            >
+                              {connectionState === 'connecting' ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                'Connect'
+                              )}
+                            </Button>
+                          </div>
+                        </div>
+
+                        {/* Connection Status */}
+                        {connectionState === 'waiting' && (
+                          <div className="flex items-center justify-center space-x-2 text-muted-foreground">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            <span className="text-sm">Waiting for connection...</span>
+                          </div>
+                        )}
+
+                        {connectionState === 'success' && (
+                          <div className="flex items-center justify-center space-x-2 text-green-600">
+                            <CheckCircle className="h-4 w-4" />
+                            <span className="text-sm">Connected successfully!</span>
+                          </div>
+                        )}
+
+                        {connectionState === 'error' && (
+                          <div className="flex items-center justify-center space-x-2 text-red-600">
+                            <AlertTriangle className="h-4 w-4" />
+                            <span className="text-sm">{error}</span>
+                          </div>
+                        )}
+                      </div>
                     )}
 
                     {remoteSignerMode === 'bunker' && connectionState === 'waiting' && bunkerUrl && (
