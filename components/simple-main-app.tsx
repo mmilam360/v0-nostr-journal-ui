@@ -66,9 +66,23 @@ export function SimpleMainApp({ authData, onLogout }: SimpleMainAppProps) {
     try {
       setIsSyncing(true)
       console.log("[SimpleApp] Syncing with Nostr...")
+      console.log("[SimpleApp] User pubkey:", authData.pubkey)
       
       const remoteNotes = await fetchNotesFromNostr(authData)
-      console.log(`[SimpleApp] Fetched ${remoteNotes.length} remote notes`)
+      console.log(`[SimpleApp] Fetched ${remoteNotes.length} remote notes from relays`)
+      
+      if (remoteNotes.length === 0) {
+        console.log("[SimpleApp] No notes found on relays - this might be the issue!")
+        console.log("[SimpleApp] Checking if notes were properly published...")
+        
+        // Show alert to user
+        alert(`No notes found on relays! This means either:
+1. Notes weren't properly published to relays
+2. The pubkey is wrong: ${authData.pubkey}
+3. The relay query is not working
+
+Check console for detailed logs.`)
+      }
       
       // Simple merge: remote notes take precedence if they exist
       const mergedNotes = [...notes]
@@ -97,8 +111,13 @@ export function SimpleMainApp({ authData, onLogout }: SimpleMainAppProps) {
       
       console.log(`[SimpleApp] Sync complete: ${mergedNotes.length} total notes`)
       
+      if (remoteNotes.length > 0) {
+        console.log("[SimpleApp] ✅ Successfully synced notes from relays!")
+      }
+      
     } catch (error) {
       console.error("[SimpleApp] Sync error:", error)
+      alert(`Sync failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
     } finally {
       setIsSyncing(false)
     }

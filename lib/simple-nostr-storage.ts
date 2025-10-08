@@ -22,35 +22,73 @@ function getPool(): nostrTools.SimplePool {
   return pool
 }
 
-// Simple note fetching - just get notes, no complex merging
+// Simple note fetching - use proper subscription like nostrudel
 export async function fetchNotesFromNostr(authData: any): Promise<DecryptedNote[]> {
   if (!authData?.pubkey) return []
   
   try {
     console.log("[SimpleNostr] Fetching notes from relays...")
+    console.log("[SimpleNostr] User pubkey:", authData.pubkey)
     
     const pool = getPool()
     const filters = [
       { 
         kinds: [30078], 
         authors: [authData.pubkey],
-        limit: 100 // Reasonable limit
+        limit: 100
       }
     ]
     
-    const events = await pool.list(SIMPLE_RELAYS, filters)
-    console.log(`[SimpleNostr] Found ${events.length} events`)
+    // Use proper subscription method that waits for responses
+    const events = await new Promise<any[]>((resolve, reject) => {
+      const collectedEvents: any[] = []
+      const sub = pool.sub(SIMPLE_RELAYS, filters)
+      
+      const timeout = setTimeout(() => {
+        console.log(`[SimpleNostr] Timeout reached, collected ${collectedEvents.length} events`)
+        sub.unsub()
+        resolve(collectedEvents)
+      }, 10000) // 10 second timeout
+      
+      sub.on('event', (event: any) => {
+        console.log("[SimpleNostr] Received event:", event.id, "kind:", event.kind)
+        collectedEvents.push(event)
+      })
+      
+      sub.on('eose', () => {
+        console.log("[SimpleNostr] End of stored events received")
+        clearTimeout(timeout)
+        sub.unsub()
+        resolve(collectedEvents)
+      })
+      
+      sub.on('error', (error: any) => {
+        console.error("[SimpleNostr] Subscription error:", error)
+        clearTimeout(timeout)
+        sub.unsub()
+        reject(error)
+      })
+    })
     
-    // Simple decryption - no caching complexity
+    console.log(`[SimpleNostr] Collected ${events.length} events from relays`)
+    
+    // Process and decrypt events
     const notes: DecryptedNote[] = []
     
     for (const event of events) {
       try {
-        // Check if it's our app
+        console.log("[SimpleNostr] Processing event:", event.id)
+        console.log("[SimpleNostr] Event tags:", event.tags)
+        
+        // Check if it's our app by looking for the client tag
         const clientTag = event.tags.find((tag: any[]) => tag[0] === "client")
         if (clientTag && clientTag[1] === "nostr-journal") {
+          console.log("[SimpleNostr] Found nostr-journal event:", event.id)
+          
           const decryptedContent = await decryptNoteContent(event.content, authData)
           if (decryptedContent) {
+            console.log("[SimpleNostr] Successfully decrypted:", decryptedContent.title)
+            
             const note: DecryptedNote = {
               id: decryptedContent.id,
               title: decryptedContent.title,
@@ -63,15 +101,19 @@ export async function fetchNotesFromNostr(authData: any): Promise<DecryptedNote[
               lastSynced: new Date()
             }
             notes.push(note)
+          } else {
+            console.warn("[SimpleNostr] Failed to decrypt content for event:", event.id)
           }
+        } else {
+          console.log("[SimpleNostr] Skipping non-nostr-journal event:", event.id)
         }
       } catch (error) {
-        console.warn("[SimpleNostr] Failed to decrypt event:", event.id, error)
+        console.warn("[SimpleNostr] Failed to process event:", event.id, error)
         // Continue with other events
       }
     }
     
-    console.log(`[SimpleNostr] Successfully decrypted ${notes.length} notes`)
+    console.log(`[SimpleNostr] Successfully processed ${notes.length} notes from relays`)
     return notes
     
   } catch (error) {
@@ -88,6 +130,7 @@ export async function saveNoteToNostr(note: DecryptedNote, authData: any): Promi
 
   try {
     console.log("[SimpleNostr] Saving note:", note.title)
+    console.log("[SimpleNostr] User pubkey:", authData.pubkey)
     
     const encryptedContent = await encryptNoteContent(note, authData)
     const dTag = `nostrjournal_note_${note.id}`
@@ -107,14 +150,60 @@ export async function saveNoteToNostr(note: DecryptedNote, authData: any): Promi
       pubkey: authData.pubkey,
     }
 
+    console.log("[SimpleNostr] Event tags:", unsignedEvent.tags)
+    console.log("[SimpleNostr] Event pubkey:", unsignedEvent.pubkey)
+
     // Sign the event
     const signedEvent = await signEventWithRemote(unsignedEvent, authData)
+    console.log("[SimpleNostr] Signed event ID:", signedEvent.id)
     
     // Publish to relays
     const pool = getPool()
-    const relays = await pool.publish(SIMPLE_RELAYS, signedEvent)
+    console.log("[SimpleNostr] Publishing to relays:", SIMPLE_RELAYS)
     
-    console.log(`[SimpleNostr] Published to ${relays.length} relays`)
+    const relays = await pool.publish(SIMPLE_RELAYS, signedEvent)
+    console.log(`[SimpleNostr] Published to ${relays.length} relays:`, relays)
+    
+    // Verify the event was published by checking if we can fetch it back
+    console.log("[SimpleNostr] Verifying publication by fetching back...")
+    setTimeout(async () => {
+      try {
+        const verifyEvents = await new Promise<any[]>((resolve) => {
+          const collectedEvents: any[] = []
+          const sub = pool.sub(SIMPLE_RELAYS, [
+            { 
+              kinds: [30078], 
+              authors: [authData.pubkey],
+              ids: [signedEvent.id]
+            }
+          ])
+          
+          const timeout = setTimeout(() => {
+            sub.unsub()
+            resolve(collectedEvents)
+          }, 5000)
+          
+          sub.on('event', (event: any) => {
+            console.log("[SimpleNostr] ✅ Verification: Found published event on relay:", event.id)
+            collectedEvents.push(event)
+          })
+          
+          sub.on('eose', () => {
+            clearTimeout(timeout)
+            sub.unsub()
+            resolve(collectedEvents)
+          })
+        })
+        
+        if (verifyEvents.length > 0) {
+          console.log("[SimpleNostr] ✅ SUCCESS: Event confirmed on relays!")
+        } else {
+          console.log("[SimpleNostr] ❌ WARNING: Event not found on relays after publishing")
+        }
+      } catch (error) {
+        console.error("[SimpleNostr] Verification error:", error)
+      }
+    }, 2000) // Wait 2 seconds before verifying
     
     return {
       success: true,
