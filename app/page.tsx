@@ -201,7 +201,7 @@ export default function Home() {
     <ErrorBoundary>
       <main className="min-h-screen bg-slate-900">
         {isLoggedIn && authData ? (
-          <InstantMainApp authData={authData} onLogout={handleLogout} />
+          <MainApp authData={authData} onLogout={handleLogout} />
                 ) : (
                   <div>
                         <LoginPageHorizontal onLoginSuccess={handleLoginSuccess} />

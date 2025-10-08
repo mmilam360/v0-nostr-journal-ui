@@ -45,6 +45,7 @@ import { saveEncryptedNotes, saveEncryptedNotesImmediate, loadEncryptedNotes } f
 import { createNostrEvent, publishToNostr } from "@/lib/nostr-publish"
 import { cleanupSigner } from "@/lib/signer-manager"
 import { smartSyncNotes, saveAndSyncNote } from "@/lib/nostr-sync-fixed"
+import { loadAllNotesFromRelays } from "@/lib/instant-nostr"
 import { sanitizeNotes } from "@/lib/data-validators"
 import { ErrorBoundary } from "@/components/error-boundary"
 import { RelayManager } from "@/components/relay-manager"
@@ -225,15 +226,6 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       setSyncStatus("syncing")
 
       try {
-        // Initialize persistent relay pool for better performance
-        try {
-          await initializePersistentRelayPool()
-          console.log("[v0] ✅ Persistent relay pool initialized")
-        } catch (error) {
-          console.error("[v0] ❌ Failed to initialize relay pool:", error)
-          // Continue without relay pool - will use individual connections
-        }
-        
         // Set up the active signer for remote authentication
         if (authData.authMethod === 'remote' && authData.sessionData) {
           console.log("[v0] Setting up remote signer from session data")
@@ -247,19 +239,33 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
           }
         }
 
-        // Load from local storage first
-        const rawLocalNotes = await loadEncryptedNotes(authData.pubkey)
-        console.log("[v0] Raw local notes loaded:", rawLocalNotes.length)
+        // Try to load from relays first (instant approach)
+        console.log("[v0] Loading notes from relays...")
+        let relayNotes: any[] = []
+        try {
+          relayNotes = await loadAllNotesFromRelays(authData)
+          console.log("[v0] ✅ Loaded", relayNotes.length, "notes from relays")
+        } catch (error) {
+          console.error("[v0] ❌ Failed to load from relays:", error)
+        }
 
-        // CRITICAL: Validate and sanitize all notes
-        const validatedNotes = sanitizeNotes(rawLocalNotes)
+        // Fallback to local storage if no relay notes
+        let localNotes: any[] = []
+        if (relayNotes.length === 0) {
+          console.log("[v0] No relay notes, loading from local storage...")
+          localNotes = await loadEncryptedNotes(authData.pubkey)
+          console.log("[v0] Loaded", localNotes.length, "notes from local storage")
+        }
+
+        // Use relay notes if available, otherwise use local notes
+        const allNotes = relayNotes.length > 0 ? relayNotes : localNotes
+        
+        // Validate and sanitize all notes
+        const validatedNotes = sanitizeNotes(allNotes)
         console.log("[v0] Validated notes:", validatedNotes.length)
-        console.log("[v0] Validated note IDs:", validatedNotes.map(n => n.id))
 
-        // CRITICAL: Show local notes immediately (don't wait for sync)
+        // Set notes in state
         setNotes(validatedNotes)
-        console.log("[v0] Notes set in React state:", validatedNotes.length)
-        console.log("[v0] Notes in React state:", validatedNotes.map(n => ({ id: n.id, title: n.title, eventId: n.eventId })))
 
         // Extract tags
         const allTags = new Set<string>()
@@ -269,52 +275,11 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
         setTags(Array.from(allTags))
 
         setIsLoading(false)
+        setSyncStatus("synced")
+        setLastSyncTime(new Date())
 
-        // Now sync in background (with error protection)
-        console.log("[v0] Starting background sync...")
+        console.log("[v0] ✅ Notes loaded successfully:", validatedNotes.length)
 
-        try {
-          const syncResult = await smartSyncNotes(validatedNotes, deletedNotes, authData)
-
-          // CRITICAL: Validate sync results before updating state
-          const validatedSyncNotes = sanitizeNotes(syncResult.notes)
-
-          // CRITICAL: Only update if we got valid notes
-          if (validatedSyncNotes.length > 0 || validatedNotes.length === 0) {
-            setNotes(validatedSyncNotes)
-        setDeletedNotes(syncResult.deletedNotes)
-        setSyncStatus(syncResult.synced ? "synced" : "error")
-            setConnectionError(syncResult.errors.length > 0 ? syncResult.errors[0] : null)
-
-        if (syncResult.synced) {
-          setLastSyncTime(new Date())
-              // Save synced state to local storage
-              await saveEncryptedNotes(authData.pubkey, validatedSyncNotes)
-            }
-
-            // Update tags again
-            const finalTags = new Set<string>()
-            validatedSyncNotes.forEach((note) => {
-              note.tags.forEach((tag) => finalTags.add(tag))
-            })
-            setTags(Array.from(finalTags))
-
-            console.log("[v0] Initial load complete:", {
-              total: validatedSyncNotes.length,
-              synced: syncResult.syncedCount,
-              failed: syncResult.failedCount,
-            })
-          } else {
-            console.warn("[v0] Sync returned no valid notes, keeping local data")
-            setSyncStatus("error")
-            setConnectionError("Sync returned invalid data")
-          }
-        } catch (syncError) {
-          console.error("[v0] Background sync failed, keeping local notes:", syncError)
-          setSyncStatus("error")
-          setConnectionError(syncError instanceof Error ? syncError.message : "Sync failed")
-          // CRITICAL: Keep the local notes we already loaded
-        }
       } catch (error) {
         console.error("[v0] Error loading notes:", error)
         setSyncStatus("error")

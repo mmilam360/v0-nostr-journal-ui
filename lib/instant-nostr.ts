@@ -37,9 +37,38 @@ export async function loadAllNotesFromRelays(authData: any): Promise<DecryptedNo
     }
   ]
   
-  // Use querySync for instant results - this is what nostrudel uses
+  // Use proper subscription method for reliable results
   try {
-    const events = await pool.querySync(INSTANT_RELAYS, filters, { timeout: 5000 })
+    const events = await new Promise<any[]>((resolve, reject) => {
+      const collectedEvents: any[] = []
+      const sub = pool.sub(INSTANT_RELAYS, filters)
+      
+      const timeout = setTimeout(() => {
+        console.log(`[InstantNostr] Timeout reached, collected ${collectedEvents.length} events`)
+        sub.unsub()
+        resolve(collectedEvents)
+      }, 8000) // 8 second timeout
+      
+      sub.on('event', (event: any) => {
+        console.log("[InstantNostr] Received event:", event.id, "kind:", event.kind)
+        collectedEvents.push(event)
+      })
+      
+      sub.on('eose', () => {
+        console.log("[InstantNostr] End of stored events received")
+        clearTimeout(timeout)
+        sub.unsub()
+        resolve(collectedEvents)
+      })
+      
+      sub.on('error', (error: any) => {
+        console.error("[InstantNostr] Subscription error:", error)
+        clearTimeout(timeout)
+        sub.unsub()
+        reject(error)
+      })
+    })
+    
     console.log(`[InstantNostr] Instantly loaded ${events.length} events from relays`)
     
     const notes: DecryptedNote[] = []
