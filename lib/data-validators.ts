@@ -44,7 +44,15 @@ export function sanitizeNotes(notes: any[]): Note[] {
     return []
   }
 
-  return notes
+  console.log("[Validator] Sanitizing notes, input count:", notes.length)
+  console.log("[Validator] Input note IDs:", notes.map(n => n?.id))
+  
+  const sanitized = notes
     .map(sanitizeNote)
     .filter((note): note is Note => note !== null)
+  
+  console.log("[Validator] Sanitized notes, output count:", sanitized.length)
+  console.log("[Validator] Output note IDs:", sanitized.map(n => n.id))
+  
+  return sanitized
 }

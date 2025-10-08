@@ -254,9 +254,11 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
         // CRITICAL: Validate and sanitize all notes
         const validatedNotes = sanitizeNotes(rawLocalNotes)
         console.log("[v0] Validated notes:", validatedNotes.length)
+        console.log("[v0] Validated note IDs:", validatedNotes.map(n => n.id))
 
         // CRITICAL: Show local notes immediately (don't wait for sync)
         setNotes(validatedNotes)
+        console.log("[v0] Notes set in React state:", validatedNotes.length)
 
         // Extract tags
         const allTags = new Set<string>()
