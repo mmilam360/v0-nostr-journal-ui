@@ -340,6 +340,19 @@ async function decryptNoteContent(encryptedData: string, authData: any): Promise
   return JSON.parse(decoder.decode(decrypted))
 }
 
+/**
+ * Sync function - just reload from relays (same as loading on startup)
+ */
+export async function syncFromRelays(authData: any): Promise<DecryptedNote[]> {
+  console.log("[SimpleEvents] Syncing from relays...")
+  
+  // Sync is just the same as loading from relays
+  const notes = await loadNotesFromRelays(authData)
+  
+  console.log(`[SimpleEvents] Sync complete: ${notes.length} notes loaded from relays`)
+  return notes
+}
+
 // Clean up global pool
 export function cleanupPool() {
   if (globalPool) {

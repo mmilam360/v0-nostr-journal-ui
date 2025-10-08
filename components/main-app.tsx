@@ -45,7 +45,7 @@ import { saveEncryptedNotes, saveEncryptedNotesImmediate, loadEncryptedNotes } f
 import { createNostrEvent, publishToNostr } from "@/lib/nostr-publish"
 import { cleanupSigner } from "@/lib/signer-manager"
 import { smartSyncNotes, saveAndSyncNote } from "@/lib/nostr-sync-fixed"
-import { loadNotesFromRelays, saveNoteToRelays, deleteNoteFromRelays } from "@/lib/simple-nostr-events"
+import { loadNotesFromRelays, saveNoteToRelays, deleteNoteFromRelays, syncFromRelays } from "@/lib/simple-nostr-events"
 import { sanitizeNotes } from "@/lib/data-validators"
 import { ErrorBoundary } from "@/components/error-boundary"
 import { RelayManager } from "@/components/relay-manager"
@@ -126,26 +126,34 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   // Simplified sync operations using global sync manager
 
   const retryConnection = async () => {
-    console.log("[v0] 🔄 Retrying connection...")
+    console.log("[v0] 🔄 Retrying connection - querying relays...")
     setConnectionError(null)
     setSyncStatus("syncing")
 
     try {
-      // CRITICAL: Process any pending direct events before syncing
-      console.log("[v0] Processing pending direct events before retry...")
-      await eventManager.processQueue(authData)
-      console.log("[v0] Direct events processed, proceeding with retry")
-
-      const syncResult = await smartSyncNotes(notes, deletedNotes, authData)
-
-      setNotes(syncResult.notes)
-      setDeletedNotes(syncResult.deletedNotes)
-      setSyncStatus(syncResult.synced ? "synced" : "error")
-      setConnectionError(syncResult.errors.length > 0 ? syncResult.errors[0] : null)
-
-      if (syncResult.synced) {
-        setLastSyncTime(new Date())
-      }
+      // Retry is just loading from relays (same as sync)
+      const relayNotes = await syncFromRelays(authData)
+      
+      // Validate and sanitize the notes
+      const validatedNotes = sanitizeNotes(relayNotes)
+      
+      // Update state with latest notes from relays
+      setNotes(validatedNotes)
+      setSyncStatus("synced")
+      setLastSyncTime(new Date())
+      
+      // Save to local storage for offline access
+      await saveEncryptedNotes(authData.pubkey, validatedNotes)
+      
+      // Update tags
+      const allTags = new Set<string>()
+      validatedNotes.forEach((note) => {
+        note.tags.forEach((tag) => allTags.add(tag))
+      })
+      setTags(Array.from(allTags))
+      
+      console.log(`[v0] ✅ Retry complete: ${validatedNotes.length} notes loaded from relays`)
+      
     } catch (error) {
       console.error("[v0] Retry failed:", error)
       setSyncStatus("error")
@@ -757,39 +765,33 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   }
 
   const handleManualSync = async () => {
-    console.log("[v0] Manual sync requested")
+    console.log("[v0] Manual sync requested - querying relays for latest events")
     setSyncStatus("syncing")
 
     try {
-      // CRITICAL: Process any pending direct events before syncing
-      console.log("[v0] Processing pending direct events before sync...")
-      await eventManager.processQueue(authData)
-      console.log("[v0] Direct events processed, proceeding with sync")
-
-      const syncResult = await smartSyncNotes(notes, deletedNotes, authData)
-
-      // Validate results
-      const validatedNotes = sanitizeNotes(syncResult.notes)
-
-      if (validatedNotes.length > 0) {
-        const syncedNotes = validatedNotes.map((note) => ({
-        ...note,
-        syncStatus: syncResult.synced ? ("synced" as const) : ("error" as const),
-      }))
-
-      setNotes(syncedNotes)
-      setDeletedNotes(syncResult.deletedNotes)
-      setSyncStatus(syncResult.synced ? "synced" : "error")
-
-      if (syncResult.synced) {
-        setLastSyncTime(new Date())
-          await saveEncryptedNotes(authData.pubkey, syncedNotes)
-        }
-
-        setConnectionError(syncResult.errors.length > 0 ? syncResult.errors[0] : null)
-      } else {
-        throw new Error("Sync returned no valid notes")
-      }
+      // Sync is just loading from relays (same as app startup)
+      const relayNotes = await syncFromRelays(authData)
+      
+      // Validate and sanitize the notes
+      const validatedNotes = sanitizeNotes(relayNotes)
+      
+      // Update state with latest notes from relays
+      setNotes(validatedNotes)
+      setSyncStatus("synced")
+      setLastSyncTime(new Date())
+      
+      // Save to local storage for offline access
+      await saveEncryptedNotes(authData.pubkey, validatedNotes)
+      
+      // Update tags
+      const allTags = new Set<string>()
+      validatedNotes.forEach((note) => {
+        note.tags.forEach((tag) => allTags.add(tag))
+      })
+      setTags(Array.from(allTags))
+      
+      console.log(`[v0] ✅ Manual sync complete: ${validatedNotes.length} notes loaded from relays`)
+      
     } catch (error) {
       console.error("[v0] Manual sync failed:", error)
       setSyncStatus("error")
