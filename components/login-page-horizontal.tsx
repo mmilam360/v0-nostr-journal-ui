@@ -163,6 +163,8 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
       if (remoteSignerMode === 'signer') {
         // Signer-initiated flow: user pastes bunker:// URL from nsec.app
         console.log('[BunkerConnect] 🔌 Connecting with bunker URL...')
+        console.log('[BunkerConnect] 📱 User Agent:', navigator.userAgent)
+        console.log('[BunkerConnect] 📱 Mobile check:', /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent))
         
         const { signer, session } = await Nip46RemoteSigner.connectToRemote(bunkerUrl)
         
@@ -175,7 +177,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
         
         // Store session for reconnection
         localStorage.setItem('nostr_connect_session', JSON.stringify(session))
-        setActiveSigner(session)
+        setActiveSigner(signer)
         
         setConnectionState('success')
         
@@ -243,7 +245,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
 
         // Store session
         localStorage.setItem('nostr_connect_session', JSON.stringify(session))
-        setActiveSigner(session)
+        setActiveSigner(signer)
 
         setConnectionState('success')
 
@@ -273,6 +275,8 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
       let errorMsg = 'Failed to connect. '
       
       if (error instanceof Error) {
+        console.log('[BunkerConnect] ❌ Error details:', error.message, error.stack)
+        
         if (error.message.includes('timeout')) {
           errorMsg += 'Connection timed out. Make sure your signing app is open, connected to the internet, and try again.'
         } else if (error.message.includes('blocked') || error.message.includes('rejected')) {
@@ -281,6 +285,10 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
           errorMsg += 'Could not connect to relay. Check your internet connection and try again.'
         } else if (error.message.includes('NIP-46')) {
           errorMsg += 'NIP-46 connection failed. Make sure your signing app supports remote signing and is connected to the internet.'
+        } else if (error.message.includes('Invalid URI') || error.message.includes('bunker://')) {
+          errorMsg += 'Invalid bunker URL format. Make sure you copied the complete URL from your signing app.'
+        } else if (error.message.includes('WebSocket') || error.message.includes('connection')) {
+          errorMsg += 'Connection failed. Check your internet connection and try again.'
         } else {
           errorMsg += error.message
         }

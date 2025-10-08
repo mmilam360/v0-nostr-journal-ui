@@ -73,8 +73,16 @@ export async function encryptWithRemote(plaintext: string, recipientPubkey: stri
       throw new Error(`nip04 methods missing. Available: ${Object.keys(nip04)}`)
     }
     
+    // Convert clientSecretKey to Uint8Array if it's a hex string
+    let clientSecretKey = authData.clientSecretKey
+    if (typeof clientSecretKey === 'string') {
+      clientSecretKey = new Uint8Array(
+        clientSecretKey.match(/.{1,2}/g)?.map((byte: string) => parseInt(byte, 16)) || []
+      )
+    }
+    
     // Use the client secret key to generate shared secret with recipient
-    const sharedSecret = nip04.getSharedSecret(authData.clientSecretKey!, recipientPubkey)
+    const sharedSecret = nip04.getSharedSecret(clientSecretKey, recipientPubkey)
     const encrypted = await nip04.encrypt(sharedSecret, plaintext)
     
     console.log("[SignerManager] ✅ Data encrypted successfully")
@@ -106,8 +114,16 @@ export async function decryptWithRemote(ciphertext: string, senderPubkey: string
       throw new Error(`nip04 methods missing. Available: ${Object.keys(nip04)}`)
     }
     
+    // Convert clientSecretKey to Uint8Array if it's a hex string
+    let clientSecretKey = authData.clientSecretKey
+    if (typeof clientSecretKey === 'string') {
+      clientSecretKey = new Uint8Array(
+        clientSecretKey.match(/.{1,2}/g)?.map((byte: string) => parseInt(byte, 16)) || []
+      )
+    }
+    
     // Use the client secret key to generate shared secret with sender
-    const sharedSecret = nip04.getSharedSecret(authData.clientSecretKey!, senderPubkey)
+    const sharedSecret = nip04.getSharedSecret(clientSecretKey, senderPubkey)
     const decrypted = await nip04.decrypt(sharedSecret, ciphertext)
     
     console.log("[SignerManager] ✅ Data decrypted successfully")

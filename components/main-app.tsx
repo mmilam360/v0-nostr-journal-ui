@@ -178,7 +178,14 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       // Set up the active signer for remote authentication
       if (authData.authMethod === 'remote' && authData.sessionData) {
         console.log("[v0] Setting up remote signer from session data")
-        setActiveSigner(authData.sessionData)
+        try {
+          const { resumeNip46Session } = await import('@/lib/signer-connector')
+          await resumeNip46Session(authData.sessionData)
+          console.log("[v0] ✅ Remote signer resumed successfully")
+        } catch (error) {
+          console.error("[v0] ❌ Failed to resume remote signer:", error)
+          // Continue without remote signer - user can reconnect
+        }
       }
       
       setIsLoading(true)
