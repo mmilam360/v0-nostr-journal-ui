@@ -225,7 +225,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
         console.log("[v0] Starting background sync...")
 
         try {
-          const syncResult = await smartSyncNotes(notesWithStatus, deletedNotes, authData)
+          const syncResult = await smartSyncNotes(validatedNotes, deletedNotes, authData)
 
           // CRITICAL: Validate sync results before updating state
           const validatedSyncNotes = sanitizeNotes(syncResult.notes)

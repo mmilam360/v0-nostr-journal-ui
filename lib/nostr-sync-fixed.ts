@@ -54,7 +54,6 @@ export async function smartSyncNotes(
 
     // Step 4: Sync any local-only notes TO Nostr
     const notesToSync = mergedNotes.filter(note => 
-      note.syncStatus === 'local' || 
       !note.eventId ||
       (note.lastModified && note.lastSynced && note.lastModified > note.lastSynced)
     )
@@ -82,20 +81,16 @@ export async function smartSyncNotes(
               // Update the note with sync info
               note.eventId = result.eventId
               note.lastSynced = new Date()
-              note.syncStatus = 'synced'
               console.log("[SmartSync] ✅ Synced:", note.title)
               return { success: true, note }
             } else {
-              note.syncStatus = 'error'
-              note.syncError = result.error
               console.error("[SmartSync] ❌ Failed:", note.title, result.error)
               return { success: false, note, error: result.error }
             }
           } catch (error) {
-            note.syncStatus = 'error'
-            note.syncError = error instanceof Error ? error.message : "Unknown error"
+            const errorMessage = error instanceof Error ? error.message : "Unknown error"
             console.error("[SmartSync] ❌ Error syncing:", note.title, error)
-            return { success: false, note, error: note.syncError }
+            return { success: false, note, error: errorMessage }
           }
         })
       )
@@ -184,11 +179,7 @@ export async function smartSyncNotes(
     // CRITICAL: On error, return local notes unchanged
     // This prevents data loss
     return {
-      notes: localNotes.map(note => ({
-        ...note,
-        syncStatus: 'error' as const,
-        syncError: error instanceof Error ? error.message : "Sync failed"
-      })),
+      notes: localNotes,
       deletedNotes: localDeletedNotes,
       synced: false,
       syncedCount: 0,
@@ -207,10 +198,7 @@ function mergeNotes(localNotes: DecryptedNote[], remoteNotes: DecryptedNote[]): 
 
   // Add all local notes
   for (const note of localNotes) {
-    noteMap.set(note.id, {
-      ...note,
-      syncStatus: note.syncStatus || 'local'
-    })
+    noteMap.set(note.id, note)
   }
 
   // Merge with remote notes (prefer remote if it's newer)
@@ -221,7 +209,6 @@ function mergeNotes(localNotes: DecryptedNote[], remoteNotes: DecryptedNote[]): 
       // New note from remote - use it completely
       noteMap.set(remoteNote.id, {
         ...remoteNote,
-        syncStatus: 'synced',
         lastSynced: new Date()
       })
     } else {
@@ -245,7 +232,6 @@ function mergeNotes(localNotes: DecryptedNote[], remoteNotes: DecryptedNote[]): 
         console.log("[SmartSync] 📥 Using remote version (newer):", remoteNote.title)
         noteMap.set(remoteNote.id, {
           ...remoteNote,
-          syncStatus: 'synced',
           lastSynced: new Date()
         })
       } else if (localTime > remoteTime) {
@@ -255,14 +241,12 @@ function mergeNotes(localNotes: DecryptedNote[], remoteNotes: DecryptedNote[]): 
           ...localNote,
           eventId: remoteNote.eventId,        // ⭐ CRITICAL: Preserve eventId from remote
           eventKind: remoteNote.eventKind,    // ⭐ CRITICAL: Preserve eventKind from remote
-          syncStatus: 'local' // Will be synced to Nostr to update content
         })
       } else {
         // Same time - prefer remote (it's the source of truth)
         console.log("[SmartSync] ⚖️ Same timestamp, using remote:", remoteNote.title)
         noteMap.set(remoteNote.id, {
           ...remoteNote,
-          syncStatus: 'synced',
           lastSynced: new Date()
         })
       }
@@ -285,8 +269,7 @@ export async function saveAndSyncNote(
     // Update last modified time
     const updatedNote = {
       ...note,
-      lastModified: new Date(),
-      syncStatus: 'syncing' as const
+      lastModified: new Date()
     }
 
     // Save to Nostr
@@ -299,20 +282,14 @@ export async function saveAndSyncNote(
           ...updatedNote,
           eventId: result.eventId,
           eventKind: result.eventKind || 30078, // Default to standard kind
-          lastSynced: new Date(),
-          syncStatus: 'synced',
-          syncError: undefined
+          lastSynced: new Date()
         },
         success: true
       }
     } else {
       console.error("[SaveAndSync] ❌ Failed to sync:", note.title, result.error)
       return {
-        note: {
-          ...updatedNote,
-          syncStatus: 'error',
-          syncError: result.error
-        },
+        note: updatedNote,
         success: false,
         error: result.error
       }
@@ -322,11 +299,7 @@ export async function saveAndSyncNote(
     console.error("[SaveAndSync] ❌ Error:", errorMsg)
     
     return {
-      note: {
-        ...note,
-        syncStatus: 'error',
-        syncError: errorMsg
-      },
+      note: note,
       success: false,
       error: errorMsg
     }

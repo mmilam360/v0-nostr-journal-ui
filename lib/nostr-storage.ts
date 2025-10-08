@@ -320,7 +320,7 @@ export const fetchAllNotesFromNostr = async (authData: any): Promise<DecryptedNo
     const relays = await getCurrentRelays()
     console.log("[v0] 📡 Fetching notes from relays:", relays)
 
-    // Query for parameterized replaceable events (kind 30078)
+    // Step 1: Fetch note events (kind 30078)
     const events = await fetcher.fetchAllEvents(
       relays,
       { kinds: [30078], authors: [authData.pubkey] },
@@ -329,13 +329,42 @@ export const fetchAllNotesFromNostr = async (authData: any): Promise<DecryptedNo
 
     console.log(`[v0] Found ${events.length} note events`)
 
-    // Filter events that have our app's d tag prefix
-    const appEvents = events.filter((event) => {
-      const dTag = event.tags.find((tag) => tag[0] === "d")
-      return dTag && dTag[1]?.startsWith(APP_D_TAG_PREFIX)
+    // Step 2: Fetch deletion events (kind 5) to filter out deleted notes
+    const deletionEvents = await fetcher.fetchAllEvents(
+      relays,
+      { kinds: [5], authors: [authData.pubkey] },
+      { sort: true }, // Sort by created_at descending
+    )
+
+    console.log(`[v0] Found ${deletionEvents.length} deletion events`)
+
+    // Step 3: Create a set of deleted event IDs
+    const deletedEventIds = new Set<string>()
+    deletionEvents.forEach(deletionEvent => {
+      // NIP-09 deletion events have 'e' tags with the event IDs being deleted
+      deletionEvent.tags.forEach(tag => {
+        if (tag[0] === 'e' && tag[1]) {
+          deletedEventIds.add(tag[1])
+        }
+      })
     })
 
-    console.log(`[v0] Filtered to ${appEvents.length} app-specific events`)
+    console.log(`[v0] Found ${deletedEventIds.size} deleted event IDs`)
+
+    // Step 4: Filter events that have our app's d tag prefix AND are not deleted
+    const appEvents = events.filter((event) => {
+      const dTag = event.tags.find((tag) => tag[0] === "d")
+      const isAppEvent = dTag && dTag[1]?.startsWith(APP_D_TAG_PREFIX)
+      const isDeleted = deletedEventIds.has(event.id)
+      
+      if (isDeleted) {
+        console.log(`[v0] 🗑️ Skipping deleted event: ${event.id}`)
+      }
+      
+      return isAppEvent && !isDeleted
+    })
+
+    console.log(`[v0] Filtered to ${appEvents.length} app-specific events (excluding deleted)`)
 
     const notes = await Promise.all(
       appEvents.map(async (event) => {
