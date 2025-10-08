@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import type { Note } from "@/components/main-app"
 import { useDebounce } from "@/hooks/useDebounce"
-import { Copy, ExternalLink, ShieldCheck, Lock, CheckCircle2, AlertCircle, Loader2, Check, Save, Trash2, Upload, FileText } from "lucide-react"
+import { Copy, ExternalLink, ShieldCheck, Lock, CheckCircle2, CheckCircle, AlertCircle, Loader2, Check, Save, Trash2, Upload, FileText } from "lucide-react"
 
 interface EditorProps {
   note: Note | null
