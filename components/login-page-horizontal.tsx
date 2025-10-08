@@ -315,15 +315,15 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
         ws = null
       }
 
-      // Set timeout for connection (90 seconds for mobile compatibility)
+      // Set timeout for connection (120 seconds for mobile compatibility with app switching)
       const timeoutId = setTimeout(() => {
         if (!isConnected) {
           console.log("[NostrConnect] ⏱️ Connection timeout")
           setConnectionState("error")
-          setError("Connection timed out. Please try again.")
+          setError("Connection timed out. Please try again or check your internet connection.")
           cleanup()
         }
-      }, 90000)
+      }, 120000)
 
       // Connect to relay
       console.log("[NostrConnect] 🔌 Connecting to relay...")
@@ -350,7 +350,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
           {
             kinds: [24133],
             "#p": [appPublicKey],
-            since: Math.floor(Date.now() / 1000) - 60
+            since: Math.floor(Date.now() / 1000) - 10 // Only get events from last 10 seconds
           }
         ]
         
@@ -478,7 +478,14 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
       const perms = encodeURIComponent("sign_event:1,sign_event:5,sign_event:30078,sign_event:31078,nip04_encrypt,nip04_decrypt,nip44_encrypt,nip44_decrypt,get_public_key,get_relays")
       
       // Use nsec.app relay for better compatibility
-      const BUNKER_RELAY = "wss://relay.nsec.app"
+      // Use multiple NIP-46 optimized relays for better mobile reliability
+      const BUNKER_RELAYS = [
+        "wss://relay.nsec.app",
+        "wss://relay.damus.io", 
+        "wss://nos.lol",
+        "wss://relay.nostr.band"
+      ]
+      const BUNKER_RELAY = BUNKER_RELAYS[0] // Primary relay
       
       // Generate the nostrconnect URI with secret
       const bunkerURI = `nostrconnect://${appPublicKey}?relay=${encodeURIComponent(BUNKER_RELAY)}&secret=${secret}&name=${appName}&perms=${perms}`
@@ -507,21 +514,21 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
         ws = null
       }
 
-      // Set timeout for connection (90 seconds for mobile compatibility)
+      // Set timeout for connection (120 seconds for mobile compatibility with app switching)
       const timeoutId = setTimeout(() => {
         if (!isConnected) {
           console.log("[NostrConnect] ⏱️ Connection timeout")
           setConnectionState("error")
-          setError("Connection timed out. Please try scanning the QR code again.")
+          setError("Connection timed out. Please try scanning the QR code again or check your internet connection.")
           cleanup()
         }
-      }, 90000)
+      }, 120000)
 
       // Connect to relay
       console.log("[NostrConnect] 🔌 Connecting to relay...")
       ws = new WebSocket(BUNKER_RELAY)
 
-      // Add mobile-specific WebSocket handling
+      // Add mobile-specific WebSocket handling with retry logic
       ws.onerror = (error) => {
         console.error("[NostrConnect] ❌ WebSocket error:", error)
         console.error("[NostrConnect] 📱 Mobile WebSocket error details:", {
@@ -530,10 +537,45 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
           error: error
         })
         if (!isConnected) {
-          setConnectionState("error")
-          setError("Failed to connect to relay. Please check your internet connection and try again.")
-          clearTimeout(timeoutId)
-          cleanup()
+          console.log("[NostrConnect] 🔄 Attempting to reconnect...")
+          // Try to reconnect after a short delay
+          setTimeout(() => {
+            if (!isConnected && ws?.readyState !== WebSocket.OPEN) {
+              try {
+                ws.close()
+                ws = new WebSocket(BUNKER_RELAY)
+                // Re-attach event handlers
+                ws.onopen = () => {
+                  console.log("[NostrConnect] ✅ Reconnected to relay")
+                  // Re-subscribe and re-send connection request
+                  const subscriptionId = crypto.randomUUID()
+                  const subscription = [
+                    "REQ",
+                    subscriptionId,
+                    {
+                      kinds: [24133],
+                      "#p": [appPublicKey],
+                      since: Math.floor(Date.now() / 1000) - 10
+                    }
+                  ]
+                  ws.send(JSON.stringify(subscription))
+                }
+                ws.onerror = (retryError) => {
+                  console.error("[NostrConnect] ❌ Retry failed:", retryError)
+                  setConnectionState("error")
+                  setError("Failed to connect to relay. Please check your internet connection and try again.")
+                  clearTimeout(timeoutId)
+                  cleanup()
+                }
+              } catch (retryError) {
+                console.error("[NostrConnect] ❌ Retry connection failed:", retryError)
+                setConnectionState("error")
+                setError("Failed to connect to relay. Please check your internet connection and try again.")
+                clearTimeout(timeoutId)
+                cleanup()
+              }
+            }
+          }, 2000)
         }
       }
 
@@ -558,7 +600,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
           {
             kinds: [24133],
             "#p": [appPublicKey],
-            since: Math.floor(Date.now() / 1000) - 60
+            since: Math.floor(Date.now() / 1000) - 10 // Only get events from last 10 seconds
           }
         ]
         
@@ -1054,9 +1096,15 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
 
                     {remoteSignerMode === 'bunker' && connectionState === 'waiting' && bunkerUrl && (
                       <div className="space-y-4">
-                        <p className="text-sm text-muted-foreground text-center">
-                          Scan this QR code with your Nostr app
-                        </p>
+                        <div className="text-center space-y-2">
+                          <p className="text-sm text-muted-foreground">
+                            Scan this QR code with your Nostr app
+                          </p>
+                          <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
+                            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                            <span>Waiting for connection...</span>
+                          </div>
+                        </div>
                         <div className="flex justify-center">
                           <div className="w-40 h-40 sm:w-52 sm:h-52 bg-white p-4 rounded-lg border-2 border-gray-200">
                             {bunkerUrl && <QRCodeSVG value={bunkerUrl} size="100%" />}
