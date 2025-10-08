@@ -1021,6 +1021,8 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
           )
         }
 
+        return null
+
       case 'connect':
         if (selectedPath === 'new' && generatedKeys) {
           return (
@@ -1119,8 +1121,9 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                       I have saved my private key (nsec) in a secure location
                     </label>
                   </div>
+                </div>
 
-                  <Button
+                <Button
                     onClick={completeAccountCreation}
                     disabled={!hasConfirmedSave}
                     className="w-full bg-primary mt-4"
@@ -1353,8 +1356,6 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
             </div>
           )
         }
-
-        return null
 
       case 'complete':
         return (
