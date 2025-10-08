@@ -473,7 +473,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
           lastSynced: new Date(),
           isSynced: eventExists // Add sync status
         }
-        setNotes(notes.map(n => n.id === newNote.id ? finalNote : n))
+        setNotes(prevNotes => prevNotes.map(n => n.id === newNote.id ? finalNote : n))
         setSelectedNote(finalNote)
         console.log(`[v0] ✅ New note saved to relays: ${result.eventId} (verified: ${eventExists})`)
       } else {
@@ -516,7 +516,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
           lastSynced: new Date(),
           isSynced: eventExists // Add sync status
         }
-        setNotes(notes.map(n => n.id === updatedNote.id ? finalNote : n))
+        setNotes(prevNotes => prevNotes.map(n => n.id === updatedNote.id ? finalNote : n))
         setSelectedNote(finalNote)
         console.log(`[v0] ✅ Note saved to relays: ${result.eventId} (verified: ${eventExists})`)
       } else {

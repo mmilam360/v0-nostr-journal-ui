@@ -348,39 +348,51 @@ export async function verifyEventExists(eventId: string, authData: any): Promise
   
   console.log("[SimpleEvents] Verifying event exists on relays:", eventId)
   
-  const pool = getPool()
-  
   try {
+    // Use a fresh pool instance for verification to avoid subscription issues
+    const { SimplePool } = await import("nostr-tools/pool")
+    const pool = new SimplePool()
+    
     const events = await new Promise<any[]>((resolve, reject) => {
       const collectedEvents: any[] = []
-      const sub = pool.sub(RELAYS, [
-        { 
-          kinds: [EVENT_KIND], 
-          authors: [authData.pubkey],
-          ids: [eventId] // Query for specific event ID
-        }
-      ])
       
-      const timeout = setTimeout(() => {
-        sub.unsub()
-        resolve(collectedEvents)
-      }, 5000) // 5 second timeout for verification
-      
-      sub.on('event', (event: any) => {
-        collectedEvents.push(event)
-      })
-      
-      sub.on('eose', () => {
-        clearTimeout(timeout)
-        sub.unsub()
-        resolve(collectedEvents)
-      })
-      
-      sub.on('error', (error: any) => {
-        clearTimeout(timeout)
-        sub.unsub()
-        reject(error)
-      })
+      try {
+        const sub = pool.sub(RELAYS, [
+          { 
+            kinds: [EVENT_KIND], 
+            authors: [authData.pubkey],
+            ids: [eventId] // Query for specific event ID
+          }
+        ])
+        
+        const timeout = setTimeout(() => {
+          sub.unsub()
+          pool.close(RELAYS)
+          resolve(collectedEvents)
+        }, 5000) // 5 second timeout for verification
+        
+        sub.on('event', (event: any) => {
+          collectedEvents.push(event)
+        })
+        
+        sub.on('eose', () => {
+          clearTimeout(timeout)
+          sub.unsub()
+          pool.close(RELAYS)
+          resolve(collectedEvents)
+        })
+        
+        sub.on('error', (error: any) => {
+          clearTimeout(timeout)
+          sub.unsub()
+          pool.close(RELAYS)
+          reject(error)
+        })
+      } catch (subError) {
+        console.error("[SimpleEvents] Subscription error:", subError)
+        pool.close(RELAYS)
+        resolve([]) // Return empty array instead of rejecting
+      }
     })
     
     const exists = events.length > 0
