@@ -18,6 +18,7 @@ interface StoredSession {
   clientSecretKey?: number[] // Stored as array for JSON serialization
   bunkerPubkey?: string
   relays?: string[]
+  sessionData?: any // For nostr-signer-connector session management
   // For nsec
   nsec?: string
   privateKey?: string
@@ -54,6 +55,7 @@ export default function Home() {
             restoredAuthData.bunkerUri = session.bunkerUri
             restoredAuthData.bunkerPubkey = session.bunkerPubkey
             restoredAuthData.relays = session.relays
+            restoredAuthData.sessionData = session.sessionData
             if (session.clientSecretKey) {
               restoredAuthData.clientSecretKey = new Uint8Array(session.clientSecretKey)
             }
@@ -89,6 +91,7 @@ export default function Home() {
       hasBunkerUri: !!data.bunkerUri,
       hasClientSecretKey: !!data.clientSecretKey,
       hasBunkerPubkey: !!data.bunkerPubkey,
+      hasSessionData: !!data.sessionData,
       relays: data.relays
     })
 
@@ -146,6 +149,7 @@ export default function Home() {
         session.bunkerUri = data.bunkerUri
         session.bunkerPubkey = data.bunkerPubkey
         session.relays = data.relays
+        session.sessionData = data.sessionData
         if (data.clientSecretKey) {
           session.clientSecretKey = Array.from(data.clientSecretKey)
         }

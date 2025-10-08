@@ -54,7 +54,7 @@ import { ThemeToggle } from "@/components/theme-toggle"
 import { getDefaultRelays } from "@/lib/relay-manager"
 import { DonationModal } from "@/components/donation-modal-proper"
 import { setActiveSigner } from "@/lib/signer-connector"
-import { createGlobalSyncManager, type GlobalSyncManager } from "@/lib/global-sync-manager"
+import { createDirectEventManager, type DirectEventManager } from "@/lib/direct-event-manager"
 
 export interface Note {
   id: string
@@ -117,15 +117,8 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   const [displayName, setDisplayName] = useState<string>("")
   const [showDonationModal, setShowDonationModal] = useState(false)
   
-  // Global sync manager
-  const [globalSyncManager] = useState<GlobalSyncManager>(() => 
-    createGlobalSyncManager(
-      authData,
-      (updatedNotes) => setNotes(updatedNotes),
-      (updatedDeletedNotes) => setDeletedNotes(updatedDeletedNotes),
-      (status) => setSyncStatus(status as any)
-    )
-  )
+  // Direct event manager
+  const [eventManager] = useState<DirectEventManager>(() => createDirectEventManager())
 
   // Simplified sync operations using global sync manager
 
@@ -135,10 +128,10 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     setSyncStatus("syncing")
 
     try {
-      // CRITICAL: Process any pending global sync operations before syncing
-      console.log("[v0] Processing pending global sync operations before retry...")
-      await globalSyncManager.processSync()
-      console.log("[v0] Global sync operations processed, proceeding with retry")
+      // CRITICAL: Process any pending direct events before syncing
+      console.log("[v0] Processing pending direct events before retry...")
+      await eventManager.processQueue(authData)
+      console.log("[v0] Direct events processed, proceeding with retry")
 
       const syncResult = await smartSyncNotes(notes, deletedNotes, authData)
 
@@ -158,7 +151,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   }
 
   const retrySyncFailedNotes = async () => {
-    const failedNotes = notes.filter((n) => n.syncStatus === "error")
+    const failedNotes = notes.filter((n) => !n.eventId)
 
     if (failedNotes.length === 0) {
       return
@@ -170,7 +163,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     for (const note of failedNotes) {
       try {
         const result = await saveAndSyncNote(note, authData)
-        setNotes(notes.map((n) => (n.id === note.id ? result.note : n)))
+        setNotes(prevNotes => prevNotes.map((n) => (n.id === note.id ? result.note : n)))
 
         if (result.success) {
           await saveEncryptedNotes(
@@ -216,17 +209,12 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
         const validatedNotes = sanitizeNotes(rawLocalNotes)
         console.log("[v0] Validated notes:", validatedNotes.length)
 
-        const notesWithStatus = validatedNotes.map((note) => ({
-          ...note,
-          syncStatus: note.syncStatus || ("local" as const),
-        }))
-
         // CRITICAL: Show local notes immediately (don't wait for sync)
-        setNotes(notesWithStatus)
+        setNotes(validatedNotes)
 
         // Extract tags
         const allTags = new Set<string>()
-        notesWithStatus.forEach((note) => {
+        validatedNotes.forEach((note) => {
           note.tags.forEach((tag) => allTags.add(tag))
         })
         setTags(Array.from(allTags))
@@ -430,11 +418,12 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     // Save locally immediately
     await saveEncryptedNotes(authData.pubkey, updatedNotes)
 
-    // Add to global sync manager
-    globalSyncManager.addOperation({
+    // Queue for direct event processing
+    eventManager.queueOperation({
       type: 'create',
       note: newNote
     })
+    setNeedsSync(true)
 
     console.log("[v0] New note created:", newNote.id)
   }
@@ -455,11 +444,12 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     const updatedNotes = notes.map((note) => (note.id === updatedNote.id ? optimisticNote : note))
     await saveEncryptedNotes(authData.pubkey, updatedNotes)
 
-    // Add to global sync manager
-    globalSyncManager.addOperation({
+    // Queue for direct event processing
+    eventManager.queueOperation({
       type: 'update',
       note: optimisticNote
     })
+    setNeedsSync(true)
 
     console.log("[v0] ✅ Note updated and queued for batch sync")
 
@@ -516,7 +506,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
 
     // Flush any pending batch operations
     try {
-      await globalSyncManager.processSync()
+      await eventManager.processQueue(authData)
       console.log("[v0] Flushed pending batch operations")
     } catch (error) {
       console.error("[v0] Error flushing batch operations:", error)
@@ -587,7 +577,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
         
         // Trigger immediate sync to ensure deletion is reflected
         console.log("[v0] Triggering immediate sync after deletion...")
-        const syncResult = await smartSyncNotes(notes, updatedDeletedNotes, authData)
+        const syncResult = await smartSyncNotes(notes, deletedNotes, authData)
         
         // Update notes and sync status
         const validatedNotes = sanitizeNotes(syncResult.notes)
@@ -611,11 +601,12 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       console.error("[v0] Failed to delete note on Nostr immediately:", error)
       setSyncStatus("error")
       
-      // Fallback to global sync manager if immediate deletion fails
-      globalSyncManager.addOperation({
+      // Fallback to direct event manager if immediate deletion fails
+      eventManager.queueOperation({
         type: 'delete',
         noteId: noteToDelete.id
       })
+      setNeedsSync(true)
     }
 
     setShowDeleteConfirmation(false)
@@ -743,10 +734,10 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     setSyncStatus("syncing")
 
     try {
-      // CRITICAL: Process any pending global sync operations before syncing
-      console.log("[v0] Processing pending global sync operations before sync...")
-      await globalSyncManager.processSync()
-      console.log("[v0] Global sync operations processed, proceeding with sync")
+      // CRITICAL: Process any pending direct events before syncing
+      console.log("[v0] Processing pending direct events before sync...")
+      await eventManager.processQueue(authData)
+      console.log("[v0] Direct events processed, proceeding with sync")
 
       const syncResult = await smartSyncNotes(notes, deletedNotes, authData)
 
@@ -1020,7 +1011,10 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                               className="w-full h-full object-cover"
                               onError={(e) => {
                                 e.currentTarget.style.display = 'none'
-                                e.currentTarget.nextElementSibling.style.display = 'flex'
+                                const nextElement = e.currentTarget.nextElementSibling as HTMLElement
+                                if (nextElement) {
+                                  nextElement.style.display = 'flex'
+                                }
                               }}
                             />
                           ) : null}
