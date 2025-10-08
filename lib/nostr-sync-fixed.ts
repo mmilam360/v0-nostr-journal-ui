@@ -47,6 +47,13 @@ export async function smartSyncNotes(
     const deletedNoteIds = new Set(localDeletedNotes.map(d => d.id))
     const filteredLocalNotes = localNotes.filter(note => !deletedNoteIds.has(note.id))
     console.log("[SmartSync] 🗑️ Filtered local notes (removed deleted):", filteredLocalNotes.length)
+    
+    // Debug: Log which notes were filtered out
+    if (deletedNoteIds.size > 0) {
+      console.log("[SmartSync] 🗑️ Deleted note IDs:", Array.from(deletedNoteIds))
+      const filteredOutNotes = localNotes.filter(note => deletedNoteIds.has(note.id))
+      console.log("[SmartSync] 🗑️ Notes filtered out:", filteredOutNotes.map(n => `"${n.title}"`))
+    }
 
     // Step 3: Debug remote notes to understand the issue
     console.log("[SmartSync] 🔍 Remote notes debug:")
@@ -170,6 +177,12 @@ export async function smartSyncNotes(
       total: mergedNotes.length
     })
 
+    // Debug: Log final notes to understand what's being returned
+    console.log("[SmartSync] 🔍 Final notes being returned:")
+    mergedNotes.forEach(note => {
+      console.log(`  - "${note.title}" eventId: ${note.eventId || 'MISSING'}`)
+    })
+
     return {
       notes: mergedNotes,
       deletedNotes: newDeletedNotes,
@@ -251,13 +264,23 @@ function mergeNotes(localNotes: DecryptedNote[], remoteNotes: DecryptedNote[]): 
         })
       } else {
         // Same time - prefer remote (it's the source of truth)
-        console.log("[SmartSync] ⚖️ Same timestamp, using remote:", remoteNote.title)
-        noteMap.set(remoteNote.id, {
-          ...remoteNote,
-          eventId: remoteNote.eventId,        // ⭐ CRITICAL: Preserve eventId from remote
-          eventKind: remoteNote.eventKind,    // ⭐ CRITICAL: Preserve eventKind from remote
-          lastSynced: new Date()
-        })
+        // BUT if remote has no eventId and local does, keep local content with local eventId
+        if (remoteNote.eventId || !localNote.eventId) {
+          console.log("[SmartSync] ⚖️ Same timestamp, using remote:", remoteNote.title)
+          noteMap.set(remoteNote.id, {
+            ...remoteNote,
+            eventId: remoteNote.eventId,        // ⭐ CRITICAL: Preserve eventId from remote
+            eventKind: remoteNote.eventKind,    // ⭐ CRITICAL: Preserve eventKind from remote
+            lastSynced: new Date()
+          })
+        } else {
+          // Remote has no eventId but local does - keep local (it's been synced)
+          console.log("[SmartSync] ⚖️ Same timestamp, keeping local (has eventId):", localNote.title)
+          noteMap.set(localNote.id, {
+            ...localNote,
+            lastSynced: new Date()
+          })
+        }
       }
     }
   }

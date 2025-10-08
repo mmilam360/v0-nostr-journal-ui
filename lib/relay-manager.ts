@@ -16,22 +16,25 @@ export interface RelayConfig {
   maxRetries: number
 }
 
-// Curated list of reliable relays based on community feedback
+// Curated list of reliable relays based on nostr.info directory and community feedback
 const RELAY_CONFIG: RelayConfig = {
   primary: [
-    "wss://relay.damus.io",
-    "wss://relay.primal.net", 
-    "wss://relay.nostr.band",
-    "wss://nos.lol"
+    "wss://relay.snort.social",        // High performance, good filter support
+    "wss://nos.lol",                   // Reliable, supports all filter types
+    "wss://relay.primal.net",          // Fast, good uptime
+    "wss://relay.damus.io"             // Well-maintained, supports NIP-46
   ],
   fallback: [
-    "wss://relay.nsec.app",
-    "wss://nostr.mutinywallet.com",
-    "wss://relay.snort.social",
-    "wss://relay.wine",
-    "wss://relay.getalby.com/v1"
+    "wss://relay.nostr.band",          // Good performance
+    "wss://relay.getalby.com/v1",      // Alby's relay, reliable
+    "wss://relay.wine",                // Alternative option
+    "wss://relay.nsec.app",            // Backup option
+    "wss://nostr.mutinywallet.com",    // Mutiny's relay
+    "wss://relay.bitcoiner.social",    // Bitcoin-focused, reliable
+    "wss://relay.nostr.wine",          // Additional backup
+    "wss://relay.nostrich.land"        // Community relay
   ],
-  timeout: 10000, // 10 seconds
+  timeout: 15000, // 15 seconds - increased for better reliability
   maxRetries: 3
 }
 
