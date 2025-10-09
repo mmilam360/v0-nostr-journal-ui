@@ -4,6 +4,16 @@ import { nip04, SimplePool } from "nostr-tools"
 import type { DecryptedNote } from "./nostr-crypto"
 import { signEventWithRemote } from "./signer-manager"
 
+// Declare window.nostr for TypeScript
+declare global {
+  interface Window {
+    nostr?: {
+      signEvent: (event: any) => Promise<any>
+      getPublicKey: () => Promise<string>
+    }
+  }
+}
+
 // Helper function to get private key for encryption
 function getPrivateKeyForEncryption(authData: any): string {
   if (authData.authMethod === "extension") {
@@ -53,7 +63,14 @@ export async function loadJournalFromKind30001(authData: any): Promise<Decrypted
     return []
   }
   
-  console.log("[Kind30001Journal] Loading journal entries from Kind 30001 lists for pubkey:", authData.pubkey)
+  // Get the actual pubkey from the signer (important for extension/remote signers)
+  let actualPubkey = authData.pubkey
+  if (authData.authMethod === "extension" && window.nostr) {
+    actualPubkey = await window.nostr.getPublicKey()
+    console.log("[Kind30001Journal] Got actual pubkey from extension for loading:", actualPubkey)
+  }
+  
+  console.log("[Kind30001Journal] Loading journal entries from Kind 30001 lists for pubkey:", actualPubkey)
   const pool = getPool()
   
   try {
@@ -61,14 +78,14 @@ export async function loadJournalFromKind30001(authData: any): Promise<Decrypted
     console.log("[Kind30001Journal] Querying relays for Kind 30001 lists...")
     console.log("[Kind30001Journal] Query filters:", {
       kinds: [KIND30001_LIST],
-      authors: [authData.pubkey],
+      authors: [actualPubkey],
       limit: 1000
     })
     
     const listEvents = await pool.querySync(RELAYS, [
       { 
         kinds: [KIND30001_LIST], 
-        authors: [authData.pubkey], // User is the author
+        authors: [actualPubkey], // Use the actual pubkey from the signer
         limit: 1000
       }
     ], { timeout: 15000 })
@@ -84,7 +101,7 @@ export async function loadJournalFromKind30001(authData: any): Promise<Decrypted
       const retryEvents = await pool.querySync(RELAYS, [
         { 
           kinds: [KIND30001_LIST], 
-          authors: [authData.pubkey],
+          authors: [actualPubkey],
           limit: 1000
         }
       ], { timeout: 15000 })
@@ -124,7 +141,7 @@ export async function loadJournalFromKind30001(authData: any): Promise<Decrypted
     for (const event of validEvents) {
       try {
         console.log("[Kind30001Journal] Attempting to decrypt Kind 30001 event:", event.id)
-        const decryptedContent = await decryptKind30001Content(event.content, authData)
+        const decryptedContent = await decryptKind30001Content(event.content, authData, actualPubkey)
         if (decryptedContent) {
           console.log("[Kind30001Journal] Successfully decrypted journal entry:", decryptedContent.title)
           const note: DecryptedNote = {
@@ -166,8 +183,15 @@ export async function saveJournalAsKind30001(note: DecryptedNote, authData: any)
   }
 
   try {
+    // Get the actual pubkey from the signer (important for extension/remote signers)
+    let actualPubkey = authData.pubkey
+    if (authData.authMethod === "extension" && window.nostr) {
+      actualPubkey = await window.nostr.getPublicKey()
+      console.log("[Kind30001Journal] Got actual pubkey from extension:", actualPubkey)
+    }
+    
     // Encrypt the journal content using NIP-04
-    const encryptedContent = await encryptKind30001Content(note, authData)
+    const encryptedContent = await encryptKind30001Content(note, authData, actualPubkey)
     
     // Create unique identifier for this journal entry
     const dTag = `journal-${note.id || Date.now()}`
@@ -180,7 +204,7 @@ export async function saveJournalAsKind30001(note: DecryptedNote, authData: any)
         ["d", dTag], // Unique identifier for this journal entry
       ],
       content: encryptedContent,
-      pubkey: authData.pubkey,
+      pubkey: actualPubkey, // Use the actual pubkey from the signer
     }
     
     console.log("[Kind30001Journal v1.0] Created unsigned Kind 30001 event:", {
@@ -272,10 +296,10 @@ export async function deleteJournalKind4(note: DecryptedNote, authData: any): Pr
 /**
  * Encrypt journal content using NIP-04 encryption for Kind 30001
  */
-async function encryptKind30001Content(note: DecryptedNote, authData: any): Promise<string> {
+async function encryptKind30001Content(note: DecryptedNote, authData: any, actualPubkey?: string): Promise<string> {
   
-  // For Kind 30001, we encrypt with the user's own keypair
-  const userPubkey = authData.pubkey
+  // For Kind 30001, we encrypt with the user's actual keypair
+  const userPubkey = actualPubkey || authData.pubkey
   
   // Create the journal data as JSON
   const journalData = JSON.stringify({
@@ -301,11 +325,11 @@ async function encryptKind30001Content(note: DecryptedNote, authData: any): Prom
 /**
  * Decrypt Kind 30001 content using NIP-04 decryption
  */
-async function decryptKind30001Content(encryptedData: string, authData: any): Promise<any> {
+async function decryptKind30001Content(encryptedData: string, authData: any, actualPubkey?: string): Promise<any> {
   
   try {
-    // For Kind 30001, we decrypt with the user's own keypair
-    const userPubkey = authData.pubkey
+    // For Kind 30001, we decrypt with the user's actual keypair
+    const userPubkey = actualPubkey || authData.pubkey
     
     console.log("[Kind30001Journal] Decrypting Kind 30001 content for user:", userPubkey)
     
