@@ -78,12 +78,10 @@ export async function loadJournalFromKind30001(authData: any): Promise<Decrypted
     const listEvents: any[] = []
     
     await new Promise<void>((resolve) => {
-      const sub = pool.sub(RELAYS, [
-        { 
-          kinds: [KIND30001_LIST], 
-          limit: 1000
-        }
-      ])
+      const sub = pool.sub(RELAYS, { 
+        kinds: [KIND30001_LIST], 
+        limit: 1000
+      })
       
       sub.on('event', (event) => {
         listEvents.push(event)
@@ -110,12 +108,10 @@ export async function loadJournalFromKind30001(authData: any): Promise<Decrypted
       const retryEvents: any[] = []
       
       await new Promise<void>((resolve) => {
-        const sub = pool.sub(RELAYS, [
-          { 
-            kinds: [KIND30001_LIST], 
-            limit: 1000
-          }
-        ])
+        const sub = pool.sub(RELAYS, { 
+          kinds: [KIND30001_LIST], 
+          limit: 1000
+        })
         
         sub.on('event', (event) => {
           retryEvents.push(event)
@@ -142,13 +138,11 @@ export async function loadJournalFromKind30001(authData: any): Promise<Decrypted
     const deletionEvents: any[] = []
     
     await new Promise<void>((resolve) => {
-      const sub = pool.sub(RELAYS, [
-        { 
-          kinds: [DELETION_KIND], 
-          authors: [authData.pubkey],
-          limit: 1000
-        }
-      ])
+      const sub = pool.sub(RELAYS, { 
+        kinds: [DELETION_KIND], 
+        authors: [authData.pubkey],
+        limit: 1000
+      })
       
       sub.on('event', (event) => {
         deletionEvents.push(event)
