@@ -47,7 +47,7 @@ import { saveEncryptedNotes, saveEncryptedNotesImmediate, loadEncryptedNotes } f
 import { createNostrEvent, publishToNostr } from "@/lib/nostr-publish"
 import { cleanupSigner } from "@/lib/signer-manager"
 // import { smartSyncNotes, saveAndSyncNote } from "@/lib/nostr-sync-fixed" // Disabled - using simple events
-import { loadNotesFromRelays, saveNoteToRelays, deleteNoteFromRelays, syncFromRelays, verifyEventExists } from "@/lib/simple-nostr-events"
+import { loadJournalFromKind4, saveJournalAsKind4, deleteJournalKind4, syncFromKind4 } from "@/lib/kind4-journal"
 import { sanitizeNotes } from "@/lib/data-validators"
 import { ErrorBoundary } from "@/components/error-boundary"
 import { RelayManager } from "@/components/relay-manager"
@@ -274,14 +274,14 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
           }
         }
 
-        // Load notes from relays using simple event model
-        console.log("[v0] Loading notes from relays...")
+        // Load notes from Kind 4 encrypted DMs
+        console.log("[v0] Loading journal entries from Kind 4 DMs...")
         let relayNotes: any[] = []
         try {
-          relayNotes = await loadNotesFromRelays(authData)
-          console.log("[v0] ✅ Loaded", relayNotes.length, "notes from relays")
+          relayNotes = await loadJournalFromKind4(authData)
+          console.log("[v0] ✅ Loaded", relayNotes.length, "journal entries from Kind 4 DMs")
         } catch (error) {
-          console.error("[v0] ❌ Failed to load from relays:", error)
+          console.error("[v0] ❌ Failed to load from Kind 4 DMs:", error)
         }
 
         // Always load from local storage as well to merge
@@ -498,10 +498,10 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     // Save locally
     await saveEncryptedNotes(authData.pubkey, updatedNotes)
 
-    // Save to relays - simple approach like nostrudel
+    // Save to relays as Kind 4 encrypted DM to self
     try {
-      console.log("[v0] Attempting to save note to relays...")
-      const result = await saveNoteToRelays(newNote, authData)
+      console.log("[v0] Attempting to save note as Kind 4 DM to self...")
+      const result = await saveJournalAsKind4(newNote, authData)
       console.log("[v0] Save result:", result)
       
       if (result.success && result.eventId) {
@@ -547,10 +547,10 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     const updatedNotes = notes.map((note) => note.id === updatedNote.id ? optimisticNote : note)
     await saveEncryptedNotes(authData.pubkey, updatedNotes)
 
-    // Save to relays - simple approach like nostrudel
+    // Save to relays as Kind 4 encrypted DM to self
     try {
-      console.log("[v0] Attempting to save updated note to relays...")
-      const result = await saveNoteToRelays(optimisticNote, authData)
+      console.log("[v0] Attempting to save updated note as Kind 4 DM to self...")
+      const result = await saveJournalAsKind4(optimisticNote, authData)
       console.log("[v0] Update result:", result)
       
       if (result.success && result.eventId) {
@@ -675,12 +675,12 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     // Save to local storage
     await saveEncryptedNotes(authData.pubkey, updatedNotes)
 
-    // Delete from relays using simple event model
+    // Delete from relays using Kind 4 DM model
     if (noteToDelete.eventId) {
       try {
-        const result = await deleteNoteFromRelays(noteToDelete, authData)
+        const result = await deleteJournalKind4(noteToDelete, authData)
         if (result.success) {
-          console.log("[v0] ✅ Note deleted from relays")
+          console.log("[v0] ✅ Journal entry deleted from relays")
         } else {
           console.error("[v0] ❌ Failed to delete from relays:", result.error)
         }
@@ -833,8 +833,8 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     setSyncStatus("syncing")
 
     try {
-      // Sync is just loading from relays (same as app startup)
-      const relayNotes = await syncFromRelays(authData)
+      // Sync is just loading from Kind 4 DMs (same as app startup)
+      const relayNotes = await syncFromKind4(authData)
       
       // Mark all relay notes as fetched from relays
       const notesWithSyncStatus = relayNotes.map(note => ({
