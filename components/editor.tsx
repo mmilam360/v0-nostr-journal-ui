@@ -367,27 +367,6 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
               </div>
               
               {/* Sync status */}
-              {note.syncStatus === 'synced' && note.eventId && (
-                <div className="flex items-center gap-1 text-blue-600 dark:text-blue-400">
-                  <CheckCircle2 className="w-3 h-3" />
-                  <span>On Nostr</span>
-                </div>
-              )}
-              
-              {note.syncStatus === 'synced' && !note.eventId && (
-                <div className="flex items-center gap-1 text-yellow-600 dark:text-yellow-400">
-                  <AlertCircle className="w-3 h-3" />
-                  <span>Synced (no event ID)</span>
-                </div>
-              )}
-              
-              {note.syncStatus === 'local' && (
-                <div className="flex items-center gap-1 text-yellow-600 dark:text-yellow-400">
-                  <AlertCircle className="w-3 h-3" />
-                  <span>Local only</span>
-                </div>
-              )}
-              
               {/* Individual note sync status removed - using global sync */}
             </div>
             

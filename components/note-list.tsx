@@ -31,11 +31,23 @@ export default function NoteList({ notes, selectedNote, onSelectNote, onCreateNo
   )
 
   const getSyncIcon = (note: Note) => {
-    if (note.isSynced && note.eventId) {
+    // Debug logging for sync status
+    console.log(`[NoteList] Note "${note.title}": isSynced=${note.isSynced}, eventId=${note.eventId}, fetchedFromRelays=${note.fetchedFromRelays}, publishedToRelays=${note.publishedToRelays}`)
+    
+    // If note has eventId and was fetched from relays, it's definitely synced
+    if (note.eventId && note.fetchedFromRelays) {
       return <CheckCircle className="w-3 h-3 text-green-500" title="Synced to Nostr" />
-    } else if (note.eventId) {
+    }
+    // If note has eventId but wasn't fetched from relays, it might be published but not verified
+    else if (note.eventId) {
       return <AlertCircle className="w-3 h-3 text-yellow-500" title="Published but not verified" />
-    } else {
+    }
+    // If note was fetched from relays but has no eventId, something is wrong
+    else if (note.fetchedFromRelays) {
+      return <AlertCircle className="w-3 h-3 text-orange-500" title="Fetched from relays but no event ID" />
+    }
+    // Otherwise it's local only
+    else {
       return <CloudOff className="w-3 h-3 text-gray-400" title="Local only" />
     }
   }
