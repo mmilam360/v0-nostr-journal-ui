@@ -300,13 +300,15 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
         
         // Override with relay notes if they exist
         relayNotes.forEach(note => {
-          noteMap.set(note.id, { 
+          const mergedNote = { 
             ...note, 
             source: 'relay',
             fetchedFromRelays: true,
             publishedToRelays: true, // If fetched from relays, it was previously published
             isSynced: true // All notes fetched from relays are synced
-          })
+          }
+          console.log(`[MainApp] Merging relay note "${note.title}" with eventId: ${note.eventId}`)
+          noteMap.set(note.id, mergedNote)
         })
         
         const allNotes = Array.from(noteMap.values())

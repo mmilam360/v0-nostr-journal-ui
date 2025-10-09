@@ -370,9 +370,6 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
               {/* Individual note sync status removed - using global sync */}
             </div>
             
-            {/* Debug logging for event ID */}
-            {console.log(`[Editor] Note "${note.title}": eventId=${note.eventId}, fetchedFromRelays=${note.fetchedFromRelays}, publishedToRelays=${note.publishedToRelays}, isSynced=${note.isSynced}`)}
-            
             {/* Event ID with actions - Show for notes WITH eventId */}
             {note.eventId && (
               <div className="flex items-center gap-1">
@@ -380,23 +377,6 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
                 <code className="text-xs font-mono text-primary bg-primary/10 px-1.5 py-0.5 rounded">
                   {note.eventId.slice(0, 8)}...
                 </code>
-                
-                {/* Sync status indicators */}
-                <div className="flex items-center gap-1">
-                  {/* Upload status - published to relays */}
-                  {note.publishedToRelays ? (
-                    <Upload className="w-3 h-3 text-green-500" title="Published to relays" />
-                  ) : (
-                    <Upload className="w-3 h-3 text-gray-400" title="Not published to relays" />
-                  )}
-                  
-                  {/* Download status - fetched from relays */}
-                  {note.fetchedFromRelays ? (
-                    <Download className="w-3 h-3 text-blue-500" title="Fetched from relays" />
-                  ) : (
-                    <Download className="w-3 h-3 text-gray-400" title="Not fetched from relays" />
-                  )}
-                </div>
                 
                 <Button
                   onClick={() => copyEventId(note.eventId!)}
@@ -418,77 +398,11 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
                   variant="ghost"
                   size="sm"
                   className="h-6 w-6 p-0"
-                  title="Verify on Nostr (njump gateway)"
+                  title="View on njump.me"
                 >
                   <ExternalLink className="w-3 h-3" />
                 </Button>
               </div>
-            )}
-            
-            {/* Find on Nostr button - Show for synced notes WITHOUT eventId */}
-            {!note.eventId && note.fetchedFromRelays && (
-              <Button
-                onClick={async () => {
-                  console.log('[Editor] 🔍 Finding note on Nostr...')
-                  setFindingEventId(true)
-                  
-                  try {
-                    // Import the fetch function
-                    const { fetchAllNotesFromNostr } = await import('@/lib/nostr-storage')
-                    
-                    // Fetch all notes from Nostr
-                    console.log('[Editor] Fetching all notes from relays...')
-                    const remoteNotes = await fetchAllNotesFromNostr(authData)
-                    console.log('[Editor] Found', remoteNotes.length, 'notes on Nostr')
-                    
-                    // Find this specific note by ID
-                    const remoteNote = remoteNotes.find(n => n.id === note.id)
-                    
-                    if (remoteNote && remoteNote.eventId) {
-                      console.log('[Editor] ✅ Found event ID:', remoteNote.eventId)
-                      
-                      // Update the note with the eventId
-                      onUpdateNote({
-                        ...note,
-                        eventId: remoteNote.eventId,
-                        eventKind: remoteNote.eventKind
-                      })
-                      
-                      console.log('[Editor] ✅ Note updated with eventId:', remoteNote.eventId)
-                    } else {
-                      console.log('[Editor] ❌ Note not found on Nostr')
-                      alert('Note not found on Nostr network.\n\nThis note may not have synced yet, or may only exist locally.')
-                    }
-                  } catch (error) {
-                    console.error('[Editor] ❌ Error finding note:', error)
-                    alert('Failed to search Nostr:\n\n' + (error instanceof Error ? error.message : 'Unknown error'))
-                  } finally {
-                    setFindingEventId(false)
-                  }
-                }}
-                variant="ghost"
-                size="sm"
-                className="h-6 px-2 text-xs bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-600 dark:text-yellow-500"
-                disabled={findingEventId}
-                title="Search for this note on Nostr relays to retrieve event ID"
-              >
-                {findingEventId ? (
-                  <>
-                    <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-                    Searching...
-                  </>
-                ) : (
-                  <>
-                    🔍 Find on Nostr
-                  </>
-                )}
-              </Button>
-            )}
-            
-            {!note.eventId && !note.fetchedFromRelays && (
-              <span className="text-xs text-muted-foreground">
-                Not yet synced to Nostr
-              </span>
             )}
           </div>
         </div>

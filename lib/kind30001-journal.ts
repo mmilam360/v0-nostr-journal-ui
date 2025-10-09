@@ -155,7 +155,7 @@ export async function loadJournalFromKind30001(authData: any): Promise<Decrypted
           
           if (decryptedContent) {
             console.log("[Kind30001Journal] Successfully decrypted journal entry:", decryptedContent.title)
-            return {
+            const note = {
               id: decryptedContent.id,
               title: decryptedContent.title,
               content: decryptedContent.content,
@@ -166,6 +166,9 @@ export async function loadJournalFromKind30001(authData: any): Promise<Decrypted
               eventKind: event.kind,
               lastSynced: new Date()
             }
+            
+            console.log(`[Kind30001Journal] Created note "${note.title}" with eventId: ${note.eventId}`)
+            return note
           } else {
             console.log("[Kind30001Journal] Decryption returned null for event:", event.id)
             return null
