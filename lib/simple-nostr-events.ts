@@ -216,23 +216,24 @@ export async function saveNoteToRelays(note: DecryptedNote, authData: any): Prom
     
     // Wait for relay confirmations (optional but helpful for debugging)
     const confirmations = await Promise.allSettled(
-      relays.map(async (relay) => {
+      relays.map(async (relay, index) => {
+        const relayUrl = RELAYS[index] // Use the URL from our RELAYS array
         return new Promise((resolve) => {
           const timeout = setTimeout(() => {
-            console.log(`[SimpleEvents] Timeout waiting for confirmation from ${relay.relay.url}`)
-            resolve({ relay: relay.relay.url, status: 'timeout' })
+            console.log(`[SimpleEvents] Timeout waiting for confirmation from ${relayUrl}`)
+            resolve({ relay: relayUrl, status: 'timeout' })
           }, 5000)
           
           relay.on('ok', () => {
             clearTimeout(timeout)
-            console.log(`[SimpleEvents] ✅ Event confirmed by ${relay.relay.url}`)
-            resolve({ relay: relay.relay.url, status: 'ok' })
+            console.log(`[SimpleEvents] ✅ Event confirmed by ${relayUrl}`)
+            resolve({ relay: relayUrl, status: 'ok' })
           })
           
           relay.on('failed', (reason) => {
             clearTimeout(timeout)
-            console.log(`[SimpleEvents] ❌ Event rejected by ${relay.relay.url}: ${reason}`)
-            resolve({ relay: relay.relay.url, status: 'failed', reason })
+            console.log(`[SimpleEvents] ❌ Event rejected by ${relayUrl}: ${reason}`)
+            resolve({ relay: relayUrl, status: 'failed', reason })
           })
         })
       })
