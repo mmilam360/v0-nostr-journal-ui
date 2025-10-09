@@ -58,6 +58,7 @@ import { getDefaultRelays, initializePersistentRelayPool, shutdownPersistentRela
 import { DonationModal } from "@/components/donation-modal-proper"
 import { setActiveSigner } from "@/lib/signer-connector"
 import { createDirectEventManager, type DirectEventManager } from "@/lib/direct-event-manager"
+import { LoadingScreen } from "@/components/loading-screen"
 import { addSyncTask, addHighPrioritySyncTask, onSyncTaskCompleted, onSyncTaskFailed, getSyncQueueStats } from "@/lib/sync-queue"
 
 // Sync Status Component
@@ -918,6 +919,12 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
         }
       }
       
+      // If no note is selected but we have notes, select the first one
+      if (!selectedNote && validatedNotes.length > 0) {
+        setSelectedNote(validatedNotes[0])
+        console.log("[v0] Auto-selected first note after refresh")
+      }
+      
       // Save to local storage
       await saveEncryptedNotes(authData.pubkey, validatedNotes)
       
@@ -1063,6 +1070,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
 
   return (
     <ErrorBoundary>
+      <LoadingScreen isLoading={isLoading} />
     <div className="h-screen bg-background flex flex-col w-full">
         {/* Clean Header */}
         <header className="sticky top-0 z-50 bg-white/95 dark:bg-card/95 backdrop-blur-sm border-b border-border">
