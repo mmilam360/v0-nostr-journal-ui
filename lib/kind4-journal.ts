@@ -134,6 +134,14 @@ export async function saveJournalAsKind4(note: DecryptedNote, authData: any): Pr
       content: encryptedContent,
       pubkey: authData.pubkey,
     }
+    
+    console.log("[Kind4Journal] Created unsigned Kind 4 event:", {
+      kind: unsignedEvent.kind,
+      created_at: unsignedEvent.created_at,
+      tags: unsignedEvent.tags,
+      content_length: unsignedEvent.content.length,
+      pubkey: unsignedEvent.pubkey
+    })
 
     // Sign the event
     const signedEvent = await signEventWithRemote(unsignedEvent, authData)
@@ -142,43 +150,28 @@ export async function saveJournalAsKind4(note: DecryptedNote, authData: any): Pr
     // Publish to relays with better error tracking
     const pool = getPool()
     
-    // Try to publish to each relay individually to get better error feedback
-    const publishPromises = RELAYS.map(async (relayUrl, index) => {
-      try {
-        console.log(`[Kind4Journal] Publishing to relay ${index + 1}: ${relayUrl}`)
-        const relay = pool.ensureRelay(relayUrl)
-        await relay.publish(signedEvent)
-        console.log(`[Kind4Journal] ✅ Successfully published to ${relayUrl}`)
-        return { relay: relayUrl, status: 'success' }
-      } catch (error) {
-        console.error(`[Kind4Journal] ❌ Failed to publish to ${relayUrl}:`, error)
-        return { relay: relayUrl, status: 'error', error: error.message }
+    // Publish to all relays using the correct nostr-tools API
+    try {
+      console.log(`[Kind4Journal] Publishing to ${RELAYS.length} relays...`)
+      const relays = await pool.publish(RELAYS, signedEvent)
+      console.log(`[Kind4Journal] ✅ Published to ${relays.length} relays successfully`)
+      
+      // Log which relays we published to
+      RELAYS.forEach((relay, index) => {
+        console.log(`[Kind4Journal] ✅ Published to relay ${index + 1}: ${relay}`)
+      })
+      
+      return {
+        success: true,
+        eventId: signedEvent.id
       }
-    })
-    
-    const results = await Promise.allSettled(publishPromises)
-    const successful = results.filter(r => r.status === 'fulfilled' && r.value.status === 'success').length
-    const failed = results.filter(r => r.status === 'rejected' || (r.status === 'fulfilled' && r.value.status === 'error')).length
-    
-    console.log(`[Kind4Journal] Publishing results: ${successful} successful, ${failed} failed`)
-    
-    // Log detailed results
-    results.forEach((result, index) => {
-      if (result.status === 'fulfilled') {
-        const { relay, status, error } = result.value
-        if (status === 'success') {
-          console.log(`[Kind4Journal] ✅ ${relay}: Published successfully`)
-        } else {
-          console.log(`[Kind4Journal] ❌ ${relay}: ${error}`)
-        }
-      } else {
-        console.log(`[Kind4Journal] ❌ ${RELAYS[index]}: ${result.reason}`)
+      
+    } catch (error) {
+      console.error(`[Kind4Journal] ❌ Failed to publish to relays:`, error)
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error"
       }
-    })
-    
-    return {
-      success: true,
-      eventId: signedEvent.id
     }
     
   } catch (error) {
