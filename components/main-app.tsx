@@ -304,7 +304,8 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
             ...note, 
             source: 'relay',
             fetchedFromRelays: true,
-            publishedToRelays: true // If fetched from relays, it was previously published
+            publishedToRelays: true, // If fetched from relays, it was previously published
+            isSynced: true // All notes fetched from relays are synced
           })
         })
         
