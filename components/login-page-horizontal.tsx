@@ -170,58 +170,72 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
     try {
       if (remoteSignerMode === 'signer') {
         // Signer-initiated flow: user pastes bunker:// URL from nsec.app
-        console.log('[BunkerConnect] 🔌 Connecting with bunker URL...')
-        console.log('[BunkerConnect] 📱 User Agent:', navigator.userAgent)
-        console.log('[BunkerConnect] 📱 Mobile check:', /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent))
+        console.log('[Login] Connecting to remote signer...')
         
-        // Use our new signer-connector
+        const input = bunkerUrl.trim()
+        
+        if (!input) {
+          throw new Error('Please enter a bunker URL')
+        }
+        
+        // Parse the input (supports both bunker:// and nostrconnect://)
+        let bunkerUri = input
+        if (input.startsWith('nostrconnect://')) {
+          // Convert nostrconnect:// to bunker:// format if needed
+          bunkerUri = input.replace('nostrconnect://', 'bunker://')
+        }
+        
+        if (!bunkerUri.startsWith('bunker://')) {
+          throw new Error('Invalid bunker URL. Should start with bunker:// or nostrconnect://')
+        }
+        
+        console.log('[Login] Parsed bunker URI')
+        
+        // Connect using nostr-signer-connector
         const { connectNip46, setActiveSigner } = await import('@/lib/signer-connector')
-        const result = await connectNip46(bunkerUrl)
+        const result = await connectNip46(bunkerUri)
         
         if (!result.success || !result.signer) {
           throw new Error(result.error || 'Failed to connect to remote signer')
         }
         
-        const signer = result.signer
-        const session = { bunkerUri: bunkerUrl, connectedAt: Date.now() }
+        console.log('[Login] ✅ Connected to remote signer')
         
-        console.log('[BunkerConnect] ✅ Connected! Getting user pubkey...')
+        // Get the user's public key from the remote signer
+        const userPubkey = await result.signer.getPublicKey()
+        console.log('[Login] Got user pubkey:', userPubkey)
         
-        // Get the actual user pubkey (not signer pubkey)
-        const userPubkey = await signer.getPublicKey()
+        // Set the active signer globally
+        setActiveSigner(result.signer)
         
-        console.log('[BunkerConnect] 👤 User pubkey:', userPubkey)
+        // Store session data for reconnection
+        const sessionData = {
+          bunkerUri: bunkerUri,
+          userPubkey: userPubkey,
+          connectedAt: Date.now()
+        }
         
-        // Store session for reconnection
-        localStorage.setItem('nostr_connect_session', JSON.stringify(session))
-        localStorage.setItem('nostr_remote_session', JSON.stringify({ bunkerUri: bunkerUrl, connectedAt: Date.now() }))
+        // Save to localStorage for reconnection
+        localStorage.setItem('nostr_remote_session', JSON.stringify(sessionData))
         
-        // Set the active signer using our signer-connector
-        setActiveSigner(signer)
+        console.log('[Login] ✅ Remote signer authentication complete')
         
         setConnectionState('success')
         
-        // Convert session to the format expected by main app
-        const clientSecretKeyHex = (session as any)?.clientSecretKey ? 
-          Array.from((session as any).clientSecretKey as Uint8Array).map((b: number) => b.toString(16).padStart(2, '0')).join('') : 
-          Array.from(await generateSecretKey()).map((b: number) => b.toString(16).padStart(2, '0')).join('')
-
-        setTimeout(() => {
-          onLoginSuccess({
-            pubkey: userPubkey,
-            authMethod: 'remote',
-            bunkerUri: bunkerUrl,
-            clientSecretKey: clientSecretKeyHex,
-            bunkerPubkey: userPubkey, // This is the user's pubkey, not signer's
-            relays: ['wss://relay.damus.io', 'wss://nos.lol', 'wss://relay.nostr.band', 'wss://relay.primal.net', 'wss://purplepag.es'],
-            // Store session data for nostr-signer-connector
-            sessionData: session
-          })
-        }, 1500)
+        // Create auth data for the app
+        const authData = {
+          pubkey: userPubkey,
+          authMethod: 'remote' as const,
+          bunkerUri: bunkerUri,
+          relays: ['wss://relay.damus.io', 'wss://nos.lol', 'wss://relay.nostr.band', 'wss://relay.primal.net', 'wss://purplepag.es'],
+          sessionData: sessionData
+        }
         
+        onLoginSuccess(authData)
+
       } else {
         // Client-initiated flow: generate nostrconnect:// URI
-        console.log('[BunkerConnect] 🚀 Starting client-initiated connection...')
+        console.log('[BunkerConnect] 📱 Generating connection URI...')
         
         const clientMetadata = {
           name: 'Nostr Journal',
@@ -229,14 +243,12 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
           description: 'Private journaling on Nostr'
         }
 
-        // Use more reliable relays with lower PoW requirements for NIP-46
-        // These relays are known to work well with remote signers
         const relays = [
-          'wss://relay.damus.io',      // Reliable, low PoW requirements
-          'wss://nos.lol',             // Good for NIP-46
-          'wss://relay.nostr.band',    // Reliable connection
-          'wss://relay.primal.net',    // Fast, reliable
-          'wss://purplepag.es'         // Good fallback
+          'wss://relay.damus.io',
+          'wss://nos.lol',
+          'wss://relay.nostr.band',
+          'wss://relay.primal.net',
+          'wss://purplepag.es'
         ]
 
         // Use the standard NIP-46 client-initiated flow
@@ -248,7 +260,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
         console.log('[BunkerConnect] 📱 Generated connection URI')
         setConnectUri(connectUri)
 
-        // Wait for connection with shorter timeout
+        // Wait for connection with timeout
         const timeout = setTimeout(() => {
           setConnectionState('error')
           setError('Connection timeout. Please make sure your signing app is connected and try again.')
@@ -260,72 +272,43 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
         clearTimeout(timeout)
 
         console.log('[BunkerConnect] ✅ Connected! Getting user pubkey...')
-
+        
         // Get actual user pubkey
-      const userPubkey = await signer.getPublicKey()
-
+        const userPubkey = await signer.getPublicKey()
         console.log('[BunkerConnect] 👤 User pubkey:', userPubkey)
 
-        // Store session
-        localStorage.setItem('nostr_connect_session', JSON.stringify(session))
-        localStorage.setItem('nostr_remote_session', JSON.stringify({ bunkerUri: connectUri, connectedAt: Date.now() }))
-        
         // Set the active signer using our signer-connector
         const { setActiveSigner } = await import('@/lib/signer-connector')
         setActiveSigner(signer)
 
+        // Store session data for reconnection
+        const sessionData = {
+          bunkerUri: connectUri,
+          userPubkey: userPubkey,
+          connectedAt: Date.now()
+        }
+        
+        // Save to localStorage for reconnection
+        localStorage.setItem('nostr_remote_session', JSON.stringify(sessionData))
+
         setConnectionState('success')
 
-        // Convert session to the format expected by main app
-        const clientSecretKeyHex = (session as any)?.clientSecretKey ? 
-          Array.from((session as any).clientSecretKey as Uint8Array).map((b: number) => b.toString(16).padStart(2, '0')).join('') : 
-          Array.from(await generateSecretKey()).map((b: number) => b.toString(16).padStart(2, '0')).join('')
-
-      setTimeout(() => {
-        onLoginSuccess({
+        // Create auth data for the app
+        const authData = {
           pubkey: userPubkey,
-          authMethod: 'remote',
-            bunkerUri: connectUri,
-          clientSecretKey: clientSecretKeyHex,
-            bunkerPubkey: userPubkey, // This is the user's pubkey, not signer's
-            relays: relays,
-            // Store session data for nostr-signer-connector
-            sessionData: session
-        })
-      }, 1500)
+          authMethod: 'remote' as const,
+          bunkerUri: connectUri,
+          relays: relays,
+          sessionData: sessionData
+        }
+
+        onLoginSuccess(authData)
       }
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('[BunkerConnect] ❌ Connection failed:', error)
       setConnectionState('error')
-      
-      let errorMsg = 'Failed to connect. '
-      
-      if (error instanceof Error) {
-        console.log('[BunkerConnect] ❌ Error details:', error.message, error.stack)
-        
-        if (error.message.includes('timeout')) {
-          errorMsg += 'Connection timed out. Make sure your signing app is open, connected to the internet, and try again.'
-        } else if (error.message.includes('blocked') || error.message.includes('rejected')) {
-          errorMsg += 'Relay blocked the connection. Try using a different signing app or check your internet connection.'
-        } else if (error.message.includes('pow') || error.message.includes('Proof of Work') || error.message.includes('bits needed')) {
-          errorMsg += 'Relay requires Proof of Work. Try using a different signing app with PoW support or use browser extension login instead.'
-        } else if (error.message.includes('relay')) {
-          errorMsg += 'Could not connect to relay. Check your internet connection and try again.'
-        } else if (error.message.includes('NIP-46')) {
-          errorMsg += 'NIP-46 connection failed. Make sure your signing app supports remote signing and is connected to the internet.'
-        } else if (error.message.includes('Invalid URI') || error.message.includes('bunker://')) {
-          errorMsg += 'Invalid bunker URL format. Make sure you copied the complete URL from your signing app.'
-        } else if (error.message.includes('WebSocket') || error.message.includes('connection')) {
-          errorMsg += 'Connection failed. Check your internet connection and try again.'
-        } else {
-          errorMsg += error.message
-        }
-      } else {
-        errorMsg += 'Unknown error occurred. Please try again.'
-      }
-      
-      setError(errorMsg)
+      setError(error.message || 'Failed to connect to remote signer')
     }
   }
 
@@ -612,11 +595,6 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                           <p className="text-sm text-muted-foreground mb-4">
                             Scan with nsec.app, Alby, or Amethyst to connect
                           </p>
-                          <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 mb-4">
-                            <p className="text-xs text-blue-700 dark:text-blue-300">
-                              <strong>Tip:</strong> If you get "Proof of Work required" errors, try using a different signing app or use browser extension login instead.
-                            </p>
-                          </div>
                         </div>
                         {connectUri ? (
                           <div className="flex flex-col items-center space-y-4">
@@ -693,11 +671,6 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                               </ol>
                             </div>
                             
-                            <div className="bg-amber-50 dark:bg-amber-900/20 rounded-lg p-3 mt-2">
-                              <p className="text-xs text-amber-700 dark:text-amber-300">
-                                <strong>⚠️ Important:</strong> You may need to approve additional permissions in your signing app for creating, editing, and deleting notes. Keep your signing app open for the best experience.
-                              </p>
-                            </div>
                           </div>
                         )}
                       </div>
@@ -748,17 +721,6 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                           </ol>
                         </div>
                         
-                        <div className="bg-amber-50 dark:bg-amber-900/20 rounded-lg p-3 mt-2">
-                          <p className="text-xs text-amber-700 dark:text-amber-300">
-                            <strong>⚠️ Important:</strong> You may need to approve additional permissions in your signing app for creating, editing, and deleting notes. Keep your signing app open for the best experience.
-                          </p>
-                        </div>
-                        
-                        <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 mt-2">
-                          <p className="text-xs text-blue-700 dark:text-blue-300">
-                            <strong>💡 Tip:</strong> If you get "Proof of Work required" errors, try using a different signing app or use browser extension login instead.
-                          </p>
-                        </div>
                       </div>
                     )}
 
