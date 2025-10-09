@@ -31,23 +31,13 @@ export default function NoteList({ notes, selectedNote, onSelectNote, onCreateNo
   )
 
   const getSyncIcon = (note: Note) => {
-    return (
-      <div className="flex items-center gap-1">
-        {/* Upload status - published to relays */}
-        {note.publishedToRelays ? (
-          <Upload className="w-3 h-3 text-green-500" title="Published to relays" />
-        ) : (
-          <Upload className="w-3 h-3 text-gray-400" title="Not published to relays" />
-        )}
-        
-        {/* Download status - fetched from relays */}
-        {note.fetchedFromRelays ? (
-          <Download className="w-3 h-3 text-blue-500" title="Fetched from relays" />
-        ) : (
-          <Download className="w-3 h-3 text-gray-400" title="Not fetched from relays" />
-        )}
-      </div>
-    )
+    if (note.isSynced && note.eventId) {
+      return <CheckCircle className="w-3 h-3 text-green-500" title="Synced to Nostr" />
+    } else if (note.eventId) {
+      return <AlertCircle className="w-3 h-3 text-yellow-500" title="Published but not verified" />
+    } else {
+      return <CloudOff className="w-3 h-3 text-gray-400" title="Local only" />
+    }
   }
 
   const handleNoteClick = (note: Note) => {

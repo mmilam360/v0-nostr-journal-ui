@@ -4,13 +4,17 @@ import * as nostrTools from "nostr-tools"
 import type { DecryptedNote } from "./nostr-crypto"
 import { signEventWithRemote } from "./signer-manager"
 
-// Simple relay list for reliable communication
+// Relay list optimized for kind 30078 parameterized replaceable events
+// These relays are known to accept a wide variety of event kinds
 const RELAYS = [
-  "wss://relay.damus.io",
-  "wss://nos.lol", 
-  "wss://relay.primal.net",
-  "wss://relay.snort.social",
-  "wss://relay.nostr.band"
+  "wss://relay.damus.io",      // Damus relay - generally permissive
+  "wss://nos.lol",             // Nos.lol - good for various kinds
+  "wss://relay.nostr.band",    // Nostr.band - supports many kinds
+  "wss://relay.snort.social",  // Snort relay - widely used
+  "wss://relay.nostr.wine",    // Nostr.wine - permissive relay
+  "wss://relay.current.fyi",   // Current.fyi - supports various kinds
+  "wss://relay.nostr.com.au",  // Nostr.com.au - Australian relay
+  "wss://relay.nostr.net"      // Nostr.net - backup relay
 ]
 
 // App identifier for our events
@@ -204,17 +208,42 @@ export async function saveNoteToRelays(note: DecryptedNote, authData: any): Prom
     const signedEvent = await signEventWithRemote(unsignedEvent, authData)
     console.log("[SimpleEvents] Publishing event to relays:", signedEvent.id)
     
-    // Publish to relays - simple approach like nostrudel
+    // Publish to relays with better error tracking
     const pool = getPool()
-    const relays = await pool.publish(RELAYS, signedEvent)
-    console.log("[SimpleEvents] Published to", relays.length, "relays")
     
-    // Log which relays we published to
-    RELAYS.forEach((relay, index) => {
-      console.log(`[SimpleEvents] Published to relay ${index + 1}: ${relay}`)
+    // Try to publish to each relay individually to get better error feedback
+    const publishPromises = RELAYS.map(async (relayUrl, index) => {
+      try {
+        console.log(`[SimpleEvents] Publishing to relay ${index + 1}: ${relayUrl}`)
+        const relay = pool.ensureRelay(relayUrl)
+        await relay.publish(signedEvent)
+        console.log(`[SimpleEvents] ✅ Successfully published to ${relayUrl}`)
+        return { relay: relayUrl, status: 'success' }
+      } catch (error) {
+        console.error(`[SimpleEvents] ❌ Failed to publish to ${relayUrl}:`, error)
+        return { relay: relayUrl, status: 'error', error: error.message }
+      }
     })
     
-    console.log("[SimpleEvents] Event published successfully, relay confirmations not available in this nostr-tools version")
+    const results = await Promise.allSettled(publishPromises)
+    const successful = results.filter(r => r.status === 'fulfilled' && r.value.status === 'success').length
+    const failed = results.filter(r => r.status === 'rejected' || (r.status === 'fulfilled' && r.value.status === 'error')).length
+    
+    console.log(`[SimpleEvents] Publishing results: ${successful} successful, ${failed} failed`)
+    
+    // Log detailed results
+    results.forEach((result, index) => {
+      if (result.status === 'fulfilled') {
+        const { relay, status, error } = result.value
+        if (status === 'success') {
+          console.log(`[SimpleEvents] ✅ ${relay}: Published successfully`)
+        } else {
+          console.log(`[SimpleEvents] ❌ ${relay}: ${error}`)
+        }
+      } else {
+        console.log(`[SimpleEvents] ❌ ${RELAYS[index]}: ${result.reason}`)
+      }
+    })
     
     // Just return success - don't wait for confirmations
     return {
