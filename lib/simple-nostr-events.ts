@@ -137,6 +137,34 @@ export async function loadNotesFromRelays(authData: any): Promise<DecryptedNote[
     }
     
     console.log("[SimpleEvents] Successfully loaded", notes.length, "decrypted notes from relays")
+    
+    // If no notes found, try querying for a specific recent event ID to test relay connectivity
+    if (notes.length === 0) {
+      console.log("[SimpleEvents] No notes found - testing relay connectivity...")
+      try {
+        // Query for any kind 30078 events from this pubkey (without app filter) to see if events exist
+        const allKind30078Events = await pool.querySync(RELAYS, [
+          { 
+            kinds: [EVENT_KIND], 
+            authors: [authData.pubkey],
+            limit: 10
+          }
+        ], { timeout: 5000 })
+        
+        console.log("[SimpleEvents] Found", allKind30078Events.length, "total kind 30078 events (any client)")
+        
+        if (allKind30078Events.length > 0) {
+          console.log("[SimpleEvents] Sample events found:")
+          allKind30078Events.slice(0, 3).forEach((event, i) => {
+            const clientTag = event.tags.find((tag: any[]) => tag[0] === "client")
+            console.log(`[SimpleEvents] Event ${i + 1}: ${event.id}, client: ${clientTag ? clientTag[1] : 'none'}`)
+          })
+        }
+      } catch (error) {
+        console.error("[SimpleEvents] Error testing relay connectivity:", error)
+      }
+    }
+    
     return notes
     
   } catch (error) {
@@ -181,10 +209,36 @@ export async function saveNoteToRelays(note: DecryptedNote, authData: any): Prom
     const relays = await pool.publish(RELAYS, signedEvent)
     console.log("[SimpleEvents] Published to", relays.length, "relays")
     
-    // Log which relays we published to
+    // Log which relays we published to and wait for responses
     RELAYS.forEach((relay, index) => {
       console.log(`[SimpleEvents] Published to relay ${index + 1}: ${relay}`)
     })
+    
+    // Wait for relay confirmations (optional but helpful for debugging)
+    const confirmations = await Promise.allSettled(
+      relays.map(async (relay) => {
+        return new Promise((resolve) => {
+          const timeout = setTimeout(() => {
+            console.log(`[SimpleEvents] Timeout waiting for confirmation from ${relay.relay.url}`)
+            resolve({ relay: relay.relay.url, status: 'timeout' })
+          }, 5000)
+          
+          relay.on('ok', () => {
+            clearTimeout(timeout)
+            console.log(`[SimpleEvents] ✅ Event confirmed by ${relay.relay.url}`)
+            resolve({ relay: relay.relay.url, status: 'ok' })
+          })
+          
+          relay.on('failed', (reason) => {
+            clearTimeout(timeout)
+            console.log(`[SimpleEvents] ❌ Event rejected by ${relay.relay.url}: ${reason}`)
+            resolve({ relay: relay.relay.url, status: 'failed', reason })
+          })
+        })
+      })
+    )
+    
+    console.log("[SimpleEvents] Relay confirmations:", confirmations)
     
     // Just return success - don't wait for confirmations
     return {
