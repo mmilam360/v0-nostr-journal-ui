@@ -34,8 +34,9 @@ async function createGiftWrappedDM(unsignedEvent: any, authData: any): Promise<a
     }
     
     // Step 3: Create the gift wrap (Kind 1059) - encrypted with throwaway key
-    const throwawayKey = nostrTools.generatePrivateKey()
-    const throwawayPubkey = nostrTools.getPublicKey(throwawayKey)
+    const { generatePrivateKey, getPublicKey } = nostrTools
+    const throwawayKey = generatePrivateKey()
+    const throwawayPubkey = getPublicKey(throwawayKey)
     
     const sealJson = JSON.stringify(seal)
     const wrappedContent = await nip04.encrypt(throwawayKey, authData.pubkey, sealJson)
