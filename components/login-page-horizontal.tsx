@@ -191,7 +191,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
         
         console.log('[Login] Parsed bunker URI')
         
-        // Connect using nostr-signer-connector
+        // Connect using nostr-signer-connector with comprehensive permissions
         const { connectNip46, setActiveSigner } = await import('@/lib/signer-connector')
         const result = await connectNip46(bunkerUri)
         
@@ -257,7 +257,14 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
             clientMetadata,
             {
               connectTimeoutMs: 30000, // 30 second timeout
-              permissions: ['sign_event', 'get_public_key'] // Explicit permissions
+              permissions: [
+                'sign_event',        // Sign journal entries (Kind 30001)
+                'get_public_key',    // Get user's public key
+                'delete_event',      // Delete journal entries (Kind 5 deletion events)
+                'nip04_encrypt',     // Encrypt journal content
+                'nip04_decrypt',     // Decrypt journal content
+                'get_relays'         // Get relay information
+              ]
             }
           )
           
@@ -287,7 +294,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
           console.log('[BunkerConnect] ✅ Connected! Getting user pubkey...')
           
           // Get actual user pubkey
-          const userPubkey = await signer.getPublicKey()
+      const userPubkey = await signer.getPublicKey()
           console.log('[BunkerConnect] 👤 User pubkey:', userPubkey)
 
           // Set the active signer using our signer-connector
@@ -304,7 +311,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
           // Save to localStorage for reconnection
           localStorage.setItem('nostr_remote_session', JSON.stringify(sessionData))
 
-          setConnectionState('success')
+      setConnectionState('success')
 
           // Create auth data for the app
           const authData = {
@@ -329,11 +336,11 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
       
       let errorMsg = 'Failed to connect to remote signer'
       
-      if (error.message.includes('timeout')) {
+        if (error.message.includes('timeout')) {
         errorMsg = 'Connection timeout. Make sure to:\n1. Scan the QR code with nsec.app\n2. Approve the connection in your signing app\n3. Check your internet connection'
       } else if (error.message.includes('NIP-46')) {
         errorMsg = 'NIP-46 connection failed. Please try scanning the QR code again with nsec.app'
-      } else {
+        } else {
         errorMsg = error.message || 'Failed to connect to remote signer'
       }
       
@@ -634,7 +641,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                                 level="L"
                           includeMargin={true}
                         />
-                            </div>
+                      </div>
                             <div className="text-center">
                               <p className="text-sm text-muted-foreground">
                                 Scan with your signing app or copy the connection string below
