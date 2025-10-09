@@ -44,7 +44,7 @@ import DonationBubble from "@/components/donation-bubble"
 import { saveEncryptedNotes, saveEncryptedNotesImmediate, loadEncryptedNotes } from "@/lib/nostr-crypto"
 import { createNostrEvent, publishToNostr } from "@/lib/nostr-publish"
 import { cleanupSigner } from "@/lib/signer-manager"
-import { smartSyncNotes, saveAndSyncNote } from "@/lib/nostr-sync-fixed"
+// import { smartSyncNotes, saveAndSyncNote } from "@/lib/nostr-sync-fixed" // Disabled - using simple events
 import { loadNotesFromRelays, saveNoteToRelays, deleteNoteFromRelays, syncFromRelays, verifyEventExists } from "@/lib/simple-nostr-events"
 import { sanitizeNotes } from "@/lib/data-validators"
 import { ErrorBoundary } from "@/components/error-boundary"
@@ -331,115 +331,113 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     }
   }, [authData]) // Only depend on pubkey, not entire authData object
 
-  useEffect(() => {
-    const syncInterval = setInterval(async () => {
-      if (syncStatus === "syncing" || needsSync) return
+  // Background sync disabled - using instant sync instead
+  // useEffect(() => {
+  //   const syncInterval = setInterval(async () => {
+  //     if (syncStatus === "syncing" || needsSync) return
 
-      console.log("[v0] Performing background sync...")
-      setSyncStatus("syncing")
+  //     console.log("[v0] Performing background sync...")
+  //     setSyncStatus("syncing")
 
-      try {
-        const syncResult = await smartSyncNotes(notes, deletedNotes, authData)
+  //     try {
+  //       // Use simple sync - just reload from relays
+  //       const relayNotes = await loadNotesFromRelays(authData)
+  //       const localNotes = await loadEncryptedNotes(authData.pubkey)
 
-        // Validate results
-        const validatedNotes = sanitizeNotes(syncResult.notes)
+  //       // Merge relay and local notes, preferring relay notes when available
+  //       const noteMap = new Map()
+  //       localNotes.forEach(note => noteMap.set(note.id, { ...note, source: 'local' }))
+  //       relayNotes.forEach(note => noteMap.set(note.id, { ...note, source: 'relay' }))
+  //       const mergedNotes = Array.from(noteMap.values())
 
-        // Only update if we got different valid data
-        if (validatedNotes.length > 0 && JSON.stringify(validatedNotes) !== JSON.stringify(notes)) {
-          console.log("[v0] Background sync found changes")
+  //       const validatedNotes = sanitizeNotes(mergedNotes)
 
-          const syncedNotes = validatedNotes.map((note) => ({
-            ...note,
-            syncStatus: syncResult.synced ? ("synced" as const) : ("error" as const),
-          }))
+  //       if (validatedNotes.length !== notes.length || JSON.stringify(validatedNotes) !== JSON.stringify(notes)) {
+  //         console.log("[v0] Background sync found changes")
+  //         setNotes(validatedNotes)
+  //         await saveEncryptedNotes(authData.pubkey, validatedNotes)
+  //       }
 
-          setNotes(syncedNotes)
-          setDeletedNotes(syncResult.deletedNotes)
-        }
+  //       setSyncStatus("synced")
+  //       setLastSyncTime(new Date())
+  //     } catch (error) {
+  //       console.error("[v0] Background sync failed:", error)
+  //       setSyncStatus("error")
+  //     }
+  //   }, 300000) // 5 minutes - much less frequent
 
-        setSyncStatus(syncResult.synced ? "synced" : "error")
-        if (syncResult.synced) {
-          setLastSyncTime(new Date())
-          // Save synced state to local storage
-          await saveEncryptedNotes(authData.pubkey, validatedNotes)
-        }
-      } catch (error) {
-        console.error("[v0] Background sync failed:", error)
-        setSyncStatus("error")
-      }
-    }, 120000) // Increased to 2 minutes to reduce interference with batch processing
+  //   return () => clearInterval(syncInterval)
+  // }, [syncStatus, needsSync, authData, notes, deletedNotes])
 
-    return () => clearInterval(syncInterval)
-  }, [syncStatus, needsSync, authData, notes, deletedNotes]) // Removed notes/deletedNotes from deps to prevent loops
+  // Old sync system disabled - using instant sync instead
+  // useEffect(() => {
+  //     const saveNotes = async () => {
+  //       console.log("[v0] Triggering sync after changes...")
 
-  useEffect(() => {
-      const saveNotes = async () => {
-        console.log("[v0] Triggering sync after changes...")
+  //     // Save locally first (instant feedback)
+  //       await saveEncryptedNotes(authData.pubkey, notes)
 
-      // Save locally first (instant feedback)
-        await saveEncryptedNotes(authData.pubkey, notes)
+  //       if (notes.length > 0 || deletedNotes.length > 0) {
+  //         try {
+  //           setSyncStatus("syncing")
 
-        if (notes.length > 0 || deletedNotes.length > 0) {
-          try {
-            setSyncStatus("syncing")
+  //           setNotes((prev) =>
+  //             prev.map((note) => ({
+  //               ...note,
+  //               syncStatus: "syncing" as const,
+  //             })),
+  //           )
 
-            setNotes((prev) =>
-              prev.map((note) => ({
-                ...note,
-                syncStatus: "syncing" as const,
-              })),
-            )
+  //           console.log("[v0] Syncing changes to Nostr...")
+  //         const result = await smartSyncNotes(notes, deletedNotes, authData)
 
-            console.log("[v0] Syncing changes to Nostr...")
-          const result = await smartSyncNotes(notes, deletedNotes, authData)
+  //         // Validate results
+  //         const validatedNotes = sanitizeNotes(result.notes)
 
-          // Validate results
-          const validatedNotes = sanitizeNotes(result.notes)
+  //         if (validatedNotes.length > 0 && JSON.stringify(validatedNotes) !== JSON.stringify(notes)) {
+  //             console.log("[v0] Sync returned changes, updating state")
 
-          if (validatedNotes.length > 0 && JSON.stringify(validatedNotes) !== JSON.stringify(notes)) {
-              console.log("[v0] Sync returned changes, updating state")
+  //           const syncedNotes = validatedNotes.map((note) => ({
+  //               ...note,
+  //               syncStatus: result.synced ? ("synced" as const) : ("error" as const),
+  //             }))
 
-            const syncedNotes = validatedNotes.map((note) => ({
-                ...note,
-                syncStatus: result.synced ? ("synced" as const) : ("error" as const),
-              }))
+  //             setNotes(syncedNotes)
+  //             setDeletedNotes(result.deletedNotes)
+  //           }
 
-              setNotes(syncedNotes)
-              setDeletedNotes(result.deletedNotes)
-            }
+  //           setSyncStatus(result.synced ? "synced" : "error")
+  //           if (result.synced) {
+  //             setLastSyncTime(new Date())
+  //           }
+  //         } catch (error) {
+  //           console.error("[v0] Error syncing to Nostr:", error)
+  //           setSyncStatus("error")
 
-            setSyncStatus(result.synced ? "synced" : "error")
-            if (result.synced) {
-              setLastSyncTime(new Date())
-            }
-          } catch (error) {
-            console.error("[v0] Error syncing to Nostr:", error)
-            setSyncStatus("error")
+  //           setNotes((prev) =>
+  //             prev.map((note) => ({
+  //               ...note,
+  //               syncStatus: "error" as const,
+  //             })),
+  //           )
+  //         }
+  //       }
 
-            setNotes((prev) =>
-              prev.map((note) => ({
-                ...note,
-                syncStatus: "error" as const,
-              })),
-            )
-          }
-        }
+  //       setNeedsSync(false)
+  //     }
 
-        setNeedsSync(false)
-      }
+  //   let timeoutId: NodeJS.Timeout | null = null
 
-    let timeoutId: NodeJS.Timeout | null = null
+  //   if (!isLoading && needsSync && syncStatus !== "syncing") {
+  //     timeoutId = setTimeout(saveNotes, 2000)
+  //   }
 
-    if (!isLoading && needsSync && syncStatus !== "syncing") {
-      timeoutId = setTimeout(saveNotes, 2000)
-    }
-
-    return () => {
-      if (timeoutId) {
-        clearTimeout(timeoutId)
-      }
-    }
-  }, [needsSync, isLoading, syncStatus, authData, notes, deletedNotes]) // Removed notes/deletedNotes to prevent loops
+  //   return () => {
+  //     if (timeoutId) {
+  //       clearTimeout(timeoutId)
+  //     }
+  //   }
+  // }, [needsSync, isLoading, syncStatus, authData, notes, deletedNotes]) // Removed notes/deletedNotes to prevent loops
 
   const handleCreateNote = async () => {
     console.log("[v0] Creating new note...")
