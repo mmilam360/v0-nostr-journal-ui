@@ -146,6 +146,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   const [profilePicture, setProfilePicture] = useState<string>("")
   const [displayName, setDisplayName] = useState<string>("")
   const [showDonationModal, setShowDonationModal] = useState(false)
+  const [isRefreshing, setIsRefreshing] = useState(false)
   
   // Direct event manager
   const [eventManager] = useState<DirectEventManager>(() => createDirectEventManager())
@@ -870,6 +871,45 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     }
   }
 
+  const handleManualRefresh = async () => {
+    console.log("[v0] Manual refresh triggered")
+    setIsRefreshing(true)
+    
+    try {
+      // Use the same logic as page load - fetch from Kind 30001 lists
+      const relayNotes = await loadJournalFromKind30001(authData)
+      console.log("[v0] ✅ Refreshed", relayNotes.length, "journal entries from Kind 30001 lists")
+      
+      // Update notes with fetched data (set both sync statuses to true)
+      const updatedNotes = relayNotes.map(note => ({
+        ...note,
+        publishedToRelays: true,
+        fetchedFromRelays: true
+      }))
+      
+      // Validate and sanitize the notes
+      const validatedNotes = sanitizeNotes(updatedNotes)
+      
+      setNotes(validatedNotes)
+      
+      // Save to local storage
+      await saveEncryptedNotes(authData.pubkey, validatedNotes)
+      
+      // Update tags
+      const allTags = new Set<string>()
+      validatedNotes.forEach((note) => {
+        note.tags.forEach((tag) => allTags.add(tag))
+      })
+      setTags(Array.from(allTags))
+      
+      console.log("[v0] ✅ Manual refresh complete")
+    } catch (error) {
+      console.error("[v0] ❌ Manual refresh failed:", error)
+    } finally {
+      setIsRefreshing(false)
+    }
+  }
+
   const handleCopyNpub = async () => {
     try {
       await navigator.clipboard.writeText(npub)
@@ -1035,9 +1075,38 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                   <span className="text-muted-foreground">Events sync instantly</span>
                 </div>
                 
+                {/* Manual refresh button - Desktop */}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleManualRefresh}
+                  disabled={isRefreshing}
+                  className="hidden md:flex items-center gap-2 text-xs"
+                  title="Refresh notes from relays"
+                >
+                  {isRefreshing ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-4 w-4" />
+                  )}
+                  <span className="hidden lg:inline">Refresh</span>
+                </Button>
+                
                 {/* Sync status - Mobile (icon only) */}
                 <div className="md:hidden">
-                  <CheckCircle2 className="h-4 w-4 text-green-500" title="Events sync instantly" />
+                  {isRefreshing ? (
+                    <Loader2 className="h-4 w-4 animate-spin text-blue-500" title="Refreshing..." />
+                  ) : (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleManualRefresh}
+                      className="p-1"
+                      title="Refresh notes from relays"
+                    >
+                      <RefreshCw className="h-4 w-4" />
+                    </Button>
+                  )}
                 </div>
                 
                 
