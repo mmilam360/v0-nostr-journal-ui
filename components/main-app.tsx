@@ -169,7 +169,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       // Update state with latest notes from relays
       setNotes(validatedNotes)
       setSyncStatus("synced")
-      setLastSyncTime(new Date())
+        setLastSyncTime(new Date())
       
       // Save to local storage for offline access
       await saveEncryptedNotes(authData.pubkey, validatedNotes)
@@ -325,7 +325,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
         // Override with relay notes if they exist
         relayNotes.forEach(note => {
           const mergedNote = { 
-            ...note, 
+          ...note,
             source: 'relay',
             fetchedFromRelays: true,
             publishedToRelays: true, // If fetched from relays, it was previously published
@@ -354,7 +354,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
 
         setIsLoading(false)
         setSyncStatus("synced")
-        setLastSyncTime(new Date())
+          setLastSyncTime(new Date())
 
         console.log("[v0] ✅ Notes loaded successfully:", validatedNotes.length)
 

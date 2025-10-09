@@ -170,7 +170,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
     try {
       if (remoteSignerMode === 'signer') {
         // Signer-initiated flow: user pastes bunker:// URL from nsec.app
-        console.log('[Login] Connecting to remote signer...')
+        console.log('[Login] Connecting to remote signer via bunker URL...')
         
         const input = bunkerUrl.trim()
         
@@ -178,20 +178,15 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
           throw new Error('Please enter a bunker URL')
         }
         
-        // Parse the input (supports both bunker:// and nostrconnect://)
+        // Parse the bunker URL properly
         let bunkerUri = input
-        if (input.startsWith('nostrconnect://')) {
-          // Convert nostrconnect:// to bunker:// format if needed
-          bunkerUri = input.replace('nostrconnect://', 'bunker://')
+        if (!input.startsWith('bunker://') && !input.startsWith('nostrconnect://')) {
+          throw new Error('Invalid URL format. Should start with bunker:// or nostrconnect://')
         }
         
-        if (!bunkerUri.startsWith('bunker://')) {
-          throw new Error('Invalid bunker URL. Should start with bunker:// or nostrconnect://')
-        }
+        console.log('[Login] Parsed bunker URI:', bunkerUri.substring(0, 50) + '...')
         
-        console.log('[Login] Parsed bunker URI')
-        
-        // Connect using nostr-signer-connector with comprehensive permissions
+        // Connect using nostr-signer-connector
         const { connectNip46, setActiveSigner } = await import('@/lib/signer-connector')
         const result = await connectNip46(bunkerUri)
         
@@ -234,101 +229,128 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
         onLoginSuccess(authData)
 
       } else {
-        // Client-initiated flow: generate nostrconnect:// URI
-        console.log('[BunkerConnect] 📱 Generating connection URI...')
+        // Client-initiated flow: generate proper nostrconnect:// URI per NIP-46 spec
+        console.log('[BunkerConnect] 📱 Generating NIP-46 compliant connection URI...')
         
+        // Generate client keypair for NIP-46
+        const clientPrivateKey = generateSecretKey()
+        const clientPublicKey = getPublicKey(clientPrivateKey)
+        
+        console.log('[BunkerConnect] Generated client keypair:', clientPublicKey)
+        
+        // Create proper metadata (URL-encoded JSON per NIP-46 spec)
         const clientMetadata = {
           name: 'Nostr Journal',
-          url: typeof window !== 'undefined' ? window.location.origin : 'https://nostrjournal.app',
+          url: typeof window !== 'undefined' ? window.location.origin : 'https://nostrjournal.com',
           description: 'Private journaling on Nostr'
         }
 
-        // Try different relay combinations for NIP-46 compatibility
+        // Use single reliable relay for NIP-46 (per NIP-46 best practices)
+        // Try different relays in order of reliability for NIP-46
         const relays = [
-          'wss://nos.lol', // Alternative reliable relay
-          'wss://relay.damus.io' // Fallback
+          'wss://relay.damus.io',  // Primary - most reliable for NIP-46
+          'wss://nos.lol',         // Backup - good NIP-46 support
+          'wss://relay.nostr.band' // Fallback
         ]
-
-        // Use the standard NIP-46 client-initiated flow
+        const relay = relays[0] // Start with most reliable
+        
+        // Generate proper nostrconnect URI per NIP-46 specification
+        const connectUri = `nostrconnect://${clientPublicKey}?relay=${encodeURIComponent(relay)}&metadata=${encodeURIComponent(JSON.stringify(clientMetadata))}`
+        
+        console.log('[BunkerConnect] 📱 Generated NIP-46 compliant URI:', connectUri)
+        setConnectUri(connectUri)
+        
+        // Create signer instance with proper URI
         console.log('[BunkerConnect] 🔗 Starting NIP-46 client-initiated connection...')
         
-        try {
-          const { connectUri, established } = Nip46RemoteSigner.listenConnectionFromRemote(
-            relays,
-            clientMetadata,
-            {
-              connectTimeoutMs: 60000, // 60 second timeout - give more time for handshake
-              permissions: [
-                'sign_event',        // Sign journal entries (Kind 30001)
-                'get_public_key',    // Get user's public key
-                'delete_event',      // Delete journal entries (Kind 5 deletion events)
-                'nip04_encrypt',     // Encrypt journal content
-                'nip04_decrypt',     // Decrypt journal content
-                'get_relays'         // Get relay information
-              ]
+        let signer: Nip46RemoteSigner | null = null
+        let connectionSuccessful = false
+        
+        // Try connecting with different relays if the first one fails
+        for (let i = 0; i < relays.length && !connectionSuccessful; i++) {
+          const currentRelay = relays[i]
+          console.log(`[BunkerConnect] 🔗 Attempting connection with relay ${i + 1}/${relays.length}: ${currentRelay}`)
+          
+          try {
+            // Generate URI with current relay
+            const currentConnectUri = `nostrconnect://${clientPublicKey}?relay=${encodeURIComponent(currentRelay)}&metadata=${encodeURIComponent(JSON.stringify(clientMetadata))}`
+            
+            // Update the displayed URI if this is the first attempt
+            if (i === 0) {
+              setConnectUri(currentConnectUri)
+              console.log('[BunkerConnect] 📱 Generated NIP-46 compliant URI:', currentConnectUri)
             }
-          )
-          
-          console.log('[BunkerConnect] 📱 Generated connection URI:', connectUri)
-          setConnectUri(connectUri)
-          
-          // Wait for connection with timeout
-          const timeout = setTimeout(() => {
-            console.log('[BunkerConnect] ⏰ Connection timeout after 60s')
-            setConnectionState('error')
-            setError('Connection timeout. Please make sure your signing app is connected and try again.')
-          }, 60000) // 60 seconds
-
-          console.log('[BunkerConnect] ⏳ Waiting for remote signer to connect...')
-          console.log('[BunkerConnect] 📱 QR Code URI format:', connectUri.substring(0, 100) + '...')
-          console.log('[BunkerConnect] 🔗 Full URI for debugging:', connectUri)
-          
-          // Wait for remote signer to connect
-          console.log('[BunkerConnect] 📡 Awaiting established promise...')
-          const { signer, session } = await established
-          console.log('[BunkerConnect] ✅ Connection established!')
-          console.log('[BunkerConnect] 👤 Signer:', signer)
-          console.log('[BunkerConnect] 📋 Session:', session)
-
-          clearTimeout(timeout)
-
-          console.log('[BunkerConnect] ✅ Connected! Getting user pubkey...')
-          
-          // Get actual user pubkey
-      const userPubkey = await signer.getPublicKey()
-          console.log('[BunkerConnect] 👤 User pubkey:', userPubkey)
-
-          // Set the active signer using our signer-connector
-          const { setActiveSigner } = await import('@/lib/signer-connector')
-          setActiveSigner(signer)
-
-          // Store session data for reconnection
-          const sessionData = {
-            bunkerUri: connectUri,
-            userPubkey: userPubkey,
-            connectedAt: Date.now()
+            
+            signer = new Nip46RemoteSigner(currentConnectUri)
+            
+            console.log('[BunkerConnect] ⏳ Waiting for remote signer to connect...')
+            console.log('[BunkerConnect] 📱 QR Code URI format:', currentConnectUri.substring(0, 100) + '...')
+            console.log('[BunkerConnect] 🔗 Full URI for debugging:', currentConnectUri)
+            
+            // Wait for connection with timeout
+            await Promise.race([
+              signer.waitConnected(),
+              new Promise((_, reject) => 
+                setTimeout(() => reject(new Error(`Connection timeout on relay ${currentRelay}`)), 45000)
+              )
+            ])
+            
+            console.log('[BunkerConnect] ✅ Connection established!')
+            connectionSuccessful = true
+            
+            // Update the final connect URI
+            setConnectUri(currentConnectUri)
+            
+          } catch (relayError) {
+            console.warn(`[BunkerConnect] ⚠️ Failed to connect with relay ${currentRelay}:`, relayError)
+            
+            if (i === relays.length - 1) {
+              // Last relay failed, throw the error
+              throw relayError
+            } else {
+              // Try next relay
+              console.log(`[BunkerConnect] 🔄 Trying next relay...`)
+              continue
+            }
           }
-          
-          // Save to localStorage for reconnection
-          localStorage.setItem('nostr_remote_session', JSON.stringify(sessionData))
-
-      setConnectionState('success')
-
-          // Create auth data for the app
-          const authData = {
-            pubkey: userPubkey,
-            authMethod: 'remote' as const,
-            bunkerUri: connectUri,
-            relays: relays,
-            sessionData: sessionData
-          }
-
-          onLoginSuccess(authData)
-          
-        } catch (connectionError) {
-          console.error('[BunkerConnect] ❌ Connection establishment failed:', connectionError)
-          throw connectionError
         }
+        
+        if (!signer || !connectionSuccessful) {
+          throw new Error('Failed to connect with any relay')
+        }
+
+        console.log('[BunkerConnect] ✅ Connected! Getting user pubkey...')
+        
+        // Get actual user pubkey
+        const userPubkey = await signer.getPublicKey()
+        console.log('[BunkerConnect] 👤 User pubkey:', userPubkey)
+
+        // Set the active signer using our signer-connector
+        const { setActiveSigner } = await import('@/lib/signer-connector')
+        setActiveSigner(signer)
+
+        // Store session data for reconnection
+        const sessionData = {
+          bunkerUri: connectUri,
+          userPubkey: userPubkey,
+          connectedAt: Date.now()
+        }
+        
+        // Save to localStorage for reconnection
+        localStorage.setItem('nostr_remote_session', JSON.stringify(sessionData))
+
+        setConnectionState('success')
+
+        // Create auth data for the app
+        const authData = {
+          pubkey: userPubkey,
+          authMethod: 'remote' as const,
+          bunkerUri: connectUri,
+          relays: relays,
+          sessionData: sessionData
+        }
+
+        onLoginSuccess(authData)
       }
 
     } catch (error: any) {
@@ -337,11 +359,13 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
       
       let errorMsg = 'Failed to connect to remote signer'
       
-        if (error.message.includes('timeout')) {
+      if (error.message.includes('timeout')) {
         errorMsg = 'Connection timeout. Make sure to:\n1. Scan the QR code with nsec.app\n2. Approve the connection in your signing app\n3. Check your internet connection'
       } else if (error.message.includes('NIP-46')) {
         errorMsg = 'NIP-46 connection failed. Please try scanning the QR code again with nsec.app'
-        } else {
+      } else if (error.message.includes('Invalid URL format')) {
+        errorMsg = 'Invalid URL format. Please check your bunker URL and try again.'
+      } else {
         errorMsg = error.message || 'Failed to connect to remote signer'
       }
       

@@ -25,7 +25,7 @@ export async function connectNip46(bunkerUri: string): Promise<{
   try {
     console.log("[SignerConnector] Connecting to bunker:", bunkerUri.substring(0, 50) + "...")
     
-    // Create a new Nip46RemoteSigner instance
+    // Create a new Nip46RemoteSigner instance with proper URI
     const signer = new Nip46RemoteSigner(bunkerUri)
     
     // Wait for connection to establish (with timeout)
@@ -50,9 +50,24 @@ export async function connectNip46(bunkerUri: string): Promise<{
     
   } catch (error) {
     console.error("[SignerConnector] ❌ Connection failed:", error)
+    
+    // Provide more specific error messages
+    let errorMessage = "Connection failed"
+    if (error instanceof Error) {
+      if (error.message.includes('timeout')) {
+        errorMessage = 'Connection timeout. Make sure your signing app is online and try again.'
+      } else if (error.message.includes('NIP-46')) {
+        errorMessage = 'NIP-46 protocol error. Please try with a different signing app.'
+      } else if (error.message.includes('Invalid URL')) {
+        errorMessage = 'Invalid bunker URL format. Please check your URL and try again.'
+      } else {
+        errorMessage = error.message
+      }
+    }
+    
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Connection failed"
+      error: errorMessage
     }
   }
 }
