@@ -209,37 +209,12 @@ export async function saveNoteToRelays(note: DecryptedNote, authData: any): Prom
     const relays = await pool.publish(RELAYS, signedEvent)
     console.log("[SimpleEvents] Published to", relays.length, "relays")
     
-    // Log which relays we published to and wait for responses
+    // Log which relays we published to
     RELAYS.forEach((relay, index) => {
       console.log(`[SimpleEvents] Published to relay ${index + 1}: ${relay}`)
     })
     
-    // Wait for relay confirmations (optional but helpful for debugging)
-    const confirmations = await Promise.allSettled(
-      relays.map(async (relay, index) => {
-        const relayUrl = RELAYS[index] // Use the URL from our RELAYS array
-        return new Promise((resolve) => {
-          const timeout = setTimeout(() => {
-            console.log(`[SimpleEvents] Timeout waiting for confirmation from ${relayUrl}`)
-            resolve({ relay: relayUrl, status: 'timeout' })
-          }, 5000)
-          
-          relay.on('ok', () => {
-            clearTimeout(timeout)
-            console.log(`[SimpleEvents] ✅ Event confirmed by ${relayUrl}`)
-            resolve({ relay: relayUrl, status: 'ok' })
-          })
-          
-          relay.on('failed', (reason) => {
-            clearTimeout(timeout)
-            console.log(`[SimpleEvents] ❌ Event rejected by ${relayUrl}: ${reason}`)
-            resolve({ relay: relayUrl, status: 'failed', reason })
-          })
-        })
-      })
-    )
-    
-    console.log("[SimpleEvents] Relay confirmations:", confirmations)
+    console.log("[SimpleEvents] Event published successfully, relay confirmations not available in this nostr-tools version")
     
     // Just return success - don't wait for confirmations
     return {
