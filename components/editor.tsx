@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import type { Note } from "@/components/main-app"
 import { useDebounce } from "@/hooks/useDebounce"
-import { Copy, ExternalLink, ShieldCheck, Lock, CheckCircle2, CheckCircle, AlertCircle, Loader2, Check, Save, Trash2, Upload, FileText } from "lucide-react"
+import { Copy, ExternalLink, ShieldCheck, Lock, CheckCircle2, CheckCircle, AlertCircle, Loader2, Check, Save, Trash2, Upload, FileText, Download } from "lucide-react"
 
 interface EditorProps {
   note: Note | null
@@ -399,12 +399,22 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
                   {note.eventId.slice(0, 8)}...
                 </code>
                 
-                {/* Sync status indicator */}
-                {note.isSynced ? (
-                  <CheckCircle className="w-3 h-3 text-green-500" title="Verified on relays" />
-                ) : (
-                  <AlertCircle className="w-3 h-3 text-yellow-500" title="Published but not verified" />
-                )}
+                {/* Sync status indicators */}
+                <div className="flex items-center gap-1">
+                  {/* Upload status - published to relays */}
+                  {note.publishedToRelays ? (
+                    <Upload className="w-3 h-3 text-green-500" title="Published to relays" />
+                  ) : (
+                    <Upload className="w-3 h-3 text-gray-400" title="Not published to relays" />
+                  )}
+                  
+                  {/* Download status - fetched from relays */}
+                  {note.fetchedFromRelays ? (
+                    <Download className="w-3 h-3 text-blue-500" title="Fetched from relays" />
+                  ) : (
+                    <Download className="w-3 h-3 text-gray-400" title="Not fetched from relays" />
+                  )}
+                </div>
                 
                 <Button
                   onClick={() => copyEventId(note.eventId!)}

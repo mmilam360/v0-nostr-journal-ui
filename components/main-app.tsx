@@ -19,6 +19,8 @@ import {
   Sun,
   Moon,
   Zap,
+  Upload,
+  Download,
 } from "lucide-react"
 import TagsPanel from "@/components/tags-panel"
 import NoteList from "@/components/note-list"
@@ -58,6 +60,27 @@ import { setActiveSigner } from "@/lib/signer-connector"
 import { createDirectEventManager, type DirectEventManager } from "@/lib/direct-event-manager"
 import { addSyncTask, addHighPrioritySyncTask, onSyncTaskCompleted, onSyncTaskFailed, getSyncQueueStats } from "@/lib/sync-queue"
 
+// Sync Status Component
+const SyncStatusIcons = ({ note }: { note: Note }) => {
+  return (
+    <div className="flex items-center gap-1">
+      {/* Upload status - published to relays */}
+      {note.publishedToRelays ? (
+        <Upload className="w-3 h-3 text-green-500" title="Published to relays" />
+      ) : (
+        <Upload className="w-3 h-3 text-gray-400" title="Not published to relays" />
+      )}
+      
+      {/* Download status - fetched from relays */}
+      {note.fetchedFromRelays ? (
+        <Download className="w-3 h-3 text-blue-500" title="Fetched from relays" />
+      ) : (
+        <Download className="w-3 h-3 text-gray-400" title="Not fetched from relays" />
+      )}
+    </div>
+  )
+}
+
 export interface Note {
   id: string
   title: string
@@ -69,6 +92,9 @@ export interface Note {
   eventId?: string // Nostr event ID for verification
   eventKind?: number // Track which kind was used (30078 or 31078)
   isSynced?: boolean // True if event exists on relays and is verified
+  // Sync status tracking
+  publishedToRelays?: boolean // True if successfully published to relays
+  fetchedFromRelays?: boolean // True if successfully fetched from relays
 }
 
 export interface AuthData {
@@ -273,7 +299,12 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
         
         // Override with relay notes if they exist
         relayNotes.forEach(note => {
-          noteMap.set(note.id, { ...note, source: 'relay' })
+          noteMap.set(note.id, { 
+            ...note, 
+            source: 'relay',
+            fetchedFromRelays: true,
+            publishedToRelays: true // If fetched from relays, it was previously published
+          })
         })
         
         const allNotes = Array.from(noteMap.values())
@@ -475,12 +506,14 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       
       if (result.success && result.eventId) {
         console.log("[v0] Note saved successfully with eventId:", result.eventId)
-        // Update with eventId - assume synced if we got an eventId
+        // Update with eventId and sync status
         const finalNote = { 
           ...newNote, 
           eventId: result.eventId, 
           lastSynced: new Date(),
-          isSynced: true
+          isSynced: true,
+          publishedToRelays: true,
+          fetchedFromRelays: false // New notes haven't been fetched yet
         }
         const finalUpdatedNotes = [finalNote, ...notes.filter(n => n.id !== newNote.id)]
         setNotes(finalUpdatedNotes)
@@ -522,12 +555,14 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       
       if (result.success && result.eventId) {
         console.log("[v0] Note updated successfully with eventId:", result.eventId)
-        // Update with eventId - assume synced if we got an eventId
+        // Update with eventId and sync status
         const finalNote = { 
           ...optimisticNote, 
           eventId: result.eventId, 
           lastSynced: new Date(),
-          isSynced: true
+          isSynced: true,
+          publishedToRelays: true,
+          fetchedFromRelays: false // Updated notes haven't been fetched yet
         }
         setNotes(prevNotes => prevNotes.map(n => n.id === updatedNote.id ? finalNote : n))
         setSelectedNote(finalNote)
@@ -801,8 +836,15 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       // Sync is just loading from relays (same as app startup)
       const relayNotes = await syncFromRelays(authData)
       
+      // Mark all relay notes as fetched from relays
+      const notesWithSyncStatus = relayNotes.map(note => ({
+        ...note,
+        fetchedFromRelays: true,
+        publishedToRelays: true // If fetched from relays, it was previously published
+      }))
+      
       // Validate and sanitize the notes
-      const validatedNotes = sanitizeNotes(relayNotes)
+      const validatedNotes = sanitizeNotes(notesWithSyncStatus)
       
       // Update state with latest notes from relays
       setNotes(validatedNotes)
