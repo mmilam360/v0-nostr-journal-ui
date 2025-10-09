@@ -10,8 +10,7 @@ const RELAYS = [
   "wss://nos.lol", 
   "wss://relay.primal.net",
   "wss://relay.snort.social",
-  "wss://relay.nostr.band",
-  "wss://purplepag.es"
+  "wss://relay.nostr.band"
 ]
 
 // App identifier for our events
