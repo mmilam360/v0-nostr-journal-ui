@@ -193,7 +193,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
             bunkerUri: bunkerUrl,
             clientSecretKey: clientSecretKeyHex,
             bunkerPubkey: userPubkey, // This is the user's pubkey, not signer's
-            relays: ['wss://relay.nsec.app', 'wss://relay.getalby.com/v1', 'wss://nostr.mutinywallet.com', 'wss://relay.damus.io', 'wss://nos.lol'],
+            relays: ['wss://relay.damus.io', 'wss://nos.lol', 'wss://relay.nostr.band', 'wss://relay.primal.net', 'wss://purplepag.es'],
             // Store session data for nostr-signer-connector
             sessionData: session
           })
@@ -209,17 +209,27 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
           description: 'Private journaling on Nostr'
         }
 
+        // Use more reliable relays with lower PoW requirements for NIP-46
+        // These relays are known to work well with remote signers
         const relays = [
-          'wss://relay.nsec.app',
-          'wss://relay.getalby.com/v1',
-          'wss://nostr.mutinywallet.com',
-          'wss://relay.damus.io',
-          'wss://nos.lol'
+          'wss://relay.damus.io',      // Reliable, low PoW requirements
+          'wss://nos.lol',             // Good for NIP-46
+          'wss://relay.nostr.band',    // Reliable connection
+          'wss://relay.primal.net',    // Fast, reliable
+          'wss://purplepag.es'         // Good fallback
         ]
+
+        // Add connection options for better reliability
+        const connectionOptions = {
+          timeout: 120000, // 2 minutes
+          retryCount: 2,
+          retryDelay: 2000
+        }
 
         const { connectUri, established } = Nip46RemoteSigner.listenConnectionFromRemote(
           relays,
-          clientMetadata
+          clientMetadata,
+          connectionOptions
         )
 
         console.log('[BunkerConnect] 📱 Generated connection URI')
@@ -281,6 +291,8 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
           errorMsg += 'Connection timed out. Make sure your signing app is open, connected to the internet, and try again.'
         } else if (error.message.includes('blocked') || error.message.includes('rejected')) {
           errorMsg += 'Relay blocked the connection. Try using a different signing app or check your internet connection.'
+        } else if (error.message.includes('pow') || error.message.includes('Proof of Work') || error.message.includes('bits needed')) {
+          errorMsg += 'Relay requires Proof of Work. Try using a different signing app with PoW support or use browser extension login instead.'
         } else if (error.message.includes('relay')) {
           errorMsg += 'Could not connect to relay. Check your internet connection and try again.'
         } else if (error.message.includes('NIP-46')) {
@@ -586,6 +598,11 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                           <p className="text-sm text-muted-foreground mb-4">
                             Scan with nsec.app, Alby, or Amethyst to connect
                           </p>
+                          <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 mb-4">
+                            <p className="text-xs text-blue-700 dark:text-blue-300">
+                              <strong>Tip:</strong> If you get "Proof of Work required" errors, try using a different signing app or use browser extension login instead.
+                            </p>
+                          </div>
                         </div>
                         {connectUri ? (
                           <div className="flex flex-col items-center space-y-4">
@@ -720,6 +737,12 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                         <div className="bg-amber-50 dark:bg-amber-900/20 rounded-lg p-3 mt-2">
                           <p className="text-xs text-amber-700 dark:text-amber-300">
                             <strong>⚠️ Important:</strong> You may need to approve additional permissions in your signing app for creating, editing, and deleting notes. Keep your signing app open for the best experience.
+                          </p>
+                        </div>
+                        
+                        <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 mt-2">
+                          <p className="text-xs text-blue-700 dark:text-blue-300">
+                            <strong>💡 Tip:</strong> If you get "Proof of Work required" errors, try using a different signing app or use browser extension login instead.
                           </p>
                         </div>
                       </div>

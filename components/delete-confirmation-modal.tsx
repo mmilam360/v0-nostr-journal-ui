@@ -28,10 +28,7 @@ export default function DeleteConfirmationModal({ note, onConfirm, onCancel }: D
         success: true,
       })
 
-      // Auto-close after successful delete
-      setTimeout(() => {
-        onCancel()
-      }, 1500)
+      // Don't auto-close - let user manually close to see the success message
     } catch (error) {
       setDeleteResult({
         success: false,
@@ -69,7 +66,8 @@ export default function DeleteConfirmationModal({ note, onConfirm, onCancel }: D
                 <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0" />
                 <div>
                   <p className="text-green-300 font-medium">Note deleted successfully!</p>
-                  <p className="text-slate-400 text-xs mt-1">The note has been removed from all devices</p>
+                  <p className="text-slate-400 text-xs mt-1">The note has been removed from Nostr relays and all devices</p>
+                  <p className="text-slate-500 text-xs mt-1">Click "✓ Close" to dismiss this message</p>
                 </div>
               </>
             ) : (
@@ -123,10 +121,12 @@ export default function DeleteConfirmationModal({ note, onConfirm, onCancel }: D
           <Button
             onClick={onCancel}
             variant="outline"
-            className="border-slate-600 text-slate-300 hover:bg-slate-700 bg-transparent"
+            className={`border-slate-600 text-slate-300 hover:bg-slate-700 bg-transparent ${
+              deleteResult?.success ? "border-green-600 text-green-300 hover:bg-green-900/20" : ""
+            }`}
             disabled={isDeleting}
           >
-            {deleteResult?.success ? "Close" : "Cancel"}
+            {deleteResult?.success ? "✓ Close" : "Cancel"}
           </Button>
           {!deleteResult?.success && (
             <Button
