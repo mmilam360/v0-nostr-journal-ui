@@ -841,7 +841,9 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       const notesWithSyncStatus = relayNotes.map(note => ({
         ...note,
         fetchedFromRelays: true,
-        publishedToRelays: true // If fetched from relays, it was previously published
+        publishedToRelays: true, // If fetched from relays, it was previously published
+        isSynced: true, // All notes fetched from relays are synced
+        eventId: note.eventId || note.id // Ensure eventId is set (use note.id as fallback)
       }))
       
       // Validate and sanitize the notes
@@ -849,6 +851,16 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       
       // Update state with latest notes from relays
       setNotes(validatedNotes)
+      
+      // Update selected note if it exists in the refreshed notes
+      if (selectedNote) {
+        const updatedSelectedNote = validatedNotes.find(note => note.id === selectedNote.id)
+        if (updatedSelectedNote) {
+          setSelectedNote(updatedSelectedNote)
+          console.log("[v0] Updated selected note with latest data from relays")
+        }
+      }
+      
       setSyncStatus("synced")
       setLastSyncTime(new Date())
       
@@ -880,17 +892,28 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       const relayNotes = await loadJournalFromKind30001(authData)
       console.log("[v0] ✅ Refreshed", relayNotes.length, "journal entries from Kind 30001 lists")
       
-      // Update notes with fetched data (set both sync statuses to true)
+      // Update notes with fetched data (set both sync statuses to true and ensure event IDs are present)
       const updatedNotes = relayNotes.map(note => ({
         ...note,
         publishedToRelays: true,
-        fetchedFromRelays: true
+        fetchedFromRelays: true,
+        isSynced: true, // All notes fetched from relays are synced
+        eventId: note.eventId || note.id // Ensure eventId is set (use note.id as fallback)
       }))
       
       // Validate and sanitize the notes
       const validatedNotes = sanitizeNotes(updatedNotes)
       
       setNotes(validatedNotes)
+      
+      // Update selected note if it exists in the refreshed notes
+      if (selectedNote) {
+        const updatedSelectedNote = validatedNotes.find(note => note.id === selectedNote.id)
+        if (updatedSelectedNote) {
+          setSelectedNote(updatedSelectedNote)
+          console.log("[v0] Updated selected note with latest data from relays")
+        }
+      }
       
       // Save to local storage
       await saveEncryptedNotes(authData.pubkey, validatedNotes)
