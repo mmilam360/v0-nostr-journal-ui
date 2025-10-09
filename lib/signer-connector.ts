@@ -1,12 +1,12 @@
-import { Nip46Signer } from 'nostr-signer-connector'
+import { Nip46RemoteSigner } from 'nostr-signer-connector'
 
-let activeSigner: Nip46Signer | null = null
+let activeSigner: Nip46RemoteSigner | null = null
 
 export function getActiveSigner() {
   return activeSigner
 }
 
-export function setActiveSigner(signer: Nip46Signer | null) {
+export function setActiveSigner(signer: Nip46RemoteSigner | null) {
   activeSigner = signer
 }
 
@@ -19,14 +19,14 @@ export function clearActiveSigner() {
  */
 export async function connectNip46(bunkerUri: string): Promise<{
   success: boolean
-  signer?: Nip46Signer
+  signer?: Nip46RemoteSigner
   error?: string
 }> {
   try {
     console.log("[SignerConnector] Connecting to bunker:", bunkerUri.substring(0, 50) + "...")
     
-    // Create a new Nip46Signer instance
-    const signer = new Nip46Signer(bunkerUri)
+    // Create a new Nip46RemoteSigner instance
+    const signer = new Nip46RemoteSigner(bunkerUri)
     
     // Wait for connection to establish (with timeout)
     console.log("[SignerConnector] Waiting for connection...")
@@ -60,7 +60,7 @@ export async function connectNip46(bunkerUri: string): Promise<{
 /**
  * Resume a NIP-46 session from stored session data
  */
-export async function resumeNip46Session(sessionData: any): Promise<Nip46Signer | null> {
+export async function resumeNip46Session(sessionData: any): Promise<Nip46RemoteSigner | null> {
   try {
     if (!sessionData?.bunkerUri) {
       console.warn("[SignerConnector] No bunker URI in session data")
