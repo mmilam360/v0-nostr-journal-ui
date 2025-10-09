@@ -370,6 +370,9 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
               {/* Individual note sync status removed - using global sync */}
             </div>
             
+            {/* Debug logging for event ID */}
+            {console.log(`[Editor] Note "${note.title}": eventId=${note.eventId}, fetchedFromRelays=${note.fetchedFromRelays}, publishedToRelays=${note.publishedToRelays}, isSynced=${note.isSynced}`)}
+            
             {/* Event ID with actions - Show for notes WITH eventId */}
             {note.eventId && (
               <div className="flex items-center gap-1">
@@ -423,7 +426,7 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
             )}
             
             {/* Find on Nostr button - Show for synced notes WITHOUT eventId */}
-            {!note.eventId && note.syncStatus === 'synced' && (
+            {!note.eventId && note.fetchedFromRelays && (
               <Button
                 onClick={async () => {
                   console.log('[Editor] 🔍 Finding note on Nostr...')
@@ -482,15 +485,9 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
               </Button>
             )}
             
-            {!note.eventId && note.syncStatus === 'local' && (
+            {!note.eventId && !note.fetchedFromRelays && (
               <span className="text-xs text-muted-foreground">
                 Not yet synced to Nostr
-              </span>
-            )}
-            
-            {!note.eventId && !note.syncStatus && (
-              <span className="text-xs text-muted-foreground">
-                Not synced
               </span>
             )}
           </div>
