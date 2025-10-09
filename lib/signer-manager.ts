@@ -4,7 +4,6 @@
  */
 
 import type { AuthData } from "@/components/main-app"
-import { getActiveSigner, signWithActiveSigner, resumeNip46Session, setActiveSigner } from './signer-connector'
 
 // Declare window.nostr for TypeScript
 declare global {
@@ -16,33 +15,7 @@ declare global {
   }
 }
 
-/**
- * Initialize or get the persistent remote signer
- */
-export async function getRemoteSigner(authData: AuthData) {
-  console.log("[SignerManager] 🔌 Getting remote signer...")
-  
-  try {
-    // Try to get existing active signer first
-    let signer = getActiveSigner()
-    
-    if (!signer && authData.sessionData) {
-      // Try to resume from saved session
-      console.log("[SignerManager] 🔄 Resuming from saved session...")
-      signer = await resumeNip46Session(authData.sessionData)
-    }
-    
-    if (!signer) {
-      throw new Error('No active signer available. Please reconnect.')
-    }
-    
-    console.log("[SignerManager] ✅ Remote signer ready")
-    return signer
-  } catch (error) {
-    console.error("[SignerManager] ❌ Failed to get signer:", error)
-    throw new Error(`Failed to connect to remote signer: ${error instanceof Error ? error.message : "Unknown error"}`)
-  }
-}
+// Simplified signer manager - remote signer is now handled by MKStacks implementation
 
 /**
  * Sign an event using the appropriate signer based on auth method
@@ -82,10 +55,15 @@ export async function signEventWithRemote(unsignedEvent: any, authData: AuthData
       return signedEvent
       
     } else if (authData.authMethod === "remote") {
-      // Use the active remote signer
-      console.log("[SignerManager] Using remote signer for signing")
-      const signedEvent = await signWithActiveSigner(unsignedEvent)
-      console.log("[SignerManager] ✅ Event signed with remote signer")
+      // Use MKStacks remote signer for signing
+      console.log("[SignerManager] Using MKStacks remote signer for signing")
+      
+      if (!(window as any).remoteSigner) {
+        throw new Error("Remote signer not available. Please reconnect.")
+      }
+      
+      const signedEvent = await (window as any).remoteSigner.signEvent(unsignedEvent)
+      console.log("[SignerManager] ✅ Event signed with MKStacks remote signer")
       return signedEvent
       
     } else {

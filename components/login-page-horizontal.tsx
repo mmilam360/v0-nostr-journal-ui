@@ -21,8 +21,7 @@ import { generateSecretKey, getPublicKey, nip19 } from 'nostr-tools'
 import { bytesToHex } from '@noble/hashes/utils'
 import { QRCodeSVG } from 'qrcode.react'
 import { Logo } from './logo'
-import { Nip46RemoteSigner } from 'nostr-signer-connector'
-import { setActiveSigner } from '@/lib/signer-connector'
+import { MKStacksRemoteSigner } from '@/lib/mkstacks-remote-signer'
 
 interface LoginPageHorizontalProps {
   onLoginSuccess: (data: any) => void
@@ -166,7 +165,8 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
         console.log('[BunkerConnect] 📱 User Agent:', navigator.userAgent)
         console.log('[BunkerConnect] 📱 Mobile check:', /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent))
         
-        const { signer, session } = await Nip46RemoteSigner.connectToRemote(bunkerUrl)
+        const remoteSigner = new MKStacksRemoteSigner()
+        const { signer, session } = await remoteSigner.connectToRemote(bunkerUrl)
         
         console.log('[BunkerConnect] ✅ Connected! Getting user pubkey...')
         
@@ -177,7 +177,8 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
         
         // Store session for reconnection
         localStorage.setItem('nostr_connect_session', JSON.stringify(session))
-        setActiveSigner(signer)
+        // Store the signer instance globally
+        (window as any).remoteSigner = remoteSigner
         
         setConnectionState('success')
         
@@ -219,19 +220,9 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
           'wss://purplepag.es'         // Good fallback
         ]
 
-        // Add connection options for better reliability
-        const connectionOptions = {
-          timeout: 120000, // 2 minutes
-          retryCount: 2,
-          retryDelay: 2000
-        }
-
-        const { connectUri, established } = Nip46RemoteSigner.listenConnectionFromRemote(
-          relays,
-          clientMetadata,
-          connectionOptions
-        )
-
+        const remoteSigner = new MKStacksRemoteSigner(relays)
+        const connectUri = remoteSigner.generateConnectionUri()
+        
         console.log('[BunkerConnect] 📱 Generated connection URI')
         setConnectUri(connectUri)
 
@@ -242,7 +233,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
         }, 120000)
 
         // Wait for remote signer to connect
-        const { signer, session } = await established
+        const { signer, session } = await remoteSigner.listenForConnection(120000)
 
         clearTimeout(timeout)
 
@@ -255,7 +246,8 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
 
         // Store session
         localStorage.setItem('nostr_connect_session', JSON.stringify(session))
-        setActiveSigner(signer)
+        // Store the signer instance globally
+        (window as any).remoteSigner = remoteSigner
 
         setConnectionState('success')
 
