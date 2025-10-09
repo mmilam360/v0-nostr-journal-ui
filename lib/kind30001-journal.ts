@@ -20,19 +20,18 @@ function getPrivateKeyForEncryption(authData: any): string {
   }
 }
 
-// Reliable relays that support Kind 4 encrypted DMs
+// Modern relays that support parameterized replaceable events (kinds 30000-39999)
 const RELAYS = [
   "wss://relay.damus.io",
-  "wss://nos.lol", 
+  "wss://nos.lol",
   "wss://relay.nostr.band",
+  "wss://purplepag.es",
   "wss://relay.snort.social",
-  "wss://relay.primal.net",
-  "wss://relay.nostr.wine",
-  "wss://relay.current.fyi"
+  "wss://relay.primal.net"
 ]
 
 // Event kinds
-const KIND4_DM = 4 // Encrypted DM
+const KIND30001_LIST = 30001 // NIP-51 Generic Lists (for journal entries)
 const DELETION_KIND = 5 // NIP-09 deletion events
 
 // Global pool for connection reuse
@@ -46,77 +45,54 @@ function getPool(): SimplePool {
 }
 
 /**
- * Load all journal entries from Kind 4 DMs where user sends messages to themselves
+ * Load all journal entries from Kind 30001 Generic Lists
  */
-export async function loadJournalFromKind4(authData: any): Promise<DecryptedNote[]> {
+export async function loadJournalFromKind30001(authData: any): Promise<DecryptedNote[]> {
   if (!authData?.pubkey) {
-    console.log("[Kind4Journal] No authData or pubkey provided")
+    console.log("[Kind30001Journal] No authData or pubkey provided")
     return []
   }
   
-  console.log("[Kind4Journal] Loading journal entries from Kind 4 DMs for pubkey:", authData.pubkey)
+  console.log("[Kind30001Journal] Loading journal entries from Kind 30001 lists for pubkey:", authData.pubkey)
   const pool = getPool()
   
   try {
-    // Query for Kind 4 events where user is both author and recipient (self-DM)
-    console.log("[Kind4Journal] Querying relays for Kind 4 self-DMs...")
-    console.log("[Kind4Journal] Query filters:", {
-      kinds: [KIND4_DM],
+    // Query for Kind 30001 events (no p-tag filtering needed)
+    console.log("[Kind30001Journal] Querying relays for Kind 30001 lists...")
+    console.log("[Kind30001Journal] Query filters:", {
+      kinds: [KIND30001_LIST],
       authors: [authData.pubkey],
-      "#p": [authData.pubkey],
       limit: 1000
     })
     
-    const dmEvents = await pool.querySync(RELAYS, [
+    const listEvents = await pool.querySync(RELAYS, [
       { 
-        kinds: [KIND4_DM], 
+        kinds: [KIND30001_LIST], 
         authors: [authData.pubkey], // User is the author
-        "#p": [authData.pubkey],    // User is also the recipient (p-tag)
         limit: 1000
       }
     ], { timeout: 15000 })
     
-    console.log("[Kind4Journal] Found", dmEvents.length, "Kind 4 self-DM events")
+    console.log("[Kind30001Journal] Found", listEvents.length, "Kind 30001 list events")
     
     // If no events found, wait and retry once (events might need time to propagate)
-    if (dmEvents.length === 0) {
-      console.log("[Kind4Journal] No self-DMs found, waiting 3 seconds for propagation...")
+    if (listEvents.length === 0) {
+      console.log("[Kind30001Journal] No list events found, waiting 3 seconds for propagation...")
       await new Promise(resolve => setTimeout(resolve, 3000))
       
-      console.log("[Kind4Journal] Retrying query after delay...")
+      console.log("[Kind30001Journal] Retrying query after delay...")
       const retryEvents = await pool.querySync(RELAYS, [
         { 
-          kinds: [KIND4_DM], 
+          kinds: [KIND30001_LIST], 
           authors: [authData.pubkey],
-          "#p": [authData.pubkey],
           limit: 1000
         }
       ], { timeout: 15000 })
       
-      console.log("[Kind4Journal] Retry found", retryEvents.length, "Kind 4 self-DM events")
+      console.log("[Kind30001Journal] Retry found", retryEvents.length, "Kind 30001 list events")
       
       if (retryEvents.length > 0) {
-        dmEvents.push(...retryEvents)
-      } else {
-        // Try a broader query to see if any Kind 4 events exist from this user
-        console.log("[Kind4Journal] Still no self-DMs found, checking for any Kind 4 events from this user...")
-        const anyKind4Events = await pool.querySync(RELAYS, [
-          { 
-            kinds: [KIND4_DM], 
-            authors: [authData.pubkey],
-            limit: 100
-          }
-        ], { timeout: 10000 })
-        
-        console.log("[Kind4Journal] Found", anyKind4Events.length, "total Kind 4 events from this user")
-        
-        if (anyKind4Events.length > 0) {
-          console.log("[Kind4Journal] Sample Kind 4 events found:")
-          anyKind4Events.slice(0, 3).forEach((event, i) => {
-            const pTags = event.tags.filter(tag => tag[0] === "p")
-            console.log(`[Kind4Journal] Event ${i + 1}: ${event.id}, p-tags:`, pTags)
-          })
-        }
+        listEvents.push(...retryEvents)
       }
     }
     
@@ -140,17 +116,17 @@ export async function loadJournalFromKind4(authData: any): Promise<DecryptedNote
     })
     
     // Filter out deleted events
-    const validEvents = dmEvents.filter(event => !deletedEventIds.has(event.id))
-    console.log("[Kind4Journal] Found", validEvents.length, "valid Kind 4 events after filtering deletions")
+    const validEvents = listEvents.filter(event => !deletedEventIds.has(event.id))
+    console.log("[Kind30001Journal] Found", validEvents.length, "valid Kind 30001 events after filtering deletions")
     
     const notes: DecryptedNote[] = []
     
     for (const event of validEvents) {
       try {
-        console.log("[Kind4Journal] Attempting to decrypt Kind 4 event:", event.id)
-        const decryptedContent = await decryptKind4Content(event.content, authData)
-        if (decryptedContent && decryptedContent.header === "This message is from Nostr Journal, don't delete it") {
-          console.log("[Kind4Journal] Successfully decrypted journal entry:", decryptedContent.title)
+        console.log("[Kind30001Journal] Attempting to decrypt Kind 30001 event:", event.id)
+        const decryptedContent = await decryptKind30001Content(event.content, authData)
+        if (decryptedContent) {
+          console.log("[Kind30001Journal] Successfully decrypted journal entry:", decryptedContent.title)
           const note: DecryptedNote = {
             id: decryptedContent.id,
             title: decryptedContent.title,
@@ -164,15 +140,15 @@ export async function loadJournalFromKind4(authData: any): Promise<DecryptedNote
           }
           notes.push(note)
         } else {
-          console.log("[Kind4Journal] Decryption returned null or invalid header for event:", event.id)
+          console.log("[Kind30001Journal] Decryption returned null for event:", event.id)
         }
       } catch (error) {
-        console.error("[Kind4Journal] Failed to decrypt Kind 4 event:", event.id, error)
+        console.error("[Kind30001Journal] Failed to decrypt Kind 30001 event:", event.id, error)
         // Silent fail - just skip bad events
       }
     }
     
-    console.log("[Kind4Journal] Successfully loaded", notes.length, "decrypted journal entries from Kind 4")
+    console.log("[Kind30001Journal] Successfully loaded", notes.length, "decrypted journal entries from Kind 30001")
     return notes
     
   } catch (error) {
@@ -182,39 +158,43 @@ export async function loadJournalFromKind4(authData: any): Promise<DecryptedNote
 }
 
 /**
- * Save a journal entry as a Kind 4 encrypted DM to self
+ * Save a journal entry as a Kind 30001 Generic List (parameterized replaceable event)
  */
-export async function saveJournalAsKind4(note: DecryptedNote, authData: any): Promise<{ success: boolean; eventId?: string; error?: string }> {
+export async function saveJournalAsKind30001(note: DecryptedNote, authData: any): Promise<{ success: boolean; eventId?: string; error?: string }> {
   if (!authData) {
     return { success: false, error: "No auth data" }
   }
 
   try {
     // Encrypt the journal content using NIP-04
-    const encryptedContent = await encryptKind4Content(note, authData)
+    const encryptedContent = await encryptKind30001Content(note, authData)
     
-    // Create Kind 4 event (encrypted DM to self)
+    // Create unique identifier for this journal entry
+    const dTag = `journal-${note.id || Date.now()}`
+    
+    // Create Kind 30001 event (parameterized replaceable event)
     const unsignedEvent = {
-      kind: KIND4_DM,
+      kind: KIND30001_LIST,
       created_at: Math.floor(Date.now() / 1000),
       tags: [
-        ["p", authData.pubkey], // p-tag pointing to self (recipient)
+        ["d", dTag], // Unique identifier for this journal entry
       ],
       content: encryptedContent,
       pubkey: authData.pubkey,
     }
     
-    console.log("[Kind4Journal] Created unsigned Kind 4 event:", {
+    console.log("[Kind30001Journal] Created unsigned Kind 30001 event:", {
       kind: unsignedEvent.kind,
       created_at: unsignedEvent.created_at,
       tags: unsignedEvent.tags,
       content_length: unsignedEvent.content.length,
-      pubkey: unsignedEvent.pubkey
+      pubkey: unsignedEvent.pubkey,
+      dTag: dTag
     })
 
     // Sign the event
     const signedEvent = await signEventWithRemote(unsignedEvent, authData)
-    console.log("[Kind4Journal] Publishing Kind 4 journal entry to relays:", signedEvent.id)
+    console.log("[Kind30001Journal] Publishing Kind 30001 journal entry to relays:", signedEvent.id)
     
     // Publish to relays with better error tracking
     const pool = getPool()
@@ -290,14 +270,14 @@ export async function deleteJournalKind4(note: DecryptedNote, authData: any): Pr
 }
 
 /**
- * Encrypt journal content using NIP-04 encryption
+ * Encrypt journal content using NIP-04 encryption for Kind 30001
  */
-async function encryptKind4Content(note: DecryptedNote, authData: any): Promise<string> {
+async function encryptKind30001Content(note: DecryptedNote, authData: any): Promise<string> {
   
-  // For Kind 4, we use the recipient's pubkey (which is the same as sender for self-DM)
-  const recipientPubkey = authData.pubkey
+  // For Kind 30001, we encrypt with the user's own keypair
+  const userPubkey = authData.pubkey
   
-  // Create the journal data as JSON with header
+  // Create the journal data as JSON
   const journalData = JSON.stringify({
     id: note.id,
     title: note.title,
@@ -305,47 +285,35 @@ async function encryptKind4Content(note: DecryptedNote, authData: any): Promise<
     tags: note.tags,
     createdAt: note.createdAt.toISOString(),
     lastModified: note.lastModified.toISOString(),
-    // Add header to identify this as a Nostr Journal entry
-    header: "This message is from Nostr Journal, don't delete it"
   })
   
-  console.log("[Kind4Journal] Encrypting journal data for recipient:", recipientPubkey)
+  console.log("[Kind30001Journal] Encrypting journal data for user:", userPubkey)
   
   // Get the private key
   const privateKey = getPrivateKeyForEncryption(authData)
   
-  // Encrypt using NIP-04
-  const encrypted = await nip04.encrypt(privateKey, recipientPubkey, journalData)
+  // Encrypt using NIP-04 with user's own keypair
+  const encrypted = await nip04.encrypt(privateKey, userPubkey, journalData)
   
   return encrypted
 }
 
 /**
- * Decrypt Kind 4 content using NIP-04 decryption
+ * Decrypt Kind 30001 content using NIP-04 decryption
  */
-async function decryptKind4Content(encryptedData: string, authData: any): Promise<any> {
+async function decryptKind30001Content(encryptedData: string, authData: any): Promise<any> {
   
   try {
-    // For self-DMs, sender and recipient are the same
-    const senderPubkey = authData.pubkey
+    // For Kind 30001, we decrypt with the user's own keypair
+    const userPubkey = authData.pubkey
     
-    console.log("[Kind4Journal] Decrypting Kind 4 content from sender:", senderPubkey)
+    console.log("[Kind30001Journal] Decrypting Kind 30001 content for user:", userPubkey)
     
-    // Get the private key - same logic as encryption
-    let privateKey: string
-    if (authData.authMethod === "extension") {
-      privateKey = authData.pubkey
-    } else if (authData.authMethod === "nsec" && authData.privateKey) {
-      privateKey = authData.privateKey
-    } else if (authData.authMethod === "remote" && authData.clientSecretKey) {
-      privateKey = typeof authData.clientSecretKey === 'string' ? authData.clientSecretKey : 
-        Array.from(authData.clientSecretKey).map(b => b.toString(16).padStart(2, '0')).join('')
-    } else {
-      throw new Error("No private key available for decryption")
-    }
+    // Get the private key
+    const privateKey = getPrivateKeyForEncryption(authData)
     
     // Decrypt using NIP-04
-    const decrypted = await nip04.decrypt(privateKey, senderPubkey, encryptedData)
+    const decrypted = await nip04.decrypt(privateKey, userPubkey, encryptedData)
     
     // Parse the JSON content
     const journalData = JSON.parse(decrypted)
@@ -353,22 +321,59 @@ async function decryptKind4Content(encryptedData: string, authData: any): Promis
     return journalData
     
   } catch (error) {
-    console.error("[Kind4Journal] Failed to decrypt Kind 4 content:", error)
+    console.error("[Kind30001Journal] Failed to decrypt Kind 30001 content:", error)
     return null
   }
 }
 
 /**
- * Sync function - reload from Kind 4 DMs
+ * Sync function - reload from Kind 30001 lists
  */
-export async function syncFromKind4(authData: any): Promise<DecryptedNote[]> {
-  console.log("[Kind4Journal] Syncing from Kind 4 DMs...")
+export async function syncFromKind30001(authData: any): Promise<DecryptedNote[]> {
+  console.log("[Kind30001Journal] Syncing from Kind 30001 lists...")
   
-  // Sync is just the same as loading from Kind 4 DMs
-  const notes = await loadJournalFromKind4(authData)
+  // Sync is just the same as loading from Kind 30001 lists
+  const notes = await loadJournalFromKind30001(authData)
   
-  console.log(`[Kind4Journal] Sync complete: ${notes.length} journal entries loaded from Kind 4 DMs`)
+  console.log(`[Kind30001Journal] Sync complete: ${notes.length} journal entries loaded from Kind 30001 lists`)
   return notes
+}
+
+/**
+ * Delete a journal entry by publishing a Kind 5 deletion event
+ */
+export async function deleteJournalKind30001(note: DecryptedNote, authData: any): Promise<{ success: boolean; error?: string }> {
+  if (!note.eventId) {
+    return { success: false, error: "No event ID to delete" }
+  }
+
+  try {
+    // Create Kind 5 deletion event for the Kind 30001 event ID
+    const deletionEvent = {
+      kind: DELETION_KIND,
+      created_at: Math.floor(Date.now() / 1000),
+      tags: [
+        ["e", note.eventId], // Kind 30001 event ID to delete
+      ],
+      content: "Deleted a journal entry from Nostr Journal.",
+      pubkey: authData.pubkey,
+    }
+
+    const signedEvent = await signEventWithRemote(deletionEvent, authData)
+    console.log("[Kind30001Journal] Publishing Kind 5 deletion event for Kind 30001 event:", signedEvent.id)
+    
+    const pool = getPool()
+    const relays = await pool.publish(RELAYS, signedEvent)
+    
+    return { success: true }
+    
+  } catch (error) {
+    console.error("[Kind30001Journal] Error deleting journal entry:", error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error"
+    }
+  }
 }
 
 // Clean up global pool
