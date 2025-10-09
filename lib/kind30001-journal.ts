@@ -183,7 +183,7 @@ export async function saveJournalAsKind30001(note: DecryptedNote, authData: any)
       pubkey: authData.pubkey,
     }
     
-    console.log("[Kind30001Journal] Created unsigned Kind 30001 event:", {
+    console.log("[Kind30001Journal v1.0] Created unsigned Kind 30001 event:", {
       kind: unsignedEvent.kind,
       created_at: unsignedEvent.created_at,
       tags: unsignedEvent.tags,
@@ -194,7 +194,7 @@ export async function saveJournalAsKind30001(note: DecryptedNote, authData: any)
 
     // Sign the event
     const signedEvent = await signEventWithRemote(unsignedEvent, authData)
-    console.log("[Kind30001Journal] Publishing Kind 30001 journal entry to relays:", signedEvent.id)
+    console.log("[Kind30001Journal v1.0] Publishing Kind 30001 journal entry to relays:", signedEvent.id)
     
     // Publish to relays with better error tracking
     const pool = getPool()
