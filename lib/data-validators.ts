@@ -31,6 +31,12 @@ export function sanitizeNote(note: any): Note | null {
       lastSynced: note.lastSynced ? (note.lastSynced instanceof Date ? note.lastSynced : new Date(note.lastSynced)) : undefined,
       syncStatus: note.syncStatus || "local",
       syncError: note.syncError,
+      // Preserve new sync properties
+      eventId: note.eventId,
+      eventKind: note.eventKind,
+      isSynced: note.isSynced,
+      publishedToRelays: note.publishedToRelays,
+      fetchedFromRelays: note.fetchedFromRelays,
     }
   } catch (error) {
     console.error("[Validator] Error sanitizing note:", error)
