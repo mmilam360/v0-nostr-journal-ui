@@ -1,8 +1,7 @@
 'use client';
 
-import { SimplePool, nip04 } from 'nostr-tools';
+import { SimplePool, nip04, getSharedSecret } from 'nostr-tools';
 import { generateSecretKey, getPublicKey } from 'nostr-tools/pure';
-import { getSharedSecret } from 'nostr-tools/keys';
 import { bytesToHex } from '@noble/hashes/utils';
 
 // MKStacks-inspired remote signer implementation
