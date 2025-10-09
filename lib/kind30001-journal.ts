@@ -67,16 +67,18 @@ export async function loadJournalFromKind30001(authData: any): Promise<Decrypted
   const pool = getPool()
   
   try {
-    // Query for ALL Kind 30001 events (no author filtering - we'll filter by JSON content)
-    console.log("[Kind30001Journal] Querying relays for all Kind 30001 events...")
+    // Query for Kind 30001 events with our consistent user identifier in p-tag
+    console.log("[Kind30001Journal] Querying relays for Kind 30001 events with p-tag:", authData.pubkey)
     console.log("[Kind30001Journal] Query filters:", {
       kinds: [KIND30001_LIST],
+      "#p": [authData.pubkey],
       limit: 1000
     })
     
-    // Use pool.querySync with proper filter format
+    // Use pool.querySync with p-tag filter for consistent user identification
     const listEvents = await pool.querySync(RELAYS, {
       kinds: [KIND30001_LIST],
+      "#p": [authData.pubkey],
       limit: 1000
     })
     
@@ -90,6 +92,7 @@ export async function loadJournalFromKind30001(authData: any): Promise<Decrypted
       console.log("[Kind30001Journal] Retrying query after delay...")
       const retryEvents = await pool.querySync(RELAYS, {
         kinds: [KIND30001_LIST],
+        "#p": [authData.pubkey],
         limit: 1000
       })
       
@@ -123,23 +126,7 @@ export async function loadJournalFromKind30001(authData: any): Promise<Decrypted
     
     const notes: DecryptedNote[] = []
     
-    // Filter events by pubkey and d-tag, then decrypt
-    const userPubkeys = [authData.pubkey]
-    
-    // For extension auth, also check if extension has a different pubkey
-    if (authData.authMethod === "extension" && window.nostr) {
-      try {
-        const extensionPubkey = await window.nostr.getPublicKey()
-        if (extensionPubkey !== authData.pubkey) {
-          userPubkeys.push(extensionPubkey)
-          console.log("[Kind30001Journal] Extension pubkey differs from stored:", extensionPubkey)
-        }
-      } catch (error) {
-        console.warn("[Kind30001Journal] Could not get extension pubkey:", error)
-      }
-    }
-    
-    // Filter events by pubkey and d-tag
+    // Filter events by d-tag (p-tag filtering already done by relay query)
     const relevantEvents = validEvents.filter(event => {
       // Check if this is a journal entry by looking at the d-tag
       const dTag = event.tags.find(tag => tag[0] === "d")?.[1]
@@ -147,8 +134,14 @@ export async function loadJournalFromKind30001(authData: any): Promise<Decrypted
         return false
       }
       
-      // Check if the event pubkey matches any of our user's pubkeys
-      return userPubkeys.includes(event.pubkey)
+      // Verify the p-tag matches our user (double-check since relay already filtered)
+      const pTag = event.tags.find(tag => tag[0] === "p")?.[1]
+      if (pTag !== authData.pubkey) {
+        console.log("[Kind30001Journal] P-tag mismatch:", pTag, "vs", authData.pubkey)
+        return false
+      }
+      
+      return true
     })
     
     console.log("[Kind30001Journal] Filtered to", relevantEvents.length, "relevant events for user")
@@ -225,10 +218,14 @@ export async function saveJournalAsKind30001(note: DecryptedNote, authData: any)
       created_at: Math.floor(Date.now() / 1000),
       tags: [
         ["d", dTag], // Unique identifier for this journal entry
+        ["p", authData.pubkey], // Consistent user identifier for filtering
       ],
       content: encryptedContent,
       pubkey: actualPubkey, // Use the actual pubkey from the signer
     }
+    
+    console.log("[Kind30001Journal] Event tags:", unsignedEvent.tags)
+    console.log("[Kind30001Journal] Signing pubkey:", actualPubkey, "Filter pubkey:", authData.pubkey)
     
     console.log("[Kind30001Journal v1.0] Created unsigned Kind 30001 event:", {
       kind: unsignedEvent.kind,
