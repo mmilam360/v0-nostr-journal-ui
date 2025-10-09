@@ -55,15 +55,15 @@ export async function signEventWithRemote(unsignedEvent: any, authData: AuthData
       return signedEvent
       
     } else if (authData.authMethod === "remote") {
-      // Use MKStacks remote signer for signing
-      console.log("[SignerManager] Using MKStacks remote signer for signing")
+      // Use NIP-46 remote signer for signing
+      console.log("[SignerManager] Using NIP-46 remote signer for signing")
       
       if (!(window as any).remoteSigner) {
         throw new Error("Remote signer not available. Please reconnect.")
       }
       
       const signedEvent = await (window as any).remoteSigner.signEvent(unsignedEvent)
-      console.log("[SignerManager] ✅ Event signed with MKStacks remote signer")
+      console.log("[SignerManager] ✅ Event signed with NIP-46 remote signer")
       return signedEvent
       
     } else {

@@ -21,7 +21,7 @@ import { generateSecretKey, getPublicKey, nip19 } from 'nostr-tools'
 import { bytesToHex } from '@noble/hashes/utils'
 import { QRCodeSVG } from 'qrcode.react'
 import { Logo } from './logo'
-import { MKStacksRemoteSigner } from '@/lib/mkstacks-remote-signer'
+import { Nip46RemoteSigner } from 'nostr-signer-connector'
 
 interface LoginPageHorizontalProps {
   onLoginSuccess: (data: any) => void
@@ -165,8 +165,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
         console.log('[BunkerConnect] 📱 User Agent:', navigator.userAgent)
         console.log('[BunkerConnect] 📱 Mobile check:', /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent))
         
-        const remoteSigner = new MKStacksRemoteSigner()
-        const { signer, session } = await remoteSigner.connectToRemote(bunkerUrl)
+        const { signer, session } = await Nip46RemoteSigner.connectToRemote(bunkerUrl)
         
         console.log('[BunkerConnect] ✅ Connected! Getting user pubkey...')
         
@@ -178,7 +177,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
         // Store session for reconnection
         localStorage.setItem('nostr_connect_session', JSON.stringify(session))
         // Store the signer instance globally
-        (window as any).remoteSigner = remoteSigner
+        (window as any).remoteSigner = signer
         
         setConnectionState('success')
         
@@ -220,9 +219,11 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
           'wss://purplepag.es'         // Good fallback
         ]
 
-        const remoteSigner = new MKStacksRemoteSigner(relays)
-        const connectUri = remoteSigner.generateConnectionUri()
-        
+        const { connectUri, established } = Nip46RemoteSigner.listenConnectionFromRemote(
+          relays,
+          clientMetadata
+        )
+
         console.log('[BunkerConnect] 📱 Generated connection URI')
         setConnectUri(connectUri)
 
@@ -233,7 +234,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
         }, 60000)
 
         // Wait for remote signer to connect
-        const { signer, session } = await remoteSigner.listenForConnection(60000)
+        const { signer, session } = await established
 
         clearTimeout(timeout)
 
@@ -247,7 +248,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
         // Store session
         localStorage.setItem('nostr_connect_session', JSON.stringify(session))
         // Store the signer instance globally
-        (window as any).remoteSigner = remoteSigner
+        (window as any).remoteSigner = signer
 
         setConnectionState('success')
 
