@@ -1,63 +1,8 @@
 "use client"
 
-import { nip04, generatePrivateKey, getPublicKey, SimplePool } from "nostr-tools"
+import { nip04, SimplePool } from "nostr-tools"
 import type { DecryptedNote } from "./nostr-crypto"
 import { signEventWithRemote } from "./signer-manager"
-
-// NIP-59 Gift Wrap implementation for Kind 4 DMs
-const GIFT_WRAP_KIND = 1059
-const SEAL_KIND = 13
-
-// Create a gift-wrapped Kind 4 event according to NIP-59
-async function createGiftWrappedDM(unsignedEvent: any, authData: any): Promise<any> {
-  try {
-    // Step 1: Create the rumor (unsigned event)
-    const rumor = {
-      ...unsignedEvent,
-      // Remove signature if present
-      sig: undefined
-    }
-    
-    // Step 2: Create the seal (Kind 13) - encrypted with sender's key
-    const senderPrivateKey = getPrivateKeyForEncryption(authData)
-    
-    const rumorJson = JSON.stringify(rumor)
-    const sealedContent = await nip04.encrypt(senderPrivateKey, authData.pubkey, rumorJson)
-    
-    const seal = {
-      kind: SEAL_KIND,
-      created_at: Math.floor(Date.now() / 1000),
-      tags: [["p", authData.pubkey]], // Recipient (self)
-      content: sealedContent,
-      pubkey: authData.pubkey
-    }
-    
-    // Step 3: Create the gift wrap (Kind 1059) - encrypted with throwaway key
-    const throwawayKey = generatePrivateKey()
-    const throwawayPubkey = getPublicKey(throwawayKey)
-    
-    const sealJson = JSON.stringify(seal)
-    const wrappedContent = await nip04.encrypt(throwawayKey, authData.pubkey, sealJson)
-    
-    const giftWrap = {
-      kind: GIFT_WRAP_KIND,
-      created_at: Math.floor(Date.now() / 1000),
-      tags: [
-        ["p", authData.pubkey], // Recipient
-        ["p", throwawayPubkey]  // Sender (throwaway key)
-      ],
-      content: wrappedContent,
-      pubkey: throwawayPubkey
-    }
-    
-    console.log("[Kind4Journal] Created gift-wrapped DM with throwaway key:", throwawayPubkey)
-    return giftWrap
-    
-  } catch (error) {
-    console.error("[Kind4Journal] Error creating gift-wrapped DM:", error)
-    throw error
-  }
-}
 
 // Helper function to get private key for encryption
 function getPrivateKeyForEncryption(authData: any): string {
@@ -75,33 +20,15 @@ function getPrivateKeyForEncryption(authData: any): string {
   }
 }
 
-// Unwrap a gift-wrapped event to get the original Kind 4 event
-async function unwrapGiftWrappedEvent(giftWrappedEvent: any, authData: any): Promise<any> {
-  try {
-    const privateKey = getPrivateKeyForEncryption(authData)
-    
-    // Step 1: Decrypt the gift wrap to get the seal
-    const sealJson = await nip04.decrypt(privateKey, authData.pubkey, giftWrappedEvent.content)
-    const seal = JSON.parse(sealJson)
-    
-    // Step 2: Decrypt the seal to get the rumor (original Kind 4 event)
-    const rumorJson = await nip04.decrypt(privateKey, authData.pubkey, seal.content)
-    const rumor = JSON.parse(rumorJson)
-    
-    console.log("[Kind4Journal] Successfully unwrapped gift-wrapped event:", rumor.id)
-    return rumor
-    
-  } catch (error) {
-    console.error("[Kind4Journal] Failed to unwrap gift-wrapped event:", error)
-    return null
-  }
-}
-
 // Reliable relays that support Kind 4 encrypted DMs
 const RELAYS = [
   "wss://relay.damus.io",
   "wss://nos.lol", 
-  "wss://relay.nostr.band"
+  "wss://relay.nostr.band",
+  "wss://relay.snort.social",
+  "wss://relay.primal.net",
+  "wss://relay.nostr.wine",
+  "wss://relay.current.fyi"
 ]
 
 // Event kinds
@@ -131,57 +58,61 @@ export async function loadJournalFromKind4(authData: any): Promise<DecryptedNote
   const pool = getPool()
   
   try {
-    // Query for gift-wrapped events (Kind 1059) where user is recipient
-    console.log("[Kind4Journal] Querying relays for gift-wrapped Kind 1059 events...")
+    // Query for Kind 4 events where user is both author and recipient (self-DM)
+    console.log("[Kind4Journal] Querying relays for Kind 4 self-DMs...")
     console.log("[Kind4Journal] Query filters:", {
-      kinds: [GIFT_WRAP_KIND],
+      kinds: [KIND4_DM],
+      authors: [authData.pubkey],
       "#p": [authData.pubkey],
       limit: 1000
     })
     
-    const giftWrappedEvents = await pool.querySync(RELAYS, [
+    const dmEvents = await pool.querySync(RELAYS, [
       { 
-        kinds: [GIFT_WRAP_KIND], 
-        "#p": [authData.pubkey], // p-tag must match user's pubkey (recipient)
+        kinds: [KIND4_DM], 
+        authors: [authData.pubkey], // User is the author
+        "#p": [authData.pubkey],    // User is also the recipient (p-tag)
         limit: 1000
       }
     ], { timeout: 15000 })
     
-    console.log("[Kind4Journal] Found", giftWrappedEvents.length, "gift-wrapped events")
+    console.log("[Kind4Journal] Found", dmEvents.length, "Kind 4 self-DM events")
     
     // If no events found, wait and retry once (events might need time to propagate)
-    if (giftWrappedEvents.length === 0) {
-      console.log("[Kind4Journal] No gift-wrapped events found, waiting 3 seconds for propagation...")
+    if (dmEvents.length === 0) {
+      console.log("[Kind4Journal] No self-DMs found, waiting 3 seconds for propagation...")
       await new Promise(resolve => setTimeout(resolve, 3000))
       
       console.log("[Kind4Journal] Retrying query after delay...")
       const retryEvents = await pool.querySync(RELAYS, [
         { 
-          kinds: [GIFT_WRAP_KIND], 
+          kinds: [KIND4_DM], 
+          authors: [authData.pubkey],
           "#p": [authData.pubkey],
           limit: 1000
         }
       ], { timeout: 15000 })
       
-      console.log("[Kind4Journal] Retry found", retryEvents.length, "gift-wrapped events")
+      console.log("[Kind4Journal] Retry found", retryEvents.length, "Kind 4 self-DM events")
       
       if (retryEvents.length > 0) {
-        giftWrappedEvents.push(...retryEvents)
+        dmEvents.push(...retryEvents)
       } else {
-        // Try a broader query to see if any gift-wrapped events exist
-        console.log("[Kind4Journal] Still no gift-wrapped events found, checking for any Kind 1059 events...")
-        const anyGiftWrappedEvents = await pool.querySync(RELAYS, [
+        // Try a broader query to see if any Kind 4 events exist from this user
+        console.log("[Kind4Journal] Still no self-DMs found, checking for any Kind 4 events from this user...")
+        const anyKind4Events = await pool.querySync(RELAYS, [
           { 
-            kinds: [GIFT_WRAP_KIND], 
+            kinds: [KIND4_DM], 
+            authors: [authData.pubkey],
             limit: 100
           }
         ], { timeout: 10000 })
         
-        console.log("[Kind4Journal] Found", anyGiftWrappedEvents.length, "total Kind 1059 events")
+        console.log("[Kind4Journal] Found", anyKind4Events.length, "total Kind 4 events from this user")
         
-        if (anyGiftWrappedEvents.length > 0) {
-          console.log("[Kind4Journal] Sample gift-wrapped events found:")
-          anyGiftWrappedEvents.slice(0, 3).forEach((event, i) => {
+        if (anyKind4Events.length > 0) {
+          console.log("[Kind4Journal] Sample Kind 4 events found:")
+          anyKind4Events.slice(0, 3).forEach((event, i) => {
             const pTags = event.tags.filter(tag => tag[0] === "p")
             console.log(`[Kind4Journal] Event ${i + 1}: ${event.id}, p-tags:`, pTags)
           })
@@ -208,21 +139,9 @@ export async function loadJournalFromKind4(authData: any): Promise<DecryptedNote
       })
     })
     
-    // Process gift-wrapped events to extract Kind 4 events
-    const validEvents: any[] = []
-    
-    for (const giftWrappedEvent of giftWrappedEvents) {
-      try {
-        // Unwrap the gift-wrapped event to get the Kind 4 event
-        const kind4Event = await unwrapGiftWrappedEvent(giftWrappedEvent, authData)
-        if (kind4Event && !deletedEventIds.has(kind4Event.id)) {
-          validEvents.push(kind4Event)
-        }
-      } catch (error) {
-        console.warn("[Kind4Journal] Failed to unwrap gift-wrapped event:", giftWrappedEvent.id, error)
-      }
-    }
-    console.log("[Kind4Journal] Found", validEvents.length, "valid entries after filtering deletions")
+    // Filter out deleted events
+    const validEvents = dmEvents.filter(event => !deletedEventIds.has(event.id))
+    console.log("[Kind4Journal] Found", validEvents.length, "valid Kind 4 events after filtering deletions")
     
     const notes: DecryptedNote[] = []
     
@@ -293,13 +212,9 @@ export async function saveJournalAsKind4(note: DecryptedNote, authData: any): Pr
       pubkey: unsignedEvent.pubkey
     })
 
-    // Create gift-wrapped version for compatibility with DM apps like 0xchat
-    console.log("[Kind4Journal] Creating gift-wrapped DM for compatibility...")
-    const giftWrappedEvent = await createGiftWrappedDM(unsignedEvent, authData)
-    
-    // Sign the gift-wrapped event
-    const signedEvent = await signEventWithRemote(giftWrappedEvent, authData)
-    console.log("[Kind4Journal] Publishing gift-wrapped Kind 1059 journal entry to relays:", signedEvent.id)
+    // Sign the event
+    const signedEvent = await signEventWithRemote(unsignedEvent, authData)
+    console.log("[Kind4Journal] Publishing Kind 4 journal entry to relays:", signedEvent.id)
     
     // Publish to relays with better error tracking
     const pool = getPool()
@@ -346,19 +261,19 @@ export async function deleteJournalKind4(note: DecryptedNote, authData: any): Pr
   }
 
   try {
-    // Create Kind 5 deletion event for the gift-wrapped event ID
+    // Create Kind 5 deletion event for the Kind 4 event ID
     const deletionEvent = {
       kind: DELETION_KIND,
       created_at: Math.floor(Date.now() / 1000),
       tags: [
-        ["e", note.eventId], // Gift-wrapped event ID to delete
+        ["e", note.eventId], // Kind 4 event ID to delete
       ],
       content: "Deleted a journal entry from Nostr Journal.",
       pubkey: authData.pubkey,
     }
 
     const signedEvent = await signEventWithRemote(deletionEvent, authData)
-    console.log("[Kind4Journal] Publishing Kind 5 deletion event for gift-wrapped event:", signedEvent.id)
+    console.log("[Kind4Journal] Publishing Kind 5 deletion event for Kind 4 event:", signedEvent.id)
     
     const pool = getPool()
     const relays = await pool.publish(RELAYS, signedEvent)
