@@ -226,14 +226,14 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
         console.log('[BunkerConnect] 📱 Generated connection URI')
         setConnectUri(connectUri)
 
-        // Wait for connection (with longer timeout for mobile)
+        // Wait for connection with shorter timeout
         const timeout = setTimeout(() => {
           setConnectionState('error')
-          setError('Connection timeout. Please approve within 2 minutes. Make sure your signing app is connected to the internet.')
-        }, 120000)
+          setError('Connection timeout. Please make sure your signing app is connected and try again.')
+        }, 60000)
 
         // Wait for remote signer to connect
-        const { signer, session } = await remoteSigner.listenForConnection(120000)
+        const { signer, session } = await remoteSigner.listenForConnection(60000)
 
         clearTimeout(timeout)
 

@@ -2,6 +2,7 @@
 
 import { SimplePool, nip04 } from 'nostr-tools';
 import { generateSecretKey, getPublicKey } from 'nostr-tools/pure';
+import { getSharedSecret } from 'nostr-tools/keys';
 import { bytesToHex } from '@noble/hashes/utils';
 
 // MKStacks-inspired remote signer implementation
@@ -42,15 +43,23 @@ export class MKStacksRemoteSigner {
   }
 
   // Listen for incoming connections (client-initiated)
-  async listenForConnection(timeoutMs = 120000): Promise<{ signer: any; session: any }> {
-    return new Promise(async (resolve, reject) => {
+  async listenForConnection(timeoutMs = 60000): Promise<{ signer: any; session: any }> {
+    return new Promise((resolve, reject) => {
+      let resolved = false;
+      
       const timeout = setTimeout(() => {
-        reject(new Error('Connection timeout. Please try again.'));
+        if (!resolved) {
+          resolved = true;
+          sub?.close();
+          reject(new Error('Connection timeout. Please make sure your signing app is connected and try again.'));
+        }
       }, timeoutMs);
+
+      let sub: any = null;
 
       try {
         // Subscribe to NIP-46 requests
-        const sub = this.pool.subscribeMany(
+        sub = this.pool.subscribeMany(
           this.relays,
           [{
             kinds: [24133], // NIP-46 request
@@ -58,15 +67,23 @@ export class MKStacksRemoteSigner {
           }],
           {
             onevent: async (event) => {
+              if (resolved) return;
+              
               try {
+                console.log('[MKStacks] Received connection request from:', event.pubkey);
+                
                 // Decrypt the request
                 const decrypted = await nip04.decrypt(this.appSecretKey, event.content);
                 const request = JSON.parse(decrypted);
 
+                console.log('[MKStacks] Decrypted request:', request);
+
                 if (request.method === 'connect') {
                   this.walletPubkey = event.pubkey;
-                  this.sharedSecret = await nip04.getSharedSecret(this.appSecretKey, this.walletPubkey);
+                  this.sharedSecret = getSharedSecret(this.appSecretKey, this.walletPubkey);
                   this.isConnected = true;
+
+                  console.log('[MKStacks] Connection established with:', this.walletPubkey);
 
                   // Send response
                   const response = {
@@ -87,32 +104,38 @@ export class MKStacksRemoteSigner {
                   };
 
                   await this.pool.publish(this.relays, responseEvent);
+                  console.log('[MKStacks] Sent connection response');
 
-                  clearTimeout(timeout);
-                  resolve({
-                    signer: this,
-                    session: {
-                      walletPubkey: this.walletPubkey,
-                      sharedSecret: this.sharedSecret,
-                      relays: this.relays
-                    }
-                  });
+                  if (!resolved) {
+                    resolved = true;
+                    clearTimeout(timeout);
+                    sub?.close();
+                    resolve({
+                      signer: this,
+                      session: {
+                        walletPubkey: this.walletPubkey,
+                        sharedSecret: this.sharedSecret,
+                        relays: this.relays
+                      }
+                    });
+                  }
                 }
               } catch (error) {
-                console.error('Error processing connection request:', error);
+                console.error('[MKStacks] Error processing connection request:', error);
               }
             }
           }
         );
 
-        // Clean up on timeout
-        setTimeout(() => {
-          sub.close();
-        }, timeoutMs);
+        console.log('[MKStacks] Listening for connections on relays:', this.relays);
 
       } catch (error) {
-        clearTimeout(timeout);
-        reject(error);
+        if (!resolved) {
+          resolved = true;
+          clearTimeout(timeout);
+          sub?.close();
+          reject(error);
+        }
       }
     });
   }
@@ -120,18 +143,24 @@ export class MKStacksRemoteSigner {
   // Connect to remote signer (signer-initiated flow)
   async connectToRemote(bunkerUrl: string): Promise<{ signer: any; session: any }> {
     try {
+      console.log('[MKStacks] Connecting to bunker URL:', bunkerUrl);
+      
       const url = new URL(bunkerUrl);
       const walletPubkey = url.hostname;
       const relayUrl = url.searchParams.get('relay');
       const secret = url.searchParams.get('secret');
 
+      console.log('[MKStacks] Parsed bunker URL:', { walletPubkey, relayUrl, hasSecret: !!secret });
+
       if (!relayUrl || !secret) {
-        throw new Error('Invalid bunker URL format');
+        throw new Error('Invalid bunker URL format - missing relay or secret parameters');
       }
 
       this.walletPubkey = walletPubkey;
-      this.sharedSecret = await nip04.getSharedSecret(this.appSecretKey, walletPubkey);
+      this.sharedSecret = getSharedSecret(this.appSecretKey, walletPubkey);
       this.isConnected = true;
+
+      console.log('[MKStacks] Connected to remote signer:', this.walletPubkey);
 
       return {
         signer: this,
@@ -142,6 +171,7 @@ export class MKStacksRemoteSigner {
         }
       };
     } catch (error) {
+      console.error('[MKStacks] Bunker connection error:', error);
       throw new Error(`Failed to connect to remote signer: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
