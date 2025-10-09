@@ -150,11 +150,11 @@ export async function saveJournalAsKind4(note: DecryptedNote, authData: any): Pr
     // Publish to relays with better error tracking
     const pool = getPool()
     
-    // Publish to all relays using the correct nostr-tools API
+    // Publish to all relays using the correct nostr-tools API (v2.0)
     try {
-      console.log(`[Kind4Journal] Publishing to ${RELAYS.length} relays...`)
+      console.log(`[Kind4Journal v2.0] Publishing to ${RELAYS.length} relays using pool.publish()...`)
       const relays = await pool.publish(RELAYS, signedEvent)
-      console.log(`[Kind4Journal] ✅ Published to ${relays.length} relays successfully`)
+      console.log(`[Kind4Journal v2.0] ✅ Published to ${relays.length} relays successfully`)
       
       // Log which relays we published to
       RELAYS.forEach((relay, index) => {
