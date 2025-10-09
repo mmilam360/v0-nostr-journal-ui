@@ -1,6 +1,6 @@
 "use client"
 
-import * as nostrTools from "nostr-tools"
+import { nip04, generatePrivateKey, getPublicKey, SimplePool } from "nostr-tools"
 import type { DecryptedNote } from "./nostr-crypto"
 import { signEventWithRemote } from "./signer-manager"
 
@@ -19,7 +19,6 @@ async function createGiftWrappedDM(unsignedEvent: any, authData: any): Promise<a
     }
     
     // Step 2: Create the seal (Kind 13) - encrypted with sender's key
-    const { nip04 } = nostrTools
     const senderPrivateKey = getPrivateKeyForEncryption(authData)
     
     const rumorJson = JSON.stringify(rumor)
@@ -34,7 +33,6 @@ async function createGiftWrappedDM(unsignedEvent: any, authData: any): Promise<a
     }
     
     // Step 3: Create the gift wrap (Kind 1059) - encrypted with throwaway key
-    const { generatePrivateKey, getPublicKey } = nostrTools
     const throwawayKey = generatePrivateKey()
     const throwawayPubkey = getPublicKey(throwawayKey)
     
@@ -80,7 +78,6 @@ function getPrivateKeyForEncryption(authData: any): string {
 // Unwrap a gift-wrapped event to get the original Kind 4 event
 async function unwrapGiftWrappedEvent(giftWrappedEvent: any, authData: any): Promise<any> {
   try {
-    const { nip04 } = nostrTools
     const privateKey = getPrivateKeyForEncryption(authData)
     
     // Step 1: Decrypt the gift wrap to get the seal
@@ -112,11 +109,11 @@ const KIND4_DM = 4 // Encrypted DM
 const DELETION_KIND = 5 // NIP-09 deletion events
 
 // Global pool for connection reuse
-let globalPool: nostrTools.SimplePool | null = null
+let globalPool: SimplePool | null = null
 
-function getPool(): nostrTools.SimplePool {
+function getPool(): SimplePool {
   if (!globalPool) {
-    globalPool = new nostrTools.SimplePool()
+    globalPool = new SimplePool()
   }
   return globalPool
 }
@@ -381,7 +378,6 @@ export async function deleteJournalKind4(note: DecryptedNote, authData: any): Pr
  * Encrypt journal content using NIP-04 encryption
  */
 async function encryptKind4Content(note: DecryptedNote, authData: any): Promise<string> {
-  const { nip04 } = nostrTools
   
   // For Kind 4, we use the recipient's pubkey (which is the same as sender for self-DM)
   const recipientPubkey = authData.pubkey
@@ -413,7 +409,6 @@ async function encryptKind4Content(note: DecryptedNote, authData: any): Promise<
  * Decrypt Kind 4 content using NIP-04 decryption
  */
 async function decryptKind4Content(encryptedData: string, authData: any): Promise<any> {
-  const { nip04 } = nostrTools
   
   try {
     // For self-DMs, sender and recipient are the same
