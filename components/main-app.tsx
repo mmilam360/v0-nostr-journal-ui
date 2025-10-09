@@ -910,7 +910,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       
       setNotes(validatedNotes)
       
-      // Update selected note if it exists in the refreshed notes
+      // Update selected note to point to the updated note object (triggers Editor re-render)
       if (selectedNote) {
         const updatedSelectedNote = validatedNotes.find(note => note.id === selectedNote.id)
         if (updatedSelectedNote) {
@@ -936,15 +936,6 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       setTags(Array.from(allTags))
       
       console.log("[v0] ✅ Manual refresh complete")
-      
-      // Smart refresh: refresh current note view without full page reload
-      if (selectedNote) {
-        const refreshedNote = validatedNotes.find(note => note.id === selectedNote.id)
-        if (refreshedNote) {
-          console.log("[v0] Updating note view with refreshed content")
-          setSelectedNote(refreshedNote)
-        }
-      }
       
     } catch (error) {
       console.error("[v0] ❌ Manual refresh failed:", error)

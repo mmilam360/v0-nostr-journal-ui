@@ -35,25 +35,32 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
   const debouncedContent = useDebounce(content, 1500)
 
   useEffect(() => {
-    if (note && note.id !== currentNoteIdRef.current) {
-      // Save previous note if there were unsaved changes
-      if (previousNoteDataRef.current && hasUnsavedChanges) {
-        console.log("[v0] Saving previous note before switching:", previousNoteDataRef.current.id)
-        const noteToSave = {
-          ...note,
-          id: previousNoteDataRef.current.id,
-          title: previousNoteDataRef.current.title,
-          content: previousNoteDataRef.current.content,
-        } as Note
-        onUpdateNote(noteToSave)
-      }
+    if (note) {
+      // Check if this is a new note or if the content has been updated (e.g., from manual refresh)
+      const isNewNote = note.id !== currentNoteIdRef.current
+      const isContentUpdate = note.id === currentNoteIdRef.current && 
+        (note.title !== title || note.content !== content)
+      
+      if (isNewNote || isContentUpdate) {
+        // Save previous note if there were unsaved changes (only for new notes)
+        if (isNewNote && previousNoteDataRef.current && hasUnsavedChanges) {
+          console.log("[v0] Saving previous note before switching:", previousNoteDataRef.current.id)
+          const noteToSave = {
+            ...note,
+            id: previousNoteDataRef.current.id,
+            title: previousNoteDataRef.current.title,
+            content: previousNoteDataRef.current.content,
+          } as Note
+          onUpdateNote(noteToSave)
+        }
 
-      console.log("[v0] Switching to note:", note.id)
-      setTitle(note.title)
-      setContent(note.content)
-      setHasUnsavedChanges(false)
-      currentNoteIdRef.current = note.id
-      previousNoteDataRef.current = { id: note.id, title: note.title, content: note.content }
+        console.log("[v0] Updating note view:", note.id, isNewNote ? "(new note)" : "(content update)")
+        setTitle(note.title)
+        setContent(note.content)
+        setHasUnsavedChanges(false)
+        currentNoteIdRef.current = note.id
+        previousNoteDataRef.current = { id: note.id, title: note.title, content: note.content }
+      }
     }
   }, [note])
 
