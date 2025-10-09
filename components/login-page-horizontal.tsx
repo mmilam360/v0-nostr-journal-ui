@@ -243,9 +243,10 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
           description: 'Private journaling on Nostr'
         }
 
-        // Use single relay for NIP-46 (some signers prefer single relay)
+        // Try different relay combinations for NIP-46 compatibility
         const relays = [
-          'wss://relay.damus.io' // Most reliable for NIP-46
+          'wss://nos.lol', // Alternative reliable relay
+          'wss://relay.damus.io' // Fallback
         ]
 
         // Use the standard NIP-46 client-initiated flow
@@ -256,7 +257,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
             relays,
             clientMetadata,
             {
-              connectTimeoutMs: 30000, // 30 second timeout
+              connectTimeoutMs: 60000, // 60 second timeout - give more time for handshake
               permissions: [
                 'sign_event',        // Sign journal entries (Kind 30001)
                 'get_public_key',    // Get user's public key
@@ -273,10 +274,10 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
           
           // Wait for connection with timeout
           const timeout = setTimeout(() => {
-            console.log('[BunkerConnect] ⏰ Connection timeout after 30s')
+            console.log('[BunkerConnect] ⏰ Connection timeout after 60s')
             setConnectionState('error')
             setError('Connection timeout. Please make sure your signing app is connected and try again.')
-          }, 30000) // 30 seconds
+          }, 60000) // 60 seconds
 
           console.log('[BunkerConnect] ⏳ Waiting for remote signer to connect...')
           console.log('[BunkerConnect] 📱 QR Code URI format:', connectUri.substring(0, 100) + '...')
