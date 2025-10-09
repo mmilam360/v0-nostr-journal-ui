@@ -34,13 +34,9 @@ export default function NoteList({ notes, selectedNote, onSelectNote, onCreateNo
     // Debug logging for sync status
     console.log(`[NoteList] Note "${note.title}": isSynced=${note.isSynced}, eventId=${note.eventId}, fetchedFromRelays=${note.fetchedFromRelays}, publishedToRelays=${note.publishedToRelays}`)
     
-    // If note has eventId and was fetched from relays, it's definitely synced
-    if (note.eventId && note.fetchedFromRelays) {
+    // If note has eventId (regardless of how it got it), it's synced
+    if (note.eventId) {
       return <CheckCircle className="w-3 h-3 text-green-500" title="Synced to Nostr" />
-    }
-    // If note has eventId but wasn't fetched from relays, it might be published but not verified
-    else if (note.eventId) {
-      return <AlertCircle className="w-3 h-3 text-yellow-500" title="Published but not verified" />
     }
     // If note was fetched from relays but has no eventId, something is wrong
     else if (note.fetchedFromRelays) {

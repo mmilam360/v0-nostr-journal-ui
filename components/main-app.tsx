@@ -936,9 +936,13 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       setTags(Array.from(allTags))
       
       console.log("[v0] ✅ Manual refresh complete")
+      
+      // Force page refresh to ensure note view updates properly
+      console.log("[v0] Refreshing page to update note view...")
+      window.location.reload()
+      
     } catch (error) {
       console.error("[v0] ❌ Manual refresh failed:", error)
-    } finally {
       setIsRefreshing(false)
     }
   }
@@ -1055,22 +1059,11 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   }, [authData.pubkey])
 
   if (isLoading) {
-    return (
-      <div className="h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Loading your notes...</p>
-          {authData.authMethod === "nsec" && (
-            <p className="text-muted-foreground text-sm mt-2">Syncing with Nostr network...</p>
-          )}
-        </div>
-      </div>
-    )
+    return <LoadingScreen isLoading={true} />
   }
 
   return (
     <ErrorBoundary>
-      <LoadingScreen isLoading={isLoading} />
     <div className="h-screen bg-background flex flex-col w-full">
         {/* Clean Header */}
         <header className="sticky top-0 z-50 bg-white/95 dark:bg-card/95 backdrop-blur-sm border-b border-border">
