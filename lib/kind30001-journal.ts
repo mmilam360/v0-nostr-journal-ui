@@ -74,12 +74,30 @@ export async function loadJournalFromKind30001(authData: any): Promise<Decrypted
       limit: 1000
     })
     
-    const listEvents = await pool.querySync(RELAYS, [
-      { 
-        kinds: [KIND30001_LIST], 
-        limit: 1000
-      }
-    ], { timeout: 15000 })
+    // Try using the sub method instead of querySync
+    const listEvents: any[] = []
+    
+    await new Promise<void>((resolve) => {
+      const sub = pool.sub(RELAYS, [
+        { 
+          kinds: [KIND30001_LIST], 
+          limit: 1000
+        }
+      ])
+      
+      sub.on('event', (event) => {
+        listEvents.push(event)
+      })
+      
+      sub.on('eose', () => {
+        resolve()
+      })
+      
+      // Timeout after 15 seconds
+      setTimeout(() => {
+        resolve()
+      }, 15000)
+    })
     
     console.log("[Kind30001Journal] Found", listEvents.length, "Kind 30001 list events")
     
@@ -89,12 +107,29 @@ export async function loadJournalFromKind30001(authData: any): Promise<Decrypted
       await new Promise(resolve => setTimeout(resolve, 3000))
       
       console.log("[Kind30001Journal] Retrying query after delay...")
-      const retryEvents = await pool.querySync(RELAYS, [
-        { 
-          kinds: [KIND30001_LIST], 
-          limit: 1000
-        }
-      ], { timeout: 15000 })
+      const retryEvents: any[] = []
+      
+      await new Promise<void>((resolve) => {
+        const sub = pool.sub(RELAYS, [
+          { 
+            kinds: [KIND30001_LIST], 
+            limit: 1000
+          }
+        ])
+        
+        sub.on('event', (event) => {
+          retryEvents.push(event)
+        })
+        
+        sub.on('eose', () => {
+          resolve()
+        })
+        
+        // Timeout after 15 seconds
+        setTimeout(() => {
+          resolve()
+        }, 15000)
+      })
       
       console.log("[Kind30001Journal] Retry found", retryEvents.length, "Kind 30001 list events")
       
@@ -104,13 +139,30 @@ export async function loadJournalFromKind30001(authData: any): Promise<Decrypted
     }
     
     // Get deletion events to filter out deleted entries
-    const deletionEvents = await pool.querySync(RELAYS, [
-      { 
-        kinds: [DELETION_KIND], 
-        authors: [authData.pubkey],
-        limit: 1000
-      }
-    ], { timeout: 10000 })
+    const deletionEvents: any[] = []
+    
+    await new Promise<void>((resolve) => {
+      const sub = pool.sub(RELAYS, [
+        { 
+          kinds: [DELETION_KIND], 
+          authors: [authData.pubkey],
+          limit: 1000
+        }
+      ])
+      
+      sub.on('event', (event) => {
+        deletionEvents.push(event)
+      })
+      
+      sub.on('eose', () => {
+        resolve()
+      })
+      
+      // Timeout after 10 seconds
+      setTimeout(() => {
+        resolve()
+      }, 10000)
+    })
     
     // Create set of deleted event IDs
     const deletedEventIds = new Set<string>()
