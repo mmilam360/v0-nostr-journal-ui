@@ -30,12 +30,17 @@ function getPool(): nostrTools.SimplePool {
  * Load all notes from relays - simple query and filter
  */
 export async function loadNotesFromRelays(authData: any): Promise<DecryptedNote[]> {
-  if (!authData?.pubkey) return []
+  if (!authData?.pubkey) {
+    console.log("[SimpleEvents] No authData or pubkey provided")
+    return []
+  }
   
+  console.log("[SimpleEvents] Loading notes from relays for pubkey:", authData.pubkey)
   const pool = getPool()
   
   try {
     // Get note events
+    console.log("[SimpleEvents] Querying relays for kind", EVENT_KIND, "events...")
     const noteEvents = await pool.querySync(RELAYS, [
       { 
         kinds: [EVENT_KIND], 
@@ -44,11 +49,19 @@ export async function loadNotesFromRelays(authData: any): Promise<DecryptedNote[
       }
     ], { timeout: 10000 })
     
+    console.log("[SimpleEvents] Found", noteEvents.length, "total kind", EVENT_KIND, "events")
+    
     // Filter for our app events
     const appEvents = noteEvents.filter(event => {
       const clientTag = event.tags.find((tag: any[]) => tag[0] === "client")
-      return clientTag && clientTag[1] === APP_IDENTIFIER
+      const isOurApp = clientTag && clientTag[1] === APP_IDENTIFIER
+      if (isOurApp) {
+        console.log("[SimpleEvents] Found our app event:", event.id, "with client tag:", clientTag[1])
+      }
+      return isOurApp
     })
+    
+    console.log("[SimpleEvents] Filtered to", appEvents.length, "app-specific events")
     
     // Get deletion events
     const deletionEvents = await pool.querySync(RELAYS, [
@@ -76,8 +89,10 @@ export async function loadNotesFromRelays(authData: any): Promise<DecryptedNote[
     
     for (const event of validEvents) {
       try {
+        console.log("[SimpleEvents] Attempting to decrypt event:", event.id)
         const decryptedContent = await decryptNoteContent(event.content, authData)
         if (decryptedContent) {
+          console.log("[SimpleEvents] Successfully decrypted note:", decryptedContent.id, decryptedContent.title)
           const note: DecryptedNote = {
             id: decryptedContent.id,
             title: decryptedContent.title,
@@ -90,12 +105,16 @@ export async function loadNotesFromRelays(authData: any): Promise<DecryptedNote[
             lastSynced: new Date()
           }
           notes.push(note)
+        } else {
+          console.log("[SimpleEvents] Decryption returned null for event:", event.id)
         }
       } catch (error) {
+        console.error("[SimpleEvents] Failed to decrypt event:", event.id, error)
         // Silent fail - just skip bad events
       }
     }
     
+    console.log("[SimpleEvents] Successfully loaded", notes.length, "decrypted notes from relays")
     return notes
     
   } catch (error) {
