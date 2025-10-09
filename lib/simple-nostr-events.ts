@@ -8,7 +8,10 @@ import { signEventWithRemote } from "./signer-manager"
 const RELAYS = [
   "wss://relay.damus.io",
   "wss://nos.lol", 
-  "wss://relay.primal.net"
+  "wss://relay.primal.net",
+  "wss://relay.snort.social",
+  "wss://relay.nostr.band",
+  "wss://purplepag.es"
 ]
 
 // App identifier for our events
@@ -38,6 +41,9 @@ export async function loadNotesFromRelays(authData: any): Promise<DecryptedNote[
   console.log("[SimpleEvents] Loading notes from relays for pubkey:", authData.pubkey)
   const pool = getPool()
   
+  // Log which relays we're querying
+  console.log("[SimpleEvents] Querying relays:", RELAYS)
+  
   try {
     // Get note events
     console.log("[SimpleEvents] Querying relays for kind", EVENT_KIND, "events...")
@@ -50,6 +56,23 @@ export async function loadNotesFromRelays(authData: any): Promise<DecryptedNote[
     ], { timeout: 10000 })
     
     console.log("[SimpleEvents] Found", noteEvents.length, "total kind", EVENT_KIND, "events")
+    
+    // If no events found, wait a moment and try once more (relays might need time to store)
+    if (noteEvents.length === 0) {
+      console.log("[SimpleEvents] No events found, waiting 2 seconds and retrying...")
+      await new Promise(resolve => setTimeout(resolve, 2000))
+      
+      const retryEvents = await pool.querySync(RELAYS, [
+        { 
+          kinds: [EVENT_KIND], 
+          authors: [authData.pubkey],
+          limit: 1000
+        }
+      ], { timeout: 10000 })
+      
+      console.log("[SimpleEvents] Retry found", retryEvents.length, "total kind", EVENT_KIND, "events")
+      noteEvents.push(...retryEvents)
+    }
     
     // Filter for our app events
     const appEvents = noteEvents.filter(event => {
@@ -152,10 +175,17 @@ export async function saveNoteToRelays(note: DecryptedNote, authData: any): Prom
 
     // Sign the event
     const signedEvent = await signEventWithRemote(unsignedEvent, authData)
+    console.log("[SimpleEvents] Publishing event to relays:", signedEvent.id)
     
     // Publish to relays - simple approach like nostrudel
     const pool = getPool()
     const relays = await pool.publish(RELAYS, signedEvent)
+    console.log("[SimpleEvents] Published to", relays.length, "relays")
+    
+    // Log which relays we published to
+    RELAYS.forEach((relay, index) => {
+      console.log(`[SimpleEvents] Published to relay ${index + 1}: ${relay}`)
+    })
     
     // Just return success - don't wait for confirmations
     return {
