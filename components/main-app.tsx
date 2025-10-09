@@ -483,8 +483,13 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
           lastSynced: new Date(),
           isSynced: eventExists // Add sync status
         }
-        setNotes(prevNotes => prevNotes.map(n => n.id === newNote.id ? finalNote : n))
+        const finalUpdatedNotes = [finalNote, ...notes.filter(n => n.id !== newNote.id)]
+        setNotes(finalUpdatedNotes)
         setSelectedNote(finalNote)
+        
+        // Save the updated note with eventId to localStorage
+        await saveEncryptedNotes(authData.pubkey, finalUpdatedNotes)
+        
         console.log(`[v0] ✅ New note saved to relays: ${result.eventId} (verified: ${eventExists})`)
         
         // Show success message to user
@@ -501,8 +506,12 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
           eventId: undefined,
           isSynced: false
         }
-        setNotes(prevNotes => prevNotes.map(n => n.id === newNote.id ? failedNote : n))
+        const failedUpdatedNotes = [failedNote, ...notes.filter(n => n.id !== newNote.id)]
+        setNotes(failedUpdatedNotes)
         setSelectedNote(failedNote)
+        
+        // Save the failed note to localStorage
+        await saveEncryptedNotes(authData.pubkey, failedUpdatedNotes)
       }
     } catch (error) {
       console.error("[v0] ❌ Error saving new note to relays:", error)
@@ -512,8 +521,12 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
         eventId: undefined,
         isSynced: false
       }
-      setNotes(prevNotes => prevNotes.map(n => n.id === newNote.id ? failedNote : n))
+      const failedUpdatedNotes = [failedNote, ...notes.filter(n => n.id !== newNote.id)]
+      setNotes(failedUpdatedNotes)
       setSelectedNote(failedNote)
+      
+      // Save the failed note to localStorage
+      await saveEncryptedNotes(authData.pubkey, failedUpdatedNotes)
     }
 
     console.log("[v0] New note created:", newNote.id)

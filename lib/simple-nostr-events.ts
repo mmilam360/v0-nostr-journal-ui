@@ -37,77 +37,33 @@ export async function loadNotesFromRelays(authData: any): Promise<DecryptedNote[
   const pool = getPool()
   
   try {
-    // Step 1: Get all note events (kind 30078) for this user
-    const noteEvents = await new Promise<any[]>((resolve, reject) => {
-      const collectedEvents: any[] = []
-      const sub = pool.sub(RELAYS, [
-        { 
-          kinds: [EVENT_KIND], 
-          authors: [authData.pubkey],
-          limit: 1000
-        }
-      ])
-      
-      const timeout = setTimeout(() => {
-        sub.unsub()
-        resolve(collectedEvents)
-      }, 10000)
-      
-      sub.on('event', (event: any) => {
-        // Only collect events with our app identifier
-        const clientTag = event.tags.find((tag: any[]) => tag[0] === "client")
-        if (clientTag && clientTag[1] === APP_IDENTIFIER) {
-          collectedEvents.push(event)
-        }
-      })
-      
-      sub.on('eose', () => {
-        clearTimeout(timeout)
-        sub.unsub()
-        resolve(collectedEvents)
-      })
-      
-      sub.on('error', (error: any) => {
-        clearTimeout(timeout)
-        sub.unsub()
-        reject(error)
-      })
+    // Step 1: Get all note events (kind 30078) for this user using querySync
+    console.log("[SimpleEvents] Querying relays for note events...")
+    const noteEvents = await pool.querySync(RELAYS, [
+      { 
+        kinds: [EVENT_KIND], 
+        authors: [authData.pubkey],
+        limit: 1000
+      }
+    ], { timeout: 10000 })
+    
+    // Filter for our app events
+    const appEvents = noteEvents.filter(event => {
+      const clientTag = event.tags.find((tag: any[]) => tag[0] === "client")
+      return clientTag && clientTag[1] === APP_IDENTIFIER
     })
     
-    console.log(`[SimpleEvents] Found ${noteEvents.length} note events`)
+    console.log(`[SimpleEvents] Found ${appEvents.length} app-specific events out of ${noteEvents.length} total`)
     
-    // Step 2: Get all deletion events (kind 5) for this user
-    const deletionEvents = await new Promise<any[]>((resolve, reject) => {
-      const collectedEvents: any[] = []
-      const sub = pool.sub(RELAYS, [
-        { 
-          kinds: [DELETION_KIND], 
-          authors: [authData.pubkey],
-          limit: 1000
-        }
-      ])
-      
-      const timeout = setTimeout(() => {
-        sub.unsub()
-        resolve(collectedEvents)
-      }, 10000)
-      
-      sub.on('event', (event: any) => {
-        collectedEvents.push(event)
-      })
-      
-      sub.on('eose', () => {
-        clearTimeout(timeout)
-        sub.unsub()
-        resolve(collectedEvents)
-      })
-      
-      sub.on('error', (error: any) => {
-        clearTimeout(timeout)
-        sub.unsub()
-        reject(error)
-      })
-    })
+    // Step 2: Get all deletion events (kind 5) for this user using querySync
+    console.log("[SimpleEvents] Querying relays for deletion events...")
+    const deletionEvents = await pool.querySync(RELAYS, [
+      { 
+        kinds: [DELETION_KIND], 
+        authors: [authData.pubkey],
+        limit: 1000
+      }
+    ], { timeout: 10000 })
     
     console.log(`[SimpleEvents] Found ${deletionEvents.length} deletion events`)
     
@@ -124,7 +80,7 @@ export async function loadNotesFromRelays(authData: any): Promise<DecryptedNote[
     console.log(`[SimpleEvents] Found ${deletedEventIds.size} deleted event IDs`)
     
     // Step 4: Filter out deleted notes and decrypt remaining ones
-    const validEvents = noteEvents.filter(event => !deletedEventIds.has(event.id))
+    const validEvents = appEvents.filter(event => !deletedEventIds.has(event.id))
     console.log(`[SimpleEvents] ${validEvents.length} notes remain after filtering deletions`)
     
     const notes: DecryptedNote[] = []
