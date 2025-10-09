@@ -32,13 +32,10 @@ function getPool(): nostrTools.SimplePool {
 export async function loadNotesFromRelays(authData: any): Promise<DecryptedNote[]> {
   if (!authData?.pubkey) return []
   
-  console.log("[SimpleEvents] Loading notes from relays for:", authData.pubkey)
-  
   const pool = getPool()
   
   try {
-    // Step 1: Get all note events (kind 30078) for this user using querySync
-    console.log("[SimpleEvents] Querying relays for note events...")
+    // Get note events
     const noteEvents = await pool.querySync(RELAYS, [
       { 
         kinds: [EVENT_KIND], 
@@ -53,10 +50,7 @@ export async function loadNotesFromRelays(authData: any): Promise<DecryptedNote[
       return clientTag && clientTag[1] === APP_IDENTIFIER
     })
     
-    console.log(`[SimpleEvents] Found ${appEvents.length} app-specific events out of ${noteEvents.length} total`)
-    
-    // Step 2: Get all deletion events (kind 5) for this user using querySync
-    console.log("[SimpleEvents] Querying relays for deletion events...")
+    // Get deletion events
     const deletionEvents = await pool.querySync(RELAYS, [
       { 
         kinds: [DELETION_KIND], 
@@ -65,23 +59,18 @@ export async function loadNotesFromRelays(authData: any): Promise<DecryptedNote[
       }
     ], { timeout: 10000 })
     
-    console.log(`[SimpleEvents] Found ${deletionEvents.length} deletion events`)
-    
-    // Step 3: Create set of deleted event IDs
+    // Create set of deleted event IDs
     const deletedEventIds = new Set<string>()
     deletionEvents.forEach(deletionEvent => {
       deletionEvent.tags.forEach((tag: any[]) => {
         if (tag[0] === "e") {
-          deletedEventIds.add(tag[1]) // Event ID being deleted
+          deletedEventIds.add(tag[1])
         }
       })
     })
     
-    console.log(`[SimpleEvents] Found ${deletedEventIds.size} deleted event IDs`)
-    
-    // Step 4: Filter out deleted notes and decrypt remaining ones
+    // Filter out deleted notes and decrypt remaining ones
     const validEvents = appEvents.filter(event => !deletedEventIds.has(event.id))
-    console.log(`[SimpleEvents] ${validEvents.length} notes remain after filtering deletions`)
     
     const notes: DecryptedNote[] = []
     
@@ -103,11 +92,10 @@ export async function loadNotesFromRelays(authData: any): Promise<DecryptedNote[
           notes.push(note)
         }
       } catch (error) {
-        console.warn("[SimpleEvents] Failed to decrypt event:", event.id, error)
+        // Silent fail - just skip bad events
       }
     }
     
-    console.log(`[SimpleEvents] Successfully loaded ${notes.length} notes from relays`)
     return notes
     
   } catch (error) {
@@ -125,8 +113,6 @@ export async function saveNoteToRelays(note: DecryptedNote, authData: any): Prom
   }
 
   try {
-    console.log("[SimpleEvents] Saving note:", note.title)
-    
     const encryptedContent = await encryptNoteContent(note, authData)
     const dTag = `${APP_IDENTIFIER}_note_${note.id}`
 
@@ -147,40 +133,12 @@ export async function saveNoteToRelays(note: DecryptedNote, authData: any): Prom
 
     // Sign the event
     const signedEvent = await signEventWithRemote(unsignedEvent, authData)
-    console.log("[SimpleEvents] Event signed:", signedEvent.id)
     
-    // Publish to relays
+    // Publish to relays - simple approach like nostrudel
     const pool = getPool()
-    console.log(`[SimpleEvents] Publishing to ${RELAYS.length} relays`)
+    const relays = await pool.publish(RELAYS, signedEvent)
     
-    // Use the correct pool.publish API
-    const publishPromises = RELAYS.map(relayUrl => 
-      new Promise<void>((resolve) => {
-        const relay = pool.ensureRelay(relayUrl)
-        
-        const timeout = setTimeout(() => {
-          console.warn(`[SimpleEvents] ⏰ Timeout waiting for ${relayUrl}`)
-          resolve()
-        }, 10000)
-        
-        relay.publish(signedEvent)
-          .then(() => {
-            clearTimeout(timeout)
-            console.log(`[SimpleEvents] ✅ Event confirmed by ${relayUrl}`)
-            resolve()
-          })
-          .catch((reason: any) => {
-            clearTimeout(timeout)
-            console.error(`[SimpleEvents] ❌ Event rejected by ${relayUrl}:`, reason)
-            resolve()
-          })
-      })
-    )
-    
-    await Promise.all(publishPromises)
-    
-    console.log(`[SimpleEvents] Publishing complete to all relays`)
-    
+    // Just return success - don't wait for confirmations
     return {
       success: true,
       eventId: signedEvent.id
@@ -204,8 +162,6 @@ export async function deleteNoteFromRelays(note: DecryptedNote, authData: any): 
   }
 
   try {
-    console.log("[SimpleEvents] Deleting note:", note.title, "eventId:", note.eventId)
-    
     const deletionEvent = {
       kind: DELETION_KIND,
       created_at: Math.floor(Date.now() / 1000),
@@ -217,38 +173,9 @@ export async function deleteNoteFromRelays(note: DecryptedNote, authData: any): 
     }
 
     const signedEvent = await signEventWithRemote(deletionEvent, authData)
-    console.log("[SimpleEvents] Deletion event signed:", signedEvent.id)
     
     const pool = getPool()
-    console.log(`[SimpleEvents] Publishing deletion to ${RELAYS.length} relays`)
-    
-    // Use the correct pool.publish API
-    const publishPromises = RELAYS.map(relayUrl => 
-      new Promise<void>((resolve) => {
-        const relay = pool.ensureRelay(relayUrl)
-        
-        const timeout = setTimeout(() => {
-          console.warn(`[SimpleEvents] ⏰ Timeout waiting for deletion confirmation from ${relayUrl}`)
-          resolve()
-        }, 10000)
-        
-        relay.publish(signedEvent)
-          .then(() => {
-            clearTimeout(timeout)
-            console.log(`[SimpleEvents] ✅ Deletion confirmed by ${relayUrl}`)
-            resolve()
-          })
-          .catch((reason: any) => {
-            clearTimeout(timeout)
-            console.error(`[SimpleEvents] ❌ Deletion rejected by ${relayUrl}:`, reason)
-            resolve()
-          })
-      })
-    )
-    
-    await Promise.all(publishPromises)
-    
-    console.log(`[SimpleEvents] Deletion complete to all relays`)
+    const relays = await pool.publish(RELAYS, signedEvent)
     
     return { success: true }
     

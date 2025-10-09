@@ -467,19 +467,16 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     // Save locally
     await saveEncryptedNotes(authData.pubkey, updatedNotes)
 
-    // Save to relays using simple event model
+    // Save to relays - simple approach like nostrudel
     try {
       const result = await saveNoteToRelays(newNote, authData)
       if (result.success && result.eventId) {
-        // Verify event exists on relays
-        const eventExists = await verifyEventExists(result.eventId, authData)
-        
-        // Update with eventId and sync status
+        // Update with eventId - assume synced if we got an eventId
         const finalNote = { 
           ...newNote, 
           eventId: result.eventId, 
           lastSynced: new Date(),
-          isSynced: eventExists // Add sync status
+          isSynced: true
         }
         const finalUpdatedNotes = [finalNote, ...notes.filter(n => n.id !== newNote.id)]
         setNotes(finalUpdatedNotes)
@@ -487,44 +484,9 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
         
         // Save the updated note with eventId to localStorage
         await saveEncryptedNotes(authData.pubkey, finalUpdatedNotes)
-        
-        console.log(`[v0] ✅ New note saved to relays: ${result.eventId} (verified: ${eventExists})`)
-        
-        // Show success message to user
-        if (eventExists) {
-          console.log(`[v0] 🎉 Note successfully published and verified on relays!`)
-        } else {
-          console.warn(`[v0] ⚠️ Note published but verification failed - may not be available on other devices`)
-        }
-      } else {
-        console.error("[v0] ❌ Failed to save new note to relays:", result.error)
-        // Update note to show it failed to sync
-        const failedNote = { 
-          ...newNote, 
-          eventId: undefined,
-          isSynced: false
-        }
-        const failedUpdatedNotes = [failedNote, ...notes.filter(n => n.id !== newNote.id)]
-        setNotes(failedUpdatedNotes)
-        setSelectedNote(failedNote)
-        
-        // Save the failed note to localStorage
-        await saveEncryptedNotes(authData.pubkey, failedUpdatedNotes)
       }
     } catch (error) {
-      console.error("[v0] ❌ Error saving new note to relays:", error)
-      // Update note to show it failed to sync
-      const failedNote = { 
-        ...newNote, 
-        eventId: undefined,
-        isSynced: false
-      }
-      const failedUpdatedNotes = [failedNote, ...notes.filter(n => n.id !== newNote.id)]
-      setNotes(failedUpdatedNotes)
-      setSelectedNote(failedNote)
-      
-      // Save the failed note to localStorage
-      await saveEncryptedNotes(authData.pubkey, failedUpdatedNotes)
+      console.error("[v0] Error saving new note to relays:", error)
     }
 
     console.log("[v0] New note created:", newNote.id)
@@ -546,28 +508,22 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     const updatedNotes = notes.map((note) => note.id === updatedNote.id ? optimisticNote : note)
     await saveEncryptedNotes(authData.pubkey, updatedNotes)
 
-    // Save to relays using simple event model
+    // Save to relays - simple approach like nostrudel
     try {
       const result = await saveNoteToRelays(optimisticNote, authData)
       if (result.success && result.eventId) {
-        // Verify event exists on relays
-        const eventExists = await verifyEventExists(result.eventId, authData)
-        
-        // Update with eventId and sync status
+        // Update with eventId - assume synced if we got an eventId
         const finalNote = { 
           ...optimisticNote, 
           eventId: result.eventId, 
           lastSynced: new Date(),
-          isSynced: eventExists // Add sync status
+          isSynced: true
         }
         setNotes(prevNotes => prevNotes.map(n => n.id === updatedNote.id ? finalNote : n))
         setSelectedNote(finalNote)
-        console.log(`[v0] ✅ Note saved to relays: ${result.eventId} (verified: ${eventExists})`)
-      } else {
-        console.error("[v0] ❌ Failed to save to relays:", result.error)
       }
     } catch (error) {
-      console.error("[v0] ❌ Error saving to relays:", error)
+      console.error("[v0] Error saving to relays:", error)
     }
 
     // Update tags
