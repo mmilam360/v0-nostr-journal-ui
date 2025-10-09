@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Loader2, Zap, Globe, Lock, RefreshCw, CheckCircle } from "lucide-react"
+import { Loader2, Zap, Globe, Lock, RefreshCw, CheckCircle, BookOpen, Heart } from "lucide-react"
 
 interface LoadingScreenProps {
   isLoading: boolean
@@ -15,18 +15,10 @@ const loadingMessages = [
   { text: "Ready to connect!", icon: CheckCircle },
 ]
 
-const encouragingMessages = [
-  "Decentralized and secure ✨",
-  "Your data, your control 💫",
-  "No servers, no limits 🌟",
-  "Built on Nostr protocol 📡",
-  "Censorship resistant 🛡️",
-  "Open source freedom 🚀",
-]
+// Removed encouraging messages - keeping it simple with just loading messages
 
 export function LoadingScreen({ isLoading }: LoadingScreenProps) {
   const [currentMessageIndex, setCurrentMessageIndex] = useState(0)
-  const [currentEncouragementIndex, setCurrentEncouragementIndex] = useState(0)
   const [dots, setDots] = useState("")
 
   useEffect(() => {
@@ -37,10 +29,6 @@ export function LoadingScreen({ isLoading }: LoadingScreenProps) {
       setCurrentMessageIndex((prev) => (prev + 1) % loadingMessages.length)
     }, 2000)
 
-    // Cycle through encouraging messages
-    const encouragementInterval = setInterval(() => {
-      setCurrentEncouragementIndex((prev) => (prev + 1) % encouragingMessages.length)
-    }, 3000)
 
     // Animate dots
     const dotsInterval = setInterval(() => {
@@ -52,7 +40,6 @@ export function LoadingScreen({ isLoading }: LoadingScreenProps) {
 
     return () => {
       clearInterval(messageInterval)
-      clearInterval(encouragementInterval)
       clearInterval(dotsInterval)
     }
   }, [isLoading])
@@ -61,7 +48,6 @@ export function LoadingScreen({ isLoading }: LoadingScreenProps) {
 
   const CurrentIcon = loadingMessages[currentMessageIndex].icon
   const currentMessage = loadingMessages[currentMessageIndex].text
-  const currentEncouragement = encouragingMessages[currentEncouragementIndex]
 
   return (
     <div className="fixed inset-0 bg-background/95 backdrop-blur-sm z-50 flex items-center justify-center">
@@ -93,13 +79,6 @@ export function LoadingScreen({ isLoading }: LoadingScreenProps) {
           </div>
         </div>
 
-        {/* Encouraging Message */}
-        <div className="space-y-2">
-          <div className="w-full h-px bg-border"></div>
-          <p className="text-sm text-muted-foreground animate-fade-in">
-            {currentEncouragement}
-          </p>
-        </div>
 
         {/* Progress indicator */}
         <div className="flex items-center justify-center gap-2">
