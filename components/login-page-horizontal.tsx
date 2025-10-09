@@ -257,17 +257,22 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
           clientMetadata
         )
 
-        console.log('[BunkerConnect] 📱 Generated connection URI')
+        console.log('[BunkerConnect] 📱 Generated connection URI:', connectUri)
         setConnectUri(connectUri)
 
         // Wait for connection with timeout
         const timeout = setTimeout(() => {
+          console.log('[BunkerConnect] ⏰ Connection timeout after 60s')
           setConnectionState('error')
           setError('Connection timeout. Please make sure your signing app is connected and try again.')
-        }, 60000)
+        }, 30000) // Reduced to 30 seconds
 
+        console.log('[BunkerConnect] ⏳ Waiting for remote signer to connect...')
+        console.log('[BunkerConnect] 📱 QR Code URI format:', connectUri.substring(0, 100) + '...')
+        
         // Wait for remote signer to connect
         const { signer, session } = await established
+        console.log('[BunkerConnect] ✅ Connection established!')
 
         clearTimeout(timeout)
 
@@ -308,7 +313,18 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
     } catch (error: any) {
       console.error('[BunkerConnect] ❌ Connection failed:', error)
       setConnectionState('error')
-      setError(error.message || 'Failed to connect to remote signer')
+      
+      let errorMsg = 'Failed to connect to remote signer'
+      
+      if (error.message.includes('timeout')) {
+        errorMsg = 'Connection timeout. Make sure to:\n1. Scan the QR code with nsec.app\n2. Approve the connection in your signing app\n3. Check your internet connection'
+      } else if (error.message.includes('NIP-46')) {
+        errorMsg = 'NIP-46 connection failed. Please try scanning the QR code again with nsec.app'
+      } else {
+        errorMsg = error.message || 'Failed to connect to remote signer'
+      }
+      
+      setError(errorMsg)
     }
   }
 
