@@ -243,18 +243,21 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
           description: 'Private journaling on Nostr'
         }
 
+        // Use more reliable relays for NIP-46
         const relays = [
-          'wss://relay.damus.io',
-          'wss://nos.lol',
-          'wss://relay.nostr.band',
-          'wss://relay.primal.net',
-          'wss://purplepag.es'
+          'wss://relay.damus.io', // Most reliable for NIP-46
+          'wss://nos.lol' // Good fallback
         ]
 
         // Use the standard NIP-46 client-initiated flow
+        console.log('[BunkerConnect] 🔗 Starting NIP-46 client-initiated connection...')
         const { connectUri, established } = Nip46RemoteSigner.listenConnectionFromRemote(
           relays,
-          clientMetadata
+          clientMetadata,
+          {
+            connectTimeoutMs: 30000, // 30 second timeout
+            permissions: ['sign_event', 'get_public_key'] // Explicit permissions
+          }
         )
 
         console.log('[BunkerConnect] 📱 Generated connection URI:', connectUri)
@@ -269,10 +272,14 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
 
         console.log('[BunkerConnect] ⏳ Waiting for remote signer to connect...')
         console.log('[BunkerConnect] 📱 QR Code URI format:', connectUri.substring(0, 100) + '...')
+        console.log('[BunkerConnect] 🔗 Full URI for debugging:', connectUri)
         
         // Wait for remote signer to connect
+        console.log('[BunkerConnect] 📡 Awaiting established promise...')
         const { signer, session } = await established
         console.log('[BunkerConnect] ✅ Connection established!')
+        console.log('[BunkerConnect] 👤 Signer:', signer)
+        console.log('[BunkerConnect] 📋 Session:', session)
 
         clearTimeout(timeout)
 
