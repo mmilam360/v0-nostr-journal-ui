@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Loader2, Heart, PenTool, Sparkles, BookOpen, Zap } from "lucide-react"
+import { Loader2, Zap, Globe, Lock, RefreshCw, CheckCircle } from "lucide-react"
 
 interface LoadingScreenProps {
   isLoading: boolean
@@ -9,21 +9,19 @@ interface LoadingScreenProps {
 
 const loadingMessages = [
   { text: "Connecting to Nostr relays...", icon: Zap },
-  { text: "Loading your journal entries...", icon: BookOpen },
-  { text: "Encrypting your private thoughts...", icon: Heart },
-  { text: "Organizing your memories...", icon: Sparkles },
-  { text: "Ready to capture your thoughts!", icon: PenTool },
+  { text: "Querying decentralized network...", icon: Globe },
+  { text: "Fetching encrypted events...", icon: Lock },
+  { text: "Syncing with Nostr...", icon: RefreshCw },
+  { text: "Ready to connect!", icon: CheckCircle },
 ]
 
 const encouragingMessages = [
-  "Your thoughts matter ✨",
-  "Every word is a step forward 💫",
-  "Journaling is self-care 🌟",
-  "Your story is worth telling 📖",
-  "Take a moment to reflect 🧘",
-  "Express yourself freely 🎨",
-  "Your voice is powerful 🗣️",
-  "Write from the heart 💝",
+  "Decentralized and secure ✨",
+  "Your data, your control 💫",
+  "No servers, no limits 🌟",
+  "Built on Nostr protocol 📡",
+  "Censorship resistant 🛡️",
+  "Open source freedom 🚀",
 ]
 
 export function LoadingScreen({ isLoading }: LoadingScreenProps) {

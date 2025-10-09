@@ -937,12 +937,18 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       
       console.log("[v0] ✅ Manual refresh complete")
       
-      // Force page refresh to ensure note view updates properly
-      console.log("[v0] Refreshing page to update note view...")
-      window.location.reload()
+      // Smart refresh: refresh current note view without full page reload
+      if (selectedNote) {
+        const refreshedNote = validatedNotes.find(note => note.id === selectedNote.id)
+        if (refreshedNote) {
+          console.log("[v0] Updating note view with refreshed content")
+          setSelectedNote(refreshedNote)
+        }
+      }
       
     } catch (error) {
       console.error("[v0] ❌ Manual refresh failed:", error)
+    } finally {
       setIsRefreshing(false)
     }
   }
