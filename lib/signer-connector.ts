@@ -1,34 +1,87 @@
-'use client';
+import { Nip46Signer } from 'nostr-signer-connector'
 
-import { Nip46RemoteSigner, type NostrSigner } from 'nostr-signer-connector';
+let activeSigner: Nip46Signer | null = null
 
-let activeSigner: NostrSigner | null = null;
+export function getActiveSigner() {
+  return activeSigner
+}
 
-/**
- * Set the active signer instance
- */
-export function setActiveSigner(signer: NostrSigner) {
-  activeSigner = signer;
+export function setActiveSigner(signer: Nip46Signer | null) {
+  activeSigner = signer
+}
+
+export function clearActiveSigner() {
+  activeSigner = null
 }
 
 /**
- * Get the active signer instance
+ * Connect to a remote signer using NIP-46 (bunker:// URL)
  */
-export function getActiveSigner(): NostrSigner | null {
-  return activeSigner;
+export async function connectNip46(bunkerUri: string): Promise<{
+  success: boolean
+  signer?: Nip46Signer
+  error?: string
+}> {
+  try {
+    console.log("[SignerConnector] Connecting to bunker:", bunkerUri.substring(0, 50) + "...")
+    
+    // Create a new Nip46Signer instance
+    const signer = new Nip46Signer(bunkerUri)
+    
+    // Wait for connection to establish (with timeout)
+    console.log("[SignerConnector] Waiting for connection...")
+    await Promise.race([
+      signer.waitConnected(),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error("Connection timeout after 30s")), 30000)
+      )
+    ])
+    
+    console.log("[SignerConnector] ✅ Bunker connected")
+    
+    // Test the connection by getting public key
+    const pubkey = await signer.getPublicKey()
+    console.log("[SignerConnector] ✅ Got pubkey from bunker:", pubkey)
+    
+    return {
+      success: true,
+      signer: signer
+    }
+    
+  } catch (error) {
+    console.error("[SignerConnector] ❌ Connection failed:", error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Connection failed"
+    }
+  }
 }
 
 /**
- * Resume a saved NIP-46 session
+ * Resume a NIP-46 session from stored session data
  */
-export async function resumeNip46Session(sessionData: any): Promise<NostrSigner> {
-  console.log('[SignerConnector] Resuming NIP-46 session...');
-  
-  const signer = await Nip46RemoteSigner.resumeSession(sessionData);
-  
-  setActiveSigner(signer);
-  
-  return signer;
+export async function resumeNip46Session(sessionData: any): Promise<Nip46Signer | null> {
+  try {
+    if (!sessionData?.bunkerUri) {
+      console.warn("[SignerConnector] No bunker URI in session data")
+      return null
+    }
+    
+    console.log("[SignerConnector] Resuming session...")
+    
+    const result = await connectNip46(sessionData.bunkerUri)
+    
+    if (result.success && result.signer) {
+      setActiveSigner(result.signer)
+      return result.signer
+    }
+    
+    return null
+    
+  } catch (error) {
+    console.error("[SignerConnector] Failed to resume session:", error)
+    return null
+  }
 }
 
 /**
@@ -36,27 +89,17 @@ export async function resumeNip46Session(sessionData: any): Promise<NostrSigner>
  */
 export async function signWithActiveSigner(unsignedEvent: any): Promise<any> {
   if (!activeSigner) {
-    throw new Error('No active signer. Please connect first.');
+    throw new Error("No active signer available")
   }
   
-  return await activeSigner.signEvent(unsignedEvent);
-}
-
-/**
- * Get public key from active signer
- */
-export async function getPublicKeyFromSigner(): Promise<string> {
-  if (!activeSigner) {
-    throw new Error('No active signer');
-  }
+  console.log("[SignerConnector] Signing event with remote signer...")
   
-  return await activeSigner.getPublicKey();
-}
-
-/**
- * Clear the active signer
- */
-export function clearActiveSigner() {
-  activeSigner = null;
-  localStorage.removeItem('nostr_connect_session');
+  try {
+    const signedEvent = await activeSigner.signEvent(unsignedEvent)
+    console.log("[SignerConnector] ✅ Event signed")
+    return signedEvent
+  } catch (error) {
+    console.error("[SignerConnector] ❌ Signing failed:", error)
+    throw error
+  }
 }

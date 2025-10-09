@@ -264,16 +264,38 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
 
       try {
         // Set up the active signer for remote authentication
-        if (authData.authMethod === 'remote' && authData.sessionData) {
+        if (authData.authMethod === 'remote') {
           console.log("[v0] Setting up remote signer from session data")
-          try {
-            const { Nip46RemoteSigner } = await import('nostr-signer-connector')
-            const signer = await Nip46RemoteSigner.resumeSession(authData.sessionData)
-            ;(window as any).remoteSigner = signer
-            console.log("[v0] ✅ Remote signer resumed successfully")
-          } catch (error) {
-            console.error("[v0] ❌ Failed to resume remote signer:", error)
-            // Continue without remote signer - user can reconnect
+          
+          // Check for saved session
+          const savedSession = localStorage.getItem('nostr_remote_session')
+          
+          if (savedSession) {
+            try {
+              const sessionData = JSON.parse(savedSession)
+              console.log("[v0] Found saved remote session, attempting to resume...")
+              
+              const { resumeNip46Session } = await import('@/lib/signer-connector')
+              const signer = await resumeNip46Session(sessionData)
+              
+              if (signer) {
+                console.log("[v0] ✅ Remote session resumed successfully")
+              } else {
+                console.warn("[v0] Could not resume remote session - user may need to reconnect")
+              }
+            } catch (error) {
+              console.error("[v0] ❌ Failed to resume remote signer:", error)
+              // Continue without remote signer - user can reconnect
+            }
+          } else if (authData.sessionData) {
+            // Try using session data from authData
+            try {
+              const { resumeNip46Session } = await import('@/lib/signer-connector')
+              await resumeNip46Session(authData.sessionData)
+              console.log("[v0] ✅ Remote signer resumed successfully from authData")
+            } catch (error) {
+              console.error("[v0] ❌ Failed to resume remote signer from authData:", error)
+            }
           }
         }
 
@@ -648,6 +670,12 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
 
     // Clean up the remote signer connection
     await cleanupSigner()
+    
+    // IMPORTANT: Clear saved remote session
+    if (authData.authMethod === 'remote') {
+      localStorage.removeItem('nostr_remote_session')
+      console.log("[v0] ✅ Remote session cleared")
+    }
 
     console.log("[v0] Notes will remain encrypted in storage")
     onLogout()

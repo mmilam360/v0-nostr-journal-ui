@@ -4,6 +4,7 @@
  */
 
 import type { AuthData } from "@/components/main-app"
+import { getActiveSigner, signWithActiveSigner, resumeNip46Session, setActiveSigner, clearActiveSigner } from './signer-connector'
 
 // Declare window.nostr for TypeScript
 declare global {
@@ -58,11 +59,7 @@ export async function signEventWithRemote(unsignedEvent: any, authData: AuthData
       // Use NIP-46 remote signer for signing
       console.log("[SignerManager] Using NIP-46 remote signer for signing")
       
-      if (!(window as any).remoteSigner) {
-        throw new Error("Remote signer not available. Please reconnect.")
-      }
-      
-      const signedEvent = await (window as any).remoteSigner.signEvent(unsignedEvent)
+      const signedEvent = await signWithActiveSigner(unsignedEvent)
       console.log("[SignerManager] ✅ Event signed with NIP-46 remote signer")
       return signedEvent
       

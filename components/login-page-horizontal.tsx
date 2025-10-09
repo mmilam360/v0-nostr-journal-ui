@@ -2,6 +2,8 @@
 
 import React, { useState, useRef } from 'react'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { 
   Check, 
   CheckCircle, 
@@ -15,7 +17,9 @@ import {
   Radio, 
   Smartphone, 
   User,
-  AlertTriangle
+  AlertTriangle,
+  X,
+  AlertCircle
 } from 'lucide-react'
 import { generateSecretKey, getPublicKey, nip19 } from 'nostr-tools'
 import { bytesToHex } from '@noble/hashes/utils'
@@ -48,6 +52,10 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
   const [nsecInput, setNsecInput] = useState('')
   const [showNsec, setShowNsec] = useState(false)
   const [remoteSignerMode, setRemoteSignerMode] = useState<'client' | 'signer'>('client')
+  const [remoteSignerInput, setRemoteSignerInput] = useState('')
+  const [isConnectingRemote, setIsConnectingRemote] = useState(false)
+  const [remoteConnectionError, setRemoteConnectionError] = useState('')
+  const [showRemoteSignerInput, setShowRemoteSignerInput] = useState(false)
   const [sessionKeypair, setSessionKeypair] = useState<{
     appSecretKey: Uint8Array
     appPublicKey: string
@@ -149,6 +157,91 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
     } catch (err: any) {
       setConnectionState('error')
       setError(err.message || 'Failed to import key')
+    }
+  }
+
+  const handleRemoteSignerClick = () => {
+    setShowRemoteSignerInput(true)
+    setRemoteConnectionError('')
+  }
+
+  const handleRemoteSignerConnect = async () => {
+    setIsConnectingRemote(true)
+    setRemoteConnectionError('')
+    
+    try {
+      console.log('[Login] Connecting to remote signer...')
+      
+      // Import the NIP-46 connection function
+      const { connectNip46, setActiveSigner } = await import('@/lib/signer-connector')
+      
+      const input = remoteSignerInput.trim()
+      
+      if (!input) {
+        throw new Error('Please enter a bunker URL')
+      }
+      
+      // Parse the input (supports both bunker:// and nostrconnect://)
+      let bunkerUri = input
+      if (input.startsWith('nostrconnect://')) {
+        // Convert nostrconnect:// to bunker:// format if needed
+        bunkerUri = input.replace('nostrconnect://', 'bunker://')
+      }
+      
+      if (!bunkerUri.startsWith('bunker://')) {
+        throw new Error('Invalid bunker URL. Should start with bunker:// or nostrconnect://')
+      }
+      
+      console.log('[Login] Parsed bunker URI')
+      
+      // Connect using nostr-signer-connector
+      const result = await connectNip46(bunkerUri)
+      
+      if (!result.success || !result.signer) {
+        throw new Error(result.error || 'Failed to connect to remote signer')
+      }
+      
+      console.log('[Login] ✅ Connected to remote signer')
+      
+      // Get the user's public key from the remote signer
+      const userPubkey = await result.signer.getPublicKey()
+      console.log('[Login] Got user pubkey:', userPubkey)
+      
+      // Set the active signer globally
+      setActiveSigner(result.signer)
+      
+      // Store session data for reconnection
+      const sessionData = {
+        bunkerUri: bunkerUri,
+        userPubkey: userPubkey,
+        connectedAt: Date.now()
+      }
+      
+      // Create auth data for the app
+      const authData = {
+        pubkey: userPubkey,
+        authMethod: 'remote' as const,
+        signer: result.signer,
+        sessionData: sessionData,
+        bunkerUri: bunkerUri,
+        relays: ['wss://relay.damus.io', 'wss://nos.lol', 'wss://relay.nostr.band', 'wss://relay.primal.net', 'wss://purplepag.es']
+      }
+      
+      // Save to localStorage for reconnection
+      localStorage.setItem('nostr_remote_session', JSON.stringify(sessionData))
+      
+      console.log('[Login] ✅ Remote signer authentication complete')
+      onLoginSuccess(authData)
+      
+    } catch (error) {
+      console.error('[Login] Remote signer connection failed:', error)
+      setRemoteConnectionError(
+        error instanceof Error 
+          ? error.message 
+          : 'Failed to connect to remote signer. Please check your bunker URL.'
+      )
+    } finally {
+      setIsConnectingRemote(false)
     }
   }
 
@@ -408,11 +501,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                 </button>
                 <button
                   onClick={() => {
-                    setSelectedMethod('remote')
-                    setRemoteSignerMode('client') // Default to client-initiated
-                    setBunkerUrl('')
-                    setConnectUri('')
-                    goNext()
+                    handleRemoteSignerClick()
                   }}
                   className="p-4 sm:p-6 rounded-lg border-2 border-border hover:border-primary text-left bg-card hover:bg-card/80 group"
                 >
@@ -440,6 +529,76 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                   </p>
                 </button>
               </div>
+
+              {/* New Remote Signer Input UI */}
+              {showRemoteSignerInput && (
+                <div className="space-y-3 mt-4 p-4 border rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-medium">Connect to nsec.app</h4>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setShowRemoteSignerInput(false)
+                        setRemoteSignerInput('')
+                        setRemoteConnectionError('')
+                      }}
+                    >
+                      <X className="w-4 h-4" />
+                    </Button>
+                  </div>
+                  
+                  <p className="text-sm text-muted-foreground">
+                    Paste your bunker:// URL from nsec.app or other NIP-46 signer
+                  </p>
+                  
+                  <Input
+                    type="text"
+                    placeholder="bunker://..."
+                    value={remoteSignerInput}
+                    onChange={(e) => setRemoteSignerInput(e.target.value)}
+                    className="font-mono text-sm"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && remoteSignerInput.trim()) {
+                        handleRemoteSignerConnect()
+                      }
+                    }}
+                  />
+                  
+                  <Button
+                    onClick={handleRemoteSignerConnect}
+                    disabled={!remoteSignerInput.trim() || isConnectingRemote}
+                    className="w-full"
+                  >
+                    {isConnectingRemote ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Connecting to bunker...
+                      </>
+                    ) : (
+                      "Connect"
+                    )}
+                  </Button>
+                  
+                  {remoteConnectionError && (
+                    <Alert variant="destructive">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription>{remoteConnectionError}</AlertDescription>
+                    </Alert>
+                  )}
+                  
+                  <div className="text-xs text-muted-foreground space-y-1 pt-2 border-t">
+                    <p className="font-medium">How to get your bunker URL:</p>
+                    <ol className="list-decimal list-inside space-y-1 ml-2">
+                      <li>Open nsec.app</li>
+                      <li>Go to Settings → Connect Apps</li>
+                      <li>Copy your bunker:// URL</li>
+                      <li>Paste it above and click Connect</li>
+                    </ol>
+                    <p className="pt-2">Your keys stay secure on your device/nsec.app</p>
+                  </div>
+                </div>
+              )}
             </div>
           )
         }
