@@ -469,8 +469,12 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
 
     // Save to relays - simple approach like nostrudel
     try {
+      console.log("[v0] Attempting to save note to relays...")
       const result = await saveNoteToRelays(newNote, authData)
+      console.log("[v0] Save result:", result)
+      
       if (result.success && result.eventId) {
+        console.log("[v0] Note saved successfully with eventId:", result.eventId)
         // Update with eventId - assume synced if we got an eventId
         const finalNote = { 
           ...newNote, 
@@ -484,6 +488,8 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
         
         // Save the updated note with eventId to localStorage
         await saveEncryptedNotes(authData.pubkey, finalUpdatedNotes)
+      } else {
+        console.error("[v0] Failed to save note to relays:", result.error || "Unknown error")
       }
     } catch (error) {
       console.error("[v0] Error saving new note to relays:", error)
@@ -510,8 +516,12 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
 
     // Save to relays - simple approach like nostrudel
     try {
+      console.log("[v0] Attempting to save updated note to relays...")
       const result = await saveNoteToRelays(optimisticNote, authData)
+      console.log("[v0] Update result:", result)
+      
       if (result.success && result.eventId) {
+        console.log("[v0] Note updated successfully with eventId:", result.eventId)
         // Update with eventId - assume synced if we got an eventId
         const finalNote = { 
           ...optimisticNote, 
@@ -521,6 +531,8 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
         }
         setNotes(prevNotes => prevNotes.map(n => n.id === updatedNote.id ? finalNote : n))
         setSelectedNote(finalNote)
+      } else {
+        console.error("[v0] Failed to save updated note to relays:", result.error || "Unknown error")
       }
     } catch (error) {
       console.error("[v0] Error saving to relays:", error)
