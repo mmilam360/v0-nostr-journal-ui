@@ -74,27 +74,10 @@ export async function loadJournalFromKind30001(authData: any): Promise<Decrypted
       limit: 1000
     })
     
-    // Try using the sub method instead of querySync
-    const listEvents: any[] = []
-    
-    await new Promise<void>((resolve) => {
-      const sub = pool.sub(RELAYS, { 
-        kinds: [KIND30001_LIST], 
-        limit: 1000
-      })
-      
-      sub.on('event', (event) => {
-        listEvents.push(event)
-      })
-      
-      sub.on('eose', () => {
-        resolve()
-      })
-      
-      // Timeout after 15 seconds
-      setTimeout(() => {
-        resolve()
-      }, 15000)
+    // Use pool.querySync with proper filter format
+    const listEvents = await pool.querySync(RELAYS, {
+      kinds: [KIND30001_LIST],
+      limit: 1000
     })
     
     console.log("[Kind30001Journal] Found", listEvents.length, "Kind 30001 list events")
@@ -105,26 +88,9 @@ export async function loadJournalFromKind30001(authData: any): Promise<Decrypted
       await new Promise(resolve => setTimeout(resolve, 3000))
       
       console.log("[Kind30001Journal] Retrying query after delay...")
-      const retryEvents: any[] = []
-      
-      await new Promise<void>((resolve) => {
-        const sub = pool.sub(RELAYS, { 
-          kinds: [KIND30001_LIST], 
-          limit: 1000
-        })
-        
-        sub.on('event', (event) => {
-          retryEvents.push(event)
-        })
-        
-        sub.on('eose', () => {
-          resolve()
-        })
-        
-        // Timeout after 15 seconds
-        setTimeout(() => {
-          resolve()
-        }, 15000)
+      const retryEvents = await pool.querySync(RELAYS, {
+        kinds: [KIND30001_LIST],
+        limit: 1000
       })
       
       console.log("[Kind30001Journal] Retry found", retryEvents.length, "Kind 30001 list events")
@@ -135,27 +101,10 @@ export async function loadJournalFromKind30001(authData: any): Promise<Decrypted
     }
     
     // Get deletion events to filter out deleted entries
-    const deletionEvents: any[] = []
-    
-    await new Promise<void>((resolve) => {
-      const sub = pool.sub(RELAYS, { 
-        kinds: [DELETION_KIND], 
-        authors: [authData.pubkey],
-        limit: 1000
-      })
-      
-      sub.on('event', (event) => {
-        deletionEvents.push(event)
-      })
-      
-      sub.on('eose', () => {
-        resolve()
-      })
-      
-      // Timeout after 10 seconds
-      setTimeout(() => {
-        resolve()
-      }, 10000)
+    const deletionEvents = await pool.querySync(RELAYS, {
+      kinds: [DELETION_KIND],
+      authors: [authData.pubkey],
+      limit: 1000
     })
     
     // Create set of deleted event IDs
@@ -174,7 +123,7 @@ export async function loadJournalFromKind30001(authData: any): Promise<Decrypted
     
     const notes: DecryptedNote[] = []
     
-    // First, filter events by pubkey and d-tag to avoid unnecessary decryption
+    // Filter events by pubkey and d-tag, then decrypt
     const userPubkeys = [authData.pubkey]
     
     // For extension auth, also check if extension has a different pubkey
@@ -190,6 +139,7 @@ export async function loadJournalFromKind30001(authData: any): Promise<Decrypted
       }
     }
     
+    // Filter events by pubkey and d-tag
     const relevantEvents = validEvents.filter(event => {
       // Check if this is a journal entry by looking at the d-tag
       const dTag = event.tags.find(tag => tag[0] === "d")?.[1]
@@ -198,43 +148,45 @@ export async function loadJournalFromKind30001(authData: any): Promise<Decrypted
       }
       
       // Check if the event pubkey matches any of our user's pubkeys
-      if (userPubkeys.includes(event.pubkey)) {
-        console.log("[Kind30001Journal] Found relevant event:", event.id, "pubkey:", event.pubkey, "d-tag:", dTag)
-        return true
-      }
-      
-      return false
+      return userPubkeys.includes(event.pubkey)
     })
     
     console.log("[Kind30001Journal] Filtered to", relevantEvents.length, "relevant events for user")
     
-    // Now decrypt only the relevant events
-    for (const event of relevantEvents) {
-      try {
-        console.log("[Kind30001Journal] Decrypting relevant event:", event.id)
-        const decryptedContent = await decryptKind30001Content(event.content, authData)
-        if (decryptedContent) {
-          console.log("[Kind30001Journal] Successfully decrypted journal entry:", decryptedContent.title)
-          const note: DecryptedNote = {
-            id: decryptedContent.id,
-            title: decryptedContent.title,
-            content: decryptedContent.content,
-            tags: decryptedContent.tags || [],
-            createdAt: new Date(decryptedContent.createdAt),
-            lastModified: new Date(decryptedContent.lastModified || decryptedContent.createdAt),
-            eventId: event.id,
-            eventKind: event.kind,
-            lastSynced: new Date()
+    // Decrypt and parse each relevant event
+    const journalEntries = await Promise.all(
+      relevantEvents.map(async (event) => {
+        try {
+          console.log("[Kind30001Journal] Decrypting event:", event.id)
+          const decryptedContent = await decryptKind30001Content(event.content, authData)
+          
+          if (decryptedContent) {
+            console.log("[Kind30001Journal] Successfully decrypted journal entry:", decryptedContent.title)
+            return {
+              id: decryptedContent.id,
+              title: decryptedContent.title,
+              content: decryptedContent.content,
+              tags: decryptedContent.tags || [],
+              createdAt: new Date(decryptedContent.createdAt),
+              lastModified: new Date(decryptedContent.lastModified || decryptedContent.createdAt),
+              eventId: event.id,
+              eventKind: event.kind,
+              lastSynced: new Date()
+            }
+          } else {
+            console.log("[Kind30001Journal] Decryption returned null for event:", event.id)
+            return null
           }
-          notes.push(note)
-        } else {
-          console.log("[Kind30001Journal] Decryption returned null for event:", event.id)
+        } catch (error) {
+          console.error("[Kind30001Journal] Failed to decrypt Kind 30001 event:", event.id, error)
+          return null
         }
-      } catch (error) {
-        console.error("[Kind30001Journal] Failed to decrypt Kind 30001 event:", event.id, error)
-        // Silent fail - just skip bad events
-      }
-    }
+      })
+    )
+    
+    // Filter out null results and add to notes
+    const validEntries = journalEntries.filter(entry => entry !== null)
+    notes.push(...validEntries)
     
     console.log("[Kind30001Journal] Successfully loaded", notes.length, "decrypted journal entries from Kind 30001")
     return notes
