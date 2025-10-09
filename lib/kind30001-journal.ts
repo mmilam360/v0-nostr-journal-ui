@@ -128,20 +128,47 @@ export async function loadJournalFromKind30001(authData: any): Promise<Decrypted
     
     const notes: DecryptedNote[] = []
     
-    for (const event of validEvents) {
+    // First, filter events by pubkey and d-tag to avoid unnecessary decryption
+    const userPubkeys = [authData.pubkey]
+    
+    // For extension auth, also check if extension has a different pubkey
+    if (authData.authMethod === "extension" && window.nostr) {
       try {
-        console.log("[Kind30001Journal] Attempting to decrypt Kind 30001 event:", event.id)
-        
-        // Check if this is a journal entry by looking at the d-tag
-        const dTag = event.tags.find(tag => tag[0] === "d")?.[1]
-        if (!dTag || !dTag.startsWith("journal-")) {
-          console.log("[Kind30001Journal] Skipping event - not a journal entry (d-tag:", dTag, ")")
-          continue
+        const extensionPubkey = await window.nostr.getPublicKey()
+        if (extensionPubkey !== authData.pubkey) {
+          userPubkeys.push(extensionPubkey)
+          console.log("[Kind30001Journal] Extension pubkey differs from stored:", extensionPubkey)
         }
-        
+      } catch (error) {
+        console.warn("[Kind30001Journal] Could not get extension pubkey:", error)
+      }
+    }
+    
+    const relevantEvents = validEvents.filter(event => {
+      // Check if this is a journal entry by looking at the d-tag
+      const dTag = event.tags.find(tag => tag[0] === "d")?.[1]
+      if (!dTag || !dTag.startsWith("journal-")) {
+        return false
+      }
+      
+      // Check if the event pubkey matches any of our user's pubkeys
+      if (userPubkeys.includes(event.pubkey)) {
+        console.log("[Kind30001Journal] Found relevant event:", event.id, "pubkey:", event.pubkey, "d-tag:", dTag)
+        return true
+      }
+      
+      return false
+    })
+    
+    console.log("[Kind30001Journal] Filtered to", relevantEvents.length, "relevant events for user")
+    
+    // Now decrypt only the relevant events
+    for (const event of relevantEvents) {
+      try {
+        console.log("[Kind30001Journal] Decrypting relevant event:", event.id)
         const decryptedContent = await decryptKind30001Content(event.content, authData)
-        if (decryptedContent && decryptedContent.pubkey === authData.pubkey) {
-          console.log("[Kind30001Journal] Successfully decrypted journal entry for user:", decryptedContent.title)
+        if (decryptedContent) {
+          console.log("[Kind30001Journal] Successfully decrypted journal entry:", decryptedContent.title)
           const note: DecryptedNote = {
             id: decryptedContent.id,
             title: decryptedContent.title,
@@ -154,8 +181,6 @@ export async function loadJournalFromKind30001(authData: any): Promise<Decrypted
             lastSynced: new Date()
           }
           notes.push(note)
-        } else if (decryptedContent) {
-          console.log("[Kind30001Journal] Decrypted event but pubkey mismatch:", decryptedContent.pubkey, "vs", authData.pubkey)
         } else {
           console.log("[Kind30001Journal] Decryption returned null for event:", event.id)
         }
@@ -329,47 +354,21 @@ async function encryptKind30001Content(note: DecryptedNote, authData: any, actua
 async function decryptKind30001Content(encryptedData: string, authData: any): Promise<any> {
   
   try {
-    // For extension auth, we need to try both the stored pubkey and the extension's actual pubkey
-    const pubkeysToTry = [authData.pubkey]
+    // Since we've already filtered by pubkey, we know this event belongs to our user
+    const userPubkey = authData.pubkey
     
-    if (authData.authMethod === "extension" && window.nostr) {
-      try {
-        const extensionPubkey = await window.nostr.getPublicKey()
-        if (extensionPubkey !== authData.pubkey) {
-          pubkeysToTry.push(extensionPubkey)
-          console.log("[Kind30001Journal] Extension pubkey differs from stored:", extensionPubkey)
-        }
-      } catch (error) {
-        console.warn("[Kind30001Journal] Could not get extension pubkey:", error)
-      }
-    }
+    console.log("[Kind30001Journal] Decrypting with user pubkey:", userPubkey)
     
-    // Try decrypting with each pubkey
-    for (const userPubkey of pubkeysToTry) {
-      try {
-        console.log("[Kind30001Journal] Trying to decrypt with pubkey:", userPubkey)
-        
-        // Get the private key
-        const privateKey = getPrivateKeyForEncryption(authData)
-        
-        // Decrypt using NIP-04
-        const decrypted = await nip04.decrypt(privateKey, userPubkey, encryptedData)
-        
-        // Parse the JSON content
-        const journalData = JSON.parse(decrypted)
-        
-        console.log("[Kind30001Journal] Successfully decrypted with pubkey:", userPubkey)
-        return journalData
-        
-      } catch (error) {
-        console.log("[Kind30001Journal] Failed to decrypt with pubkey:", userPubkey, error)
-        // Try next pubkey
-        continue
-      }
-    }
+    // Get the private key
+    const privateKey = getPrivateKeyForEncryption(authData)
     
-    // If we get here, decryption failed with all pubkeys
-    throw new Error("Failed to decrypt with any pubkey")
+    // Decrypt using NIP-04
+    const decrypted = await nip04.decrypt(privateKey, userPubkey, encryptedData)
+    
+    // Parse the JSON content
+    const journalData = JSON.parse(decrypted)
+    
+    return journalData
     
   } catch (error) {
     console.error("[Kind30001Journal] Failed to decrypt Kind 30001 content:", error)
