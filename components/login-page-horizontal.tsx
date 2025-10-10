@@ -72,6 +72,15 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
         setSelectedPath(null)
         setSelectedMethod(null)
       }
+      
+      // Reset all connection states when going back
+      setConnectionState('idle')
+      setError('')
+      setBunkerUrl('')
+      setConnectUri('')
+      setNsecInput('')
+      setRemoteSignerMode('client')
+      setSessionKeypair(null)
     }
   }
 
@@ -157,11 +166,19 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
     }
   }
 
-  const handleRemoteSignerClick = () => {
-    setSelectedMethod('remote')
-    setRemoteSignerMode('client') // Default to client-initiated for QR code
+  const resetConnectionStates = () => {
+    setConnectionState('idle')
+    setError('')
     setBunkerUrl('')
     setConnectUri('')
+    setNsecInput('')
+    setRemoteSignerMode('client')
+    setSessionKeypair(null)
+  }
+
+  const handleRemoteSignerClick = () => {
+    setSelectedMethod('remote')
+    resetConnectionStates()
     goNext()
   }
 
@@ -266,23 +283,44 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
         ]
         
         // Import and use the correct API
-        const { startClientInitiatedFlow, setActiveSigner } = await import('@/lib/signer-connector')
+        const { startClientInitiatedFlow, setActiveSigner, monitorNip46Events } = await import('@/lib/signer-connector')
         
         // Start listening for connection
         const { connectUri, established } = startClientInitiatedFlow(relays, clientMetadata)
         
+        // Extract client pubkey from URI for monitoring
+        const clientPubkeyMatch = connectUri.match(/nostrconnect:\/\/([a-f0-9]{64})/)
+        if (clientPubkeyMatch) {
+          const clientPubkey = clientPubkeyMatch[1]
+          console.log('[Login] 🔍 Starting NIP-46 event monitoring for client:', clientPubkey)
+          monitorNip46Events(relays, clientPubkey)
+        }
+        
         console.log('[Login] Generated nostrconnect URI:', connectUri)
         setConnectUri(connectUri)
         
-        // Wait for connection (library handles timeout internally)
+        // Wait for connection with better timeout handling
         console.log('[Login] Waiting for remote signer to scan and connect...')
         console.log('[Login] Promise state:', established)
         
         console.log('[Login] 🔍 About to await established promise...')
         console.log('[Login] 🔍 Promise state:', established)
         
+        // Add a manual timeout to provide better error handling
+        const connectionTimeout = setTimeout(() => {
+          console.log('[Login] ⏰ Manual timeout reached (5 minutes)')
+          console.log('[Login] 🔍 Debugging info:')
+          console.log('[Login] - Connection state:', connectionState)
+          console.log('[Login] - Connect URI:', connectUri)
+          console.log('[Login] - Promise state:', established)
+          
+          setConnectionState('error')
+          setError('Connection timeout after 5 minutes. The remote signer may not be responding properly.\n\nTroubleshooting steps:\n1. Make sure your signing app (nsec.app) is open and connected to the internet\n2. Try the bunker:// URL method instead (often more reliable)\n3. Check that you scanned the QR code correctly\n4. Try refreshing and generating a new QR code\n5. Check browser console for detailed error logs')
+        }, 300000) // 5 minutes
+        
         const { signer, session } = await established.then(
           (result) => {
+            clearTimeout(connectionTimeout)
             console.log('[Login] ✅ Client-initiated connection successful')
             console.log('[Login] Signer:', result.signer)
             console.log('[Login] Session:', result.session)
@@ -294,6 +332,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
             return result
           },
           (error) => {
+            clearTimeout(connectionTimeout)
             console.error('[Login] ❌ Connection promise rejected:', error)
             console.error('[Login] ❌ Error details:', {
               name: error.name,
@@ -448,6 +487,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                 <button
                   onClick={() => {
                     setSelectedMethod('extension')
+                    resetConnectionStates()
                     goNext()
                   }}
                   className="p-4 sm:p-6 rounded-lg border-2 border-border hover:border-primary text-left bg-card hover:bg-card/80 group"
@@ -477,6 +517,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                 <button
                   onClick={() => {
                     setSelectedMethod('nsec')
+                    resetConnectionStates()
                     goNext()
                   }}
                   className="p-4 sm:p-6 rounded-lg border-2 border-border hover:border-primary text-left bg-card hover:bg-card/80 group"
