@@ -182,9 +182,16 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
     console.log('[Login] ✅ Connection states reset to idle')
   }
 
+  // Force UI update when switching methods
+  const forceUIUpdate = () => {
+    // Force a re-render by updating a dummy state
+    setConnectionState(prev => prev === 'idle' ? 'idle' : 'idle')
+  }
+
   const handleRemoteSignerClick = () => {
     setSelectedMethod('remote')
     resetConnectionStates()
+    forceUIUpdate()
     goNext()
   }
 
@@ -283,11 +290,9 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
           // Removed url to avoid potential encoding issues
         }
 
-        // Use multiple relays for better compatibility
+        // Use single reliable relay for NIP-46 (per best practices)
         const relays = [
-          'wss://relay.damus.io',
-          'wss://nos.lol', 
-          'wss://relay.snort.social'
+          'wss://relay.damus.io' // Most reliable for NIP-46
         ]
         
         // Import and use the correct API
@@ -308,15 +313,15 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
         
         // Add a manual timeout to provide better error handling
         const connectionTimeout = setTimeout(() => {
-          console.log('[Login] ⏰ Manual timeout reached (5 minutes)')
+          console.log('[Login] ⏰ Manual timeout reached (2 minutes)')
           console.log('[Login] 🔍 Debugging info:')
           console.log('[Login] - Connection state:', connectionState)
           console.log('[Login] - Connect URI:', connectUri)
           console.log('[Login] - Promise state:', established)
           
           setConnectionState('error')
-          setError('Connection timeout after 5 minutes. The remote signer may not be responding properly.\n\nTroubleshooting steps:\n1. Make sure your signing app (nsec.app) is open and connected to the internet\n2. Try the bunker:// URL method instead (often more reliable)\n3. Check that you scanned the QR code correctly\n4. Try refreshing and generating a new QR code\n5. Check browser console for detailed error logs')
-        }, 300000) // 5 minutes
+          setError('Connection timeout after 2 minutes. The remote signer may not be responding properly.\n\nTroubleshooting steps:\n1. Make sure your signing app (nsec.app) is open and connected to the internet\n2. Try the bunker:// URL method instead (often more reliable)\n3. Check that you scanned the QR code correctly\n4. Try refreshing and generating a new QR code\n5. Check browser console for detailed error logs')
+        }, 120000) // 2 minutes
         
         const { signer, session } = await established.then(
           (result) => {

@@ -82,9 +82,14 @@ export function startClientInitiatedFlow(
   console.log("[SignerConnector] Client metadata:", clientMetadata)
   
   try {
+    // Use a single reliable relay for NIP-46 (per best practices)
+    const primaryRelay = relayUrls[0] // Use first relay as primary
+    
+    console.log("[SignerConnector] Using primary relay:", primaryRelay)
+    
     // Use the static method - it returns an object with connectUri and established promise
-    const result = Nip46RemoteSigner.listenConnectionFromRemote(relayUrls, clientMetadata, {
-      connectTimeoutMs: 300000, // 5 minute timeout - increased for better compatibility
+    const result = Nip46RemoteSigner.listenConnectionFromRemote([primaryRelay], clientMetadata, {
+      connectTimeoutMs: 120000, // 2 minute timeout - shorter for better UX
       permissions: [
         'sign_event',
         'get_public_key', 
@@ -98,7 +103,7 @@ export function startClientInitiatedFlow(
     console.log("[SignerConnector] Generated connect URI:", result.connectUri)
     console.log("[SignerConnector] URI analysis:")
     console.log("[SignerConnector] - Has secret parameter:", result.connectUri.includes('secret='))
-    console.log("[SignerConnector] - Relay count:", relayUrls.length)
+    console.log("[SignerConnector] - Primary relay:", primaryRelay)
     console.log("[SignerConnector] - Client metadata:", JSON.stringify(clientMetadata, null, 2))
     
     // Enhanced debugging for the established promise
@@ -122,6 +127,7 @@ export function startClientInitiatedFlow(
           console.error("[SignerConnector] 🕐 This appears to be a timeout error")
           console.error("[SignerConnector] 💡 The remote signer may not be responding properly")
           console.error("[SignerConnector] 💡 Try using the bunker:// URL method instead")
+          console.error("[SignerConnector] 💡 Make sure nsec.app is open and connected to internet")
         }
         
         throw error
