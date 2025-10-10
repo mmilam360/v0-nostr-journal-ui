@@ -264,39 +264,47 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
         if (authData.authMethod === 'remote') {
           console.log("[v0] Setting up remote signer from session data")
           
-          // Check for saved session (stored as Nip46SessionState)
-          const savedSession = localStorage.getItem('nostr_remote_session')
+          // First check if signer is already active (from fresh login)
+          const { getActiveSigner } = await import('@/lib/signer-connector')
+          const existingSigner = getActiveSigner()
           
-          if (savedSession) {
-            try {
-              const sessionData = JSON.parse(savedSession)
-              console.log("[v0] Found saved session, attempting to resume...")
-              
-              const { resumeNip46Session } = await import('@/lib/signer-connector')
-              const signer = await resumeNip46Session(sessionData)
-              
-              if (signer) {
-                console.log("[v0] ✅ Remote session resumed successfully")
-              } else {
-                console.warn("[v0] Could not resume - user may need to reconnect")
+          if (existingSigner) {
+            console.log("[v0] ✅ Active signer already exists from fresh login")
+          } else {
+            // Check for saved session (stored as Nip46SessionState)
+            const savedSession = localStorage.getItem('nostr_remote_session')
+            
+            if (savedSession) {
+              try {
+                const sessionData = JSON.parse(savedSession)
+                console.log("[v0] Found saved session, attempting to resume...")
+                
+                const { resumeNip46Session } = await import('@/lib/signer-connector')
+                const signer = await resumeNip46Session(sessionData)
+                
+                if (signer) {
+                  console.log("[v0] ✅ Remote session resumed successfully")
+                } else {
+                  console.warn("[v0] Could not resume - user may need to reconnect")
+                  // Clear invalid session
+                  localStorage.removeItem('nostr_remote_session')
+                }
+              } catch (error) {
+                console.error("[v0] ❌ Failed to resume remote signer:", error)
                 // Clear invalid session
                 localStorage.removeItem('nostr_remote_session')
               }
-            } catch (error) {
-              console.error("[v0] ❌ Failed to resume remote signer:", error)
-              // Clear invalid session
-              localStorage.removeItem('nostr_remote_session')
-            }
-          } else if (authData.sessionData) {
-            // Try using session data from authData
-            try {
-              const { resumeNip46Session } = await import('@/lib/signer-connector')
-              const signer = await resumeNip46Session(authData.sessionData)
-              if (signer) {
-                console.log("[v0] ✅ Remote signer resumed from authData")
+            } else if (authData.sessionData) {
+              // Try using session data from authData
+              try {
+                const { resumeNip46Session } = await import('@/lib/signer-connector')
+                const signer = await resumeNip46Session(authData.sessionData)
+                if (signer) {
+                  console.log("[v0] ✅ Remote signer resumed from authData")
+                }
+              } catch (error) {
+                console.error("[v0] ❌ Failed to resume from authData:", error)
               }
-            } catch (error) {
-              console.error("[v0] ❌ Failed to resume from authData:", error)
             }
           }
         }

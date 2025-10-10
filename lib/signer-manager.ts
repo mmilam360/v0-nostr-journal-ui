@@ -59,6 +59,14 @@ export async function signEventWithRemote(unsignedEvent: any, authData: AuthData
       // Use NIP-46 remote signer for signing
       console.log("[SignerManager] Using NIP-46 remote signer for signing")
       
+      // Debug: Check if active signer exists
+      const activeSigner = getActiveSigner()
+      console.log("[SignerManager] Active signer exists:", !!activeSigner)
+      if (!activeSigner) {
+        console.error("[SignerManager] ❌ No active signer available for remote auth method")
+        throw new Error("No active signer available")
+      }
+      
       const signedEvent = await signWithActiveSigner(unsignedEvent)
       console.log("[SignerManager] ✅ Event signed with NIP-46 remote signer")
       return signedEvent
