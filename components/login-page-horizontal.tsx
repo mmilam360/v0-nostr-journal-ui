@@ -113,6 +113,8 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
         throw new Error('Nostr extension not found')
       }
       const pubkey = await window.nostr.getPublicKey()
+      console.log('[Login] 🔑 Extension Login - Pubkey:', pubkey)
+      
       onLoginSuccess({
         pubkey,
         authMethod: 'extension'
@@ -140,6 +142,9 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
 
       const pubkey = getPublicKey(privateKeyBytes)
       const privateKeyHex = bytesToHex(privateKeyBytes)
+
+      console.log('[Login] 🔑 NSEC Login - Derived pubkey:', pubkey)
+      console.log('[Login] 🔑 NSEC Login - Private key hex:', privateKeyHex.substring(0, 10) + '...')
 
       onLoginSuccess({
         pubkey,
@@ -194,7 +199,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
         
         // Get user pubkey
         const userPubkey = await result.signer.getPublicKey()
-        console.log('[Login] User pubkey:', userPubkey)
+        console.log('[Login] 🔑 Remote Signer Login (Bunker) - User pubkey:', userPubkey)
         
         // Set active signer
         setActiveSigner(result.signer)
@@ -272,22 +277,35 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
         console.log('[Login] Waiting for remote signer to scan and connect...')
         console.log('[Login] Promise state:', established)
         
+        console.log('[Login] 🔍 About to await established promise...')
+        console.log('[Login] 🔍 Promise state:', established)
+        
         const { signer, session } = await established.then(
           (result) => {
             console.log('[Login] ✅ Client-initiated connection successful')
             console.log('[Login] Signer:', result.signer)
             console.log('[Login] Session:', result.session)
+            console.log('[Login] Session type check:', {
+              hasSessionKey: !!result.session?.sessionKey,
+              hasRemotePubkey: !!result.session?.remotePubkey,
+              hasRelayUrls: !!result.session?.relayUrls
+            })
             return result
           },
           (error) => {
             console.error('[Login] ❌ Connection promise rejected:', error)
+            console.error('[Login] ❌ Error details:', {
+              name: error.name,
+              message: error.message,
+              stack: error.stack
+            })
             throw error
           }
         )
         
         // Get user pubkey
         const userPubkey = await signer.getPublicKey()
-        console.log('[Login] User pubkey:', userPubkey)
+        console.log('[Login] 🔑 Remote Signer Login (QR) - User pubkey:', userPubkey)
         
         // Set active signer
         setActiveSigner(signer)

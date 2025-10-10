@@ -19,7 +19,7 @@ import {
   X
 } from "lucide-react"
 import type { Note } from "@/lib/types"
-import { loadEncryptedNotes, saveEncryptedNotes } from "@/lib/nostr-crypto"
+import { loadEncryptedNotes } from "@/lib/nostr-crypto"
 import { fetchNotesFromNostr, saveNoteToNostr, deleteNoteFromNostr } from "@/lib/simple-nostr-storage"
 
 interface SimpleMainAppProps {
@@ -104,8 +104,7 @@ Check console for detailed logs.`)
         }
       }
       
-      // Save merged notes to localStorage
-      await saveEncryptedNotes(authData.pubkey, mergedNotes)
+      // LOCAL STORAGE DISABLED - Notes are only stored on Nostr relays
       setNotes(mergedNotes)
       setLastSyncTime(new Date())
       
@@ -143,7 +142,7 @@ Check console for detailed logs.`)
     const updatedNotes = [...notes, newNote]
     setNotes(updatedNotes)
     setSelectedNote(newNote)
-    await saveEncryptedNotes(authData.pubkey, updatedNotes)
+    // LOCAL STORAGE DISABLED - Notes are only stored on Nostr relays
   }
 
   const updateNote = async (updatedNote: Note) => {
@@ -152,7 +151,7 @@ Check console for detailed logs.`)
     )
     setNotes(updatedNotes)
     setSelectedNote(updatedNote)
-    await saveEncryptedNotes(authData.pubkey, updatedNotes)
+    // LOCAL STORAGE DISABLED - Notes are only stored on Nostr relays
   }
 
   const deleteNote = async (noteToDelete: Note) => {
@@ -163,7 +162,7 @@ Check console for detailed logs.`)
       const updatedNotes = notes.filter(note => note.id !== noteToDelete.id)
       setNotes(updatedNotes)
       setSelectedNote(updatedNotes[0] || null)
-      await saveEncryptedNotes(authData.pubkey, updatedNotes)
+      // LOCAL STORAGE DISABLED - Notes are only stored on Nostr relays
       
       // Delete from Nostr if it has an eventId
       if (noteToDelete.eventId) {
@@ -186,7 +185,7 @@ Check console for detailed logs.`)
         const updatedNotes = notes.map(n => n.id === note.id ? updatedNote : n)
         setNotes(updatedNotes)
         setSelectedNote(updatedNote)
-        await saveEncryptedNotes(authData.pubkey, updatedNotes)
+        // LOCAL STORAGE DISABLED - Notes are only stored on Nostr relays
         
         console.log("[SimpleApp] Successfully saved to Nostr")
       } else {

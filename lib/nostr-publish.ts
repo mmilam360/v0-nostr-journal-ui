@@ -23,6 +23,8 @@ export const publishToNostr = async (unsignedEvent: any, authData: any): Promise
     content: unsignedEvent.content?.substring(0, 50) + "...", 
     tags: unsignedEvent.tags?.length || 0 
   })
+  console.log("[Publish] 🔑 AuthData pubkey:", authData.pubkey)
+  console.log("[Publish] 🔑 Unsigned event pubkey:", unsignedEvent.pubkey)
 
   let signedEvent
 
@@ -36,6 +38,7 @@ export const publishToNostr = async (unsignedEvent: any, authData: any): Promise
       )
       signedEvent = nostrTools.finalizeEvent(unsignedEvent, privateKeyBytes)
       console.log("[Publish] ✅ Event signed locally using private key")
+      console.log("[Publish] 🔑 Signed event pubkey:", signedEvent.pubkey)
       break
 
     case "remote":
@@ -46,6 +49,7 @@ export const publishToNostr = async (unsignedEvent: any, authData: any): Promise
       // Use signer manager - persistent connection, no popup!
       signedEvent = await signEventWithRemote(unsignedEvent, authData)
       console.log("[Publish] ✅ Event signed by remote signer")
+      console.log("[Publish] 🔑 Signed event pubkey:", signedEvent.pubkey)
       break
 
     case "extension":
@@ -55,6 +59,7 @@ export const publishToNostr = async (unsignedEvent: any, authData: any): Promise
       console.log("[Publish] 🔌 Requesting signature from browser extension...")
       signedEvent = await window.nostr.signEvent(unsignedEvent)
       console.log("[Publish] ✅ Received signed event from browser extension")
+      console.log("[Publish] 🔑 Signed event pubkey:", signedEvent.pubkey)
       break
 
     default:

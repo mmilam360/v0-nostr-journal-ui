@@ -36,7 +36,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { createNostrEvent, publishToNostr } from "@/lib/nostr-publish"
-import { loadEncryptedNotes, saveEncryptedNotes } from "@/lib/nostr-crypto"
+import { loadEncryptedNotes } from "@/lib/nostr-crypto"
 import { smartSyncNotes, sanitizeNotes } from "@/lib/nostr-sync-fixed"
 import { ConnectionStatus } from "@/components/connection-status"
 import { RelayManager } from "@/components/relay-manager"
@@ -155,7 +155,7 @@ export function SimplifiedMainApp({ authData, onLogout }: SimplifiedMainAppProps
 
             if (syncResult.synced) {
               setLastSyncTime(new Date())
-              await saveEncryptedNotes(authData.pubkey, validatedSyncNotes)
+              // LOCAL STORAGE DISABLED - Notes are only stored on Nostr relays
             }
 
             // Update tags
@@ -204,7 +204,7 @@ export function SimplifiedMainApp({ authData, onLogout }: SimplifiedMainAppProps
 
       try {
         // Save locally first
-        await saveEncryptedNotes(authData.pubkey, notes)
+        // LOCAL STORAGE DISABLED - Notes are only stored on Nostr relays
 
         // Process any queued operations
         await eventManager.processQueue(authData)
@@ -263,7 +263,7 @@ export function SimplifiedMainApp({ authData, onLogout }: SimplifiedMainAppProps
     setSelectedNote(newNote)
 
     // Save locally immediately
-    await saveEncryptedNotes(authData.pubkey, updatedNotes)
+    // LOCAL STORAGE DISABLED - Notes are only stored on Nostr relays
 
     // Queue for network sync
     eventManager.queueOperation({
@@ -288,7 +288,7 @@ export function SimplifiedMainApp({ authData, onLogout }: SimplifiedMainAppProps
 
     // Save locally immediately
     const updatedNotes = notes.map((note) => (note.id === updatedNote.id ? optimisticNote : note))
-    await saveEncryptedNotes(authData.pubkey, updatedNotes)
+    // LOCAL STORAGE DISABLED - Notes are only stored on Nostr relays
 
     // Queue for network sync
     eventManager.queueOperation({
@@ -327,7 +327,7 @@ export function SimplifiedMainApp({ authData, onLogout }: SimplifiedMainAppProps
     setSelectedNote(null)
 
     // Save locally immediately
-    await saveEncryptedNotes(authData.pubkey, updatedNotes)
+    // LOCAL STORAGE DISABLED - Notes are only stored on Nostr relays
 
     // Add to deleted notes
     const updatedDeletedNotes = [
@@ -367,7 +367,7 @@ export function SimplifiedMainApp({ authData, onLogout }: SimplifiedMainAppProps
       
       if (syncResult.synced) {
         setLastSyncTime(new Date())
-        await saveEncryptedNotes(authData.pubkey, validatedNotes)
+        // LOCAL STORAGE DISABLED - Notes are only stored on Nostr relays
       }
     } catch (error) {
       console.error("[SimplifiedMainApp] Manual sync failed:", error)

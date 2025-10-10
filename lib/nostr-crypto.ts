@@ -112,30 +112,18 @@ let pendingNotes: DecryptedNote[] | null = null
 let pendingPubkey: string | null = null
 
 export async function saveEncryptedNotes(pubkey: string, notes: DecryptedNote[]): Promise<void> {
-  // Store in memory immediately for instant access
-  pendingNotes = notes
-  pendingPubkey = pubkey
+  // LOCAL STORAGE DISABLED - Only use remote data
+  console.log('[Crypto] ⚠️ Local storage disabled - notes not saved locally')
+  console.log('[Crypto] 📊 Notes count:', notes.length)
+  console.log('[Crypto] 💾 Data will only be stored on Nostr relays')
   
-  // Clear existing timer
+  // Clear any pending operations
   if (encryptionTimer) {
     clearTimeout(encryptionTimer)
-  }
-  
-  // Debounce encryption - wait 2 seconds of no changes before encrypting
-  encryptionTimer = setTimeout(async () => {
-    if (pendingNotes && pendingPubkey) {
-      console.log('[Crypto] Encrypting', pendingNotes.length, 'notes after debounce period')
-      try {
-        await saveEncryptedNotesInternal(pendingPubkey, pendingNotes)
-        console.log('[Crypto] ✅ Notes encrypted and saved to localStorage')
-      } catch (error) {
-        console.error('[Crypto] ❌ Error saving encrypted notes:', error)
-      }
-    }
     encryptionTimer = null
-    pendingNotes = null
-    pendingPubkey = null
-  }, 2000) // 2 second debounce
+  }
+  pendingNotes = null
+  pendingPubkey = null
 }
 
 // Immediate encryption (used by debounced function)
@@ -167,79 +155,21 @@ async function saveEncryptedNotesInternal(pubkey: string, notes: DecryptedNote[]
 
 // Force immediate save (for critical operations like logout)
 export async function saveEncryptedNotesImmediate(pubkey: string, notes: DecryptedNote[]): Promise<void> {
-  // Clear any pending debounced saves
-  if (encryptionTimer) {
-    clearTimeout(encryptionTimer)
-    encryptionTimer = null
-  }
-  
-  // Save immediately
-  await saveEncryptedNotesInternal(pubkey, notes)
-  console.log('[Crypto] ✅ Notes saved immediately (bypassing debounce)')
+  // LOCAL STORAGE DISABLED - Only use remote data
+  console.log('[Crypto] ⚠️ Local storage disabled - not saving notes to localStorage')
+  console.log('[Crypto] 🌐 Notes will be saved to Nostr relays only')
 }
 
 export async function loadEncryptedNotes(pubkey: string): Promise<DecryptedNote[]> {
-  try {
-    const storageKey = generateStorageKey(pubkey)
-    console.log("[v0] Loading notes with storage key:", storageKey)
-    const stored = localStorage.getItem(storageKey)
-
-    if (!stored) {
-      console.log("[v0] No stored notes found for user")
-      return []
-    }
-
-    console.log("[v0] Found stored data, length:", stored.length)
-    
-    let encryptedStorage
-    try {
-      encryptedStorage = JSON.parse(stored)
-      console.log("[v0] Encrypted storage timestamp:", new Date(encryptedStorage.timestamp).toLocaleString())
-    } catch (parseError) {
-      console.error("[v0] Error parsing stored data:", parseError)
-      return []
-    }
-    
-    let decryptedData
-    try {
-      console.log("[v0] Attempting to decrypt data...")
-      decryptedData = await decryptData(encryptedStorage.data, encryptedStorage.iv, pubkey)
-      console.log("[v0] Decryption successful, data length:", decryptedData.length)
-    } catch (decryptError) {
-      console.error("[v0] Error decrypting data:", decryptError)
-      return []
-    }
-    
-    let notes
-    try {
-      notes = JSON.parse(decryptedData)
-      console.log("[v0] JSON parsing successful")
-    } catch (jsonError) {
-      console.error("[v0] Error parsing decrypted JSON:", jsonError)
-      return []
-    }
-
-    console.log("[v0] Raw decrypted notes:", notes.length)
-    console.log("[v0] Raw note IDs:", notes.map((n: any) => n.id))
-
-    // Convert date strings back to Date objects
-    const processedNotes = notes.map((note: any) => ({
-      ...note,
-      createdAt: new Date(note.createdAt),
-    }))
-
-    console.log("[v0] Notes decrypted and loaded from localStorage:", processedNotes.length)
-    return processedNotes
-  } catch (error) {
-    console.error("[v0] Error loading encrypted notes:", error)
-    return []
-  }
+  // LOCAL STORAGE DISABLED - Only use remote data
+  console.log('[Crypto] ⚠️ Local storage disabled - not loading notes from localStorage')
+  console.log('[Crypto] 🌐 Notes will be loaded from Nostr relays only')
+  return []
 }
 
 export function clearEncryptedNotes(pubkey: string): void {
-  const storageKey = generateStorageKey(pubkey)
-  localStorage.removeItem(storageKey)
-  console.log("[v0] Encrypted notes cleared from localStorage")
+  // LOCAL STORAGE DISABLED - No local storage to clear
+  console.log("[Crypto] ⚠️ Local storage disabled - no local notes to clear")
 }
 
 // Utility to get short pubkey for display

@@ -43,7 +43,7 @@ import { useTheme } from "@/lib/theme-provider"
 import { Logo } from "./logo"
 import { Input } from "@/components/ui/input"
 import DonationBubble from "@/components/donation-bubble"
-import { saveEncryptedNotes, saveEncryptedNotesImmediate, loadEncryptedNotes } from "@/lib/nostr-crypto"
+import { loadEncryptedNotes } from "@/lib/nostr-crypto"
 import { createNostrEvent, publishToNostr } from "@/lib/nostr-publish"
 import { cleanupSigner } from "@/lib/signer-manager"
 // import { smartSyncNotes, saveAndSyncNote } from "@/lib/nostr-sync-fixed" // Disabled - using simple events
@@ -172,8 +172,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       setSyncStatus("synced")
         setLastSyncTime(new Date())
       
-      // Save to local storage for offline access
-      await saveEncryptedNotes(authData.pubkey, validatedNotes)
+      // LOCAL STORAGE DISABLED - Notes are only stored on Nostr relays
       
       // Update tags
       const allTags = new Set<string>()
@@ -207,10 +206,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
         setNotes(prevNotes => prevNotes.map((n) => (n.id === note.id ? result.note : n)))
 
         if (result.success) {
-          await saveEncryptedNotes(
-            authData.pubkey,
-            notes.map((n) => (n.id === note.id ? result.note : n)),
-          )
+          // LOCAL STORAGE DISABLED - Notes are only stored on Nostr relays
         }
       } catch (error) {
         console.error("[v0] Retry failed for:", note.title, error)
@@ -315,34 +311,19 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
           console.error("[v0] ❌ Failed to load from Kind 30001 lists:", error)
         }
 
-        // Always load from local storage as well to merge
-        console.log("[v0] Loading notes from local storage...")
-        const localNotes = await loadEncryptedNotes(authData.pubkey)
-        console.log("[v0] Loaded", localNotes.length, "notes from local storage")
-
-        // Merge relay and local notes, preferring relay notes when available
-        const noteMap = new Map()
+        // LOCAL STORAGE DISABLED - Only use remote data
+        console.log("[v0] 🌐 Using only remote data - local storage disabled")
         
-        // Add local notes first
-        localNotes.forEach(note => {
-          noteMap.set(note.id, { ...note, source: 'local' })
-        })
-        
-        // Override with relay notes if they exist
-        relayNotes.forEach(note => {
-          const mergedNote = { 
+        // Use only relay notes since local storage is disabled
+        const allNotes = relayNotes.map(note => ({
           ...note,
-            source: 'relay',
-            fetchedFromRelays: true,
-            publishedToRelays: true, // If fetched from relays, it was previously published
-            isSynced: true // All notes fetched from relays are synced
-          }
-          console.log(`[MainApp] Merging relay note "${note.title}" with eventId: ${note.eventId}`)
-          noteMap.set(note.id, mergedNote)
-        })
+          source: 'relay',
+          fetchedFromRelays: true,
+          publishedToRelays: true, // If fetched from relays, it was previously published
+          isSynced: true // All notes fetched from relays are synced
+        }))
         
-        const allNotes = Array.from(noteMap.values())
-        console.log("[v0] Merged notes:", allNotes.length, "(local:", localNotes.length, "relay:", relayNotes.length, ")")
+        console.log("[v0] Loaded", allNotes.length, "notes from Nostr relays only")
         
         // Validate and sanitize all notes
         const validatedNotes = sanitizeNotes(allNotes)
@@ -529,8 +510,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     setNotes(updatedNotes)
     setSelectedNote(newNote)
 
-    // Save locally
-    await saveEncryptedNotes(authData.pubkey, updatedNotes)
+    // LOCAL STORAGE DISABLED - Notes are only stored on Nostr relays
 
     // Save to relays as Kind 30001 list
     try {
@@ -553,8 +533,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
         setNotes(finalUpdatedNotes)
         setSelectedNote(finalNote)
         
-        // Save the updated note with eventId to localStorage
-        await saveEncryptedNotes(authData.pubkey, finalUpdatedNotes)
+        // LOCAL STORAGE DISABLED - Notes are only stored on Nostr relays
       } else {
         console.error("[v0] Failed to save note to relays:", result.error || "Unknown error")
       }
@@ -577,9 +556,8 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     setNotes(notes.map((note) => note.id === updatedNote.id ? optimisticNote : note))
     setSelectedNote(optimisticNote)
 
-    // Save to local storage
+    // LOCAL STORAGE DISABLED - Notes are only stored on Nostr relays
     const updatedNotes = notes.map((note) => note.id === updatedNote.id ? optimisticNote : note)
-    await saveEncryptedNotes(authData.pubkey, updatedNotes)
 
     // Save to relays as Kind 30001 list
     try {
@@ -658,13 +636,8 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   const handleLogout = async () => {
     console.log("[v0] User logging out, cleaning up signer connection...")
 
-    // Force immediate save before logout
-    try {
-      await saveEncryptedNotesImmediate(authData.pubkey, notes)
-      console.log("[v0] ✅ Notes saved immediately before logout")
-    } catch (error) {
-      console.error("[v0] ❌ Failed to save notes before logout:", error)
-    }
+    // LOCAL STORAGE DISABLED - Notes are only stored on Nostr relays
+    console.log("[v0] 🌐 Notes are stored on Nostr relays only")
 
     // Flush any pending batch operations
     try {
@@ -712,8 +685,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       setSelectedNote(null)
     }
 
-    // Save to local storage
-    await saveEncryptedNotes(authData.pubkey, updatedNotes)
+    // LOCAL STORAGE DISABLED - Notes are only stored on Nostr relays
 
     // Delete from relays using Kind 30001 model
     if (noteToDelete.eventId) {
@@ -903,8 +875,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       setSyncStatus("synced")
       setLastSyncTime(new Date())
       
-      // Save to local storage for offline access
-      await saveEncryptedNotes(authData.pubkey, validatedNotes)
+      // LOCAL STORAGE DISABLED - Notes are only stored on Nostr relays
       
       // Update tags
       const allTags = new Set<string>()
@@ -960,8 +931,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
         console.log("[v0] Auto-selected first note after refresh")
       }
       
-      // Save to local storage
-      await saveEncryptedNotes(authData.pubkey, validatedNotes)
+      // LOCAL STORAGE DISABLED - Notes are only stored on Nostr relays
       
       // Update tags
       const allTags = new Set<string>()
@@ -1417,20 +1387,43 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                   <X className="w-4 h-4" />
                 </Button>
               </div>
-              <TagsPanel
-                tags={tags}
-                selectedTag={selectedTag}
-                onSelectTag={(tag) => {
-                  setSelectedTag(tag)
-                  setIsMobileSidebarOpen(false)
-                }}
-                pubkey={authData.pubkey}
-                onLogout={handleLogout}
-                onDonationClick={() => {
-                  setShowDonationModal(true)
-                  setIsMobileSidebarOpen(false)
-                }}
-              />
+              <div className="flex flex-col h-full">
+                {/* Tags Panel */}
+                <div className="flex-shrink-0">
+                  <TagsPanel
+                    tags={tags}
+                    selectedTag={selectedTag}
+                    onSelectTag={(tag) => {
+                      setSelectedTag(tag)
+                      setIsMobileSidebarOpen(false)
+                    }}
+                    pubkey={authData.pubkey}
+                    onLogout={handleLogout}
+                    onDonationClick={() => {
+                      setShowDonationModal(true)
+                      setIsMobileSidebarOpen(false)
+                    }}
+                  />
+                </div>
+                
+                {/* Note List */}
+                <div className="flex-1 overflow-hidden">
+                  <NoteList
+                    notes={sortedNotes}
+                    selectedNote={selectedNote}
+                    onSelectNote={(note) => {
+                      setSelectedNote(note)
+                      setIsMobileSidebarOpen(false)
+                    }}
+                    onCreateNote={() => {
+                      handleCreateNote()
+                      setIsMobileSidebarOpen(false)
+                    }}
+                    onDeleteNote={handleDeleteNote}
+                    authData={authData}
+                  />
+                </div>
+              </div>
             </div>
           </div>
         )}
