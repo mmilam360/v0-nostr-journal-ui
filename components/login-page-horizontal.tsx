@@ -67,13 +67,19 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
   const goBack = () => {
     const prevIndex = currentStepIndex - 1
     if (prevIndex >= 0) {
+      console.log('[Login] 🔄 Going back from step:', currentStep, 'to step:', steps[prevIndex])
+      
       setCurrentStep(steps[prevIndex] as any)
+      
+      // Apply the same reset logic as the first page
       if (prevIndex <= 1) {
+        console.log('[Login] 🔄 Resetting to first page state')
         setSelectedPath(null)
         setSelectedMethod(null)
       }
       
-      // Reset all connection states when going back
+      // Reset all connection states when going back (same as resetConnectionStates)
+      console.log('[Login] 🔄 Resetting all connection states')
       setConnectionState('idle')
       setError('')
       setBunkerUrl('')
@@ -81,6 +87,11 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
       setNsecInput('')
       setRemoteSignerMode('client')
       setSessionKeypair(null)
+      
+      // Force UI update to ensure state changes are reflected
+      forceUIUpdate()
+      
+      console.log('[Login] ✅ Back navigation complete with full reset')
     }
   }
 
