@@ -101,8 +101,9 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
     if (prevIndex >= 0) {
       console.log('[Login] 🔄 Going back from step:', currentStep, 'to step:', steps[prevIndex])
       
-      // TERMINATE ALL ACTIVE CONNECTIONS FIRST
-      terminateAllConnections()
+      // TERMINATE ALL ACTIVE CONNECTIONS FIRST (but preserve signer if user is logged in)
+      const shouldClearSigner = currentStep === 'connect' // Only clear signer if abandoning a connection attempt
+      terminateAllConnections(shouldClearSigner)
       
       setCurrentStep(steps[prevIndex] as any)
       
@@ -229,19 +230,23 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
   }
 
   // Comprehensive connection termination for navigation
-  const terminateAllConnections = () => {
+  const terminateAllConnections = (clearSigner = true) => {
     console.log('[Login] 🛑 Terminating all active connections...')
     
     // Reset all states
     resetConnectionStates()
     
-    // Clear any active signer connections
-    try {
-      const { clearActiveSigner } = require('@/lib/signer-connector')
-      clearActiveSigner()
-      console.log('[Login] 🛑 Cleared active signer')
-    } catch (error) {
-      console.log('[Login] ⚠️ Could not clear active signer:', error)
+    // Clear any active signer connections only if requested (for method switching)
+    if (clearSigner) {
+      try {
+        const { clearActiveSigner } = require('@/lib/signer-connector')
+        clearActiveSigner()
+        console.log('[Login] 🛑 Cleared active signer')
+      } catch (error) {
+        console.log('[Login] ⚠️ Could not clear active signer:', error)
+      }
+    } else {
+      console.log('[Login] 🛑 Preserving active signer (user is logged in)')
     }
     
     // Clear any pending promises or timeouts
@@ -1094,6 +1099,14 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
           )
         }
 
+        // Fallback for connect step - should not show "Connecting..." if connection state is idle
+        if (connectionState === 'idle') {
+          // If we're on connect step but connection state is idle, go back to method selection
+          console.log('[Login] ⚠️ Connect step with idle state - redirecting to method selection')
+          setCurrentStep('method')
+          return null
+        }
+        
         return (
           <div className="space-y-8">
             <div className="text-center">
