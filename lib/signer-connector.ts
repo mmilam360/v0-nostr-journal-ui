@@ -181,6 +181,47 @@ export function startClientInitiatedFlow(
       console.log("[SignerConnector] Could not parse URI:", error)
     }
     
+    // CORRECT THE URI ACCORDING TO NIP-46 SPECIFICATION
+    // The library puts permissions in metadata, but NIP-46 requires them as separate 'perms' parameter
+    let correctedUri = result.connectUri
+    
+    try {
+      const url = new URL(result.connectUri)
+      const clientPubkey = url.pathname
+      
+      // Extract secret from original URI
+      const secret = url.searchParams.get('secret')
+      const relay = url.searchParams.get('relay')
+      
+      // Parse metadata to get permissions
+      const metadata = url.searchParams.get('metadata')
+      let permsString = ''
+      if (metadata) {
+        try {
+          const metadataObj = JSON.parse(decodeURIComponent(metadata))
+          if (metadataObj.perms) {
+            permsString = metadataObj.perms
+          }
+        } catch (e) {
+          console.log("[SignerConnector] Could not parse metadata:", e)
+        }
+      }
+      
+      // Construct correct URI according to NIP-46 spec
+      const params = new URLSearchParams()
+      if (relay) params.set('relay', relay)
+      if (secret) params.set('secret', secret)
+      if (permsString) params.set('perms', permsString)
+      if (clientMetadata.name) params.set('name', clientMetadata.name)
+      if (clientMetadata.description) params.set('description', clientMetadata.description)
+      
+      correctedUri = `nostrconnect://${clientPubkey}?${params.toString()}`
+      console.log("[SignerConnector] ✅ Corrected URI according to NIP-46 spec:", correctedUri)
+      
+    } catch (error) {
+      console.log("[SignerConnector] Could not correct URI:", error)
+    }
+    
     // Enhanced promise handling with proper timeout and cleanup
     const establishedPromise = result.established.then(
       async (connectionResult) => {
@@ -217,7 +258,7 @@ export function startClientInitiatedFlow(
     )
     
     return {
-      connectUri: result.connectUri,
+      connectUri: correctedUri,
       established: establishedPromise
     }
     
