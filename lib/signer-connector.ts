@@ -1,4 +1,5 @@
 import { Nip46RemoteSigner, type Nip46SessionState, type Nip46ClientMetadata } from 'nostr-signer-connector'
+import { SimplePool } from 'nostr-tools'
 
 let activeSigner: Nip46RemoteSigner | null = null
 
@@ -12,6 +13,46 @@ export function setActiveSigner(signer: Nip46RemoteSigner | null) {
 
 export function clearActiveSigner() {
   activeSigner = null
+}
+
+/**
+ * Monitor for NIP-46 response events to debug handshake issues
+ */
+export function debugNip46Events(relayUrl: string, clientPubkey: string) {
+  console.log("[SignerConnector] 🔍 Starting NIP-46 event debugging...")
+  console.log("[SignerConnector] Monitoring relay:", relayUrl)
+  console.log("[SignerConnector] Client pubkey:", clientPubkey)
+  
+  const pool = new SimplePool()
+  
+  // Listen for all events to see what's happening
+  const sub = pool.sub([relayUrl], [
+    {
+      kinds: [24133], // NIP-46 response events
+      "#p": [clientPubkey]
+    }
+  ])
+  
+  sub.on('event', (event) => {
+    console.log("[SignerConnector] 📨 Received event:", event)
+    console.log("[SignerConnector] Event kind:", event.kind)
+    console.log("[SignerConnector] Event content:", event.content)
+    console.log("[SignerConnector] Event tags:", event.tags)
+    console.log("[SignerConnector] Event pubkey:", event.pubkey)
+  })
+  
+  sub.on('eose', () => {
+    console.log("[SignerConnector] 📡 End of stored events")
+  })
+  
+  // Clean up after 2 minutes
+  setTimeout(() => {
+    console.log("[SignerConnector] 🧹 Cleaning up NIP-46 debugging")
+    sub.unsub()
+    pool.close([relayUrl])
+  }, 120000)
+  
+  return sub
 }
 
 

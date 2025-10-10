@@ -172,6 +172,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
 
   const resetConnectionStates = () => {
     console.log('[Login] 🔄 Resetting connection states...')
+    console.log('[Login] Current connection state before reset:', connectionState)
     setConnectionState('idle')
     setError('')
     setBunkerUrl('')
@@ -180,13 +181,23 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
     setRemoteSignerMode('client')
     setSessionKeypair(null)
     console.log('[Login] ✅ Connection states reset to idle')
+    // Force immediate UI update
+    setTimeout(() => {
+      console.log('[Login] 🔍 Connection state after reset timeout:', connectionState)
+    }, 100)
   }
 
   // Force UI update when switching methods
+  const [uiKey, setUIKey] = useState(0)
   const forceUIUpdate = () => {
-    // Force a re-render by updating a dummy state
-    setConnectionState(prev => prev === 'idle' ? 'idle' : 'idle')
+    // Force a complete re-render by updating the key
+    setUIKey(prev => prev + 1)
   }
+
+  // Debug connection state changes
+  useEffect(() => {
+    console.log('[Login] 🔍 Connection state changed to:', connectionState)
+  }, [connectionState])
 
   const handleRemoteSignerClick = () => {
     setSelectedMethod('remote')
@@ -296,10 +307,18 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
         ]
         
         // Import and use the correct API
-        const { startClientInitiatedFlow, setActiveSigner } = await import('@/lib/signer-connector')
+        const { startClientInitiatedFlow, setActiveSigner, debugNip46Events } = await import('@/lib/signer-connector')
         
         // Start listening for connection
         const { connectUri, established } = startClientInitiatedFlow(relays, clientMetadata)
+        
+        // Extract client pubkey for debugging
+        const clientPubkeyMatch = connectUri.match(/nostrconnect:\/\/([a-f0-9]{64})/)
+        if (clientPubkeyMatch) {
+          const clientPubkey = clientPubkeyMatch[1]
+          console.log('[Login] 🔍 Starting NIP-46 event debugging for client:', clientPubkey)
+          debugNip46Events(relays[0], clientPubkey)
+        }
         
         console.log('[Login] Generated nostrconnect URI:', connectUri)
         setConnectUri(connectUri)
@@ -824,9 +843,14 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
 
                     {/* Connection Status */}
                     {connectionState === 'connecting' && (
-                      <div className="flex items-center justify-center space-x-2 text-muted-foreground">
+                      <div key={`connecting-${uiKey}`} className="flex items-center justify-center space-x-2 text-muted-foreground">
                         <Loader2 className="h-4 w-4 animate-spin" />
                         <span className="text-sm">Connecting...</span>
+                      </div>
+                    )}
+                    {connectionState === 'idle' && (
+                      <div key={`idle-${uiKey}`} className="flex items-center justify-center space-x-2 text-muted-foreground">
+                        <span className="text-sm">Ready to connect</span>
                       </div>
                     )}
                     {connectionState === 'success' && (
