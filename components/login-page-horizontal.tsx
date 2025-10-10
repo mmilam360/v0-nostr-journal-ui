@@ -643,8 +643,8 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 max-w-2xl mx-auto">
                 <button
                   onClick={() => {
-                    // Terminate any active connections before switching methods
-                    terminateAllConnections()
+                    // For extension method, only clear connection states, preserve any existing signer
+                    terminateAllConnections(false)
                     setSelectedMethod('extension')
                     forceUIUpdate()
                     goNext()
@@ -675,8 +675,8 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                 </button>
                 <button
                   onClick={() => {
-                    // Terminate any active connections before switching methods
-                    terminateAllConnections()
+                    // For nsec method, only clear connection states, preserve any existing signer
+                    terminateAllConnections(false)
                     setSelectedMethod('nsec')
                     forceUIUpdate()
                     goNext()
