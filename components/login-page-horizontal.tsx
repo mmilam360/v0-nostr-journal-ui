@@ -708,6 +708,11 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                             <li>Paste it above and click Connect</li>
                             <li>Return to nsec.app to approve the connection</li>
                           </ol>
+                          <div className="mt-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded">
+                            <p className="text-xs text-blue-700 dark:text-blue-300">
+                              <strong>💡 Tip:</strong> The bunker:// method is often more reliable than QR codes for initial connections.
+                            </p>
+                          </div>
                         </div>
                         
                       </div>

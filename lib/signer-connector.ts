@@ -86,6 +86,10 @@ export function startClientInitiatedFlow(
   })
   
   console.log("[SignerConnector] Generated connect URI:", result.connectUri)
+  console.log("[SignerConnector] URI analysis:")
+  console.log("[SignerConnector] - Has secret parameter:", result.connectUri.includes('secret='))
+  console.log("[SignerConnector] - Relay count:", relayUrls.length)
+  console.log("[SignerConnector] - Client metadata:", JSON.stringify(clientMetadata, null, 2))
   
   // Wrap the established promise with additional debugging
   const debugEstablished = result.established.then(
