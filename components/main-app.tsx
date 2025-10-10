@@ -271,6 +271,21 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
           if (existingSigner) {
             console.log("[v0] ✅ Active signer already exists from fresh login")
           } else {
+            console.log("[v0] ⚠️ No active signer found, attempting to resume session")
+            
+            // For fresh logins, try to recreate the signer from authData
+            if (authData.sessionData && !localStorage.getItem('nostr_remote_session')) {
+              console.log("[v0] Fresh login detected, setting up signer from authData")
+              try {
+                const { resumeNip46Session } = await import('@/lib/signer-connector')
+                const signer = await resumeNip46Session(authData.sessionData)
+                if (signer) {
+                  console.log("[v0] ✅ Fresh login signer set up successfully")
+                }
+              } catch (error) {
+                console.error("[v0] ❌ Failed to set up fresh login signer:", error)
+              }
+            }
             // Check for saved session (stored as Nip46SessionState)
             const savedSession = localStorage.getItem('nostr_remote_session')
             
