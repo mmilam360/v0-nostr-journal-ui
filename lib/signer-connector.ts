@@ -1,5 +1,4 @@
 import { Nip46RemoteSigner, type Nip46SessionState, type Nip46ClientMetadata } from 'nostr-signer-connector'
-import { SimplePool, generateSecretKey, getPublicKey } from 'nostr-tools'
 
 let activeSigner: Nip46RemoteSigner | null = null
 
@@ -15,45 +14,6 @@ export function clearActiveSigner() {
   activeSigner = null
 }
 
-/**
- * Monitor for NIP-46 response events to debug handshake issues
- */
-export function debugNip46Events(relayUrl: string, clientPubkey: string) {
-  console.log("[SignerConnector] 🔍 Starting NIP-46 event debugging...")
-  console.log("[SignerConnector] Monitoring relay:", relayUrl)
-  console.log("[SignerConnector] Client pubkey:", clientPubkey)
-  
-  const pool = new SimplePool()
-  
-  // Listen for all events to see what's happening
-  const sub = pool.sub([relayUrl], [
-    {
-      kinds: [24133], // NIP-46 response events
-      "#p": [clientPubkey]
-    }
-  ])
-  
-  sub.on('event', (event) => {
-    console.log("[SignerConnector] 📨 Received event:", event)
-    console.log("[SignerConnector] Event kind:", event.kind)
-    console.log("[SignerConnector] Event content:", event.content)
-    console.log("[SignerConnector] Event tags:", event.tags)
-    console.log("[SignerConnector] Event pubkey:", event.pubkey)
-  })
-  
-  sub.on('eose', () => {
-    console.log("[SignerConnector] 📡 End of stored events")
-  })
-  
-  // Clean up after 2 minutes
-  setTimeout(() => {
-    console.log("[SignerConnector] 🧹 Cleaning up NIP-46 debugging")
-    sub.unsub()
-    pool.close([relayUrl])
-  }, 120000)
-  
-  return sub
-}
 
 
 /**
@@ -109,7 +69,7 @@ export async function connectNip46(bunkerUri: string): Promise<{
 
 /**
  * Start listening for remote signer connection (Client-initiated flow)
- * Generates nostrconnect:// URI for QR code scanning per NIP-46 spec
+ * Uses the library's built-in method but with proper NIP-46 configuration
  */
 export function startClientInitiatedFlow(
   relayUrls: string[],
@@ -123,105 +83,60 @@ export function startClientInitiatedFlow(
   console.log("[SignerConnector] Client metadata:", clientMetadata)
   
   try {
-    // Generate client keypair per NIP-46 spec
-    const clientPrivateKey = generateSecretKey()
-    const clientPublicKey = getPublicKey(clientPrivateKey)
-    
-    // Generate secret per NIP-46 spec (required for connection spoofing protection)
-    const secret = Math.random().toString(36).substring(2, 10) // 8 character random string
-    
-    console.log("[SignerConnector] Generated client pubkey:", clientPublicKey)
-    console.log("[SignerConnector] Generated secret:", secret)
-    
     // Use primary relay per NIP-46 best practices
     const primaryRelay = relayUrls[0]
+    console.log("[SignerConnector] Using primary relay:", primaryRelay)
     
-    // Build nostrconnect:// URI per NIP-46 specification
-    const params = new URLSearchParams()
-    params.set('relay', primaryRelay)
-    params.set('secret', secret)
-    
-    // Add permissions per NIP-46 spec
-    const permissions = [
-      'sign_event',
-      'get_public_key',
-      'delete_event',
-      'nip04_encrypt',
-      'nip04_decrypt',
-      'get_relays'
-    ]
-    params.set('perms', permissions.join(','))
-    
-    // Add metadata
-    if (clientMetadata.name) params.set('name', clientMetadata.name)
-    if (clientMetadata.description) params.set('description', clientMetadata.description)
-    
-    const connectUri = `nostrconnect://${clientPublicKey}?${params.toString()}`
-    
-    console.log("[SignerConnector] Generated NIP-46 compliant URI:", connectUri)
-    console.log("[SignerConnector] URI analysis:")
-    console.log("[SignerConnector] - Has secret parameter:", connectUri.includes('secret='))
-    console.log("[SignerConnector] - Has perms parameter:", connectUri.includes('perms='))
-    console.log("[SignerConnector] - Primary relay:", primaryRelay)
-    
-    // Create a promise that resolves when we receive the connect response
-    const establishedPromise = new Promise<{ signer: Nip46RemoteSigner; session: Nip46SessionState }>((resolve, reject) => {
-      const pool = new SimplePool()
-      let timeoutId: NodeJS.Timeout
-      
-      // Set up timeout
-      timeoutId = setTimeout(() => {
-        console.log("[SignerConnector] ⏰ Connection timeout after 2 minutes")
-        sub.unsub()
-        pool.close([primaryRelay])
-        reject(new Error('Connection timeout - remote signer did not respond'))
-      }, 120000)
-      
-      // Listen for connect response events (kind 24133)
-      const sub = pool.sub([primaryRelay], [
-        {
-          kinds: [24133],
-          "#p": [clientPublicKey]
-        }
-      ])
-      
-      sub.on('event', (event) => {
-        console.log("[SignerConnector] 📨 Received event:", event)
-        console.log("[SignerConnector] Event kind:", event.kind)
-        console.log("[SignerConnector] Event pubkey:", event.pubkey)
-        console.log("[SignerConnector] Event content:", event.content)
-        
-        // This is a connect response from the remote signer
-        // For now, we'll use the library to handle the rest
-        clearTimeout(timeoutId)
-        sub.unsub()
-        pool.close([primaryRelay])
-        
-        // Create signer instance with the received remote signer pubkey
-        const remoteSignerPubkey = event.pubkey
-        console.log("[SignerConnector] ✅ Received connect response from:", remoteSignerPubkey)
-        
-        // Create a mock session for now
-        const session: Nip46SessionState = {
-          sessionKey: clientPrivateKey,
-          remotePubkey: remoteSignerPubkey,
-          relayUrls: [primaryRelay]
-        }
-        
-        // Create signer instance (we'll need to implement this properly)
-        const signer = new Nip46RemoteSigner(connectUri)
-        
-        resolve({ signer, session })
-      })
-      
-      sub.on('eose', () => {
-        console.log("[SignerConnector] 📡 End of stored events")
-      })
+    // Use the library's built-in method with proper configuration
+    const result = Nip46RemoteSigner.listenConnectionFromRemote([primaryRelay], clientMetadata, {
+      connectTimeoutMs: 120000, // 2 minute timeout
+      permissions: [
+        'sign_event',
+        'get_public_key',
+        'delete_event',
+        'nip04_encrypt',
+        'nip04_decrypt',
+        'get_relays'
+      ]
     })
     
+    console.log("[SignerConnector] Generated connect URI:", result.connectUri)
+    console.log("[SignerConnector] URI analysis:")
+    console.log("[SignerConnector] - Has secret parameter:", result.connectUri.includes('secret='))
+    console.log("[SignerConnector] - Has perms parameter:", result.connectUri.includes('perms='))
+    console.log("[SignerConnector] - Primary relay:", primaryRelay)
+    
+    // Enhanced debugging for the established promise
+    const debugEstablished = result.established.then(
+      (connectionResult) => {
+        console.log("[SignerConnector] ✅ Connection established successfully!")
+        console.log("[SignerConnector] Signer object:", connectionResult.signer)
+        console.log("[SignerConnector] Session object:", connectionResult.session)
+        console.log("[SignerConnector] Session keys:", Object.keys(connectionResult.session || {}))
+        return connectionResult
+      },
+      (error) => {
+        console.error("[SignerConnector] ❌ Connection promise rejected!")
+        console.error("[SignerConnector] Error type:", typeof error)
+        console.error("[SignerConnector] Error name:", error.name)
+        console.error("[SignerConnector] Error message:", error.message)
+        console.error("[SignerConnector] Error stack:", error.stack)
+        
+        // Check if it's a timeout error
+        if (error.message && error.message.includes('timeout')) {
+          console.error("[SignerConnector] 🕐 This appears to be a timeout error")
+          console.error("[SignerConnector] 💡 The remote signer may not be responding properly")
+          console.error("[SignerConnector] 💡 Try using the bunker:// URL method instead")
+          console.error("[SignerConnector] 💡 Make sure nsec.app is open and connected to internet")
+        }
+        
+        throw error
+      }
+    )
+    
     return {
-      connectUri,
-      established: establishedPromise
+      connectUri: result.connectUri,
+      established: debugEstablished
     }
     
   } catch (error) {
