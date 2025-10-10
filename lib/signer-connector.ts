@@ -39,7 +39,8 @@ export async function connectNip46(bunkerUri: string): Promise<{
     const timeoutMs = isMobile ? 60000 : 30000 // 60 seconds for mobile, 30 for desktop
     
     const permissions = [
-      'sign_event',
+      'sign_event:30001', // Specific permission for Kind 30001 journal entries
+      'sign_event:5',     // Permission for Kind 5 deletion events
       'get_public_key',
       'delete_event',
       'nip04_encrypt',
@@ -137,7 +138,8 @@ export function startClientInitiatedFlow(
     const timeoutMs = isMobile ? 180000 : 120000 // 3 minutes for mobile, 2 for desktop
     
     const permissions = [
-      'sign_event',
+      'sign_event:30001', // Specific permission for Kind 30001 journal entries
+      'sign_event:5',     // Permission for Kind 5 deletion events
       'get_public_key',
       'delete_event',
       'nip04_encrypt',
