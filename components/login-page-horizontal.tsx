@@ -201,10 +201,11 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
 
   // Reset connection state when on login screen (not actively connecting)
   useEffect(() => {
-    // If we're on the main login screen and not actively in a connection flow, reset to idle
-    if (currentStep === 'method-selection' && connectionState === 'connecting') {
-      console.log('[Login] 🔄 Resetting connection state - on login screen')
+    // Reset connection state when switching to method selection screen
+    if (currentStep === 'method' && connectionState !== 'idle') {
+      console.log('[Login] 🔄 Resetting connection state - on method selection screen')
       setConnectionState('idle')
+      setError('')
     }
   }, [currentStep, connectionState])
 

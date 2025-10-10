@@ -28,6 +28,7 @@ export async function connectNip46(bunkerUri: string): Promise<{
 }> {
   try {
     console.log("[SignerConnector] Connecting to bunker via signer-initiated flow...")
+    console.log("[SignerConnector] Bunker URI:", bunkerUri)
     
     // Use the static method - it returns a promise that resolves when connected
     const { signer, session } = await Nip46RemoteSigner.connectToRemote(bunkerUri, {
@@ -35,15 +36,26 @@ export async function connectNip46(bunkerUri: string): Promise<{
     })
     
     console.log("[SignerConnector] ✅ Connected successfully")
+    console.log("[SignerConnector] Signer object:", signer)
+    console.log("[SignerConnector] Session object:", session)
     
     // Test the connection
     const pubkey = await signer.getPublicKey()
     console.log("[SignerConnector] ✅ Got user pubkey:", pubkey)
     
+    // Create a proper session object if one wasn't returned
+    const sessionData: Nip46SessionState = session || {
+      sessionKey: signer.clientSecretKey, // Use the signer's client key
+      remotePubkey: signer.remotePubkey, // Use the signer's remote pubkey
+      relayUrls: [bunkerUri.split('relay=')[1]?.split('&')[0] || 'wss://relay.damus.io'] // Extract relay from URI
+    }
+    
+    console.log("[SignerConnector] Session data:", sessionData)
+    
     return {
       success: true,
       signer: signer,
-      session: session
+      session: sessionData
     }
     
   } catch (error) {
