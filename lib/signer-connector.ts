@@ -12,10 +12,18 @@ export function getActiveSigner() {
 }
 
 export function setActiveSigner(signer: Nip46RemoteSigner | null) {
+  console.log("[SignerConnector] 🔧 Setting active signer:", !!signer)
+  if (signer) {
+    console.log("[SignerConnector] ✅ Active signer set successfully")
+  } else {
+    console.log("[SignerConnector] ❌ Active signer set to null")
+  }
   activeSigner = signer
 }
 
 export function clearActiveSigner() {
+  console.log("[SignerConnector] 🧹 Clearing active signer...")
+  console.trace("[SignerConnector] Clear call stack:")
   activeSigner = null
 }
 
