@@ -222,13 +222,14 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
         
         const clientMetadata = {
           name: 'Nostr Journal',
-          url: typeof window !== 'undefined' ? window.location.origin : 'https://nostrjournal.com',
           description: 'Private journaling on Nostr'
+          // Removed url to avoid potential encoding issues
         }
 
+        // Use a single reliable relay for initial connection
+        // Multiple relays can cause issues with NIP-46 handshake
         const relays = [
-          'wss://relay.damus.io',
-          'wss://nos.lol'
+          'wss://relay.damus.io' // Most reliable for NIP-46
         ]
         
         // Import and use the correct API
@@ -242,9 +243,20 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
         
         // Wait for connection (library handles timeout internally)
         console.log('[Login] Waiting for remote signer to scan and connect...')
-        const { signer, session } = await established
+        console.log('[Login] Promise state:', established)
         
-        console.log('[Login] ✅ Client-initiated connection successful')
+        const { signer, session } = await established.then(
+          (result) => {
+            console.log('[Login] ✅ Client-initiated connection successful')
+            console.log('[Login] Signer:', result.signer)
+            console.log('[Login] Session:', result.session)
+            return result
+          },
+          (error) => {
+            console.error('[Login] ❌ Connection promise rejected:', error)
+            throw error
+          }
+        )
         
         // Get user pubkey
         const userPubkey = await signer.getPublicKey()

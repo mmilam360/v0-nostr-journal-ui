@@ -82,12 +82,32 @@ export function startClientInitiatedFlow(
   
   // Use the static method - it returns an object with connectUri and established promise
   const result = Nip46RemoteSigner.listenConnectionFromRemote(relayUrls, clientMetadata, {
-    connectTimeoutMs: 90000 // 90 second timeout
+    connectTimeoutMs: 120000 // 2 minute timeout - increased for debugging
   })
   
   console.log("[SignerConnector] Generated connect URI:", result.connectUri)
   
-  return result
+  // Wrap the established promise with additional debugging
+  const debugEstablished = result.established.then(
+    (connectionResult) => {
+      console.log("[SignerConnector] ✅ Connection established successfully:", connectionResult)
+      return connectionResult
+    },
+    (error) => {
+      console.error("[SignerConnector] ❌ Connection failed:", error)
+      console.error("[SignerConnector] Error details:", {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      })
+      throw error
+    }
+  )
+  
+  return {
+    connectUri: result.connectUri,
+    established: debugEstablished
+  }
 }
 
 /**
