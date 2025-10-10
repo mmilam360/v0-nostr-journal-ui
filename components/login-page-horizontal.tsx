@@ -116,6 +116,8 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
   }
 
   const handleExtensionLogin = async () => {
+    console.log('[Login] 🔄 Starting extension login...')
+    resetConnectionStates() // Reset any previous state first
     setConnectionState('connecting')
     try {
       if (!window.nostr) {
@@ -135,6 +137,8 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
   }
 
   const handleNsecLogin = async () => {
+    console.log('[Login] 🔄 Starting nsec login...')
+    resetConnectionStates() // Reset any previous state first
     setConnectionState('connecting')
     try {
       const { getPublicKey } = await import("nostr-tools/pure")
@@ -167,6 +171,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
   }
 
   const resetConnectionStates = () => {
+    console.log('[Login] 🔄 Resetting connection states...')
     setConnectionState('idle')
     setError('')
     setBunkerUrl('')
@@ -174,6 +179,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
     setNsecInput('')
     setRemoteSignerMode('client')
     setSessionKeypair(null)
+    console.log('[Login] ✅ Connection states reset to idle')
   }
 
   const handleRemoteSignerClick = () => {
@@ -186,6 +192,8 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
   const handleBunkerConnect = async () => {
     if (remoteSignerMode === 'signer' && !bunkerUrl) return
 
+    console.log('[Login] 🔄 Starting bunker connect...')
+    resetConnectionStates() // Reset any previous state first
     setConnectionState('connecting')
     setError('')
 
@@ -283,18 +291,10 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
         ]
         
         // Import and use the correct API
-        const { startClientInitiatedFlow, setActiveSigner, monitorNip46Events } = await import('@/lib/signer-connector')
+        const { startClientInitiatedFlow, setActiveSigner } = await import('@/lib/signer-connector')
         
         // Start listening for connection
         const { connectUri, established } = startClientInitiatedFlow(relays, clientMetadata)
-        
-        // Extract client pubkey from URI for monitoring
-        const clientPubkeyMatch = connectUri.match(/nostrconnect:\/\/([a-f0-9]{64})/)
-        if (clientPubkeyMatch) {
-          const clientPubkey = clientPubkeyMatch[1]
-          console.log('[Login] 🔍 Starting NIP-46 event monitoring for client:', clientPubkey)
-          monitorNip46Events(relays, clientPubkey)
-        }
         
         console.log('[Login] Generated nostrconnect URI:', connectUri)
         setConnectUri(connectUri)

@@ -1,5 +1,4 @@
 import { Nip46RemoteSigner, type Nip46SessionState, type Nip46ClientMetadata } from 'nostr-signer-connector'
-import { SimplePool } from 'nostr-tools'
 
 let activeSigner: Nip46RemoteSigner | null = null
 
@@ -15,44 +14,6 @@ export function clearActiveSigner() {
   activeSigner = null
 }
 
-/**
- * Monitor for NIP-46 response events (kind 24133) to debug handshake issues
- */
-export function monitorNip46Events(relayUrls: string[], clientPubkey: string) {
-  console.log("[SignerConnector] 🔍 Starting NIP-46 event monitoring...")
-  console.log("[SignerConnector] Monitoring relays:", relayUrls)
-  console.log("[SignerConnector] Client pubkey:", clientPubkey)
-  
-  const pool = new SimplePool()
-  
-  // Listen for kind 24133 events (NIP-46 responses)
-  const sub = pool.sub(relayUrls, [
-    {
-      kinds: [24133],
-      "#p": [clientPubkey],
-      limit: 10
-    }
-  ])
-  
-  sub.on('event', (event) => {
-    console.log("[SignerConnector] 📨 Received kind 24133 event:", event)
-    console.log("[SignerConnector] Event content:", event.content)
-    console.log("[SignerConnector] Event tags:", event.tags)
-  })
-  
-  sub.on('eose', () => {
-    console.log("[SignerConnector] 📡 End of stored events for NIP-46 monitoring")
-  })
-  
-  // Clean up after 5 minutes
-  setTimeout(() => {
-    console.log("[SignerConnector] 🧹 Cleaning up NIP-46 event monitoring")
-    sub.unsub()
-    pool.close(relayUrls)
-  }, 300000)
-  
-  return sub
-}
 
 /**
  * Connect to a remote signer using bunker:// URL (Signer-initiated flow)
