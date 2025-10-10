@@ -276,15 +276,20 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
             // For fresh logins, try to recreate the signer from authData
             if (authData.sessionData && !localStorage.getItem('nostr_remote_session')) {
               console.log("[v0] Fresh login detected, setting up signer from authData")
+              console.log("[v0] Session data:", authData.sessionData)
               try {
                 const { resumeNip46Session } = await import('@/lib/signer-connector')
                 const signer = await resumeNip46Session(authData.sessionData)
                 if (signer) {
                   console.log("[v0] ✅ Fresh login signer set up successfully")
+                } else {
+                  console.log("[v0] ❌ Fresh login signer setup returned null")
                 }
               } catch (error) {
                 console.error("[v0] ❌ Failed to set up fresh login signer:", error)
               }
+            } else {
+              console.log("[v0] Not a fresh login - sessionData:", !!authData.sessionData, "savedSession:", !!localStorage.getItem('nostr_remote_session'))
             }
             // Check for saved session (stored as Nip46SessionState)
             const savedSession = localStorage.getItem('nostr_remote_session')

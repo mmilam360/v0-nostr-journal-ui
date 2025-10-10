@@ -232,20 +232,25 @@ export function startClientInitiatedFlow(
  */
 export async function resumeNip46Session(sessionData: Nip46SessionState): Promise<Nip46RemoteSigner | null> {
   try {
+    console.log("[SignerConnector] Resuming session with data:", sessionData)
+    
     if (!sessionData?.bunkerUri) {
       console.warn("[SignerConnector] No bunker URI in session data")
       return null
     }
 
-    console.log("[SignerConnector] Resuming session...")
+    console.log("[SignerConnector] Resuming session with bunker URI:", sessionData.bunkerUri)
 
     const result = await connectNip46(sessionData.bunkerUri)
+    console.log("[SignerConnector] Connect result:", { success: result.success, hasSigner: !!result.signer })
 
     if (result.success && result.signer) {
       setActiveSigner(result.signer)
+      console.log("[SignerConnector] ✅ Session resumed successfully")
       return result.signer
     }
 
+    console.log("[SignerConnector] ❌ Session resume failed")
     return null
 
   } catch (error) {
