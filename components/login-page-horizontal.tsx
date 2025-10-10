@@ -205,16 +205,43 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
         
         setConnectionState('success')
         
-        // Create auth data
+        // Extract required fields for main app validation
+        const clientSecretKey = sessionData.sessionKey // This is the session key from NIP-46
+        const bunkerPubkey = sessionData.remotePubkey // This is the remote signer's pubkey
+        
+        console.log('[Login] Session data fields:', {
+          sessionKey: clientSecretKey,
+          remotePubkey: bunkerPubkey,
+          relayUrls: sessionData.relayUrls
+        })
+        
+        // Create auth data with all required fields
         const authData = {
           pubkey: userPubkey,
           authMethod: 'remote' as const,
           bunkerUri: input,
-          relays: ['wss://relay.damus.io', 'wss://nos.lol'],
-          sessionData: sessionData
+          relays: sessionData.relayUrls || ['wss://relay.damus.io', 'wss://nos.lol'],
+          sessionData: sessionData,
+          clientSecretKey: clientSecretKey, // Required by main app validation
+          bunkerPubkey: bunkerPubkey // Required by main app validation
         }
         
-        onLoginSuccess(authData)
+        console.log('[Login] ✅ Bunker connection successful!')
+        console.log('[Login] Auth data being passed to main app:', {
+          pubkey: authData.pubkey,
+          authMethod: authData.authMethod,
+          bunkerUri: authData.bunkerUri,
+          relays: authData.relays,
+          hasSessionData: !!authData.sessionData
+        })
+        
+        try {
+          onLoginSuccess(authData)
+          console.log('[Login] ✅ onLoginSuccess called successfully')
+        } catch (error) {
+          console.error('[Login] ❌ Error calling onLoginSuccess:', error)
+          throw error
+        }
 
       } else {
         // ============ CLIENT-INITIATED FLOW (Generate QR Code) ============
@@ -270,13 +297,25 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
         
         setConnectionState('success')
         
-        // Create auth data
+        // Extract required fields for main app validation
+        const clientSecretKey = session.sessionKey // This is the session key from NIP-46
+        const bunkerPubkey = session.remotePubkey // This is the remote signer's pubkey
+        
+        console.log('[Login] Session data fields:', {
+          sessionKey: clientSecretKey,
+          remotePubkey: bunkerPubkey,
+          relayUrls: session.relayUrls
+        })
+        
+        // Create auth data with all required fields
         const authData = {
           pubkey: userPubkey,
           authMethod: 'remote' as const,
           bunkerUri: connectUri,
-          relays: relays,
-          sessionData: session
+          relays: session.relayUrls || relays,
+          sessionData: session,
+          clientSecretKey: clientSecretKey, // Required by main app validation
+          bunkerPubkey: bunkerPubkey // Required by main app validation
         }
         
         onLoginSuccess(authData)
