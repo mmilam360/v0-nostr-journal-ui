@@ -60,6 +60,14 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
     window.addEventListener('resize', checkMobile)
     return () => window.removeEventListener('resize', checkMobile)
   }, [])
+
+  // Auto-generate QR connection when in client mode
+  useEffect(() => {
+    if (selectedMethod === 'remote' && remoteSignerMode === 'client' && !connectUri && connectionState === 'idle') {
+      console.log('[Login] 🔄 Auto-generating QR connection...')
+      handleBunkerConnect()
+    }
+  }, [selectedMethod, remoteSignerMode, connectUri, connectionState])
   const [sessionKeypair, setSessionKeypair] = useState<{
     appSecretKey: Uint8Array
     appPublicKey: string
@@ -237,6 +245,10 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
   const handleRemoteSignerClick = () => {
     setSelectedMethod('remote')
     resetConnectionStates()
+    
+    // Force reset connection state to idle
+    setConnectionState('idle')
+    setError('')
     
     // Mobile-specific: Auto-show QR code by default
     if (isMobile) {
@@ -565,6 +577,10 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                   onClick={() => {
                     setSelectedMethod('extension')
                     resetConnectionStates()
+                    // Force reset connection state to idle
+                    setConnectionState('idle')
+                    setError('')
+                    forceUIUpdate()
                     goNext()
                   }}
                   className="p-4 sm:p-6 rounded-lg border-2 border-border hover:border-primary text-left bg-card hover:bg-card/80 group"
@@ -595,6 +611,10 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                   onClick={() => {
                     setSelectedMethod('nsec')
                     resetConnectionStates()
+                    // Force reset connection state to idle
+                    setConnectionState('idle')
+                    setError('')
+                    forceUIUpdate()
                     goNext()
                   }}
                   className="p-4 sm:p-6 rounded-lg border-2 border-border hover:border-primary text-left bg-card hover:bg-card/80 group"
@@ -791,19 +811,41 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                                 Scan with your signing app or copy the connection string below
                               </p>
                             </div>
+                            
+                            {/* Mobile-specific acknowledgment button */}
+                            {isMobile && connectionState === 'connecting' && (
+                              <div className="space-y-3">
+                                <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                                  <p className="text-sm text-blue-800 dark:text-blue-200 text-center">
+                                    📱 Mobile users: After accepting the connection in nsec.app, click below to continue:
+                                  </p>
+                                </div>
+                                <Button
+                                  onClick={async () => {
+                                    console.log('[Login] 📱 Mobile user acknowledged connection acceptance')
+                                    // Try to manually check if connection is established
+                                    try {
+                                      // This will trigger the connection check
+                                      await handleBunkerConnect()
+                                    } catch (error) {
+                                      console.log('[Login] 📱 Connection check failed, but user acknowledged:', error)
+                                    }
+                                  }}
+                                  className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                                >
+                                  ✅ I've accepted the connection in nsec.app
+                                </Button>
+                              </div>
+                            )}
                           </div>
                         ) : (
                           <div className="flex justify-center">
-                            <Button
-                              onClick={handleBunkerConnect}
-                              disabled={connectionState === 'connecting'}
-                              className="bg-green-600 hover:bg-green-700 text-white"
-                            >
-                              {connectionState === 'connecting' ? (
-                                <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                              ) : null}
-                              Generate Connection
-                            </Button>
+                            <div className="text-center">
+                              <p className="text-sm text-muted-foreground mb-4">
+                                Generating connection...
+                              </p>
+                              <Loader2 className="h-6 w-6 animate-spin mx-auto" />
+                            </div>
                           </div>
                         )}
                         
