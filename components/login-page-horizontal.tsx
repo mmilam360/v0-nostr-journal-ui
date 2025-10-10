@@ -48,6 +48,18 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
   const [nsecInput, setNsecInput] = useState('')
   const [showNsec, setShowNsec] = useState(false)
   const [remoteSignerMode, setRemoteSignerMode] = useState<'client' | 'signer'>('client')
+  
+  // Mobile detection for mobile-specific fixes
+  const [isMobile, setIsMobile] = useState(false)
+  
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent))
+    }
+    checkMobile()
+    window.addEventListener('resize', checkMobile)
+    return () => window.removeEventListener('resize', checkMobile)
+  }, [])
   const [sessionKeypair, setSessionKeypair] = useState<{
     appSecretKey: Uint8Array
     appPublicKey: string
@@ -217,12 +229,21 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
       console.log('[Login] 🔄 Resetting connection state - on method selection screen')
       setConnectionState('idle')
       setError('')
+      // Force UI update to ensure state changes are reflected
+      forceUIUpdate()
     }
   }, [currentStep, connectionState])
 
   const handleRemoteSignerClick = () => {
     setSelectedMethod('remote')
     resetConnectionStates()
+    
+    // Mobile-specific: Auto-show QR code by default
+    if (isMobile) {
+      setRemoteSignerMode('client')
+      console.log('[Login] 📱 Mobile detected - auto-setting to QR code mode')
+    }
+    
     forceUIUpdate()
     goNext()
   }
@@ -253,6 +274,12 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
         
         // Use the correct API from signer-connector
         const { connectNip46, setActiveSigner } = await import('@/lib/signer-connector')
+        
+        // Mobile-specific: Add longer timeout for mobile connections
+        if (isMobile) {
+          console.log('[Login] 📱 Mobile detected - using extended timeout for bunker connection')
+        }
+        
         const result = await connectNip46(input)
         
         if (!result.success || !result.signer || !result.session) {
@@ -424,7 +451,12 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
       
       let errorMsg = 'Failed to connect to remote signer'
       if (error.message.includes('timeout')) {
-        errorMsg = 'Connection timeout after 5 minutes. Please try:\n\n1. Scan the QR code with your Nostr app (nsec.app, Damus, etc.)\n2. Make sure to approve the connection in your app\n3. Try the bunker:// URL method instead (often more reliable)\n4. Check that both devices have internet connection'
+        // Mobile-specific timeout message
+        if (isMobile) {
+          errorMsg = 'Connection timeout. On mobile, try:\n\n1. Make sure your signing app is open\n2. Try the bunker:// URL method (more reliable on mobile)\n3. Check internet connection on both devices\n4. Try refreshing the page'
+        } else {
+          errorMsg = 'Connection timeout after 5 minutes. Please try:\n\n1. Scan the QR code with your Nostr app (nsec.app, Damus, etc.)\n2. Make sure to approve the connection in your app\n3. Try the bunker:// URL method instead (often more reliable)\n4. Check that both devices have internet connection'
+        }
       } else if (error.message.includes('rejected')) {
         errorMsg = 'Connection rejected by your signing app. Please try again.'
       } else if (error.message.includes('Invalid URL')) {
@@ -434,6 +466,12 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
       }
       
       setError(errorMsg)
+      
+      // Mobile-specific: Don't kick back to method selection, stay on current screen
+      if (isMobile) {
+        console.log('[Login] 📱 Mobile detected - staying on current screen after error')
+        // Don't change the current step, just show the error
+      }
     }
   }
 
@@ -697,23 +735,38 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
 
                 {selectedMethod === 'remote' && (
                   <div className="space-y-4">
-                    {/* Connection Mode Selection */}
-                    <div className="flex gap-2 mb-4">
-                      <Button
-                        variant={remoteSignerMode === 'client' ? 'default' : 'outline'}
-                        onClick={() => setRemoteSignerMode('client')}
-                        className="flex-1"
-                      >
-                        Generate QR Code
-                      </Button>
-                      <Button
-                        variant={remoteSignerMode === 'signer' ? 'default' : 'outline'}
-                        onClick={() => setRemoteSignerMode('signer')}
-                        className="flex-1"
-                      >
-                        Paste Bunker URL
-                      </Button>
-                    </div>
+                    {/* Connection Mode Selection - Hidden on mobile, auto-show QR */}
+                    {!isMobile && (
+                      <div className="flex gap-2 mb-4">
+                        <Button
+                          variant={remoteSignerMode === 'client' ? 'default' : 'outline'}
+                          onClick={() => setRemoteSignerMode('client')}
+                          className="flex-1"
+                        >
+                          Generate QR Code
+                        </Button>
+                        <Button
+                          variant={remoteSignerMode === 'signer' ? 'default' : 'outline'}
+                          onClick={() => setRemoteSignerMode('signer')}
+                          className="flex-1"
+                        >
+                          Paste Bunker URL
+                        </Button>
+                      </div>
+                    )}
+                    
+                    {/* Mobile-specific: Show bunker option as a button */}
+                    {isMobile && remoteSignerMode === 'client' && (
+                      <div className="mb-4">
+                        <Button
+                          variant="outline"
+                          onClick={() => setRemoteSignerMode('signer')}
+                          className="w-full"
+                        >
+                          Or paste bunker:// URL instead
+                        </Button>
+                      </div>
+                    )}
 
                     {remoteSignerMode === 'client' ? (
                       /* Client-initiated flow: Generate nostrconnect:// URI */

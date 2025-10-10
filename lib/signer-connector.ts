@@ -34,15 +34,19 @@ export async function connectNip46(bunkerUri: string): Promise<{
     console.log("[SignerConnector] Bunker URI:", bunkerUri)
     
     // Use the static method with proper timeout handling
+    // Mobile connections may need longer timeout
+    const isMobile = window.innerWidth < 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+    const timeoutMs = isMobile ? 60000 : 30000 // 60 seconds for mobile, 30 for desktop
+    
     const connectionPromise = Nip46RemoteSigner.connectToRemote(bunkerUri, {
-      connectTimeoutMs: 30000 // 30 second timeout
+      connectTimeoutMs: timeoutMs
     })
     
     // Add our own timeout wrapper for better error handling
     const timeoutPromise = new Promise<never>((_, reject) => {
       setTimeout(() => {
-        reject(new Error('Connection timeout after 30 seconds'))
-      }, 30000)
+        reject(new Error(`Connection timeout after ${timeoutMs / 1000} seconds`))
+      }, timeoutMs)
     })
     
     const { signer, session } = await Promise.race([connectionPromise, timeoutPromise])
@@ -114,8 +118,12 @@ export function startClientInitiatedFlow(
     console.log("[SignerConnector] Using primary relay:", primaryRelay)
     
     // Use the library's built-in method with proper configuration
+    // Mobile connections may need longer timeout
+    const isMobile = window.innerWidth < 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+    const timeoutMs = isMobile ? 180000 : 120000 // 3 minutes for mobile, 2 for desktop
+    
     const result = Nip46RemoteSigner.listenConnectionFromRemote([primaryRelay], clientMetadata, {
-      connectTimeoutMs: 120000, // 2 minute timeout
+      connectTimeoutMs: timeoutMs,
       permissions: [
         'sign_event',
         'get_public_key',
