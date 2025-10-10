@@ -1,4 +1,4 @@
-import { Nip46RemoteSigner } from 'nostr-signer-connector'
+import { Nip46RemoteSigner, type Nip46SessionState, type Nip46ClientMetadata } from 'nostr-signer-connector'
 
 let activeSigner: Nip46RemoteSigner | null = null
 
@@ -15,51 +15,44 @@ export function clearActiveSigner() {
 }
 
 /**
- * Connect to a remote signer using NIP-46 (bunker:// URL)
+ * Connect to a remote signer using bunker:// URL (Signer-initiated flow)
+ * Used when user pastes bunker:// URL from nsec.app
  */
 export async function connectNip46(bunkerUri: string): Promise<{
   success: boolean
   signer?: Nip46RemoteSigner
+  session?: Nip46SessionState
   error?: string
 }> {
   try {
-    console.log("[SignerConnector] Connecting to bunker:", bunkerUri.substring(0, 50) + "...")
+    console.log("[SignerConnector] Connecting to bunker via signer-initiated flow...")
     
-    // Create a new Nip46RemoteSigner instance with proper URI
-    const signer = new Nip46RemoteSigner(bunkerUri)
+    // Use the static method - it returns a promise that resolves when connected
+    const { signer, session } = await Nip46RemoteSigner.connectToRemote(bunkerUri, {
+      connectTimeoutMs: 30000 // 30 second timeout
+    })
     
-    // Wait for connection to establish (with timeout)
-    console.log("[SignerConnector] Waiting for connection...")
-    await Promise.race([
-      signer.waitConnected(),
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error("Connection timeout after 30s")), 30000)
-      )
-    ])
+    console.log("[SignerConnector] ✅ Connected successfully")
     
-    console.log("[SignerConnector] ✅ Bunker connected")
-    
-    // Test the connection by getting public key
+    // Test the connection
     const pubkey = await signer.getPublicKey()
-    console.log("[SignerConnector] ✅ Got pubkey from bunker:", pubkey)
+    console.log("[SignerConnector] ✅ Got user pubkey:", pubkey)
     
     return {
       success: true,
-      signer: signer
+      signer: signer,
+      session: session
     }
     
   } catch (error) {
     console.error("[SignerConnector] ❌ Connection failed:", error)
     
-    // Provide more specific error messages
     let errorMessage = "Connection failed"
     if (error instanceof Error) {
       if (error.message.includes('timeout')) {
-        errorMessage = 'Connection timeout. Make sure your signing app is online and try again.'
-      } else if (error.message.includes('NIP-46')) {
-        errorMessage = 'NIP-46 protocol error. Please try with a different signing app.'
-      } else if (error.message.includes('Invalid URL')) {
-        errorMessage = 'Invalid bunker URL format. Please check your URL and try again.'
+        errorMessage = 'Connection timeout. Make sure your signing app is online.'
+      } else if (error.message.includes('rejected')) {
+        errorMessage = 'Connection rejected by signing app.'
       } else {
         errorMessage = error.message
       }
@@ -73,25 +66,53 @@ export async function connectNip46(bunkerUri: string): Promise<{
 }
 
 /**
+ * Start listening for remote signer connection (Client-initiated flow)
+ * Generates nostrconnect:// URI for QR code scanning
+ */
+export function startClientInitiatedFlow(
+  relayUrls: string[],
+  clientMetadata: Nip46ClientMetadata
+): {
+  connectUri: string
+  established: Promise<{ signer: Nip46RemoteSigner; session: Nip46SessionState }>
+} {
+  console.log("[SignerConnector] Starting client-initiated flow...")
+  console.log("[SignerConnector] Relays:", relayUrls)
+  console.log("[SignerConnector] Client metadata:", clientMetadata)
+  
+  // Use the static method - it returns an object with connectUri and established promise
+  const result = Nip46RemoteSigner.listenConnectionFromRemote(relayUrls, clientMetadata, {
+    connectTimeoutMs: 90000 // 90 second timeout
+  })
+  
+  console.log("[SignerConnector] Generated connect URI:", result.connectUri)
+  
+  return result
+}
+
+/**
  * Resume a NIP-46 session from stored session data
  */
-export async function resumeNip46Session(sessionData: any): Promise<Nip46RemoteSigner | null> {
+export async function resumeNip46Session(sessionData: Nip46SessionState): Promise<Nip46RemoteSigner | null> {
   try {
-    if (!sessionData?.bunkerUri) {
-      console.warn("[SignerConnector] No bunker URI in session data")
+    if (!sessionData) {
+      console.warn("[SignerConnector] No session data provided")
       return null
     }
     
     console.log("[SignerConnector] Resuming session...")
     
-    const result = await connectNip46(sessionData.bunkerUri)
+    // Use the static resumeSession method
+    const signer = await Nip46RemoteSigner.resumeSession(sessionData)
     
-    if (result.success && result.signer) {
-      setActiveSigner(result.signer)
-      return result.signer
-    }
+    console.log("[SignerConnector] ✅ Session resumed")
     
-    return null
+    // Test the connection
+    const pubkey = await signer.getPublicKey()
+    console.log("[SignerConnector] ✅ Verified pubkey:", pubkey)
+    
+    setActiveSigner(signer)
+    return signer
     
   } catch (error) {
     console.error("[SignerConnector] Failed to resume session:", error)
@@ -107,7 +128,7 @@ export async function signWithActiveSigner(unsignedEvent: any): Promise<any> {
     throw new Error("No active signer available")
   }
   
-  console.log("[SignerConnector] Signing event with remote signer...")
+  console.log("[SignerConnector] Signing event...")
   
   try {
     const signedEvent = await activeSigner.signEvent(unsignedEvent)
