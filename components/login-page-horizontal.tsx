@@ -258,10 +258,11 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
           // Removed url to avoid potential encoding issues
         }
 
-        // Use a single reliable relay for initial connection
-        // Multiple relays can cause issues with NIP-46 handshake
+        // Use multiple relays for better compatibility
         const relays = [
-          'wss://relay.damus.io' // Most reliable for NIP-46
+          'wss://relay.damus.io',
+          'wss://nos.lol', 
+          'wss://relay.snort.social'
         ]
         
         // Import and use the correct API
@@ -345,7 +346,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
       
       let errorMsg = 'Failed to connect to remote signer'
       if (error.message.includes('timeout')) {
-        errorMsg = 'Connection timeout. Please:\n1. Scan the QR code with nsec.app\n2. Approve the connection\n3. Make sure both devices have internet'
+        errorMsg = 'Connection timeout after 5 minutes. Please try:\n\n1. Scan the QR code with your Nostr app (nsec.app, Damus, etc.)\n2. Make sure to approve the connection in your app\n3. Try the bunker:// URL method instead (often more reliable)\n4. Check that both devices have internet connection'
       } else if (error.message.includes('rejected')) {
         errorMsg = 'Connection rejected by your signing app. Please try again.'
       } else if (error.message.includes('Invalid URL')) {
