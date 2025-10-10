@@ -289,7 +289,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
           pubkey: userPubkey,
           authMethod: 'remote' as const,
           bunkerUri: input,
-          relays: sessionData.relayUrls || ['wss://relay.damus.io', 'wss://nos.lol'],
+          relays: sessionData.relayUrls || ['wss://relay.nsec.app', 'wss://relay.damus.io', 'wss://nos.lol'],
           sessionData: sessionData,
           clientSecretKey: clientSecretKey, // Required by main app validation
           bunkerPubkey: bunkerPubkey // Required by main app validation
@@ -322,9 +322,11 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
           // Removed url to avoid potential encoding issues
         }
 
-        // Use single reliable relay for NIP-46 (per best practices)
+        // Use nsec.app relay for better compatibility with nsec.app
         const relays = [
-          'wss://relay.damus.io' // Most reliable for NIP-46
+          'wss://relay.nsec.app', // Primary relay for nsec.app compatibility
+          'wss://relay.damus.io', // Fallback relay
+          'wss://nos.lol' // Additional fallback
         ]
         
         // Import and use the correct API
