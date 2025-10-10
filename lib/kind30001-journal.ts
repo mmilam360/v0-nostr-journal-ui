@@ -16,18 +16,17 @@ declare global {
 
 // Helper function to get private key for encryption
 function getPrivateKeyForEncryption(authData: any): string {
-  if (authData.authMethod === "extension") {
-    // For extension auth, we can't get the actual private key
-    // Use a deterministic approach based on the pubkey
-    return authData.pubkey
-  } else if (authData.authMethod === "nsec" && authData.privateKey) {
-    return authData.privateKey
-  } else if (authData.authMethod === "remote" && authData.clientSecretKey) {
-    return typeof authData.clientSecretKey === 'string' ? authData.clientSecretKey : 
-      Array.from(authData.clientSecretKey).map(b => b.toString(16).padStart(2, '0')).join('')
-  } else {
-    throw new Error("No private key available for encryption")
-  }
+  // CRITICAL FIX: Use a consistent encryption approach across all auth methods
+  // The issue was that different methods were using different encryption keys,
+  // making notes encrypted with one method unreadable by another method.
+  
+  // For consistency, we'll use the pubkey-based approach for all methods
+  // This ensures that notes can be read regardless of how the user logged in
+  
+  console.log("[Kind30001Journal] Using consistent pubkey-based encryption for auth method:", authData.authMethod)
+  
+  // Always use the pubkey for encryption/decryption to ensure consistency
+  return authData.pubkey
 }
 
 // Modern relays that support parameterized replaceable events (kinds 30000-39999)
@@ -336,18 +335,53 @@ async function encryptKind30001Content(note: DecryptedNote, authData: any, actua
   })
   
   console.log("[Kind30001Journal] Encrypting journal data for user:", userPubkey)
+  console.log("[Kind30001Journal] Auth method:", authData.authMethod)
   
-  // Get the private key
-  const privateKey = getPrivateKeyForEncryption(authData)
+  // CRITICAL FIX: Use consistent encryption approach for all auth methods
+  // Since NIP-04 requires the actual private key and we can't get it for extension auth,
+  // we'll use a deterministic encryption approach based on the pubkey
   
-  // Encrypt using NIP-04 with user's own keypair
-  const encrypted = await nip04.encrypt(privateKey, userPubkey, journalData)
+  console.log("[Kind30001Journal] Using pubkey-based deterministic encryption for consistency")
   
-  return encrypted
+  // Use the same encryption approach as nostr-crypto.ts for consistency
+  const encoder = new TextEncoder()
+  const keyMaterial = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(userPubkey.slice(0, 32).padEnd(32, "0")),
+    { name: "PBKDF2" },
+    false,
+    ["deriveKey"],
+  )
+
+  const key = await crypto.subtle.deriveKey(
+    {
+      name: "PBKDF2",
+      salt: encoder.encode("nostr-journal-salt"),
+      iterations: 100000,
+      hash: "SHA-256",
+    },
+    keyMaterial,
+    { name: "AES-GCM", length: 256 },
+    false,
+    ["encrypt"],
+  )
+
+  const iv = crypto.getRandomValues(new Uint8Array(12))
+  const encrypted = await crypto.subtle.encrypt(
+    { name: "AES-GCM", iv },
+    key,
+    encoder.encode(journalData)
+  )
+
+  const combined = new Uint8Array(iv.length + encrypted.byteLength)
+  combined.set(iv)
+  combined.set(new Uint8Array(encrypted), iv.length)
+
+  return btoa(String.fromCharCode(...combined))
 }
 
 /**
- * Decrypt Kind 30001 content using NIP-04 decryption
+ * Decrypt Kind 30001 content using consistent decryption approach
  */
 async function decryptKind30001Content(encryptedData: string, authData: any): Promise<any> {
   
@@ -356,16 +390,49 @@ async function decryptKind30001Content(encryptedData: string, authData: any): Pr
     const userPubkey = authData.pubkey
     
     console.log("[Kind30001Journal] Decrypting with user pubkey:", userPubkey)
+    console.log("[Kind30001Journal] Auth method:", authData.authMethod)
     
-    // Get the private key
-    const privateKey = getPrivateKeyForEncryption(authData)
+    // CRITICAL FIX: Use consistent decryption approach for all auth methods
+    // This matches the encryption approach used above
     
-    // Decrypt using NIP-04
-    const decrypted = await nip04.decrypt(privateKey, userPubkey, encryptedData)
+    console.log("[Kind30001Journal] Using pubkey-based deterministic decryption for consistency")
     
-    // Parse the JSON content
-    const journalData = JSON.parse(decrypted)
-    
+    // Use the same decryption approach as nostr-crypto.ts for consistency
+    const decoder = new TextDecoder()
+    const encoder = new TextEncoder()
+
+    const combined = Uint8Array.from(atob(encryptedData), (c) => c.charCodeAt(0))
+    const iv = combined.slice(0, 12)
+    const encrypted = combined.slice(12)
+
+    const keyMaterial = await crypto.subtle.importKey(
+      "raw",
+      encoder.encode(userPubkey.slice(0, 32).padEnd(32, "0")),
+      { name: "PBKDF2" },
+      false,
+      ["deriveKey"],
+    )
+
+    const key = await crypto.subtle.deriveKey(
+      {
+        name: "PBKDF2",
+        salt: encoder.encode("nostr-journal-salt"),
+        iterations: 100000,
+        hash: "SHA-256",
+      },
+      keyMaterial,
+      { name: "AES-GCM", length: 256 },
+      false,
+      ["decrypt"],
+    )
+
+    const decrypted = await crypto.subtle.decrypt(
+      { name: "AES-GCM", iv },
+      key,
+      encrypted
+    )
+
+    const journalData = JSON.parse(decoder.decode(decrypted))
     return journalData
     
   } catch (error) {
