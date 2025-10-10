@@ -925,11 +925,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
         }
       }
       
-      // If no note is selected but we have notes, select the first one
-      if (!selectedNote && validatedNotes.length > 0) {
-        setSelectedNote(validatedNotes[0])
-        console.log("[v0] Auto-selected first note after refresh")
-      }
+      // Removed auto-selection - users should stay on their current note view
       
       // LOCAL STORAGE DISABLED - Notes are only stored on Nostr relays
       
