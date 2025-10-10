@@ -72,6 +72,14 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
       handleBunkerConnect()
     }
   }, [selectedMethod, remoteSignerMode, connectUri, connectionState])
+
+  // Cleanup all connections when component unmounts
+  useEffect(() => {
+    return () => {
+      console.log('[Login] 🛑 Component unmounting - terminating all connections')
+      terminateAllConnections()
+    }
+  }, [])
   const [sessionKeypair, setSessionKeypair] = useState<{
     appSecretKey: Uint8Array
     appPublicKey: string
@@ -93,6 +101,9 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
     if (prevIndex >= 0) {
       console.log('[Login] 🔄 Going back from step:', currentStep, 'to step:', steps[prevIndex])
       
+      // TERMINATE ALL ACTIVE CONNECTIONS FIRST
+      terminateAllConnections()
+      
       setCurrentStep(steps[prevIndex] as any)
       
       // Apply the same reset logic as the first page
@@ -102,20 +113,10 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
         setSelectedMethod(null)
       }
       
-      // Reset all connection states when going back (same as resetConnectionStates)
-      console.log('[Login] 🔄 Resetting all connection states')
-      setConnectionState('idle')
-      setError('')
-      setBunkerUrl('')
-      setConnectUri('')
-      setNsecInput('')
-      setRemoteSignerMode('client')
-      setSessionKeypair(null)
-      
       // Force UI update to ensure state changes are reflected
       forceUIUpdate()
       
-      console.log('[Login] ✅ Back navigation complete with full reset')
+      console.log('[Login] ✅ Back navigation complete with connection termination')
     }
   }
 
@@ -227,6 +228,26 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
     }, 100)
   }
 
+  // Comprehensive connection termination for navigation
+  const terminateAllConnections = () => {
+    console.log('[Login] 🛑 Terminating all active connections...')
+    
+    // Reset all states
+    resetConnectionStates()
+    
+    // Clear any active signer connections
+    try {
+      const { clearActiveSigner } = require('@/lib/signer-connector')
+      clearActiveSigner()
+      console.log('[Login] 🛑 Cleared active signer')
+    } catch (error) {
+      console.log('[Login] ⚠️ Could not clear active signer:', error)
+    }
+    
+    // Clear any pending promises or timeouts
+    console.log('[Login] 🛑 All connections terminated')
+  }
+
   // Force UI update when switching methods
   const [uiKey, setUIKey] = useState(0)
   const forceUIUpdate = () => {
@@ -252,12 +273,9 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
   }, [currentStep, connectionState])
 
   const handleRemoteSignerClick = () => {
+    // Terminate any active connections before switching methods
+    terminateAllConnections()
     setSelectedMethod('remote')
-    resetConnectionStates()
-    
-    // Force reset connection state to idle
-    setConnectionState('idle')
-    setError('')
     
     // Mobile-specific: Auto-show QR code by default
     if (isMobile) {
@@ -320,8 +338,8 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
         const sessionData = result.session
         localStorage.setItem('nostr_remote_session', JSON.stringify(sessionData))
         
-        setConnectionState('success')
-        
+      setConnectionState('success')
+
         // Extract required fields for main app validation
         const clientSecretKey = sessionData.sessionKey // This is the session key from NIP-46
         const bunkerPubkey = sessionData.remotePubkey // This is the remote signer's pubkey
@@ -355,7 +373,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
         try {
           onLoginSuccess(authData)
           console.log('[Login] ✅ onLoginSuccess called successfully')
-        } catch (error) {
+    } catch (error) {
           console.error('[Login] ❌ Error calling onLoginSuccess:', error)
           throw error
         }
@@ -406,7 +424,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
           console.log('[Login] - Promise state:', established)
           console.log('[Login] - Mobile acknowledged:', mobileAcknowledged)
           
-          setConnectionState('error')
+      setConnectionState('error')
           setError('Connection timeout after ' + (timeoutMs / 1000) + ' seconds. The remote signer may not be responding properly.\n\nTroubleshooting steps:\n1. Make sure your signing app (nsec.app) is open and connected to the internet\n2. Try the bunker:// URL method instead (often more reliable)\n3. Check that you scanned the QR code correctly\n4. Try refreshing and generating a new QR code\n5. Check browser console for detailed error logs')
         }, timeoutMs)
         
@@ -479,7 +497,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
       setConnectionState('error')
       
       let errorMsg = 'Failed to connect to remote signer'
-      if (error.message.includes('timeout')) {
+        if (error.message.includes('timeout')) {
         // Mobile-specific timeout message
         if (isMobile) {
           errorMsg = 'Connection timeout. On mobile, try:\n\n1. Make sure your signing app is open\n2. Try the bunker:// URL method (more reliable on mobile)\n3. Check internet connection on both devices\n4. Try refreshing the page'
@@ -592,11 +610,9 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 max-w-2xl mx-auto">
                 <button
                   onClick={() => {
+                    // Terminate any active connections before switching methods
+                    terminateAllConnections()
                     setSelectedMethod('extension')
-                    resetConnectionStates()
-                    // Force reset connection state to idle
-                    setConnectionState('idle')
-                    setError('')
                     forceUIUpdate()
                     goNext()
                   }}
@@ -626,11 +642,9 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                 </button>
                 <button
                   onClick={() => {
+                    // Terminate any active connections before switching methods
+                    terminateAllConnections()
                     setSelectedMethod('nsec')
-                    resetConnectionStates()
-                    // Force reset connection state to idle
-                    setConnectionState('idle')
-                    setError('')
                     forceUIUpdate()
                     goNext()
                   }}
@@ -827,7 +841,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                               <p className="text-sm text-muted-foreground">
                                 Scan with your signing app or copy the connection string below
                               </p>
-                            </div>
+                    </div>
                             
                             {/* Mobile-specific acknowledgment button */}
                             {isMobile && connectionState === 'connecting' && (
@@ -879,8 +893,8 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                         )}
                         
                         {connectUri && (
-                          <div className="space-y-2">
-                            <label className="text-sm text-muted-foreground">
+                    <div className="space-y-2">
+                      <label className="text-sm text-muted-foreground">
                               Or copy connection string:
                             </label>
                             <div className="flex gap-2">
