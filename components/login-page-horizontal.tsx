@@ -199,6 +199,15 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
     console.log('[Login] 🔍 Connection state changed to:', connectionState)
   }, [connectionState])
 
+  // Reset connection state when on login screen (not actively connecting)
+  useEffect(() => {
+    // If we're on the main login screen and not actively in a connection flow, reset to idle
+    if (currentStep === 'method-selection' && connectionState === 'connecting') {
+      console.log('[Login] 🔄 Resetting connection state - on login screen')
+      setConnectionState('idle')
+    }
+  }, [currentStep, connectionState])
+
   const handleRemoteSignerClick = () => {
     setSelectedMethod('remote')
     resetConnectionStates()
@@ -307,18 +316,10 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
         ]
         
         // Import and use the correct API
-        const { startClientInitiatedFlow, setActiveSigner, debugNip46Events } = await import('@/lib/signer-connector')
+        const { startClientInitiatedFlow, setActiveSigner } = await import('@/lib/signer-connector')
         
         // Start listening for connection
         const { connectUri, established } = startClientInitiatedFlow(relays, clientMetadata)
-        
-        // Extract client pubkey for debugging
-        const clientPubkeyMatch = connectUri.match(/nostrconnect:\/\/([a-f0-9]{64})/)
-        if (clientPubkeyMatch) {
-          const clientPubkey = clientPubkeyMatch[1]
-          console.log('[Login] 🔍 Starting NIP-46 event debugging for client:', clientPubkey)
-          debugNip46Events(relays[0], clientPubkey)
-        }
         
         console.log('[Login] Generated nostrconnect URI:', connectUri)
         setConnectUri(connectUri)
