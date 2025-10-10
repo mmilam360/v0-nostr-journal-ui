@@ -52,6 +52,10 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
   // Mobile detection for mobile-specific fixes
   const [isMobile, setIsMobile] = useState(false)
   
+  // Mobile connection timeout management
+  const [mobileAcknowledged, setMobileAcknowledged] = useState(false)
+  const [connectionTimeoutRef, setConnectionTimeoutRef] = useState<NodeJS.Timeout | null>(null)
+  
   useEffect(() => {
     const checkMobile = () => {
       setIsMobile(window.innerWidth < 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent))
@@ -211,6 +215,11 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
     setNsecInput('')
     setRemoteSignerMode('client')
     setSessionKeypair(null)
+    setMobileAcknowledged(false)
+    if (connectionTimeoutRef) {
+      clearTimeout(connectionTimeoutRef)
+      setConnectionTimeoutRef(null)
+    }
     console.log('[Login] ✅ Connection states reset to idle')
     // Force immediate UI update
     setTimeout(() => {
@@ -385,16 +394,24 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
         console.log('[Login] 🔍 Promise state:', established)
         
         // Add a manual timeout to provide better error handling
+        // Mobile users get extended timeout after acknowledgment
+        const baseTimeout = isMobile ? 180000 : 120000 // 3 minutes for mobile, 2 for desktop
+        const timeoutMs = mobileAcknowledged ? baseTimeout + 60000 : baseTimeout // Add 1 minute after mobile acknowledgment
+        
         const connectionTimeout = setTimeout(() => {
-          console.log('[Login] ⏰ Manual timeout reached (2 minutes)')
+          console.log('[Login] ⏰ Manual timeout reached:', timeoutMs / 1000, 'seconds')
           console.log('[Login] 🔍 Debugging info:')
           console.log('[Login] - Connection state:', connectionState)
           console.log('[Login] - Connect URI:', connectUri)
           console.log('[Login] - Promise state:', established)
+          console.log('[Login] - Mobile acknowledged:', mobileAcknowledged)
           
           setConnectionState('error')
-          setError('Connection timeout after 2 minutes. The remote signer may not be responding properly.\n\nTroubleshooting steps:\n1. Make sure your signing app (nsec.app) is open and connected to the internet\n2. Try the bunker:// URL method instead (often more reliable)\n3. Check that you scanned the QR code correctly\n4. Try refreshing and generating a new QR code\n5. Check browser console for detailed error logs')
-        }, 120000) // 2 minutes
+          setError('Connection timeout after ' + (timeoutMs / 1000) + ' seconds. The remote signer may not be responding properly.\n\nTroubleshooting steps:\n1. Make sure your signing app (nsec.app) is open and connected to the internet\n2. Try the bunker:// URL method instead (often more reliable)\n3. Check that you scanned the QR code correctly\n4. Try refreshing and generating a new QR code\n5. Check browser console for detailed error logs')
+        }, timeoutMs)
+        
+        // Store timeout reference for mobile acknowledgment
+        setConnectionTimeoutRef(connectionTimeout)
         
         const { signer, session } = await established.then(
           (result) => {
@@ -823,13 +840,25 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                                 <Button
                                   onClick={async () => {
                                     console.log('[Login] 📱 Mobile user acknowledged connection acceptance')
-                                    // Try to manually check if connection is established
-                                    try {
-                                      // This will trigger the connection check
-                                      await handleBunkerConnect()
-                                    } catch (error) {
-                                      console.log('[Login] 📱 Connection check failed, but user acknowledged:', error)
+                                    
+                                    // Mark as acknowledged to extend timeout
+                                    setMobileAcknowledged(true)
+                                    
+                                    // Clear the current timeout and set a new extended one
+                                    if (connectionTimeoutRef) {
+                                      clearTimeout(connectionTimeoutRef)
+                                      console.log('[Login] 📱 Cleared previous timeout, extending for mobile acknowledgment')
                                     }
+                                    
+                                    // Set a new extended timeout for mobile acknowledgment
+                                    const extendedTimeout = setTimeout(() => {
+                                      console.log('[Login] 📱 Extended mobile timeout reached')
+                                      setConnectionState('error')
+                                      setError('Connection timeout after mobile acknowledgment. Please try again or use the bunker:// URL method.')
+                                    }, 90000) // 90 seconds after acknowledgment
+                                    
+                                    setConnectionTimeoutRef(extendedTimeout)
+                                    console.log('[Login] 📱 Extended timeout set for mobile acknowledgment')
                                   }}
                                   className="w-full bg-blue-600 hover:bg-blue-700 text-white"
                                 >
