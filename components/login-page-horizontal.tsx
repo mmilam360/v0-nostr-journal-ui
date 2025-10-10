@@ -97,12 +97,18 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
   }
 
   const goBack = () => {
+    console.log('[Login] 🔄 BACK BUTTON CLICKED!')
+    console.log('[Login] 🔄 Current step index:', currentStepIndex)
+    console.log('[Login] 🔄 Current step:', currentStep)
+    
     const prevIndex = currentStepIndex - 1
     if (prevIndex >= 0) {
       console.log('[Login] 🔄 Going back from step:', currentStep, 'to step:', steps[prevIndex])
       
       // TERMINATE ALL ACTIVE CONNECTIONS FIRST (but preserve signer if user is logged in)
       const shouldClearSigner = currentStep === 'connect' // Only clear signer if abandoning a connection attempt
+      console.log('[Login] 🔄 Should clear signer:', shouldClearSigner)
+      
       terminateAllConnections(shouldClearSigner)
       
       setCurrentStep(steps[prevIndex] as any)
@@ -118,6 +124,8 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
       forceUIUpdate()
       
       console.log('[Login] ✅ Back navigation complete with connection termination')
+    } else {
+      console.log('[Login] 🔄 Cannot go back - already at first step')
     }
   }
 
@@ -232,11 +240,29 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
   // Comprehensive connection termination for navigation
   const terminateAllConnections = (clearSigner = true) => {
     console.log('[Login] 🛑 Terminating all active connections...')
+    console.log('[Login] 🛑 Current connection state:', connectionState)
+    console.log('[Login] 🛑 Current step:', currentStep)
     
-    // Reset all states
-    resetConnectionStates()
+    // AGGRESSIVE CONNECTION TERMINATION
     
-    // Clear any active signer connections only if requested (for method switching)
+    // 1. Clear all connection-related state immediately
+    setConnectionState('idle')
+    setError('')
+    setBunkerUrl('')
+    setConnectUri('')
+    setNsecInput('')
+    setRemoteSignerMode('client')
+    setSessionKeypair(null)
+    setMobileAcknowledged(false)
+    
+    // 2. Clear any active timeouts
+    if (connectionTimeoutRef) {
+      clearTimeout(connectionTimeoutRef)
+      setConnectionTimeoutRef(null)
+      console.log('[Login] 🛑 Cleared connection timeout')
+    }
+    
+    // 3. Clear any active signer connections only if requested (for method switching)
     if (clearSigner) {
       try {
         const { clearActiveSigner } = require('@/lib/signer-connector')
@@ -249,8 +275,10 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
       console.log('[Login] 🛑 Preserving active signer (user is logged in)')
     }
     
-    // Clear any pending promises or timeouts
-    console.log('[Login] 🛑 All connections terminated')
+    // 4. Force immediate UI update
+    forceUIUpdate()
+    
+    console.log('[Login] 🛑 All connections terminated aggressively')
   }
 
   // Force UI update when switching methods

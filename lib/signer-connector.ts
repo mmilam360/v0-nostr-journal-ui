@@ -38,8 +38,22 @@ export async function connectNip46(bunkerUri: string): Promise<{
     const isMobile = window.innerWidth < 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
     const timeoutMs = isMobile ? 60000 : 30000 // 60 seconds for mobile, 30 for desktop
     
+    const permissions = [
+      'sign_event',
+      'get_public_key',
+      'delete_event',
+      'nip04_encrypt',
+      'nip04_decrypt',
+      'get_relays',
+      'nip44_encrypt',
+      'nip44_decrypt'
+    ]
+    
+    console.log("[SignerConnector] Bunker connection requesting permissions:", permissions)
+    
     const connectionPromise = Nip46RemoteSigner.connectToRemote(bunkerUri, {
-      connectTimeoutMs: timeoutMs
+      connectTimeoutMs: timeoutMs,
+      permissions: permissions
     })
     
     // Add our own timeout wrapper for better error handling
@@ -122,16 +136,22 @@ export function startClientInitiatedFlow(
     const isMobile = window.innerWidth < 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
     const timeoutMs = isMobile ? 180000 : 120000 // 3 minutes for mobile, 2 for desktop
     
+    const permissions = [
+      'sign_event',
+      'get_public_key',
+      'delete_event',
+      'nip04_encrypt',
+      'nip04_decrypt',
+      'get_relays',
+      'nip44_encrypt',
+      'nip44_decrypt'
+    ]
+    
+    console.log("[SignerConnector] Requesting permissions:", permissions)
+    
     const result = Nip46RemoteSigner.listenConnectionFromRemote([primaryRelay], clientMetadata, {
       connectTimeoutMs: timeoutMs,
-      permissions: [
-        'sign_event',
-        'get_public_key',
-        'delete_event',
-        'nip04_encrypt',
-        'nip04_decrypt',
-        'get_relays'
-      ]
+      permissions: permissions
     })
     
     console.log("[SignerConnector] Generated connect URI:", result.connectUri)
@@ -139,6 +159,17 @@ export function startClientInitiatedFlow(
     console.log("[SignerConnector] - Has secret parameter:", result.connectUri.includes('secret='))
     console.log("[SignerConnector] - Has perms parameter:", result.connectUri.includes('perms='))
     console.log("[SignerConnector] - Primary relay:", primaryRelay)
+    
+    // Debug the actual URI parameters
+    try {
+      const url = new URL(result.connectUri)
+      console.log("[SignerConnector] URI parameters:")
+      console.log("[SignerConnector] - perms:", url.searchParams.get('perms'))
+      console.log("[SignerConnector] - relay:", url.searchParams.get('relay'))
+      console.log("[SignerConnector] - metadata:", url.searchParams.get('metadata'))
+    } catch (error) {
+      console.log("[SignerConnector] Could not parse URI:", error)
+    }
     
     // Enhanced promise handling with proper timeout and cleanup
     const establishedPromise = result.established.then(
