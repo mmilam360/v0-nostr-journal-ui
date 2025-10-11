@@ -186,10 +186,10 @@ export async function loadJournalFromKind30001(authData: any): Promise<Decrypted
     console.log("[Kind30001Journal] Successfully loaded", notes.length, "decrypted journal entries from Kind 30001")
     return notes
     
-  } catch (error) {
-    console.error("[Kind4Journal] Error loading journal from Kind 4:", error)
-    return []
-  }
+    } catch (error) {
+      console.error("[Kind30001Journal] Error loading journal from Kind 30001:", error)
+      return []
+    }
 }
 
 /**
@@ -257,13 +257,13 @@ export async function saveJournalAsKind30001(note: DecryptedNote, authData: any)
     
     // Publish to all relays using the correct nostr-tools API (v2.0)
     try {
-      console.log(`[Kind4Journal v2.0] Publishing to ${RELAYS.length} relays using pool.publish()...`)
+      console.log(`[Kind30001Journal v2.0] Publishing to ${RELAYS.length} relays using pool.publish()...`)
       const relays = await pool.publish(RELAYS, signedEvent)
-      console.log(`[Kind4Journal v2.0] ✅ Published to ${relays.length} relays successfully`)
+      console.log(`[Kind30001Journal v2.0] ✅ Published to ${relays.length} relays successfully`)
       
       // Log which relays we published to
       RELAYS.forEach((relay, index) => {
-        console.log(`[Kind4Journal] ✅ Published to relay ${index + 1}: ${relay}`)
+        console.log(`[Kind30001Journal] ✅ Published to relay ${index + 1}: ${relay}`)
       })
       
       return {
@@ -272,7 +272,7 @@ export async function saveJournalAsKind30001(note: DecryptedNote, authData: any)
       }
       
     } catch (error) {
-      console.error(`[Kind4Journal] ❌ Failed to publish to relays:`, error)
+      console.error(`[Kind30001Journal] ❌ Failed to publish to relays:`, error)
       return {
         success: false,
         error: error instanceof Error ? error.message : "Unknown error"
@@ -280,7 +280,7 @@ export async function saveJournalAsKind30001(note: DecryptedNote, authData: any)
     }
     
   } catch (error) {
-    console.error("[Kind4Journal] Error saving journal as Kind 4:", error)
+    console.error("[Kind30001Journal] Error saving journal as Kind 30001:", error)
     return {
       success: false,
       error: error instanceof Error ? error.message : "Unknown error"
@@ -309,7 +309,7 @@ export async function deleteJournalKind4(note: DecryptedNote, authData: any): Pr
     }
 
     const signedEvent = await signEventWithRemote(deletionEvent, authData)
-    console.log("[Kind4Journal] Publishing Kind 5 deletion event for Kind 4 event:", signedEvent.id)
+    console.log("[Kind30001Journal] Publishing Kind 5 deletion event for Kind 30001 event:", signedEvent.id)
     
     const pool = getPool()
     const relays = await pool.publish(RELAYS, signedEvent)
@@ -317,7 +317,7 @@ export async function deleteJournalKind4(note: DecryptedNote, authData: any): Pr
     return { success: true }
     
   } catch (error) {
-    console.error("[Kind4Journal] Error deleting journal entry:", error)
+    console.error("[Kind30001Journal] Error deleting journal entry:", error)
     return {
       success: false,
       error: error instanceof Error ? error.message : "Unknown error"
@@ -506,6 +506,6 @@ export function cleanupPool() {
   if (globalPool) {
     globalPool.close(RELAYS)
     globalPool = null
-    console.log("[Kind4Journal] Pool cleaned up")
+    console.log("[Kind30001Journal] Pool cleaned up")
   }
 }

@@ -609,6 +609,11 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     const updatedNotes = notes.map((note) => note.id === updatedNote.id ? optimisticNote : note)
 
     // Ensure remote signer is available before saving
+    console.log("[v0] 🔍 DEBUG: Checking auth method for remote signer setup")
+    console.log("[v0] 🔍 Auth method:", authData.authMethod)
+    console.log("[v0] 🔍 Auth method type:", typeof authData.authMethod)
+    console.log("[v0] 🔍 Auth method === 'remote':", authData.authMethod === 'remote')
+    
     if (authData.authMethod === 'remote') {
       console.log("[v0] 🔧 Ensuring remote signer is available before saving...")
       await ensureRemoteSignerAvailable()
