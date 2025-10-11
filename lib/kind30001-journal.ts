@@ -15,18 +15,20 @@ declare global {
 }
 
 // Helper function to get private key for encryption
-function getPrivateKeyForEncryption(authData: any): string {
-  // CRITICAL FIX: Use a consistent encryption approach across all auth methods
-  // The issue was that different methods were using different encryption keys,
-  // making notes encrypted with one method unreadable by another method.
-  
-  // For consistency, we'll use the pubkey-based approach for all methods
-  // This ensures that notes can be read regardless of how the user logged in
-  
-  console.log("[Kind30001Journal] Using consistent pubkey-based encryption for auth method:", authData.authMethod)
-  
-  // Always use the pubkey for encryption/decryption to ensure consistency
-  return authData.pubkey
+async function getPrivateKeyForEncryption(authData: any): Promise<string> {
+  if (authData.authMethod === "extension") {
+    // For extension auth, use pubkey as fallback
+    return authData.pubkey
+  } else if (authData.authMethod === "nsec" && authData.privateKey) {
+    return authData.privateKey
+  } else if (authData.authMethod === "remote") {
+    // CRITICAL: For remote signers, we CANNOT access the private key
+    // Remote signer will handle encryption via its own methods
+    console.log("[Kind30001Journal] Remote signer - using pubkey for key derivation")
+    return authData.pubkey
+  } else {
+    throw new Error("No encryption key available")
+  }
 }
 
 // Modern relays that support parameterized replaceable events (kinds 30000-39999)
@@ -196,14 +198,16 @@ export async function loadJournalFromKind30001(authData: any): Promise<Decrypted
  * Save a journal entry as a Kind 30001 Generic List (parameterized replaceable event)
  */
 export async function saveJournalAsKind30001(note: DecryptedNote, authData: any): Promise<{ success: boolean; eventId?: string; error?: string }> {
-  console.log("[Kind30001Journal] 🚀 saveJournalAsKind30001 called with auth method:", authData?.authMethod)
-  console.log("[Kind30001Journal] 🚀 Note ID:", note.id, "Title:", note.title)
-  
   if (!authData) {
     return { success: false, error: "No auth data" }
   }
 
   try {
+    console.log("[Kind30001Journal] 🚀 Starting save process...")
+    console.log("[Kind30001Journal] Auth method:", authData.authMethod)
+    console.log("[Kind30001Journal] Note ID:", note.id)
+    console.log("[Kind30001Journal] Note title:", note.title)
+    
     // Get the actual pubkey from the signer (important for extension/remote signers)
     let actualPubkey = authData.pubkey
     if (authData.authMethod === "extension" && window.nostr) {
@@ -212,7 +216,9 @@ export async function saveJournalAsKind30001(note: DecryptedNote, authData: any)
     }
     
     // Encrypt the journal content using NIP-04
+    console.log("[Kind30001Journal] 🔐 Encrypting content...")
     const encryptedContent = await encryptKind30001Content(note, authData, actualPubkey)
+    console.log("[Kind30001Journal] ✅ Content encrypted, length:", encryptedContent.length)
     
     // Create unique identifier for this journal entry
     const dTag = `journal-${note.id || Date.now()}`
@@ -222,48 +228,36 @@ export async function saveJournalAsKind30001(note: DecryptedNote, authData: any)
       kind: KIND30001_LIST,
       created_at: Math.floor(Date.now() / 1000),
       tags: [
-        ["d", dTag], // Unique identifier for this journal entry
-        ["p", authData.pubkey], // Consistent user identifier for filtering
+        ["d", dTag],
+        ["p", authData.pubkey],
       ],
       content: encryptedContent,
-      pubkey: actualPubkey, // Use the actual pubkey from the signer
+      pubkey: actualPubkey,
     }
     
-    console.log("[Kind30001Journal] Event tags:", unsignedEvent.tags)
-    console.log("[Kind30001Journal] Signing pubkey:", actualPubkey, "Filter pubkey:", authData.pubkey)
-    
-    console.log("[Kind30001Journal v1.0] Created unsigned Kind 30001 event:", {
+    console.log("[Kind30001Journal] 📝 Created unsigned event:", {
       kind: unsignedEvent.kind,
-      created_at: unsignedEvent.created_at,
       tags: unsignedEvent.tags,
-      content_length: unsignedEvent.content.length,
       pubkey: unsignedEvent.pubkey,
-      dTag: dTag
+      contentLength: unsignedEvent.content.length
     })
 
     // Sign the event
-    console.log("[Kind30001Journal] 🔐 About to call signEventWithRemote with auth method:", authData.authMethod)
-    console.log("[Kind30001Journal] 🔐 Unsigned event ready for signing:", {
-      kind: unsignedEvent.kind,
-      pubkey: unsignedEvent.pubkey,
-      content_length: unsignedEvent.content.length
-    })
-    
+    console.log("[Kind30001Journal] ✍️  Signing event...")
     const signedEvent = await signEventWithRemote(unsignedEvent, authData)
-    console.log("[Kind30001Journal v1.0] Publishing Kind 30001 journal entry to relays:", signedEvent.id)
+    console.log("[Kind30001Journal] ✅ Event signed, ID:", signedEvent.id)
     
-    // Publish to relays with better error tracking
+    // Publish to relays
+    console.log("[Kind30001Journal] 📡 Publishing to", RELAYS.length, "relays...")
     const pool = getPool()
     
-    // Publish to all relays using the correct nostr-tools API (v2.0)
     try {
-      console.log(`[Kind30001Journal v2.0] Publishing to ${RELAYS.length} relays using pool.publish()...`)
-      const relays = await pool.publish(RELAYS, signedEvent)
-      console.log(`[Kind30001Journal v2.0] ✅ Published to ${relays.length} relays successfully`)
+      const publishedRelays = await pool.publish(RELAYS, signedEvent)
+      console.log("[Kind30001Journal] ✅ Published to", publishedRelays.length, "relays successfully")
       
-      // Log which relays we published to
+      // Log which relays accepted
       RELAYS.forEach((relay, index) => {
-        console.log(`[Kind30001Journal] ✅ Published to relay ${index + 1}: ${relay}`)
+        console.log(`[Kind30001Journal] ✅ Relay ${index + 1}: ${relay}`)
       })
       
       return {
@@ -271,16 +265,16 @@ export async function saveJournalAsKind30001(note: DecryptedNote, authData: any)
         eventId: signedEvent.id
       }
       
-    } catch (error) {
-      console.error(`[Kind30001Journal] ❌ Failed to publish to relays:`, error)
+    } catch (publishError) {
+      console.error("[Kind30001Journal] ❌ Publishing failed:", publishError)
       return {
         success: false,
-        error: error instanceof Error ? error.message : "Unknown error"
+        error: publishError instanceof Error ? publishError.message : "Publishing failed"
       }
     }
     
   } catch (error) {
-    console.error("[Kind30001Journal] Error saving journal as Kind 30001:", error)
+    console.error("[Kind30001Journal] ❌ Save error:", error)
     return {
       success: false,
       error: error instanceof Error ? error.message : "Unknown error"
@@ -333,7 +327,7 @@ async function encryptKind30001Content(note: DecryptedNote, authData: any, actua
   // For Kind 30001, we encrypt with the user's actual keypair
   const userPubkey = actualPubkey || authData.pubkey
   
-  // Create the journal data as JSON (include pubkey for filtering)
+  // Create the journal data as JSON
   const journalData = JSON.stringify({
     id: note.id,
     title: note.title,
@@ -341,53 +335,45 @@ async function encryptKind30001Content(note: DecryptedNote, authData: any, actua
     tags: note.tags,
     createdAt: note.createdAt.toISOString(),
     lastModified: note.lastModified.toISOString(),
-    pubkey: userPubkey, // Store the pubkey for filtering
   })
   
   console.log("[Kind30001Journal] Encrypting journal data for user:", userPubkey)
-  console.log("[Kind30001Journal] Auth method:", authData.authMethod)
   
-  // CRITICAL FIX: Use consistent encryption approach for all auth methods
-  // Since NIP-04 requires the actual private key and we can't get it for extension auth,
-  // we'll use a deterministic encryption approach based on the pubkey
-  
-  console.log("[Kind30001Journal] Using pubkey-based deterministic encryption for consistency")
-  
-  // Use the same encryption approach as nostr-crypto.ts for consistency
-  const encoder = new TextEncoder()
-  const keyMaterial = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(userPubkey.slice(0, 32).padEnd(32, "0")),
-    { name: "PBKDF2" },
-    false,
-    ["deriveKey"],
-  )
-
-  const key = await crypto.subtle.deriveKey(
-    {
-      name: "PBKDF2",
-      salt: encoder.encode("nostr-journal-salt"),
-      iterations: 100000,
-      hash: "SHA-256",
-    },
-    keyMaterial,
-    { name: "AES-GCM", length: 256 },
-    false,
-    ["encrypt"],
-  )
-
-  const iv = crypto.getRandomValues(new Uint8Array(12))
-  const encrypted = await crypto.subtle.encrypt(
-    { name: "AES-GCM", iv },
-    key,
-    encoder.encode(journalData)
-  )
-
-  const combined = new Uint8Array(iv.length + encrypted.byteLength)
-  combined.set(iv)
-  combined.set(new Uint8Array(encrypted), iv.length)
-
-  return btoa(String.fromCharCode(...combined))
+  try {
+    if (authData.authMethod === "remote") {
+      // CRITICAL: For remote signers, use the signer's nip04_encrypt method
+      console.log("[Kind30001Journal] Using remote signer's nip04_encrypt method...")
+      
+      const { getActiveSigner } = await import("./signer-connector")
+      const signer = getActiveSigner()
+      
+      if (!signer) {
+        throw new Error("Remote signer not available. Please reconnect.")
+      }
+      
+      // Check if signer has nip04Encrypt method
+      if (typeof signer.nip04Encrypt !== 'function') {
+        throw new Error("Remote signer does not support nip04_encrypt")
+      }
+      
+      // Use the remote signer's nip04_encrypt method
+      const encrypted = await signer.nip04Encrypt(userPubkey, journalData)
+      console.log("[Kind30001Journal] ✅ Encrypted with remote signer")
+      
+      return encrypted
+      
+    } else {
+      // For extension and nsec methods, use standard NIP-04 encryption
+      const privateKey = await getPrivateKeyForEncryption(authData)
+      const encrypted = await nip04.encrypt(privateKey, userPubkey, journalData)
+      console.log("[Kind30001Journal] ✅ Encrypted with local key")
+      
+      return encrypted
+    }
+  } catch (error) {
+    console.error("[Kind30001Journal] ❌ Encryption failed:", error)
+    throw new Error(`Failed to encrypt journal data: ${error instanceof Error ? error.message : "Unknown error"}`)
+  }
 }
 
 /**
@@ -396,54 +382,43 @@ async function encryptKind30001Content(note: DecryptedNote, authData: any, actua
 async function decryptKind30001Content(encryptedData: string, authData: any): Promise<any> {
   
   try {
-    // Since we've already filtered by pubkey, we know this event belongs to our user
     const userPubkey = authData.pubkey
     
     console.log("[Kind30001Journal] Decrypting with user pubkey:", userPubkey)
-    console.log("[Kind30001Journal] Auth method:", authData.authMethod)
     
-    // CRITICAL FIX: Use consistent decryption approach for all auth methods
-    // This matches the encryption approach used above
-    
-    console.log("[Kind30001Journal] Using pubkey-based deterministic decryption for consistency")
-    
-    // Use the same decryption approach as nostr-crypto.ts for consistency
-    const decoder = new TextDecoder()
-    const encoder = new TextEncoder()
-
-    const combined = Uint8Array.from(atob(encryptedData), (c) => c.charCodeAt(0))
-    const iv = combined.slice(0, 12)
-    const encrypted = combined.slice(12)
-
-    const keyMaterial = await crypto.subtle.importKey(
-      "raw",
-      encoder.encode(userPubkey.slice(0, 32).padEnd(32, "0")),
-      { name: "PBKDF2" },
-      false,
-      ["deriveKey"],
-    )
-
-    const key = await crypto.subtle.deriveKey(
-      {
-        name: "PBKDF2",
-        salt: encoder.encode("nostr-journal-salt"),
-        iterations: 100000,
-        hash: "SHA-256",
-      },
-      keyMaterial,
-      { name: "AES-GCM", length: 256 },
-      false,
-      ["decrypt"],
-    )
-
-    const decrypted = await crypto.subtle.decrypt(
-      { name: "AES-GCM", iv },
-      key,
-      encrypted
-    )
-
-    const journalData = JSON.parse(decoder.decode(decrypted))
-    return journalData
+    if (authData.authMethod === "remote") {
+      // CRITICAL: For remote signers, use the signer's nip04_decrypt method
+      console.log("[Kind30001Journal] Using remote signer's nip04_decrypt method...")
+      
+      const { getActiveSigner } = await import("./signer-connector")
+      const signer = getActiveSigner()
+      
+      if (!signer) {
+        throw new Error("Remote signer not available. Please reconnect.")
+      }
+      
+      // Check if signer has nip04Decrypt method
+      if (typeof signer.nip04Decrypt !== 'function') {
+        throw new Error("Remote signer does not support nip04_decrypt")
+      }
+      
+      // Use the remote signer's nip04_decrypt method
+      const decrypted = await signer.nip04Decrypt(userPubkey, encryptedData)
+      console.log("[Kind30001Journal] ✅ Decrypted with remote signer")
+      
+      // Parse the JSON content
+      const journalData = JSON.parse(decrypted)
+      return journalData
+      
+    } else {
+      // For extension and nsec methods, use standard NIP-04 decryption
+      const privateKey = await getPrivateKeyForEncryption(authData)
+      const decrypted = await nip04.decrypt(privateKey, userPubkey, encryptedData)
+      
+      // Parse the JSON content
+      const journalData = JSON.parse(decrypted)
+      return journalData
+    }
     
   } catch (error) {
     console.error("[Kind30001Journal] Failed to decrypt Kind 30001 content:", error)

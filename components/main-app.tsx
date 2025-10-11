@@ -561,12 +561,26 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
 
     // Save to relays as Kind 30001 list
     try {
-      console.log("[v0] Attempting to save note as Kind 30001 list...")
+      console.log("[v0] 📡 Attempting to save note as Kind 30001 list...")
+      console.log("[v0] Auth method:", authData.authMethod)
+      
+      // CRITICAL: Check if remote signer is active
+      if (authData.authMethod === 'remote') {
+        const { getActiveSigner } = await import('@/lib/signer-connector')
+        const signer = getActiveSigner()
+        if (!signer) {
+          console.error("[v0] ❌ Remote signer not active!")
+          throw new Error("Remote signer disconnected. Please reconnect.")
+        }
+        console.log("[v0] ✅ Remote signer is active")
+      }
+      
       const result = await saveJournalAsKind30001(newNote, authData)
-      console.log("[v0] Save result:", result)
+      console.log("[v0] 📡 Save result:", result)
       
       if (result.success && result.eventId) {
-        console.log("[v0] Note saved successfully with eventId:", result.eventId)
+        console.log("[v0] ✅ Note saved successfully with eventId:", result.eventId)
+        
         // Update with eventId and sync status
         const finalNote = { 
           ...newNote, 
@@ -574,18 +588,20 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
           lastSynced: new Date(),
           isSynced: true,
           publishedToRelays: true,
-          fetchedFromRelays: false // New notes haven't been fetched yet
+          fetchedFromRelays: false
         }
         const finalUpdatedNotes = [finalNote, ...notes.filter(n => n.id !== newNote.id)]
         setNotes(finalUpdatedNotes)
         setSelectedNote(finalNote)
         
-        // LOCAL STORAGE DISABLED - Notes are only stored on Nostr relays
+        console.log("[v0] ✅ Note creation complete!")
       } else {
-        console.error("[v0] Failed to save note to relays:", result.error || "Unknown error")
+        console.error("[v0] ❌ Failed to save note to relays:", result.error || "Unknown error")
+        alert(`Failed to save note: ${result.error || "Unknown error"}`)
       }
     } catch (error) {
-      console.error("[v0] Error saving new note to relays:", error)
+      console.error("[v0] ❌ Error saving new note to relays:", error)
+      alert(`Error saving note: ${error instanceof Error ? error.message : "Unknown error"}`)
     }
 
     console.log("[v0] New note created:", newNote.id)
@@ -623,12 +639,26 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
 
     // Save to relays as Kind 30001 list
     try {
-      console.log("[v0] Attempting to save updated note as Kind 30001 list...")
+      console.log("[v0] 📡 Attempting to save updated note as Kind 30001 list...")
+      console.log("[v0] Auth method:", authData.authMethod)
+      
+      // CRITICAL: Check if remote signer is active
+      if (authData.authMethod === 'remote') {
+        const { getActiveSigner } = await import('@/lib/signer-connector')
+        const signer = getActiveSigner()
+        if (!signer) {
+          console.error("[v0] ❌ Remote signer not active!")
+          throw new Error("Remote signer disconnected. Please reconnect.")
+        }
+        console.log("[v0] ✅ Remote signer is active")
+      }
+      
       const result = await saveJournalAsKind30001(optimisticNote, authData)
-      console.log("[v0] Update result:", result)
+      console.log("[v0] 📡 Update result:", result)
       
       if (result.success && result.eventId) {
-        console.log("[v0] Note updated successfully with eventId:", result.eventId)
+        console.log("[v0] ✅ Note updated successfully with eventId:", result.eventId)
+        
         // Update with eventId and sync status
         const finalNote = { 
           ...optimisticNote, 
@@ -636,15 +666,19 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
           lastSynced: new Date(),
           isSynced: true,
           publishedToRelays: true,
-          fetchedFromRelays: false // Updated notes haven't been fetched yet
+          fetchedFromRelays: false
         }
         setNotes(prevNotes => prevNotes.map(n => n.id === updatedNote.id ? finalNote : n))
         setSelectedNote(finalNote)
+        
+        console.log("[v0] ✅ Note update complete!")
       } else {
-        console.error("[v0] Failed to save updated note to relays:", result.error || "Unknown error")
+        console.error("[v0] ❌ Failed to save updated note to relays:", result.error || "Unknown error")
+        alert(`Failed to update note: ${result.error || "Unknown error"}`)
       }
     } catch (error) {
-      console.error("[v0] Error saving to relays:", error)
+      console.error("[v0] ❌ Error saving updated note to relays:", error)
+      alert(`Error updating note: ${error instanceof Error ? error.message : "Unknown error"}`)
     }
 
     // Update tags

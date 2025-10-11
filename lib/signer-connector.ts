@@ -327,6 +327,56 @@ export async function signWithActiveSigner(unsignedEvent: any): Promise<any> {
 }
 
 /**
+ * Encrypt data using remote signer's nip04_encrypt
+ */
+export async function nip04EncryptWithRemote(pubkey: string, plaintext: string): Promise<string> {
+  if (!activeSigner) {
+    throw new Error("No active signer available")
+  }
+  
+  console.log("[SignerConnector] 🔐 Encrypting with nip04...")
+  
+  try {
+    // Check if the signer has nip04Encrypt method
+    if (typeof activeSigner.nip04Encrypt === 'function') {
+      const encrypted = await activeSigner.nip04Encrypt(pubkey, plaintext)
+      console.log("[SignerConnector] ✅ Encrypted successfully")
+      return encrypted
+    } else {
+      throw new Error("Remote signer does not support nip04_encrypt")
+    }
+  } catch (error) {
+    console.error("[SignerConnector] ❌ Encryption failed:", error)
+    throw error
+  }
+}
+
+/**
+ * Decrypt data using remote signer's nip04_decrypt
+ */
+export async function nip04DecryptWithRemote(pubkey: string, ciphertext: string): Promise<string> {
+  if (!activeSigner) {
+    throw new Error("No active signer available")
+  }
+  
+  console.log("[SignerConnector] 🔓 Decrypting with nip04...")
+  
+  try {
+    // Check if the signer has nip04Decrypt method
+    if (typeof activeSigner.nip04Decrypt === 'function') {
+      const decrypted = await activeSigner.nip04Decrypt(pubkey, ciphertext)
+      console.log("[SignerConnector] ✅ Decrypted successfully")
+      return decrypted
+    } else {
+      throw new Error("Remote signer does not support nip04_decrypt")
+    }
+  } catch (error) {
+    console.error("[SignerConnector] ❌ Decryption failed:", error)
+    throw error
+  }
+}
+
+/**
  * Helper function to extract relay URL from bunker URI
  */
 function extractRelayFromUri(uri: string): string {
