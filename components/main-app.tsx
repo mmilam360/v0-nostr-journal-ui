@@ -190,6 +190,45 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     }
   }
 
+  const ensureRemoteSignerAvailable = async () => {
+    console.log("[v0] 🔧 Checking if remote signer is available...")
+    
+    try {
+      const { getActiveSigner } = await import('@/lib/signer-connector')
+      const activeSigner = getActiveSigner()
+      
+      if (activeSigner) {
+        console.log("[v0] ✅ Remote signer is already available")
+        return true
+      }
+      
+      console.log("[v0] ⚠️ No active signer found, attempting to resume session...")
+      
+      // Try to resume session from localStorage
+      const savedSession = localStorage.getItem('nostr_remote_session')
+      if (savedSession) {
+        console.log("[v0] 🔧 Found saved session, attempting to resume...")
+        const sessionData = JSON.parse(savedSession)
+        const { resumeNip46Session } = await import('@/lib/signer-connector')
+        const signer = await resumeNip46Session(sessionData)
+        
+        if (signer) {
+          console.log("[v0] ✅ Remote signer session resumed successfully")
+          return true
+        } else {
+          console.error("[v0] ❌ Failed to resume remote signer session")
+          return false
+        }
+      } else {
+        console.error("[v0] ❌ No saved session found for remote signer")
+        return false
+      }
+    } catch (error) {
+      console.error("[v0] ❌ Error ensuring remote signer availability:", error)
+      return false
+    }
+  }
+
   const retrySyncFailedNotes = async () => {
     const failedNotes = notes.filter((n) => !n.eventId)
 
@@ -596,6 +635,12 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
 
     // LOCAL STORAGE DISABLED - Notes are only stored on Nostr relays
     const updatedNotes = notes.map((note) => note.id === updatedNote.id ? optimisticNote : note)
+
+    // Ensure remote signer is available before saving
+    if (authData.authMethod === 'remote') {
+      console.log("[v0] 🔧 Ensuring remote signer is available before saving...")
+      await ensureRemoteSignerAvailable()
+    }
 
     // Save to relays as Kind 30001 list
     try {
