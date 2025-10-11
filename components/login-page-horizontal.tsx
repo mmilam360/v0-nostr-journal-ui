@@ -296,18 +296,36 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
   }, [currentStep, connectionState])
 
   const handleRemoteSignerClick = () => {
-    // Terminate any active connections before switching methods
-    terminateAllConnections()
-    setSelectedMethod('remote')
+    console.log('[Login] 🚀 handleRemoteSignerClick started')
     
-    // Mobile-specific: Auto-show QR code by default
-    if (isMobile) {
-      setRemoteSignerMode('client')
-      console.log('[Login] 📱 Mobile detected - auto-setting to QR code mode')
+    try {
+      // Terminate any active connections before switching methods
+      console.log('[Login] 🛑 Terminating connections...')
+      terminateAllConnections()
+      console.log('[Login] ✅ Connections terminated')
+      
+      console.log('[Login] 🔄 Setting selected method to remote...')
+      setSelectedMethod('remote')
+      console.log('[Login] ✅ Selected method set to remote')
+      
+      // Mobile-specific: Auto-show QR code by default
+      if (isMobile) {
+        console.log('[Login] 📱 Mobile detected - setting QR code mode')
+        setRemoteSignerMode('client')
+        console.log('[Login] 📱 Mobile QR code mode set')
+      }
+      
+      console.log('[Login] 🔄 Forcing UI update...')
+      forceUIUpdate()
+      console.log('[Login] ✅ UI update forced')
+      
+      console.log('[Login] ➡️ Going to next step...')
+      goNext()
+      console.log('[Login] ✅ Moved to next step')
+      
+    } catch (error) {
+      console.error('[Login] ❌ Error in handleRemoteSignerClick:', error)
     }
-    
-    forceUIUpdate()
-    goNext()
   }
 
 
@@ -649,7 +667,13 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                 </button>
                 <button
                   onClick={() => {
-                    handleRemoteSignerClick()
+                    console.log('[Login] Remote Signer button clicked')
+                    try {
+                      handleRemoteSignerClick()
+                      console.log('[Login] handleRemoteSignerClick completed successfully')
+                    } catch (error) {
+                      console.error('[Login] Error in handleRemoteSignerClick:', error)
+                    }
                   }}
                   className="p-4 sm:p-6 rounded-lg border-2 border-border hover:border-primary text-left bg-card hover:bg-card/80 group"
                 >
@@ -1068,9 +1092,10 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                     </div>
                     <Button 
                       onClick={() => {
-                        // Import and use the NoauthConnectLogin component
-                        // For now, we'll show a placeholder
-                        console.log('[Login] Noauth connect clicked - would redirect to noauth component')
+                        console.log('[Login] Noauth connect clicked - redirecting to noauth component')
+                        // For now, redirect to the noauth component
+                        // This should be replaced with actual noauth-connect integration
+                        window.location.href = '/noauth-connect'
                       }}
                       disabled={connectionState === 'connecting'}
                       className="w-full bg-purple-600 hover:bg-purple-700 text-white"
