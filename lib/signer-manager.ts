@@ -7,13 +7,8 @@ import type { AuthData } from "@/components/main-app"
 import { getActiveSigner, signWithActiveSigner, resumeNip46Session, setActiveSigner, clearActiveSigner } from './signer-connector'
 import { remoteSignerManager } from './remote-signer-manager'
 
-/**
- * Get active remote signer from signer-connector
- */
-export function getActiveSigner() {
-  const { getActiveSigner: getSigner } = require('./signer-connector')
-  return getSigner()
-}
+// Re-export getActiveSigner for external use
+export { getActiveSigner }
 
 // Declare window.nostr for TypeScript
 declare global {
