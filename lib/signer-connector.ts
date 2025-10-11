@@ -187,7 +187,13 @@ export function startClientInitiatedFlow(
     
     try {
       const url = new URL(result.connectUri)
-      const clientPubkey = url.pathname
+      // Extract client pubkey from the URI path (everything between :// and ?)
+      const clientPubkey = url.pathname || result.connectUri.split('://')[1].split('?')[0]
+      
+      console.log("[SignerConnector] Debug URI parsing:")
+      console.log("[SignerConnector] - Original URI:", result.connectUri)
+      console.log("[SignerConnector] - URL pathname:", url.pathname)
+      console.log("[SignerConnector] - Extracted client pubkey:", clientPubkey)
       
       // Extract secret from original URI
       const secret = url.searchParams.get('secret')
