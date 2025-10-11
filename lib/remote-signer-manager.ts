@@ -57,7 +57,14 @@ class RemoteSignerManager {
    * Check if remote signer is available and initialized
    */
   isAvailable(): boolean {
-    return this.session !== null && this.session.isInitialized
+    const available = this.session !== null && this.session.isInitialized
+    console.log("[RemoteSignerManager] isAvailable check:", {
+      available,
+      hasSession: this.session !== null,
+      isInitialized: this.session?.isInitialized,
+      hasSigner: !!this.session?.signer
+    })
+    return available
   }
 
   /**
@@ -137,6 +144,13 @@ class RemoteSignerManager {
    * Decrypt data using remote signer's nip04_decrypt
    */
   async nip04Decrypt(pubkey: string, ciphertext: string): Promise<string> {
+    console.log("[RemoteSignerManager] 🔓 nip04Decrypt called with:", {
+      hasSession: this.session !== null,
+      isInitialized: this.session?.isInitialized,
+      hasSigner: !!this.session?.signer,
+      hasNip04Decrypt: typeof this.session?.signer?.nip04Decrypt === 'function'
+    })
+    
     if (!this.session) {
       throw new Error("No remote signer session available")
     }
