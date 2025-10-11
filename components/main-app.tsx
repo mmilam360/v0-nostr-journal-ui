@@ -260,9 +260,19 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       setSyncStatus("syncing")
 
       try {
+        // ALWAYS check and set up remote signer if needed
+        console.log("[v0] 🔧 Checking remote signer setup for auth method:", authData.authMethod)
+        
         // Set up the active signer for remote authentication
         if (authData.authMethod === 'remote') {
-          console.log("[v0] Setting up remote signer from session data")
+          console.log("[v0] 🔧 Setting up remote signer from session data")
+          console.log("[v0] 🔧 AuthData:", {
+            pubkey: authData.pubkey,
+            authMethod: authData.authMethod,
+            hasSessionData: !!authData.sessionData,
+            hasClientSecretKey: !!authData.clientSecretKey,
+            hasBunkerUri: !!authData.bunkerUri
+          })
           
           // First check if signer is already active (from fresh login)
           const { getActiveSigner } = await import('@/lib/signer-connector')

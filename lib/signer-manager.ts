@@ -74,7 +74,30 @@ export async function signEventWithRemote(unsignedEvent: any, authData: AuthData
       console.log("[SignerManager] Active signer exists:", !!activeSigner)
       if (!activeSigner) {
         console.error("[SignerManager] ❌ No active signer available for remote auth method")
-        throw new Error("No active signer available")
+        console.log("[SignerManager] 🔧 Attempting to resume session from localStorage...")
+        
+        // Try to resume session from localStorage
+        try {
+          const savedSession = localStorage.getItem('nostr_remote_session')
+          if (savedSession) {
+            console.log("[SignerManager] 🔧 Found saved session, attempting to resume...")
+            const sessionData = JSON.parse(savedSession)
+            const { resumeNip46Session } = await import('./signer-connector')
+            const signer = await resumeNip46Session(sessionData)
+            if (signer) {
+              console.log("[SignerManager] ✅ Session resumed successfully")
+            } else {
+              console.error("[SignerManager] ❌ Failed to resume session")
+              throw new Error("No active signer available")
+            }
+          } else {
+            console.error("[SignerManager] ❌ No saved session found")
+            throw new Error("No active signer available")
+          }
+        } catch (error) {
+          console.error("[SignerManager] ❌ Session resume failed:", error)
+          throw new Error("No active signer available")
+        }
       }
       
       const signedEvent = await signWithActiveSigner(unsignedEvent)
