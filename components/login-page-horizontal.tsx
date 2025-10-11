@@ -53,7 +53,6 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
   const [isMobile, setIsMobile] = useState(false)
   
   // Mobile connection timeout management
-  const [mobileAcknowledged, setMobileAcknowledged] = useState(false)
   const [connectionTimeoutRef, setConnectionTimeoutRef] = useState<NodeJS.Timeout | null>(null)
   
   useEffect(() => {
@@ -65,13 +64,6 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
     return () => window.removeEventListener('resize', checkMobile)
   }, [])
 
-  // Auto-generate QR connection when in client mode
-  useEffect(() => {
-    if (selectedMethod === 'remote' && remoteSignerMode === 'client' && !connectUri && connectionState === 'idle') {
-      console.log('[Login] 🔄 Auto-generating QR connection...')
-      handleBunkerConnect()
-    }
-  }, [selectedMethod, remoteSignerMode, connectUri, connectionState])
 
   // Cleanup all connections when component unmounts
   useEffect(() => {
@@ -445,9 +437,8 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
         console.log('[Login] 🔍 Promise state:', established)
         
         // Add a manual timeout to provide better error handling
-        // Mobile users get extended timeout after acknowledgment
-        const baseTimeout = isMobile ? 180000 : 120000 // 3 minutes for mobile, 2 for desktop
-        const timeoutMs = mobileAcknowledged ? baseTimeout + 60000 : baseTimeout // Add 1 minute after mobile acknowledgment
+        // Standard timeout for all users
+        const timeoutMs = 120000 // 2 minutes
         
         const connectionTimeout = setTimeout(() => {
           console.log('[Login] ⏰ Manual timeout reached:', timeoutMs / 1000, 'seconds')
@@ -455,7 +446,6 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
           console.log('[Login] - Connection state:', connectionState)
           console.log('[Login] - Connect URI:', connectUri)
           console.log('[Login] - Promise state:', established)
-          console.log('[Login] - Mobile acknowledged:', mobileAcknowledged)
           
       setConnectionState('error')
           setError('Connection timeout after ' + (timeoutMs / 1000) + ' seconds. The remote signer may not be responding properly.\n\nTroubleshooting steps:\n1. Make sure your signing app (nsec.app) is open and connected to the internet\n2. Try the bunker:// URL method instead (often more reliable)\n3. Check that you scanned the QR code correctly\n4. Try refreshing and generating a new QR code\n5. Check browser console for detailed error logs')
@@ -876,51 +866,27 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                               </p>
                     </div>
                             
-                            {/* Mobile-specific acknowledgment button */}
-                            {isMobile && connectionState === 'connecting' && (
-                              <div className="space-y-3">
-                                <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-                                  <p className="text-sm text-blue-800 dark:text-blue-200 text-center">
-                                    📱 Mobile users: After accepting the connection in nsec.app, click below to continue:
-                                  </p>
-                                </div>
-                                <Button
-                                  onClick={async () => {
-                                    console.log('[Login] 📱 Mobile user acknowledged connection acceptance')
-                                    
-                                    // Mark as acknowledged to extend timeout
-                                    setMobileAcknowledged(true)
-                                    
-                                    // Clear the current timeout and set a new extended one
-                                    if (connectionTimeoutRef) {
-                                      clearTimeout(connectionTimeoutRef)
-                                      console.log('[Login] 📱 Cleared previous timeout, extending for mobile acknowledgment')
-                                    }
-                                    
-                                    // Set a new extended timeout for mobile acknowledgment
-                                    const extendedTimeout = setTimeout(() => {
-                                      console.log('[Login] 📱 Extended mobile timeout reached')
-                                      setConnectionState('error')
-                                      setError('Connection timeout after mobile acknowledgment. Please try again or use the bunker:// URL method.')
-                                    }, 90000) // 90 seconds after acknowledgment
-                                    
-                                    setConnectionTimeoutRef(extendedTimeout)
-                                    console.log('[Login] 📱 Extended timeout set for mobile acknowledgment')
-                                  }}
-                                  className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-                                >
-                                  ✅ I've accepted the connection in nsec.app
-                                </Button>
-                              </div>
-                            )}
                           </div>
                         ) : (
                           <div className="flex justify-center">
-                            <div className="text-center">
+                            <div className="text-center space-y-4">
                               <p className="text-sm text-muted-foreground mb-4">
-                                Generating connection...
+                                Click below to generate QR code for connection
                               </p>
-                              <Loader2 className="h-6 w-6 animate-spin mx-auto" />
+                              <Button
+                                onClick={handleBunkerConnect}
+                                disabled={connectionState === 'connecting'}
+                                className="bg-purple-600 hover:bg-purple-700 text-white"
+                              >
+                                {connectionState === 'connecting' ? (
+                                  <>
+                                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                    Generating...
+                                  </>
+                                ) : (
+                                  'Generate QR Code'
+                                )}
+                              </Button>
                             </div>
                           </div>
                         )}
