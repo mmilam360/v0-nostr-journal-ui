@@ -37,7 +37,7 @@ interface GeneratedKeys {
 export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizontalProps) {
   const [currentStep, setCurrentStep] = useState<'choose' | 'method' | 'connect' | 'complete'>('choose')
   const [selectedPath, setSelectedPath] = useState<'existing' | 'new' | null>(null)
-  const [selectedMethod, setSelectedMethod] = useState<'extension' | 'remote' | 'nsec' | null>(null)
+  const [selectedMethod, setSelectedMethod] = useState<'extension' | 'remote' | 'nsec' | 'noauth' | null>(null)
   const [showInfo, setShowInfo] = useState(false)
   const [generatedKeys, setGeneratedKeys] = useState<GeneratedKeys | null>(null)
   const [hasConfirmedSave, setHasConfirmedSave] = useState(false)
@@ -665,6 +665,23 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                 </button>
                 <button
                   onClick={() => {
+                    terminateAllConnections(false)
+                    setSelectedMethod('noauth')
+                    forceUIUpdate()
+                    goNext()
+                  }}
+                  className="p-4 sm:p-6 rounded-lg border-2 border-border hover:border-primary text-left bg-card hover:bg-card/80 group"
+                >
+                  <div className="flex items-center gap-3 mb-3">
+                    <Smartphone className="w-6 h-6 text-primary" />
+                    <h3 className="font-semibold">Noauth Connect</h3>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Connect with Noauth (simplified remote signing)
+                  </p>
+                </button>
+                <button
+                  onClick={() => {
                     // For nsec method, only clear connection states, preserve any existing signer
                     terminateAllConnections(false)
                     setSelectedMethod('nsec')
@@ -776,6 +793,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                 <h2 className="text-3xl font-bold text-foreground mb-2">
                   {selectedMethod === 'extension' && 'Connect Extension'}
                   {selectedMethod === 'remote' && 'Connect Remote Signer'}
+                  {selectedMethod === 'noauth' && 'Connect with Noauth'}
                   {selectedMethod === 'nsec' && 'Import Private Key'}
                 </h2>
                 <p className="text-muted-foreground">Complete your connection</p>
@@ -1035,6 +1053,46 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                             Try Again
                           </Button>
                         </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {selectedMethod === 'noauth' && (
+                  <div className="space-y-4">
+                    <p className="text-sm text-muted-foreground text-center">
+                      Connect with Noauth for simplified remote signing
+                    </p>
+                    <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-4">
+                      <p className="text-sm text-purple-800 dark:text-purple-200 text-center">
+                        This will redirect you to use.nsec.app for secure authentication
+                      </p>
+                    </div>
+                    <Button 
+                      onClick={() => {
+                        // Import and use the NoauthConnectLogin component
+                        // For now, we'll show a placeholder
+                        console.log('[Login] Noauth connect clicked - would redirect to noauth component')
+                      }}
+                      disabled={connectionState === 'connecting'}
+                      className="w-full bg-purple-600 hover:bg-purple-700 text-white"
+                      size="lg"
+                    >
+                      {connectionState === 'connecting' ? (
+                        <>
+                          <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                          Connecting...
+                        </>
+                      ) : (
+                        <>
+                          <Smartphone className="w-5 h-5 mr-2" />
+                          Connect with Noauth
+                        </>
+                      )}
+                    </Button>
+                    {error && (
+                      <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                        <p className="text-sm text-red-800 dark:text-red-200">{error}</p>
                       </div>
                     )}
                   </div>

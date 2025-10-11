@@ -29,6 +29,7 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="format-detection" content="telephone=no" />
+        <script src="https://unpkg.com/noauth-connect/dist/noauth-connect.umd.js"></script>
       </head>
       <body className={`font-sans ${GeistSans.variable} ${GeistMono.variable}`}>
         <QueryProvider>

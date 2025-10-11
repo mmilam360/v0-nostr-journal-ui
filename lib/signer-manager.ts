@@ -87,6 +87,23 @@ export async function signEventWithRemote(unsignedEvent: any, authData: AuthData
       console.log("[SignerManager] ✅ Event signed with NIP-46 remote signer")
       return signedEvent
       
+    } else if (authData.authMethod === "noauth") {
+      // Use noauth-connect widget for signing
+      console.log("[SignerManager] Using noauth-connect widget for signing")
+      
+      const { noauthSignerManager } = await import('@/lib/noauth-signer-manager')
+      
+      if (!noauthSignerManager.isAvailable()) {
+        console.error("[SignerManager] ❌ Noauth signer not available")
+        throw new Error("Noauth signer not available")
+      }
+      
+      console.log("[SignerManager] ✅ Noauth signer is available")
+      
+      const signedEvent = await noauthSignerManager.signEvent(unsignedEvent)
+      console.log("[SignerManager] ✅ Event signed with noauth-connect widget")
+      return signedEvent
+      
     } else {
       throw new Error(`Unsupported auth method: ${authData.authMethod}`)
     }

@@ -102,7 +102,7 @@ export interface Note {
 
 export interface AuthData {
   pubkey: string
-  authMethod: "extension" | "nsec" | "remote"
+  authMethod: "extension" | "nsec" | "remote" | "noauth"
   nsec?: string
   privateKey?: string // Hex string of private key (for nsec method)
   signer?: any
@@ -584,6 +584,13 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
           throw new Error("Remote signer disconnected. Please reconnect.")
         }
         console.log("[v0] ✅ Remote signer is active")
+      } else if (authData.authMethod === 'noauth') {
+        const { noauthSignerManager } = await import('@/lib/noauth-signer-manager')
+        if (!noauthSignerManager.isAvailable()) {
+          console.error("[v0] ❌ Noauth signer not active!")
+          throw new Error("Noauth signer disconnected. Please reconnect.")
+        }
+        console.log("[v0] ✅ Noauth signer is active")
       }
       
       const result = await saveJournalAsKind30001(newNote, authData)
@@ -662,6 +669,13 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
           throw new Error("Remote signer disconnected. Please reconnect.")
         }
         console.log("[v0] ✅ Remote signer is active")
+      } else if (authData.authMethod === 'noauth') {
+        const { noauthSignerManager } = await import('@/lib/noauth-signer-manager')
+        if (!noauthSignerManager.isAvailable()) {
+          console.error("[v0] ❌ Noauth signer not active!")
+          throw new Error("Noauth signer disconnected. Please reconnect.")
+        }
+        console.log("[v0] ✅ Noauth signer is active")
       }
       
       const result = await saveJournalAsKind30001(optimisticNote, authData)
