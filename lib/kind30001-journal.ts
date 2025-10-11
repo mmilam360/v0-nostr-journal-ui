@@ -196,6 +196,9 @@ export async function loadJournalFromKind30001(authData: any): Promise<Decrypted
  * Save a journal entry as a Kind 30001 Generic List (parameterized replaceable event)
  */
 export async function saveJournalAsKind30001(note: DecryptedNote, authData: any): Promise<{ success: boolean; eventId?: string; error?: string }> {
+  console.log("[Kind30001Journal] 🚀 saveJournalAsKind30001 called with auth method:", authData?.authMethod)
+  console.log("[Kind30001Journal] 🚀 Note ID:", note.id, "Title:", note.title)
+  
   if (!authData) {
     return { success: false, error: "No auth data" }
   }
@@ -239,6 +242,13 @@ export async function saveJournalAsKind30001(note: DecryptedNote, authData: any)
     })
 
     // Sign the event
+    console.log("[Kind30001Journal] 🔐 About to call signEventWithRemote with auth method:", authData.authMethod)
+    console.log("[Kind30001Journal] 🔐 Unsigned event ready for signing:", {
+      kind: unsignedEvent.kind,
+      pubkey: unsignedEvent.pubkey,
+      content_length: unsignedEvent.content.length
+    })
+    
     const signedEvent = await signEventWithRemote(unsignedEvent, authData)
     console.log("[Kind30001Journal v1.0] Publishing Kind 30001 journal entry to relays:", signedEvent.id)
     
