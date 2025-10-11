@@ -217,7 +217,6 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
     setNsecInput('')
     setRemoteSignerMode('client')
     setSessionKeypair(null)
-    setMobileAcknowledged(false)
     if (connectionTimeoutRef) {
       clearTimeout(connectionTimeoutRef)
       setConnectionTimeoutRef(null)
@@ -245,7 +244,6 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
     setNsecInput('')
     setRemoteSignerMode('client')
     setSessionKeypair(null)
-    setMobileAcknowledged(false)
     
     // 2. Clear any active timeouts
     if (connectionTimeoutRef) {
