@@ -325,23 +325,34 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
           // Use the new remote signer manager
           if (authData.sessionData) {
             console.log("[v0] 🔧 Initializing remote signer manager from session data...")
-            const success = await remoteSignerManager.initializeFromSessionData(authData.sessionData, authData.pubkey)
+            console.log("[v0] 🔧 Session data being passed:", {
+              hasSessionData: !!authData.sessionData,
+              sessionDataType: typeof authData.sessionData,
+              sessionDataKeys: authData.sessionData ? Object.keys(authData.sessionData) : [],
+              sessionDataContent: authData.sessionData
+            })
             
-            if (success) {
-              console.log("[v0] ✅ Remote signer manager initialized successfully")
+            try {
+              const success = await remoteSignerManager.initializeFromSessionData(authData.sessionData, authData.pubkey)
               
-              // Also set up the legacy signer connector for backward compatibility
-              try {
-                const { resumeNip46Session } = await import('@/lib/signer-connector')
-                const signer = await resumeNip46Session(authData.sessionData)
-                if (signer) {
-                  console.log("[v0] ✅ Legacy signer connector also set up for compatibility")
+              if (success) {
+                console.log("[v0] ✅ Remote signer manager initialized successfully")
+                
+                // Also set up the legacy signer connector for backward compatibility
+                try {
+                  const { resumeNip46Session } = await import('@/lib/signer-connector')
+                  const signer = await resumeNip46Session(authData.sessionData)
+                  if (signer) {
+                    console.log("[v0] ✅ Legacy signer connector also set up for compatibility")
+                  }
+                } catch (error) {
+                  console.warn("[v0] ⚠️ Could not set up legacy signer connector:", error)
                 }
-              } catch (error) {
-                console.warn("[v0] ⚠️ Could not set up legacy signer connector:", error)
+              } else {
+                console.error("[v0] ❌ Failed to initialize remote signer manager")
               }
-            } else {
-              console.error("[v0] ❌ Failed to initialize remote signer manager")
+            } catch (error) {
+              console.error("[v0] ❌ Error during remote signer manager initialization:", error)
             }
           } else {
             console.error("[v0] ❌ No session data available for remote signer setup")
