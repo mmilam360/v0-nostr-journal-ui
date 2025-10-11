@@ -109,6 +109,56 @@ class RemoteSignerManager {
   }
 
   /**
+   * Encrypt data using remote signer's nip04_encrypt
+   */
+  async nip04Encrypt(pubkey: string, plaintext: string): Promise<string> {
+    if (!this.session) {
+      throw new Error("No remote signer session available")
+    }
+    
+    console.log("[RemoteSignerManager] 🔐 Encrypting with nip04...")
+    
+    try {
+      // Check if the signer has nip04Encrypt method
+      if (typeof this.session.signer.nip04Encrypt === 'function') {
+        const encrypted = await this.session.signer.nip04Encrypt(pubkey, plaintext)
+        console.log("[RemoteSignerManager] ✅ Encrypted successfully")
+        return encrypted
+      } else {
+        throw new Error("Remote signer does not support nip04_encrypt")
+      }
+    } catch (error) {
+      console.error("[RemoteSignerManager] ❌ Encryption failed:", error)
+      throw error
+    }
+  }
+
+  /**
+   * Decrypt data using remote signer's nip04_decrypt
+   */
+  async nip04Decrypt(pubkey: string, ciphertext: string): Promise<string> {
+    if (!this.session) {
+      throw new Error("No remote signer session available")
+    }
+    
+    console.log("[RemoteSignerManager] 🔓 Decrypting with nip04...")
+    
+    try {
+      // Check if the signer has nip04Decrypt method
+      if (typeof this.session.signer.nip04Decrypt === 'function') {
+        const decrypted = await this.session.signer.nip04Decrypt(pubkey, ciphertext)
+        console.log("[RemoteSignerManager] ✅ Decrypted successfully")
+        return decrypted
+      } else {
+        throw new Error("Remote signer does not support nip04_decrypt")
+      }
+    } catch (error) {
+      console.error("[RemoteSignerManager] ❌ Decryption failed:", error)
+      throw error
+    }
+  }
+
+  /**
    * Request specific permissions from remote signer
    */
   async requestPermissions(permissions: string[]): Promise<boolean> {

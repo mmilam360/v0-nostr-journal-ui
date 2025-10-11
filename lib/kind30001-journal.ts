@@ -344,20 +344,20 @@ async function encryptKind30001Content(note: DecryptedNote, authData: any, actua
       // CRITICAL: For remote signers, use the signer's nip04_encrypt method
       console.log("[Kind30001Journal] Using remote signer's nip04_encrypt method...")
       
-      const { getActiveSigner } = await import("./signer-connector")
-      const signer = getActiveSigner()
+      const { remoteSignerManager } = await import("./remote-signer-manager")
       
-      if (!signer) {
+      if (!remoteSignerManager.isAvailable()) {
         throw new Error("Remote signer not available. Please reconnect.")
       }
       
-      // Check if signer has nip04Encrypt method
-      if (typeof signer.nip04Encrypt !== 'function') {
-        throw new Error("Remote signer does not support nip04_encrypt")
+      // Get the signer from the remote signer manager
+      const sessionInfo = remoteSignerManager.getSessionInfo()
+      if (!sessionInfo.available || !sessionInfo.hasSigner) {
+        throw new Error("Remote signer not properly initialized")
       }
       
       // Use the remote signer's nip04_encrypt method
-      const encrypted = await signer.nip04Encrypt(userPubkey, journalData)
+      const encrypted = await remoteSignerManager.nip04Encrypt(userPubkey, journalData)
       console.log("[Kind30001Journal] ✅ Encrypted with remote signer")
       
       return encrypted
@@ -390,20 +390,20 @@ async function decryptKind30001Content(encryptedData: string, authData: any): Pr
       // CRITICAL: For remote signers, use the signer's nip04_decrypt method
       console.log("[Kind30001Journal] Using remote signer's nip04_decrypt method...")
       
-      const { getActiveSigner } = await import("./signer-connector")
-      const signer = getActiveSigner()
+      const { remoteSignerManager } = await import("./remote-signer-manager")
       
-      if (!signer) {
+      if (!remoteSignerManager.isAvailable()) {
         throw new Error("Remote signer not available. Please reconnect.")
       }
       
-      // Check if signer has nip04Decrypt method
-      if (typeof signer.nip04Decrypt !== 'function') {
-        throw new Error("Remote signer does not support nip04_decrypt")
+      // Get the signer from the remote signer manager
+      const sessionInfo = remoteSignerManager.getSessionInfo()
+      if (!sessionInfo.available || !sessionInfo.hasSigner) {
+        throw new Error("Remote signer not properly initialized")
       }
       
       // Use the remote signer's nip04_decrypt method
-      const decrypted = await signer.nip04Decrypt(userPubkey, encryptedData)
+      const decrypted = await remoteSignerManager.nip04Decrypt(userPubkey, encryptedData)
       console.log("[Kind30001Journal] ✅ Decrypted with remote signer")
       
       // Parse the JSON content
