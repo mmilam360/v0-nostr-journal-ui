@@ -5,6 +5,7 @@
 
 import type { AuthData } from "@/components/main-app"
 import { getActiveSigner, signWithActiveSigner, resumeNip46Session, setActiveSigner, clearActiveSigner } from './signer-connector'
+import { remoteSignerManager } from './remote-signer-manager'
 
 // Declare window.nostr for TypeScript
 declare global {
@@ -69,38 +70,17 @@ export async function signEventWithRemote(unsignedEvent: any, authData: AuthData
       // Use NIP-46 remote signer for signing
       console.log("[SignerManager] Using NIP-46 remote signer for signing")
       
-      // Debug: Check if active signer exists
-      const activeSigner = getActiveSigner()
-      console.log("[SignerManager] Active signer exists:", !!activeSigner)
-      if (!activeSigner) {
-        console.error("[SignerManager] ❌ No active signer available for remote auth method")
-        console.log("[SignerManager] 🔧 Attempting to resume session from localStorage...")
-        
-        // Try to resume session from localStorage
-        try {
-          const savedSession = localStorage.getItem('nostr_remote_session')
-          if (savedSession) {
-            console.log("[SignerManager] 🔧 Found saved session, attempting to resume...")
-            const sessionData = JSON.parse(savedSession)
-            const { resumeNip46Session } = await import('./signer-connector')
-            const signer = await resumeNip46Session(sessionData)
-            if (signer) {
-              console.log("[SignerManager] ✅ Session resumed successfully")
-            } else {
-              console.error("[SignerManager] ❌ Failed to resume session")
-              throw new Error("No active signer available")
-            }
-          } else {
-            console.error("[SignerManager] ❌ No saved session found")
-            throw new Error("No active signer available")
-          }
-        } catch (error) {
-          console.error("[SignerManager] ❌ Session resume failed:", error)
-          throw new Error("No active signer available")
-        }
+      // Check if remote signer manager is available
+      if (!remoteSignerManager.isAvailable()) {
+        console.error("[SignerManager] ❌ Remote signer manager not available")
+        throw new Error("No active signer available")
       }
       
-      const signedEvent = await signWithActiveSigner(unsignedEvent)
+      console.log("[SignerManager] ✅ Remote signer manager is available")
+      
+      // This should trigger the permission request if needed
+      // The remote signer app should show a permission popup for the first sign_event call
+      const signedEvent = await remoteSignerManager.signEvent(unsignedEvent)
       console.log("[SignerManager] ✅ Event signed with NIP-46 remote signer")
       return signedEvent
       

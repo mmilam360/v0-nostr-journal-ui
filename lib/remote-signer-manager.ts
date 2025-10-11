@@ -1,0 +1,163 @@
+/**
+ * Remote Signer Manager - Handles NIP-46 remote signer permissions and event signing
+ * Based on NIP-46 specification and proper permission flow
+ */
+
+import { Nip46RemoteSigner, type Nip46SessionState } from 'nostr-signer-connector'
+
+interface RemoteSignerSession {
+  signer: Nip46RemoteSigner
+  sessionState: Nip46SessionState
+  permissions: string[]
+  userPubkey: string
+  isInitialized: boolean
+}
+
+class RemoteSignerManager {
+  private session: RemoteSignerSession | null = null
+
+  /**
+   * Initialize remote signer from session data
+   */
+  async initializeFromSessionData(sessionData: Nip46SessionState, userPubkey: string): Promise<boolean> {
+    try {
+      console.log("[RemoteSignerManager] 🔧 Initializing from session data...")
+      console.log("[RemoteSignerManager] User pubkey:", userPubkey)
+      
+      // Create new remote signer instance
+      const signer = new Nip46RemoteSigner(sessionData)
+      
+      // Test the connection by getting public key
+      const actualUserPubkey = await signer.getPublicKey()
+      console.log("[RemoteSignerManager] Actual user pubkey from signer:", actualUserPubkey)
+      
+      if (actualUserPubkey !== userPubkey) {
+        console.warn("[RemoteSignerManager] ⚠️ Pubkey mismatch - expected:", userPubkey, "got:", actualUserPubkey)
+      }
+      
+      // Store session
+      this.session = {
+        signer,
+        sessionState: sessionData,
+        permissions: [], // Will be populated when we check permissions
+        userPubkey: actualUserPubkey,
+        isInitialized: true
+      }
+      
+      console.log("[RemoteSignerManager] ✅ Remote signer initialized successfully")
+      return true
+      
+    } catch (error) {
+      console.error("[RemoteSignerManager] ❌ Failed to initialize from session data:", error)
+      return false
+    }
+  }
+
+  /**
+   * Check if remote signer is available and initialized
+   */
+  isAvailable(): boolean {
+    return this.session !== null && this.session.isInitialized
+  }
+
+  /**
+   * Get the user's public key
+   */
+  async getUserPubkey(): Promise<string | null> {
+    if (!this.session) {
+      console.error("[RemoteSignerManager] ❌ No active session")
+      return null
+    }
+
+    try {
+      const pubkey = await this.session.signer.getPublicKey()
+      console.log("[RemoteSignerManager] Retrieved user pubkey:", pubkey)
+      return pubkey
+    } catch (error) {
+      console.error("[RemoteSignerManager] ❌ Failed to get user pubkey:", error)
+      return null
+    }
+  }
+
+  /**
+   * Sign an event with proper permission handling
+   * This is where the permission popup should appear on first sign
+   */
+  async signEvent(unsignedEvent: any): Promise<any> {
+    if (!this.session) {
+      throw new Error("No remote signer session available")
+    }
+
+    console.log("[RemoteSignerManager] 🔐 Signing event with remote signer...")
+    console.log("[RemoteSignerManager] Event kind:", unsignedEvent.kind)
+    console.log("[RemoteSignerManager] Event content length:", unsignedEvent.content?.length)
+    
+    try {
+      // This should trigger the permission request if not already granted
+      // The remote signer app should show a permission popup for the first sign_event call
+      const signedEvent = await this.session.signer.signEvent(unsignedEvent)
+      
+      console.log("[RemoteSignerManager] ✅ Event signed successfully")
+      console.log("[RemoteSignerManager] Signed event ID:", signedEvent.id)
+      
+      return signedEvent
+      
+    } catch (error) {
+      console.error("[RemoteSignerManager] ❌ Failed to sign event:", error)
+      throw error
+    }
+  }
+
+  /**
+   * Request specific permissions from remote signer
+   */
+  async requestPermissions(permissions: string[]): Promise<boolean> {
+    if (!this.session) {
+      console.error("[RemoteSignerManager] ❌ No active session for permission request")
+      return false
+    }
+
+    try {
+      console.log("[RemoteSignerManager] 🔐 Requesting permissions:", permissions)
+      
+      // For now, we'll assume permissions are granted during the initial connection
+      // The actual permission request should happen when we try to sign the first event
+      this.session.permissions = permissions
+      
+      console.log("[RemoteSignerManager] ✅ Permissions requested")
+      return true
+      
+    } catch (error) {
+      console.error("[RemoteSignerManager] ❌ Failed to request permissions:", error)
+      return false
+    }
+  }
+
+  /**
+   * Clear the current session
+   */
+  clearSession(): void {
+    console.log("[RemoteSignerManager] 🧹 Clearing remote signer session")
+    this.session = null
+  }
+
+  /**
+   * Get current session info for debugging
+   */
+  getSessionInfo(): any {
+    if (!this.session) {
+      return { available: false }
+    }
+
+    return {
+      available: true,
+      userPubkey: this.session.userPubkey,
+      permissions: this.session.permissions,
+      isInitialized: this.session.isInitialized,
+      hasSigner: !!this.session.signer
+    }
+  }
+}
+
+// Export singleton instance
+export const remoteSignerManager = new RemoteSignerManager()
