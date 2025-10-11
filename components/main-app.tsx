@@ -204,10 +204,16 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       
       console.log("[v0] ⚠️ No active signer found, attempting to resume session...")
       
+      // Debug: Check what's in localStorage
+      console.log("[v0] 🔍 Debugging localStorage contents:")
+      console.log("[v0] 🔍 - nostr_remote_session:", localStorage.getItem('nostr_remote_session'))
+      console.log("[v0] 🔍 - All localStorage keys:", Object.keys(localStorage))
+      
       // Try to resume session from localStorage
       const savedSession = localStorage.getItem('nostr_remote_session')
       if (savedSession) {
         console.log("[v0] 🔧 Found saved session, attempting to resume...")
+        console.log("[v0] 🔧 Session data:", savedSession)
         const sessionData = JSON.parse(savedSession)
         const { resumeNip46Session } = await import('@/lib/signer-connector')
         const signer = await resumeNip46Session(sessionData)
@@ -221,6 +227,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
         }
       } else {
         console.error("[v0] ❌ No saved session found for remote signer")
+        console.log("[v0] 🔍 This suggests the session was never saved during login")
         return false
       }
     } catch (error) {
@@ -623,6 +630,8 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
 
   const handleUpdateNote = async (updatedNote: Note) => {
     console.log("[v0] Updating note:", updatedNote.id)
+    console.log("[v0] 🔍 Auth method check - authData.authMethod:", authData.authMethod)
+    console.log("[v0] 🔍 Auth method type:", typeof authData.authMethod)
 
     // Update local state immediately
     const optimisticNote = {
@@ -640,6 +649,8 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     if (authData.authMethod === 'remote') {
       console.log("[v0] 🔧 Ensuring remote signer is available before saving...")
       await ensureRemoteSignerAvailable()
+    } else {
+      console.log("[v0] 🔍 Auth method is not 'remote', skipping remote signer check")
     }
 
     // Save to relays as Kind 30001 list
