@@ -23,6 +23,14 @@ declare global {
  */
 export async function signEventWithRemote(unsignedEvent: any, authData: AuthData) {
   console.log("[SignerManager] 📝 Signing event with auth method:", authData.authMethod)
+  console.log("[SignerManager] 📝 Unsigned event structure:", {
+    kind: unsignedEvent.kind,
+    created_at: unsignedEvent.created_at,
+    tags: unsignedEvent.tags,
+    content_length: unsignedEvent.content?.length,
+    pubkey: unsignedEvent.pubkey,
+    has_content: !!unsignedEvent.content
+  })
   
   try {
     if (authData.authMethod === "extension") {
@@ -34,8 +42,10 @@ export async function signEventWithRemote(unsignedEvent: any, authData: AuthData
         throw new Error("Nostr extension not found")
       }
       
+      console.log("[SignerManager] 🔌 Calling window.nostr.signEvent...")
       const signedEvent = await window.nostr.signEvent(unsignedEvent)
       console.log("[SignerManager] ✅ Event signed with extension")
+      console.log("[SignerManager] 🔑 Signed event ID:", signedEvent.id)
       return signedEvent
       
     } else if (authData.authMethod === "nsec") {
