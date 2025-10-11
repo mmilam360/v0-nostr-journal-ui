@@ -23,11 +23,20 @@ class RemoteSignerManager {
     try {
       console.log("[RemoteSignerManager] 🔧 Initializing from session data...")
       console.log("[RemoteSignerManager] User pubkey:", userPubkey)
+      console.log("[RemoteSignerManager] Session data structure:", {
+        hasSessionKey: !!sessionData.sessionKey,
+        hasRemotePubkey: !!sessionData.remotePubkey,
+        hasRelayUrls: !!sessionData.relayUrls,
+        relayCount: sessionData.relayUrls?.length || 0
+      })
       
       // Create new remote signer instance
+      console.log("[RemoteSignerManager] 🔧 Creating Nip46RemoteSigner instance...")
       const signer = new Nip46RemoteSigner(sessionData)
+      console.log("[RemoteSignerManager] ✅ Nip46RemoteSigner created successfully")
       
       // Test the connection by getting public key
+      console.log("[RemoteSignerManager] 🔧 Testing connection by getting public key...")
       const actualUserPubkey = await signer.getPublicKey()
       console.log("[RemoteSignerManager] Actual user pubkey from signer:", actualUserPubkey)
       
@@ -45,10 +54,21 @@ class RemoteSignerManager {
       }
       
       console.log("[RemoteSignerManager] ✅ Remote signer initialized successfully")
+      console.log("[RemoteSignerManager] Session stored:", {
+        hasSession: !!this.session,
+        isInitialized: this.session.isInitialized,
+        hasSigner: !!this.session.signer,
+        userPubkey: this.session.userPubkey
+      })
       return true
       
     } catch (error) {
       console.error("[RemoteSignerManager] ❌ Failed to initialize from session data:", error)
+      console.error("[RemoteSignerManager] Error details:", {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      })
       return false
     }
   }
