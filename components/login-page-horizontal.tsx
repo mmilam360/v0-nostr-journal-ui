@@ -68,8 +68,9 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
   // Cleanup all connections when component unmounts
   useEffect(() => {
     return () => {
-      console.log('[Login] 🛑 Component unmounting - terminating all connections')
-      terminateAllConnections()
+      console.log('[Login] 🛑 Component unmounting - preserving signer for main app')
+      // Only clear connections, NOT the signer - main app needs it
+      terminateAllConnections(false)
     }
   }, [])
   const [sessionKeypair, setSessionKeypair] = useState<{
@@ -253,7 +254,8 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
     }
     
     // 3. Clear any active signer connections only if requested (for method switching)
-    if (clearSigner) {
+    // NEVER clear the signer if we're on the 'choose' step (component unmounting after successful login)
+    if (clearSigner && currentStep !== 'choose') {
       try {
         const { clearActiveSigner } = require('@/lib/signer-connector')
         clearActiveSigner()
@@ -262,7 +264,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
         console.log('[Login] ⚠️ Could not clear active signer:', error)
       }
     } else {
-      console.log('[Login] 🛑 Preserving active signer (user is logged in)')
+      console.log('[Login] 🛑 Preserving active signer (user is logged in or component unmounting)')
     }
     
     // 4. Force immediate UI update

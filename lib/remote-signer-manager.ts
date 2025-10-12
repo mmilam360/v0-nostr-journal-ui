@@ -30,23 +30,30 @@ class RemoteSignerManager {
         relayCount: sessionData.relayUrls?.length || 0
       })
       
-      // Create new remote signer instance
-      console.log("[RemoteSignerManager] 🔧 Creating Nip46RemoteSigner instance...")
-      const signer = new Nip46RemoteSigner(sessionData)
-      console.log("[RemoteSignerManager] ✅ Nip46RemoteSigner created successfully")
+      // Use existing active signer from SignerConnector instead of creating new one
+      console.log("[RemoteSignerManager] 🔧 Getting existing active signer from SignerConnector...")
+      const { getActiveSigner } = await import('./signer-connector')
+      const existingSigner = getActiveSigner()
+      
+      if (!existingSigner) {
+        console.error("[RemoteSignerManager] ❌ No active signer available from SignerConnector")
+        return false
+      }
+      
+      console.log("[RemoteSignerManager] ✅ Found existing active signer")
       
       // Test the connection by getting public key
       console.log("[RemoteSignerManager] 🔧 Testing connection by getting public key...")
-      const actualUserPubkey = await signer.getPublicKey()
+      const actualUserPubkey = await existingSigner.getPublicKey()
       console.log("[RemoteSignerManager] Actual user pubkey from signer:", actualUserPubkey)
       
       if (actualUserPubkey !== userPubkey) {
         console.warn("[RemoteSignerManager] ⚠️ Pubkey mismatch - expected:", userPubkey, "got:", actualUserPubkey)
       }
       
-      // Store session
+      // Store session with existing signer
       this.session = {
-        signer,
+        signer: existingSigner,
         sessionState: sessionData,
         permissions: [], // Will be populated when we check permissions
         userPubkey: actualUserPubkey,
