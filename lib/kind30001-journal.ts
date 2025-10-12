@@ -390,36 +390,37 @@ async function encryptKind30001Content(note: DecryptedNote, authData: any, actua
   console.log("[Kind30001Journal] Encrypting journal data for user:", userPubkey)
   
   try {
-    if (authData.authMethod === "remote") {
-      // CRITICAL: For remote signers, use the signer's nip04_encrypt method
-      console.log("[Kind30001Journal] Using remote signer's nip04_encrypt method...")
-      
-      const { remoteSignerManager } = await import("./remote-signer-manager")
-      
-      if (!remoteSignerManager.isAvailable()) {
-        throw new Error("Remote signer not available. Please reconnect.")
-      }
-      
-      // Get the signer from the remote signer manager
-      const sessionInfo = remoteSignerManager.getSessionInfo()
-      if (!sessionInfo.available || !sessionInfo.hasSigner) {
-        throw new Error("Remote signer not properly initialized")
-      }
-      
-      // Use the remote signer's nip04_encrypt method
-      const encrypted = await remoteSignerManager.nip04Encrypt(userPubkey, journalData)
-      console.log("[Kind30001Journal] ✅ Encrypted with remote signer")
-      
-      return encrypted
-      
-    } else {
-      // For extension and nsec methods, use standard NIP-04 encryption
-      const privateKey = await getPrivateKeyForEncryption(authData)
-      const encrypted = await nip04.encrypt(privateKey, userPubkey, journalData)
-      console.log("[Kind30001Journal] ✅ Encrypted with local key")
-      
-      return encrypted
-    }
+    // Use deterministic encryption for ALL methods to ensure consistency
+    console.log("[Kind30001Journal] 🔐 Using deterministic pubkey-based encryption for all methods...")
+    const encrypted = await deterministicEncrypt(userPubkey, journalData)
+    console.log("[Kind30001Journal] ✅ Encrypted with deterministic method")
+    
+    return encrypted
+    
+    // OLD REMOTE SIGNER METHOD (removed for consistency):
+    // if (authData.authMethod === "remote") {
+    //   // CRITICAL: For remote signers, use the signer's nip04_encrypt method
+    //   console.log("[Kind30001Journal] Using remote signer's nip04_encrypt method...")
+    //   
+    //   const { remoteSignerManager } = await import("./remote-signer-manager")
+    //   
+    //   if (!remoteSignerManager.isAvailable()) {
+    //     throw new Error("Remote signer not available. Please reconnect.")
+    //   }
+    //   
+    //   // Get the signer from the remote signer manager
+    //   const sessionInfo = remoteSignerManager.getSessionInfo()
+    //   if (!sessionInfo.available || !sessionInfo.hasSigner) {
+    //     throw new Error("Remote signer not properly initialized")
+    //   }
+    //   
+    //   // Use the remote signer's nip04_encrypt method
+    //   const encrypted = await remoteSignerManager.nip04Encrypt(userPubkey, journalData)
+    //   console.log("[Kind30001Journal] ✅ Encrypted with remote signer")
+    //   
+    //   return encrypted
+    //   
+    // }
   } catch (error) {
     console.error("[Kind30001Journal] ❌ Encryption failed:", error)
     throw new Error(`Failed to encrypt journal data: ${error instanceof Error ? error.message : "Unknown error"}`)
@@ -439,92 +440,43 @@ async function decryptKind30001Content(encryptedData: string, authData: any, act
     console.log("[Kind30001Journal] User pubkey for decryption:", userPubkey)
     console.log("[Kind30001Journal] Encrypted data length:", encryptedData.length)
     
-    if (authData.authMethod === "remote") {
-      // CRITICAL: For remote signers, use the signer's nip04_decrypt method
-      console.log("[Kind30001Journal] 🔐 Using remote signer's nip04_decrypt method...")
-      
-      const { remoteSignerManager } = await import("./remote-signer-manager")
-      
-      if (!remoteSignerManager.isAvailable()) {
-        throw new Error("Remote signer not available. Please reconnect.")
-      }
-      
-      // Get the signer from the remote signer manager
-      const sessionInfo = remoteSignerManager.getSessionInfo()
-      if (!sessionInfo.available || !sessionInfo.hasSigner) {
-        throw new Error("Remote signer not properly initialized")
-      }
-      
-      // Use the remote signer's nip04_decrypt method
-      const decrypted = await remoteSignerManager.nip04Decrypt(userPubkey, encryptedData)
-      console.log("[Kind30001Journal] ✅ Decrypted with remote signer")
-      
-      // Parse the JSON content
-      const journalData = JSON.parse(decrypted)
-      console.log("[Kind30001Journal] 📄 Decrypted journal data:", journalData.title)
-      return journalData
-      
-    } else {
-      // For extension and nsec methods, use standard NIP-04 decryption
-      console.log("[Kind30001Journal] 🔐 Using standard NIP-04 decryption...")
-      
-      try {
-        const privateKey = await getPrivateKeyForEncryption(authData)
-        console.log("[Kind30001Journal] Private key type:", typeof privateKey, "Length:", privateKey.length)
-        
-        const decrypted = await nip04.decrypt(privateKey, userPubkey, encryptedData)
-        console.log("[Kind30001Journal] ✅ Decrypted with standard NIP-04")
-        
-        // Parse the JSON content
-        const journalData = JSON.parse(decrypted)
-        console.log("[Kind30001Journal] 📄 Decrypted journal data:", journalData.title)
-        return journalData
-        
-      } catch (error) {
-        console.log("[Kind30001Journal] ❌ Standard NIP-04 decryption failed:", error)
-        
-        // For extension method, try using remote signer decryption as fallback
-        if (authData.authMethod === "extension") {
-          console.log("[Kind30001Journal] 🔄 Trying remote signer decryption as fallback...")
-          try {
-            const { remoteSignerManager } = await import("./remote-signer-manager")
-            if (remoteSignerManager.isAvailable()) {
-              const sessionInfo = remoteSignerManager.getSessionInfo()
-              if (sessionInfo.available && sessionInfo.hasSigner) {
-                const decrypted = await remoteSignerManager.nip04Decrypt(userPubkey, encryptedData)
-                console.log("[Kind30001Journal] ✅ Decrypted with remote signer fallback")
-                
-                const journalData = JSON.parse(decrypted)
-                console.log("[Kind30001Journal] 📄 Decrypted journal data:", journalData.title)
-                return journalData
-              }
-            }
-          } catch (fallbackError) {
-            console.log("[Kind30001Journal] ❌ Remote signer fallback also failed:", fallbackError)
-          }
-          
-          // Try alternative approach - use remote signer decryption method directly
-          console.log("[Kind30001Journal] 🔄 Trying direct remote signer decryption...")
-          try {
-            // Import and use remote signer decryption even for extension method
-            const { remoteSignerManager } = await import("./remote-signer-manager")
-            if (remoteSignerManager.isAvailable()) {
-              const decrypted = await remoteSignerManager.nip04Decrypt(userPubkey, encryptedData)
-              console.log("[Kind30001Journal] ✅ Decrypted with direct remote signer method")
-              
-              const journalData = JSON.parse(decrypted)
-              console.log("[Kind30001Journal] 📄 Decrypted journal data:", journalData.title)
-              return journalData
-            }
-          } catch (directError) {
-            console.log("[Kind30001Journal] ❌ Direct remote signer decryption also failed:", directError)
-          }
-        }
-        
-        // If all methods fail, re-throw the original error
-        throw error
-      }
-    }
+    // Use deterministic decryption for ALL methods to ensure consistency
+    console.log("[Kind30001Journal] 🔓 Using deterministic pubkey-based decryption for all methods...")
+    const decrypted = await deterministicDecrypt(userPubkey, encryptedData)
+    console.log("[Kind30001Journal] ✅ Decrypted with deterministic method")
+    
+    // Parse the JSON content
+    const journalData = JSON.parse(decrypted)
+    console.log("[Kind30001Journal] 📄 Decrypted journal data:", journalData.title)
+    return journalData
+    
+    // OLD REMOTE SIGNER METHOD (removed for consistency):
+    // if (authData.authMethod === "remote") {
+    //   // CRITICAL: For remote signers, use the signer's nip04_decrypt method
+    //   console.log("[Kind30001Journal] 🔐 Using remote signer's nip04_decrypt method...")
+    //   
+    //   const { remoteSignerManager } = await import("./remote-signer-manager")
+    //   
+    //   if (!remoteSignerManager.isAvailable()) {
+    //     throw new Error("Remote signer not available. Please reconnect.")
+    //   }
+    //   
+    //   // Get the signer from the remote signer manager
+    //   const sessionInfo = remoteSignerManager.getSessionInfo()
+    //   if (!sessionInfo.available || !sessionInfo.hasSigner) {
+    //     throw new Error("Remote signer not properly initialized")
+    //   }
+    //   
+    //   // Use the remote signer's nip04_decrypt method
+    //   const decrypted = await remoteSignerManager.nip04Decrypt(userPubkey, encryptedData)
+    //   console.log("[Kind30001Journal] ✅ Decrypted with remote signer")
+    //   
+    //   // Parse the JSON content
+    //   const journalData = JSON.parse(decrypted)
+    //   console.log("[Kind30001Journal] 📄 Decrypted journal data:", journalData.title)
+    //   return journalData
+    //   
+    // }
     
   } catch (error) {
     console.error("[Kind30001Journal] Failed to decrypt Kind 30001 content:", error)
@@ -589,4 +541,78 @@ export function cleanupPool() {
     globalPool = null
     console.log("[Kind30001Journal] Pool cleaned up")
   }
+}
+
+/**
+ * Deterministic encryption based on pubkey for consistency across login methods
+ */
+async function deterministicEncrypt(pubkey: string, plaintext: string): Promise<string> {
+  console.log("[Kind30001Journal] 🔐 Deterministic encryption for pubkey:", pubkey)
+  
+  // Use the same deterministic method as nostr-crypto.ts
+  const encoder = new TextEncoder()
+  const encryptionKey = encoder.encode(pubkey).slice(0, 32)
+  
+  const keyMaterial = await crypto.subtle.importKey("raw", encryptionKey.slice(0, 32), { name: "PBKDF2" }, false, [
+    "deriveKey",
+  ])
+  
+  const key = await crypto.subtle.deriveKey(
+    {
+      name: "PBKDF2",
+      salt: encoder.encode("nostr-journal-self-encrypt"),
+      iterations: 100000,
+      hash: "SHA-256",
+    },
+    keyMaterial,
+    { name: "AES-GCM", length: 256 },
+    false,
+    ["encrypt"],
+  )
+  
+  const iv = crypto.getRandomValues(new Uint8Array(12))
+  const encrypted = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, encoder.encode(plaintext))
+  
+  const combined = new Uint8Array(iv.length + encrypted.byteLength)
+  combined.set(iv)
+  combined.set(new Uint8Array(encrypted), iv.length)
+  
+  return btoa(String.fromCharCode(...combined))
+}
+
+/**
+ * Deterministic decryption based on pubkey for consistency across login methods
+ */
+async function deterministicDecrypt(pubkey: string, encryptedData: string): Promise<string> {
+  console.log("[Kind30001Journal] 🔓 Deterministic decryption for pubkey:", pubkey)
+  
+  // Use the same deterministic method as nostr-crypto.ts
+  const decoder = new TextDecoder()
+  const encoder = new TextEncoder()
+  
+  const combined = Uint8Array.from(atob(encryptedData), (c) => c.charCodeAt(0))
+  const iv = combined.slice(0, 12)
+  const encrypted = combined.slice(12)
+  
+  const encryptionKey = encoder.encode(pubkey).slice(0, 32)
+  
+  const keyMaterial = await crypto.subtle.importKey("raw", encryptionKey.slice(0, 32), { name: "PBKDF2" }, false, [
+    "deriveKey",
+  ])
+  
+  const key = await crypto.subtle.deriveKey(
+    {
+      name: "PBKDF2",
+      salt: encoder.encode("nostr-journal-self-encrypt"),
+      iterations: 100000,
+      hash: "SHA-256",
+    },
+    keyMaterial,
+    { name: "AES-GCM", length: 256 },
+    false,
+    ["decrypt"],
+  )
+  
+  const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, encrypted)
+  return decoder.decode(decrypted)
 }
