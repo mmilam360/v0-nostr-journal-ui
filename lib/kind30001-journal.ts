@@ -68,18 +68,35 @@ export async function loadJournalFromKind30001(authData: any): Promise<Decrypted
   const pool = getPool()
   
   try {
-    // Query for Kind 30001 events with our consistent user identifier in p-tag
-    console.log("[Kind30001Journal] Querying relays for Kind 30001 events with p-tag:", authData.pubkey)
+    // Get the actual pubkey from the signer (important for extension/remote signers)
+    let actualPubkey = authData.pubkey
+    if (authData.authMethod === "extension" && window.nostr) {
+      actualPubkey = await window.nostr.getPublicKey()
+      console.log("[Kind30001Journal] Got actual pubkey from extension:", actualPubkey)
+    } else if (authData.authMethod === "remote") {
+      // For remote signers, use the pubkey from the remote signer session
+      const { remoteSignerManager } = await import("./remote-signer-manager")
+      if (remoteSignerManager.isAvailable()) {
+        const sessionInfo = remoteSignerManager.getSessionInfo()
+        if (sessionInfo.userPubkey) {
+          actualPubkey = sessionInfo.userPubkey
+          console.log("[Kind30001Journal] Got actual pubkey from remote signer:", actualPubkey)
+        }
+      }
+    }
+    
+    // Query for Kind 30001 events with the ACTUAL user pubkey in p-tag
+    console.log("[Kind30001Journal] Querying relays for Kind 30001 events with p-tag:", actualPubkey)
     console.log("[Kind30001Journal] Query filters:", {
       kinds: [KIND30001_LIST],
-      "#p": [authData.pubkey],
+      "#p": [actualPubkey],
       limit: 1000
     })
     
     // Use pool.querySync with p-tag filter for consistent user identification
     const listEvents = await pool.querySync(RELAYS, {
       kinds: [KIND30001_LIST],
-      "#p": [authData.pubkey],
+      "#p": [actualPubkey],
       limit: 1000
     })
     
@@ -93,7 +110,7 @@ export async function loadJournalFromKind30001(authData: any): Promise<Decrypted
       console.log("[Kind30001Journal] Retrying query after delay...")
       const retryEvents = await pool.querySync(RELAYS, {
         kinds: [KIND30001_LIST],
-        "#p": [authData.pubkey],
+        "#p": [actualPubkey],
         limit: 1000
       })
       
@@ -137,8 +154,8 @@ export async function loadJournalFromKind30001(authData: any): Promise<Decrypted
       
       // Verify the p-tag matches our user (double-check since relay already filtered)
       const pTag = event.tags.find(tag => tag[0] === "p")?.[1]
-      if (pTag !== authData.pubkey) {
-        console.log("[Kind30001Journal] P-tag mismatch:", pTag, "vs", authData.pubkey)
+      if (pTag !== actualPubkey) {
+        console.log("[Kind30001Journal] P-tag mismatch:", pTag, "vs", actualPubkey)
         return false
       }
       
@@ -152,7 +169,7 @@ export async function loadJournalFromKind30001(authData: any): Promise<Decrypted
       relevantEvents.map(async (event) => {
         try {
           console.log("[Kind30001Journal] Decrypting event:", event.id)
-          const decryptedContent = await decryptKind30001Content(event.content, authData)
+          const decryptedContent = await decryptKind30001Content(event.content, authData, actualPubkey)
           
           if (decryptedContent) {
             console.log("[Kind30001Journal] Successfully decrypted journal entry:", decryptedContent.title)
@@ -229,7 +246,7 @@ export async function saveJournalAsKind30001(note: DecryptedNote, authData: any)
       created_at: Math.floor(Date.now() / 1000),
       tags: [
         ["d", dTag],
-        ["p", authData.pubkey],
+        ["p", actualPubkey],  // Use actualPubkey for consistent filtering
       ],
       content: encryptedContent,
       pubkey: actualPubkey,
@@ -379,10 +396,10 @@ async function encryptKind30001Content(note: DecryptedNote, authData: any, actua
 /**
  * Decrypt Kind 30001 content using consistent decryption approach
  */
-async function decryptKind30001Content(encryptedData: string, authData: any): Promise<any> {
+async function decryptKind30001Content(encryptedData: string, authData: any, actualPubkey?: string): Promise<any> {
   
   try {
-    const userPubkey = authData.pubkey
+    const userPubkey = actualPubkey || authData.pubkey
     
     console.log("[Kind30001Journal] Decrypting with user pubkey:", userPubkey)
     
