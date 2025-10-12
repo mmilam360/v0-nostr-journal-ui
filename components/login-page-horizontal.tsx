@@ -22,6 +22,7 @@ import { bytesToHex } from '@noble/hashes/utils'
 import { QRCodeSVG } from 'qrcode.react'
 import { Logo } from './logo'
 import { Nip46RemoteSigner } from 'nostr-signer-connector'
+import InfoModal from './info-modal'
 
 interface LoginPageHorizontalProps {
   onLoginSuccess: (data: any) => void
@@ -1173,6 +1174,11 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
           </Button>
         </div>
       </div>
+      
+      {/* Info Modal */}
+      {showInfo && (
+        <InfoModal onClose={() => setShowInfo(false)} />
+      )}
     </div>
   )
 }

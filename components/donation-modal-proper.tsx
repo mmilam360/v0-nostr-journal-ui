@@ -14,12 +14,17 @@ interface DonationModalProps {
 
 export function DonationModal({ open, onOpenChange }: DonationModalProps) {
   const lightningAddress = "michaelmilam@getalby.com"
-  const [amount, setAmount] = useState<number>(5000)
+  const [amount, setAmount] = useState<number | ''>('')
   const [invoice, setInvoice] = useState<string>('')
   const [qrDataURL, setQrDataURL] = useState<string>('')
   const [isGenerating, setIsGenerating] = useState(false)
   const [error, setError] = useState<string>('')
   const [copied, setCopied] = useState(false)
+  
+  // Generate generic lightning QR code on mount
+  useEffect(() => {
+    generateGenericQR()
+  }, [])
   
   // Generate invoice when amount changes
   useEffect(() => {
@@ -27,6 +32,26 @@ export function DonationModal({ open, onOpenChange }: DonationModalProps) {
       generateInvoice(amount)
     }
   }, [amount])
+  
+  const generateGenericQR = async () => {
+    try {
+      // Generate QR code for the lightning address directly
+      const qrData = await QRCode.toDataURL(`lightning:${lightningAddress}`, {
+        errorCorrectionLevel: 'M',
+        type: 'image/png',
+        quality: 1,
+        margin: 2,
+        width: 400,
+        color: {
+          dark: '#000000',
+          light: '#FFFFFF'
+        }
+      })
+      setQrDataURL(qrData)
+    } catch (err) {
+      console.error('Generic QR generation error:', err)
+    }
+  }
   
   const generateInvoice = async (sats: number) => {
     setIsGenerating(true)
@@ -115,6 +140,16 @@ export function DonationModal({ open, onOpenChange }: DonationModalProps) {
     }
   }
   
+  const copyLightningAddress = async () => {
+    try {
+      await navigator.clipboard.writeText(lightningAddress)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch (err) {
+      console.error('Failed to copy:', err)
+    }
+  }
+  
   
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -148,11 +183,14 @@ export function DonationModal({ open, onOpenChange }: DonationModalProps) {
                 type="number"
                 placeholder="Enter amount in sats"
                 value={amount}
-                onChange={(e) => setAmount(Number(e.target.value))}
+                onChange={(e) => setAmount(e.target.value === '' ? '' : Number(e.target.value))}
                 min="1"
               />
-              <Button onClick={() => generateInvoice(amount)}>
-                Generate Invoice
+              <Button 
+                onClick={() => amount && amount > 0 ? generateInvoice(amount) : generateGenericQR()}
+                disabled={!amount || amount <= 0}
+              >
+                {amount && amount > 0 ? 'Generate Invoice' : 'Show Generic QR'}
               </Button>
             </div>
           </div>
@@ -181,21 +219,21 @@ export function DonationModal({ open, onOpenChange }: DonationModalProps) {
                 <div className="p-4 bg-white rounded-lg border-4 border-gray-200">
                   <img 
                     src={qrDataURL} 
-                    alt="Lightning Invoice QR Code" 
+                    alt={invoice ? "Lightning Invoice QR Code" : "Lightning Address QR Code"} 
                     className="w-64 h-64 sm:w-80 sm:h-80"
                   />
                 </div>
                 
                 <p className="text-sm text-center text-muted-foreground">
-                  Scan with your Lightning wallet
+                  {invoice ? 'Scan with your Lightning wallet' : 'Scan with your Lightning wallet to send any amount'}
                 </p>
                 
-                {/* Copy invoice button */}
+                {/* Copy button */}
                 <div className="w-full">
                   <Button
                     variant="outline"
                     className="w-full gap-2"
-                    onClick={copyInvoice}
+                    onClick={invoice ? copyInvoice : copyLightningAddress}
                   >
                     {copied ? (
                       <>
@@ -205,7 +243,7 @@ export function DonationModal({ open, onOpenChange }: DonationModalProps) {
                     ) : (
                       <>
                         <Copy className="w-4 h-4" />
-                        Copy Invoice
+                        {invoice ? 'Copy Invoice' : 'Copy Address'}
                       </>
                     )}
                   </Button>
