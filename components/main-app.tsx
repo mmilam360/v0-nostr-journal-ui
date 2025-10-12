@@ -157,7 +157,6 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   // Simplified sync operations using global sync manager
 
   const retryConnection = async () => {
-    console.log("[v0] 🔄 Retrying connection - querying relays...")
     setConnectionError(null)
     setSyncStatus("syncing")
 
@@ -182,7 +181,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       })
       setTags(Array.from(allTags))
       
-      console.log(`[v0] ✅ Retry complete: ${validatedNotes.length} notes loaded from relays`)
+      // Retry complete
       
     } catch (error) {
       console.error("[v0] Retry failed:", error)
