@@ -70,9 +70,14 @@ export async function loadJournalFromKind30001(authData: any): Promise<Decrypted
   try {
     // Get the actual pubkey from the signer (important for extension/remote signers)
     let actualPubkey = authData.pubkey
+    console.log("[Kind30001Journal] 🔍 DEBUGGING PUBKEY CONSISTENCY:")
+    console.log("[Kind30001Journal] Auth method:", authData.authMethod)
+    console.log("[Kind30001Journal] AuthData pubkey:", authData.pubkey)
+    
     if (authData.authMethod === "extension" && window.nostr) {
       actualPubkey = await window.nostr.getPublicKey()
       console.log("[Kind30001Journal] Got actual pubkey from extension:", actualPubkey)
+      console.log("[Kind30001Journal] ⚠️  EXTENSION PUBKEY DIFFERENT FROM AUTH DATA:", actualPubkey !== authData.pubkey)
     } else if (authData.authMethod === "remote") {
       // For remote signers, use the pubkey from the remote signer session
       const { remoteSignerManager } = await import("./remote-signer-manager")
@@ -81,9 +86,14 @@ export async function loadJournalFromKind30001(authData: any): Promise<Decrypted
         if (sessionInfo.userPubkey) {
           actualPubkey = sessionInfo.userPubkey
           console.log("[Kind30001Journal] Got actual pubkey from remote signer:", actualPubkey)
+          console.log("[Kind30001Journal] ⚠️  REMOTE PUBKEY DIFFERENT FROM AUTH DATA:", actualPubkey !== authData.pubkey)
         }
       }
+    } else if (authData.authMethod === "nsec") {
+      console.log("[Kind30001Journal] Using nsec authData pubkey:", actualPubkey)
     }
+    
+    console.log("[Kind30001Journal] 🎯 FINAL PUBKEY FOR QUERY:", actualPubkey)
     
     // Query for Kind 30001 events with the ACTUAL user pubkey in p-tag
     console.log("[Kind30001Journal] Querying relays for Kind 30001 events with p-tag:", actualPubkey)
@@ -227,10 +237,28 @@ export async function saveJournalAsKind30001(note: DecryptedNote, authData: any)
     
     // Get the actual pubkey from the signer (important for extension/remote signers)
     let actualPubkey = authData.pubkey
+    console.log("[Kind30001Journal] 🔍 SAVE DEBUGGING PUBKEY CONSISTENCY:")
+    console.log("[Kind30001Journal] Auth method:", authData.authMethod)
+    console.log("[Kind30001Journal] AuthData pubkey:", authData.pubkey)
+    
     if (authData.authMethod === "extension" && window.nostr) {
       actualPubkey = await window.nostr.getPublicKey()
       console.log("[Kind30001Journal] Got actual pubkey from extension:", actualPubkey)
+      console.log("[Kind30001Journal] ⚠️  EXTENSION PUBKEY DIFFERENT FROM AUTH DATA:", actualPubkey !== authData.pubkey)
+    } else if (authData.authMethod === "remote") {
+      // For remote signers, use the pubkey from the remote signer session
+      const { remoteSignerManager } = await import("./remote-signer-manager")
+      if (remoteSignerManager.isAvailable()) {
+        const sessionInfo = remoteSignerManager.getSessionInfo()
+        if (sessionInfo.userPubkey) {
+          actualPubkey = sessionInfo.userPubkey
+          console.log("[Kind30001Journal] Got actual pubkey from remote signer:", actualPubkey)
+          console.log("[Kind30001Journal] ⚠️  REMOTE PUBKEY DIFFERENT FROM AUTH DATA:", actualPubkey !== authData.pubkey)
+        }
+      }
     }
+    
+    console.log("[Kind30001Journal] 🎯 FINAL PUBKEY FOR SAVE:", actualPubkey)
     
     // Encrypt the journal content using NIP-04
     console.log("[Kind30001Journal] 🔐 Encrypting content...")
