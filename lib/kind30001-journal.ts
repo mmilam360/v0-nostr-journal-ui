@@ -20,7 +20,7 @@ async function getPrivateKeyForEncryption(authData: any): Promise<string> {
   console.log("[Kind30001Journal] Auth method:", authData.authMethod)
   
   if (authData.authMethod === "extension") {
-    // For extension auth, use pubkey as fallback
+    // For extension auth, use pubkey as fallback (this was working before)
     console.log("[Kind30001Journal] Using extension pubkey as encryption key:", authData.pubkey)
     return authData.pubkey
   } else if (authData.authMethod === "nsec" && authData.privateKey) {
@@ -467,16 +467,63 @@ async function decryptKind30001Content(encryptedData: string, authData: any, act
     } else {
       // For extension and nsec methods, use standard NIP-04 decryption
       console.log("[Kind30001Journal] 🔐 Using standard NIP-04 decryption...")
-      const privateKey = await getPrivateKeyForEncryption(authData)
-      console.log("[Kind30001Journal] Private key type:", typeof privateKey, "Length:", privateKey.length)
       
-      const decrypted = await nip04.decrypt(privateKey, userPubkey, encryptedData)
-      console.log("[Kind30001Journal] ✅ Decrypted with standard NIP-04")
-      
-      // Parse the JSON content
-      const journalData = JSON.parse(decrypted)
-      console.log("[Kind30001Journal] 📄 Decrypted journal data:", journalData.title)
-      return journalData
+      try {
+        const privateKey = await getPrivateKeyForEncryption(authData)
+        console.log("[Kind30001Journal] Private key type:", typeof privateKey, "Length:", privateKey.length)
+        
+        const decrypted = await nip04.decrypt(privateKey, userPubkey, encryptedData)
+        console.log("[Kind30001Journal] ✅ Decrypted with standard NIP-04")
+        
+        // Parse the JSON content
+        const journalData = JSON.parse(decrypted)
+        console.log("[Kind30001Journal] 📄 Decrypted journal data:", journalData.title)
+        return journalData
+        
+      } catch (error) {
+        console.log("[Kind30001Journal] ❌ Standard NIP-04 decryption failed:", error)
+        
+        // For extension method, try using remote signer decryption as fallback
+        if (authData.authMethod === "extension") {
+          console.log("[Kind30001Journal] 🔄 Trying remote signer decryption as fallback...")
+          try {
+            const { remoteSignerManager } = await import("./remote-signer-manager")
+            if (remoteSignerManager.isAvailable()) {
+              const sessionInfo = remoteSignerManager.getSessionInfo()
+              if (sessionInfo.available && sessionInfo.hasSigner) {
+                const decrypted = await remoteSignerManager.nip04Decrypt(userPubkey, encryptedData)
+                console.log("[Kind30001Journal] ✅ Decrypted with remote signer fallback")
+                
+                const journalData = JSON.parse(decrypted)
+                console.log("[Kind30001Journal] 📄 Decrypted journal data:", journalData.title)
+                return journalData
+              }
+            }
+          } catch (fallbackError) {
+            console.log("[Kind30001Journal] ❌ Remote signer fallback also failed:", fallbackError)
+          }
+          
+          // Try alternative approach - use remote signer decryption method directly
+          console.log("[Kind30001Journal] 🔄 Trying direct remote signer decryption...")
+          try {
+            // Import and use remote signer decryption even for extension method
+            const { remoteSignerManager } = await import("./remote-signer-manager")
+            if (remoteSignerManager.isAvailable()) {
+              const decrypted = await remoteSignerManager.nip04Decrypt(userPubkey, encryptedData)
+              console.log("[Kind30001Journal] ✅ Decrypted with direct remote signer method")
+              
+              const journalData = JSON.parse(decrypted)
+              console.log("[Kind30001Journal] 📄 Decrypted journal data:", journalData.title)
+              return journalData
+            }
+          } catch (directError) {
+            console.log("[Kind30001Journal] ❌ Direct remote signer decryption also failed:", directError)
+          }
+        }
+        
+        // If all methods fail, re-throw the original error
+        throw error
+      }
     }
     
   } catch (error) {
