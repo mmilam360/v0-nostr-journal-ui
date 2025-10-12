@@ -16,15 +16,20 @@ declare global {
 
 // Helper function to get private key for encryption
 async function getPrivateKeyForEncryption(authData: any): Promise<string> {
+  console.log("[Kind30001Journal] 🔑 Getting private key for encryption:")
+  console.log("[Kind30001Journal] Auth method:", authData.authMethod)
+  
   if (authData.authMethod === "extension") {
     // For extension auth, use pubkey as fallback
+    console.log("[Kind30001Journal] Using extension pubkey as encryption key:", authData.pubkey)
     return authData.pubkey
   } else if (authData.authMethod === "nsec" && authData.privateKey) {
+    console.log("[Kind30001Journal] Using nsec private key for encryption")
     return authData.privateKey
   } else if (authData.authMethod === "remote") {
     // CRITICAL: For remote signers, we CANNOT access the private key
     // Remote signer will handle encryption via its own methods
-    console.log("[Kind30001Journal] Remote signer - using pubkey for key derivation")
+    console.log("[Kind30001Journal] Remote signer - using pubkey for key derivation:", authData.pubkey)
     return authData.pubkey
   } else {
     throw new Error("No encryption key available")
@@ -429,11 +434,14 @@ async function decryptKind30001Content(encryptedData: string, authData: any, act
   try {
     const userPubkey = actualPubkey || authData.pubkey
     
-    console.log("[Kind30001Journal] Decrypting with user pubkey:", userPubkey)
+    console.log("[Kind30001Journal] 🔍 DECRYPTION DEBUGGING:")
+    console.log("[Kind30001Journal] Auth method:", authData.authMethod)
+    console.log("[Kind30001Journal] User pubkey for decryption:", userPubkey)
+    console.log("[Kind30001Journal] Encrypted data length:", encryptedData.length)
     
     if (authData.authMethod === "remote") {
       // CRITICAL: For remote signers, use the signer's nip04_decrypt method
-      console.log("[Kind30001Journal] Using remote signer's nip04_decrypt method...")
+      console.log("[Kind30001Journal] 🔐 Using remote signer's nip04_decrypt method...")
       
       const { remoteSignerManager } = await import("./remote-signer-manager")
       
@@ -453,15 +461,21 @@ async function decryptKind30001Content(encryptedData: string, authData: any, act
       
       // Parse the JSON content
       const journalData = JSON.parse(decrypted)
+      console.log("[Kind30001Journal] 📄 Decrypted journal data:", journalData.title)
       return journalData
       
     } else {
       // For extension and nsec methods, use standard NIP-04 decryption
+      console.log("[Kind30001Journal] 🔐 Using standard NIP-04 decryption...")
       const privateKey = await getPrivateKeyForEncryption(authData)
+      console.log("[Kind30001Journal] Private key type:", typeof privateKey, "Length:", privateKey.length)
+      
       const decrypted = await nip04.decrypt(privateKey, userPubkey, encryptedData)
+      console.log("[Kind30001Journal] ✅ Decrypted with standard NIP-04")
       
       // Parse the JSON content
       const journalData = JSON.parse(decrypted)
+      console.log("[Kind30001Journal] 📄 Decrypted journal data:", journalData.title)
       return journalData
     }
     
