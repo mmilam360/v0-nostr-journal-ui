@@ -26,7 +26,6 @@ import TagsPanel from "@/components/tags-panel"
 import NoteList from "@/components/note-list"
 import Editor from "@/components/editor"
 import PublishModal from "@/components/publish-modal"
-import PublishConfirmationModal from "@/components/publish-confirmation-modal"
 import DeleteConfirmationModal from "@/components/delete-confirmation-modal"
 import ProfilePage from "@/components/profile-page"
 import { Button } from "@/components/ui/button"
@@ -52,15 +51,12 @@ import { sanitizeNotes } from "@/lib/data-validators"
 import { ErrorBoundary } from "@/components/error-boundary"
 import { RelayManager } from "@/components/relay-manager"
 import { ConnectionStatus } from "@/components/connection-status"
-import { DiagnosticPage } from "@/components/diagnostic-page"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { getDefaultRelays, initializePersistentRelayPool, shutdownPersistentRelayPool } from "@/lib/relay-manager"
 import { DonationModal } from "@/components/donation-modal-proper"
 import { setActiveSigner } from "@/lib/signer-connector"
 import { remoteSignerManager } from "@/lib/remote-signer-manager"
-import { createDirectEventManager, type DirectEventManager } from "@/lib/direct-event-manager"
 import { LoadingScreen } from "@/components/loading-screen"
-import { addSyncTask, addHighPrioritySyncTask, onSyncTaskCompleted, onSyncTaskFailed, getSyncQueueStats } from "@/lib/sync-queue"
 import type { Nip46SessionState } from 'nostr-signer-connector'
 
 // Sync Status Component
@@ -151,8 +147,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   const [showDonationModal, setShowDonationModal] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
   
-  // Direct event manager
-  const [eventManager] = useState<DirectEventManager>(() => createDirectEventManager())
+  // Event management removed - using direct sync instead
 
   // Simplified sync operations using global sync manager
 
@@ -184,55 +179,55 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       // Retry complete
       
     } catch (error) {
-      console.error("[v0] Retry failed:", error)
+      console.error("[NostrJournal] Retry failed:", error)
       setSyncStatus("error")
       setConnectionError(error instanceof Error ? error.message : "Retry failed")
     }
   }
 
   const ensureRemoteSignerAvailable = async () => {
-    console.log("[v0] 🔧 Checking if remote signer is available...")
+    console.log("[NostrJournal] 🔧 Checking if remote signer is available...")
     
     try {
       // Check if remote signer manager is available
       if (remoteSignerManager.isAvailable()) {
-        console.log("[v0] ✅ Remote signer manager is available")
+        console.log("[NostrJournal] ✅ Remote signer manager is available")
         const sessionInfo = remoteSignerManager.getSessionInfo()
-        console.log("[v0] 🔍 Remote signer session info:", sessionInfo)
+        console.log("[NostrJournal] 🔍 Remote signer session info:", sessionInfo)
         return true
       }
       
-      console.log("[v0] ⚠️ Remote signer manager not available, attempting to resume...")
+      console.log("[NostrJournal] ⚠️ Remote signer manager not available, attempting to resume...")
       
       // Debug: Check what's in localStorage
-      console.log("[v0] 🔍 Debugging localStorage contents:")
-      console.log("[v0] 🔍 - nostr_remote_session:", localStorage.getItem('nostr_remote_session'))
-      console.log("[v0] 🔍 - All localStorage keys:", Object.keys(localStorage))
+      console.log("[NostrJournal] 🔍 Debugging localStorage contents:")
+      console.log("[NostrJournal] 🔍 - nostr_remote_session:", localStorage.getItem('nostr_remote_session'))
+      console.log("[NostrJournal] 🔍 - All localStorage keys:", Object.keys(localStorage))
       
       // Try to resume session from localStorage
       const savedSession = localStorage.getItem('nostr_remote_session')
       if (savedSession) {
-        console.log("[v0] 🔧 Found saved session, attempting to resume...")
-        console.log("[v0] 🔧 Session data:", savedSession)
+        console.log("[NostrJournal] 🔧 Found saved session, attempting to resume...")
+        console.log("[NostrJournal] 🔧 Session data:", savedSession)
         const sessionData = JSON.parse(savedSession)
         
         // Try to initialize remote signer manager from saved session
         const success = await remoteSignerManager.initializeFromSessionData(sessionData, authData.pubkey)
         
         if (success) {
-          console.log("[v0] ✅ Remote signer session resumed successfully")
+          console.log("[NostrJournal] ✅ Remote signer session resumed successfully")
           return true
         } else {
-          console.error("[v0] ❌ Failed to resume remote signer session")
+          console.error("[NostrJournal] ❌ Failed to resume remote signer session")
           return false
         }
       } else {
-        console.error("[v0] ❌ No saved session found for remote signer")
-        console.log("[v0] 🔍 This suggests the session was never saved during login")
+        console.error("[NostrJournal] ❌ No saved session found for remote signer")
+        console.log("[NostrJournal] 🔍 This suggests the session was never saved during login")
         return false
       }
     } catch (error) {
-      console.error("[v0] ❌ Error ensuring remote signer availability:", error)
+      console.error("[NostrJournal] ❌ Error ensuring remote signer availability:", error)
       return false
     }
   }
@@ -244,7 +239,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       return
     }
 
-    console.log("[v0] Retrying", failedNotes.length, "failed syncs")
+    console.log("[NostrJournal] Retrying", failedNotes.length, "failed syncs")
     setSyncStatus("syncing")
 
     for (const note of failedNotes) {
@@ -256,7 +251,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
           // LOCAL STORAGE DISABLED - Notes are only stored on Nostr relays
         }
       } catch (error) {
-        console.error("[v0] Retry failed for:", note.title, error)
+        console.error("[NostrJournal] Retry failed for:", note.title, error)
       }
     }
 
@@ -264,35 +259,36 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     setLastSyncTime(new Date())
   }
 
-  useEffect(() => {
-    // Set up sync queue event handlers with error protection
-    try {
-      onSyncTaskCompleted((result) => {
-        console.log('[SyncQueue] Task completed:', result.taskId, result.success ? 'SUCCESS' : 'FAILED');
-        console.log('[SyncQueue] EventId:', result.eventId);
-        
-        if (result.success && result.eventId) {
-          console.log('[SyncQueue] Updating note with eventId:', result.eventId);
-          // Update note with eventId
-          setNotes(prevNotes => 
-            prevNotes.map(note => 
-              note.id === result.taskId 
-                ? { ...note, eventId: result.eventId }
-                : note
-            )
-          );
-        } else {
-          console.log('[SyncQueue] Not updating note - success:', result.success, 'eventId:', result.eventId);
-        }
-      });
+  // Sync queue event handlers removed - using direct sync instead
+  // useEffect(() => {
+  //   // Set up sync queue event handlers with error protection
+  //   try {
+  //     onSyncTaskCompleted((result) => {
+  //       console.log('[SyncQueue] Task completed:', result.taskId, result.success ? 'SUCCESS' : 'FAILED');
+  //       console.log('[SyncQueue] EventId:', result.eventId);
+  //       
+  //       if (result.success && result.eventId) {
+  //         console.log('[SyncQueue] Updating note with eventId:', result.eventId);
+  //         // Update note with eventId
+  //         setNotes(prevNotes => 
+  //           prevNotes.map(note => 
+  //             note.id === result.taskId 
+  //               ? { ...note, eventId: result.eventId }
+  //               : note
+  //           )
+  //         );
+  //       } else {
+  //         console.log('[SyncQueue] Not updating note - success:', result.success, 'eventId:', result.eventId);
+  //       }
+  //     });
 
-      onSyncTaskFailed((task, error) => {
-        console.error('[SyncQueue] Task failed:', task.id, error);
-        // Could show user notification here
-      });
-    } catch (error) {
-      console.warn('[SyncQueue] Error setting up event handlers:', error);
-    }
+  //     onSyncTaskFailed((task, error) => {
+  //       console.error('[SyncQueue] Task failed:', task.id, error);
+  //       // Could show user notification here
+  //     });
+  //   } catch (error) {
+  //     console.warn('[SyncQueue] Error setting up event handlers:', error);
+  //   }
 
     // PERMANENTLY DISABLED - Sync queue stats cause loading issues
     // Even with delayed startup, they interfere with initialization
@@ -300,20 +296,21 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     //   // No cleanup needed since we're not starting any intervals
     // };
 
+  useEffect(() => {
     const loadUserNotes = async () => {
-      console.log("[v0] Loading notes for user:", authData.pubkey)
+      console.log("[NostrJournal] Loading notes for user:", authData.pubkey)
       
       setIsLoading(true)
       setSyncStatus("syncing")
 
       try {
         // ALWAYS check and set up remote signer if needed
-        console.log("[v0] 🔧 Checking remote signer setup for auth method:", authData.authMethod)
+        console.log("[NostrJournal] 🔧 Checking remote signer setup for auth method:", authData.authMethod)
         
         // Set up the remote signer for remote authentication
         if (authData.authMethod === 'remote') {
-          console.log("[v0] 🔧 Setting up remote signer from session data")
-          console.log("[v0] 🔧 AuthData:", {
+          console.log("[NostrJournal] 🔧 Setting up remote signer from session data")
+          console.log("[NostrJournal] 🔧 AuthData:", {
             pubkey: authData.pubkey,
             authMethod: authData.authMethod,
             hasSessionData: !!authData.sessionData,
@@ -323,8 +320,8 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
           
           // Use the new remote signer manager
           if (authData.sessionData) {
-            console.log("[v0] 🔧 Initializing remote signer manager from session data...")
-            console.log("[v0] 🔧 Session data being passed:", {
+            console.log("[NostrJournal] 🔧 Initializing remote signer manager from session data...")
+            console.log("[NostrJournal] 🔧 Session data being passed:", {
               hasSessionData: !!authData.sessionData,
               sessionDataType: typeof authData.sessionData,
               sessionDataKeys: authData.sessionData ? Object.keys(authData.sessionData) : [],
@@ -335,41 +332,41 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
               const success = await remoteSignerManager.initializeFromSessionData(authData.sessionData, authData.pubkey)
               
               if (success) {
-                console.log("[v0] ✅ Remote signer manager initialized successfully")
+                console.log("[NostrJournal] ✅ Remote signer manager initialized successfully")
                 
                 // Also set up the legacy signer connector for backward compatibility
                 try {
                   const { resumeNip46Session } = await import('@/lib/signer-connector')
                   const signer = await resumeNip46Session(authData.sessionData)
                   if (signer) {
-                    console.log("[v0] ✅ Legacy signer connector also set up for compatibility")
+                    console.log("[NostrJournal] ✅ Legacy signer connector also set up for compatibility")
                   }
                 } catch (error) {
-                  console.warn("[v0] ⚠️ Could not set up legacy signer connector:", error)
+                  console.warn("[NostrJournal] ⚠️ Could not set up legacy signer connector:", error)
                 }
               } else {
-                console.error("[v0] ❌ Failed to initialize remote signer manager")
+                console.error("[NostrJournal] ❌ Failed to initialize remote signer manager")
               }
             } catch (error) {
-              console.error("[v0] ❌ Error during remote signer manager initialization:", error)
+              console.error("[NostrJournal] ❌ Error during remote signer manager initialization:", error)
             }
           } else {
-            console.error("[v0] ❌ No session data available for remote signer setup")
+            console.error("[NostrJournal] ❌ No session data available for remote signer setup")
           }
         }
 
         // Load notes from Kind 30001 lists
-        console.log("[v0] Loading journal entries from Kind 30001 lists...")
+        console.log("[NostrJournal] Loading journal entries from Kind 30001 lists...")
         let relayNotes: any[] = []
         try {
           relayNotes = await loadJournalFromKind30001(authData)
-          console.log("[v0] ✅ Loaded", relayNotes.length, "journal entries from Kind 30001 lists")
+          console.log("[NostrJournal] ✅ Loaded", relayNotes.length, "journal entries from Kind 30001 lists")
         } catch (error) {
-          console.error("[v0] ❌ Failed to load from Kind 30001 lists:", error)
+          console.error("[NostrJournal] ❌ Failed to load from Kind 30001 lists:", error)
         }
 
         // LOCAL STORAGE DISABLED - Only use remote data
-        console.log("[v0] 🌐 Using only remote data - local storage disabled")
+        console.log("[NostrJournal] 🌐 Using only remote data - local storage disabled")
         
         // Use only relay notes since local storage is disabled
         const allNotes = relayNotes.map(note => ({
@@ -380,11 +377,11 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
           isSynced: true // All notes fetched from relays are synced
         }))
         
-        console.log("[v0] Loaded", allNotes.length, "notes from Nostr relays only")
+        console.log("[NostrJournal] Loaded", allNotes.length, "notes from Nostr relays only")
         
         // Validate and sanitize all notes
         const validatedNotes = sanitizeNotes(allNotes)
-        console.log("[v0] Validated notes:", validatedNotes.length)
+        console.log("[NostrJournal] Validated notes:", validatedNotes.length)
 
         // Set notes in state
         setNotes(validatedNotes)
@@ -400,10 +397,10 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
         setSyncStatus("synced")
           setLastSyncTime(new Date())
 
-        console.log("[v0] ✅ Notes loaded successfully:", validatedNotes.length)
+        console.log("[NostrJournal] ✅ Notes loaded successfully:", validatedNotes.length)
 
       } catch (error) {
-        console.error("[v0] Error loading notes:", error)
+        console.error("[NostrJournal] Error loading notes:", error)
         setSyncStatus("error")
         setConnectionError(error instanceof Error ? error.message : "Failed to load notes")
         setIsLoading(false)
@@ -414,7 +411,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
 
     // Add timeout to prevent infinite loading
     const loadTimeout = setTimeout(() => {
-      console.warn("[v0] Load timeout reached, forcing completion")
+      console.warn("[NostrJournal] Load timeout reached, forcing completion")
       setIsLoading(false)
       setSyncStatus("error")
       setConnectionError("Loading timeout - please refresh")
@@ -439,7 +436,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   //   const syncInterval = setInterval(async () => {
   //     if (syncStatus === "syncing" || needsSync) return
 
-  //     console.log("[v0] Performing background sync...")
+  //     console.log("[NostrJournal] Performing background sync...")
   //     setSyncStatus("syncing")
 
   //     try {
@@ -456,7 +453,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   //       const validatedNotes = sanitizeNotes(mergedNotes)
 
   //       if (validatedNotes.length !== notes.length || JSON.stringify(validatedNotes) !== JSON.stringify(notes)) {
-  //         console.log("[v0] Background sync found changes")
+  //         console.log("[NostrJournal] Background sync found changes")
   //         setNotes(validatedNotes)
   //         await saveEncryptedNotes(authData.pubkey, validatedNotes)
   //       }
@@ -464,7 +461,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   //       setSyncStatus("synced")
   //       setLastSyncTime(new Date())
   //     } catch (error) {
-  //       console.error("[v0] Background sync failed:", error)
+  //       console.error("[NostrJournal] Background sync failed:", error)
   //       setSyncStatus("error")
   //     }
   //   }, 300000) // 5 minutes - much less frequent
@@ -475,7 +472,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   // Old sync system disabled - using instant sync instead
   // useEffect(() => {
   //     const saveNotes = async () => {
-  //       console.log("[v0] Triggering sync after changes...")
+  //       console.log("[NostrJournal] Triggering sync after changes...")
 
   //     // Save locally first (instant feedback)
   //       await saveEncryptedNotes(authData.pubkey, notes)
@@ -491,14 +488,14 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   //             })),
   //           )
 
-  //           console.log("[v0] Syncing changes to Nostr...")
+  //           console.log("[NostrJournal] Syncing changes to Nostr...")
   //         const result = await smartSyncNotes(notes, deletedNotes, authData)
 
   //         // Validate results
   //         const validatedNotes = sanitizeNotes(result.notes)
 
   //         if (validatedNotes.length > 0 && JSON.stringify(validatedNotes) !== JSON.stringify(notes)) {
-  //             console.log("[v0] Sync returned changes, updating state")
+  //             console.log("[NostrJournal] Sync returned changes, updating state")
 
   //           const syncedNotes = validatedNotes.map((note) => ({
   //               ...note,
@@ -514,7 +511,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   //             setLastSyncTime(new Date())
   //           }
   //         } catch (error) {
-  //           console.error("[v0] Error syncing to Nostr:", error)
+  //           console.error("[NostrJournal] Error syncing to Nostr:", error)
   //           setSyncStatus("error")
 
   //           setNotes((prev) =>
@@ -543,7 +540,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   // }, [needsSync, isLoading, syncStatus, authData, notes, deletedNotes]) // Removed notes/deletedNotes to prevent loops
 
   const handleCreateNote = async () => {
-    console.log("[v0] Creating new note...")
+    console.log("[NostrJournal] Creating new note...")
     
     const now = new Date()
 
@@ -571,28 +568,28 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
 
     // Save to relays as Kind 30001 list
     try {
-      console.log("[v0] 📡 Attempting to save note as Kind 30001 list...")
-      console.log("[v0] Auth method:", authData.authMethod)
+      console.log("[NostrJournal] 📡 Attempting to save note as Kind 30001 list...")
+      console.log("[NostrJournal] Auth method:", authData.authMethod)
       
       // CRITICAL: Check if remote signer is active
       if (authData.authMethod === 'remote') {
         const { getActiveSigner } = await import('@/lib/signer-connector')
         const signer = getActiveSigner()
         if (!signer) {
-          console.error("[v0] ❌ Remote signer not active!")
+          console.error("[NostrJournal] ❌ Remote signer not active!")
           throw new Error("Remote signer disconnected. Please reconnect.")
         }
-        console.log("[v0] ✅ Remote signer is active")
+        console.log("[NostrJournal] ✅ Remote signer is active")
       } else if (authData.authMethod === 'noauth') {
-        console.log("[v0] ❌ Noauth method no longer supported")
+        console.log("[NostrJournal] ❌ Noauth method no longer supported")
         throw new Error("Noauth method has been removed. Please use Remote Signer instead.")
       }
       
       const result = await saveJournalAsKind30001(newNote, authData)
-      console.log("[v0] 📡 Save result:", result)
+      console.log("[NostrJournal] 📡 Save result:", result)
       
       if (result.success && result.eventId) {
-        console.log("[v0] ✅ Note saved successfully with eventId:", result.eventId)
+        console.log("[NostrJournal] ✅ Note saved successfully with eventId:", result.eventId)
         
         // Update with eventId and sync status
         const finalNote = { 
@@ -607,23 +604,23 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
         setNotes(finalUpdatedNotes)
         setSelectedNote(finalNote)
         
-        console.log("[v0] ✅ Note creation complete!")
+        console.log("[NostrJournal] ✅ Note creation complete!")
       } else {
-        console.error("[v0] ❌ Failed to save note to relays:", result.error || "Unknown error")
+        console.error("[NostrJournal] ❌ Failed to save note to relays:", result.error || "Unknown error")
         alert(`Failed to save note: ${result.error || "Unknown error"}`)
       }
     } catch (error) {
-      console.error("[v0] ❌ Error saving new note to relays:", error)
+      console.error("[NostrJournal] ❌ Error saving new note to relays:", error)
       alert(`Error saving note: ${error instanceof Error ? error.message : "Unknown error"}`)
     }
 
-    console.log("[v0] New note created:", newNote.id)
+    console.log("[NostrJournal] New note created:", newNote.id)
   }
 
   const handleUpdateNote = async (updatedNote: Note) => {
-    console.log("[v0] Updating note:", updatedNote.id)
-    console.log("[v0] 🔍 Auth method check - authData.authMethod:", authData.authMethod)
-    console.log("[v0] 🔍 Auth method type:", typeof authData.authMethod)
+    console.log("[NostrJournal] Updating note:", updatedNote.id)
+    console.log("[NostrJournal] 🔍 Auth method check - authData.authMethod:", authData.authMethod)
+    console.log("[NostrJournal] 🔍 Auth method type:", typeof authData.authMethod)
 
     // Update local state immediately
     const optimisticNote = {
@@ -638,42 +635,42 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     const updatedNotes = notes.map((note) => note.id === updatedNote.id ? optimisticNote : note)
 
     // Ensure remote signer is available before saving
-    console.log("[v0] 🔍 DEBUG: Checking auth method for remote signer setup")
-    console.log("[v0] 🔍 Auth method:", authData.authMethod)
-    console.log("[v0] 🔍 Auth method type:", typeof authData.authMethod)
-    console.log("[v0] 🔍 Auth method === 'remote':", authData.authMethod === 'remote')
+    console.log("[NostrJournal] 🔍 DEBUG: Checking auth method for remote signer setup")
+    console.log("[NostrJournal] 🔍 Auth method:", authData.authMethod)
+    console.log("[NostrJournal] 🔍 Auth method type:", typeof authData.authMethod)
+    console.log("[NostrJournal] 🔍 Auth method === 'remote':", authData.authMethod === 'remote')
     
     if (authData.authMethod === 'remote') {
-      console.log("[v0] 🔧 Ensuring remote signer is available before saving...")
+      console.log("[NostrJournal] 🔧 Ensuring remote signer is available before saving...")
       await ensureRemoteSignerAvailable()
     } else {
-      console.log("[v0] 🔍 Auth method is not 'remote', skipping remote signer check")
+      console.log("[NostrJournal] 🔍 Auth method is not 'remote', skipping remote signer check")
     }
 
     // Save to relays as Kind 30001 list
     try {
-      console.log("[v0] 📡 Attempting to save updated note as Kind 30001 list...")
-      console.log("[v0] Auth method:", authData.authMethod)
+      console.log("[NostrJournal] 📡 Attempting to save updated note as Kind 30001 list...")
+      console.log("[NostrJournal] Auth method:", authData.authMethod)
       
       // CRITICAL: Check if remote signer is active
       if (authData.authMethod === 'remote') {
         const { getActiveSigner } = await import('@/lib/signer-connector')
         const signer = getActiveSigner()
         if (!signer) {
-          console.error("[v0] ❌ Remote signer not active!")
+          console.error("[NostrJournal] ❌ Remote signer not active!")
           throw new Error("Remote signer disconnected. Please reconnect.")
         }
-        console.log("[v0] ✅ Remote signer is active")
+        console.log("[NostrJournal] ✅ Remote signer is active")
       } else if (authData.authMethod === 'noauth') {
-        console.log("[v0] ❌ Noauth method no longer supported")
+        console.log("[NostrJournal] ❌ Noauth method no longer supported")
         throw new Error("Noauth method has been removed. Please use Remote Signer instead.")
       }
       
       const result = await saveJournalAsKind30001(optimisticNote, authData)
-      console.log("[v0] 📡 Update result:", result)
+      console.log("[NostrJournal] 📡 Update result:", result)
       
       if (result.success && result.eventId) {
-        console.log("[v0] ✅ Note updated successfully with eventId:", result.eventId)
+        console.log("[NostrJournal] ✅ Note updated successfully with eventId:", result.eventId)
         
         // Update with eventId and sync status
         const finalNote = { 
@@ -687,13 +684,13 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
         setNotes(prevNotes => prevNotes.map(n => n.id === updatedNote.id ? finalNote : n))
         setSelectedNote(finalNote)
         
-        console.log("[v0] ✅ Note update complete!")
+        console.log("[NostrJournal] ✅ Note update complete!")
       } else {
-        console.error("[v0] ❌ Failed to save updated note to relays:", result.error || "Unknown error")
+        console.error("[NostrJournal] ❌ Failed to save updated note to relays:", result.error || "Unknown error")
         alert(`Failed to update note: ${result.error || "Unknown error"}`)
       }
     } catch (error) {
-      console.error("[v0] ❌ Error saving updated note to relays:", error)
+      console.error("[NostrJournal] ❌ Error saving updated note to relays:", error)
       alert(`Error updating note: ${error instanceof Error ? error.message : "Unknown error"}`)
     }
 
@@ -718,21 +715,21 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     if (!noteToPublish) return
 
     try {
-      console.log("[v0] Creating Nostr event for note:", noteToPublish.title)
+      console.log("[NostrJournal] Creating Nostr event for note:", noteToPublish.title)
 
       const event = await createNostrEvent(authData.pubkey, noteToPublish.content, noteToPublish.tags)
 
-      console.log("[v0] Publishing event to Nostr relays...")
+      console.log("[NostrJournal] Publishing event to Nostr relays...")
       const eventId = await publishToNostr(event, authData)
 
-      console.log("[v0] Successfully published to Nostr with event ID:", eventId)
+      console.log("[NostrJournal] Successfully published to Nostr with event ID:", eventId)
 
       setPublishedEventId(eventId)
       setShowPublishConfirmation(false)
       setShowPublishModal(true)
       setNoteToPublish(null)
     } catch (error) {
-      console.error("[v0] Error publishing to Nostr:", error)
+      console.error("[NostrJournal] Error publishing to Nostr:", error)
       const errorMessage = error instanceof Error ? error.message : "Unknown error"
       alert(`Failed to publish to Nostr: ${errorMessage}`)
       setShowPublishConfirmation(false)
@@ -746,17 +743,17 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   }
 
   const handleLogout = async () => {
-    console.log("[v0] User logging out, cleaning up signer connection...")
+    console.log("[NostrJournal] User logging out, cleaning up signer connection...")
 
     // LOCAL STORAGE DISABLED - Notes are only stored on Nostr relays
-    console.log("[v0] 🌐 Notes are stored on Nostr relays only")
+    console.log("[NostrJournal] 🌐 Notes are stored on Nostr relays only")
 
     // Flush any pending batch operations
     try {
-      await eventManager.processQueue(authData)
-      console.log("[v0] Flushed pending batch operations")
+      // Event manager processing removed - using direct sync instead
+      console.log("[NostrJournal] Flushed pending batch operations")
     } catch (error) {
-      console.error("[v0] Error flushing batch operations:", error)
+      console.error("[NostrJournal] Error flushing batch operations:", error)
     }
 
     // Clean up the remote signer connection
@@ -765,15 +762,15 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     // IMPORTANT: Clear saved remote session
     if (authData.authMethod === 'remote') {
       localStorage.removeItem('nostr_remote_session')
-      console.log("[v0] ✅ Remote session cleared")
+      console.log("[NostrJournal] ✅ Remote session cleared")
     }
 
-    console.log("[v0] Notes will remain encrypted in storage")
+    console.log("[NostrJournal] Notes will remain encrypted in storage")
     onLogout()
   }
 
   const handleDeleteNote = async (noteToDelete: Note) => {
-    console.log("[v0] Delete requested for note:", noteToDelete.id)
+    console.log("[NostrJournal] Delete requested for note:", noteToDelete.id)
 
     // Clear cache since we're deleting data
     const { clearUserCache } = await import('@/lib/nostr-storage')
@@ -787,7 +784,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   const handleConfirmDelete = async () => {
     if (!noteToDelete) return
 
-    console.log("[v0] Deleting note:", noteToDelete.id, noteToDelete.title)
+    console.log("[NostrJournal] Deleting note:", noteToDelete.id, noteToDelete.title)
 
     // Remove from local state immediately
     const updatedNotes = notes.filter((note) => note.id !== noteToDelete.id)
@@ -804,15 +801,15 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       try {
         const result = await deleteJournalKind30001(noteToDelete, authData)
         if (result.success) {
-          console.log("[v0] ✅ Journal entry deleted from relays")
+          console.log("[NostrJournal] ✅ Journal entry deleted from relays")
         } else {
-          console.error("[v0] ❌ Failed to delete from relays:", result.error)
+          console.error("[NostrJournal] ❌ Failed to delete from relays:", result.error)
         }
       } catch (error) {
-        console.error("[v0] ❌ Error deleting from relays:", error)
+        console.error("[NostrJournal] ❌ Error deleting from relays:", error)
       }
     } else {
-      console.log("[v0] Note has no eventId, skipping relay deletion")
+      console.log("[NostrJournal] Note has no eventId, skipping relay deletion")
     }
 
     // Update tags
@@ -825,18 +822,18 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     setShowDeleteConfirmation(false)
     setNoteToDelete(null)
     
-    console.log("[v0] ✅ Note deleted")
+    console.log("[NostrJournal] ✅ Note deleted")
   }
 
   // Helper function to delete on Nostr asynchronously
   const deleteNoteOnNostrAsync = async (noteToDelete: Note, authData: any) => {
     try {
-      console.log("[v0] Publishing NIP-09 deletion event to Nostr network...")
+      console.log("[NostrJournal] Publishing NIP-09 deletion event to Nostr network...")
       const { deleteNoteOnNostr } = await import("@/lib/nostr-storage")
       await deleteNoteOnNostr(noteToDelete, authData)
-      console.log("[v0] Successfully published deletion event to Nostr.")
+      console.log("[NostrJournal] Successfully published deletion event to Nostr.")
     } catch (error) {
-      console.error("[v0] Failed to publish deletion event:", error)
+      console.error("[NostrJournal] Failed to publish deletion event:", error)
     }
     }
 
@@ -892,7 +889,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   }
 
   const handlePublishHighlight = (note: Note, highlightedText: string) => {
-    console.log("[v0] Publishing highlight:", highlightedText.substring(0, 50) + "...")
+    console.log("[NostrJournal] Publishing highlight:", highlightedText.substring(0, 50) + "...")
 
     const highlightNote = {
       ...note,
@@ -953,7 +950,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   }
 
   const handleManualSync = async () => {
-    console.log("[v0] Manual sync requested - querying relays for latest events")
+    console.log("[NostrJournal] Manual sync requested - querying relays for latest events")
     setSyncStatus("syncing")
 
     try {
@@ -980,7 +977,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
         const updatedSelectedNote = validatedNotes.find(note => note.id === selectedNote.id)
         if (updatedSelectedNote) {
           setSelectedNote(updatedSelectedNote)
-          console.log("[v0] Updated selected note with latest data from relays")
+          console.log("[NostrJournal] Updated selected note with latest data from relays")
         }
       }
       
@@ -999,20 +996,20 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       console.log(`[v0] ✅ Manual sync complete: ${validatedNotes.length} notes loaded from relays`)
       
     } catch (error) {
-      console.error("[v0] Manual sync failed:", error)
+      console.error("[NostrJournal] Manual sync failed:", error)
       setSyncStatus("error")
       setConnectionError(error instanceof Error ? error.message : "Manual sync failed")
     }
   }
 
   const handleManualRefresh = async () => {
-    console.log("[v0] Manual refresh triggered")
+    console.log("[NostrJournal] Manual refresh triggered")
     setIsRefreshing(true)
     
     try {
       // Use the same logic as page load - fetch from Kind 30001 lists
       const relayNotes = await loadJournalFromKind30001(authData)
-      console.log("[v0] ✅ Refreshed", relayNotes.length, "journal entries from Kind 30001 lists")
+      console.log("[NostrJournal] ✅ Refreshed", relayNotes.length, "journal entries from Kind 30001 lists")
       
       // Update notes with fetched data (set both sync statuses to true and ensure event IDs are present)
       const updatedNotes = relayNotes.map(note => ({
@@ -1033,7 +1030,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
         const updatedSelectedNote = validatedNotes.find(note => note.id === selectedNote.id)
         if (updatedSelectedNote) {
           setSelectedNote(updatedSelectedNote)
-          console.log("[v0] Updated selected note with latest data from relays")
+          console.log("[NostrJournal] Updated selected note with latest data from relays")
         }
       }
       
@@ -1048,10 +1045,10 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       })
       setTags(Array.from(allTags))
       
-      console.log("[v0] ✅ Manual refresh complete")
+      console.log("[NostrJournal] ✅ Manual refresh complete")
       
     } catch (error) {
-      console.error("[v0] ❌ Manual refresh failed:", error)
+      console.error("[NostrJournal] ❌ Manual refresh failed:", error)
     } finally {
       setIsRefreshing(false)
     }
@@ -1611,7 +1608,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
           <RelayManager
             onClose={() => setShowRelayManager(false)}
             onSave={(relays) => {
-              console.log("[v0] 🔄 Relays updated:", relays)
+              console.log("[NostrJournal] 🔄 Relays updated:", relays)
               setShowRelayManager(false)
               // Clear relay cache to force reload
               localStorage.removeItem("nostr_user_relays")

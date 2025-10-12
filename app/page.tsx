@@ -35,7 +35,7 @@ export default function Home() {
       try {
         const sessionData = localStorage.getItem(SESSION_KEY)
         if (!sessionData) {
-          console.log("[v0] No existing session found")
+          console.log("[NostrJournal] No existing session found")
           setIsCheckingSession(false)
           return
         }
@@ -44,7 +44,7 @@ export default function Home() {
         const age = Date.now() - session.timestamp
 
         if (age < session.expiresIn) {
-          console.log("[v0] Valid session found, restoring auth state")
+          console.log("[NostrJournal] Valid session found, restoring auth state")
 
           // Restore auth data based on method
           const restoredAuthData: AuthData = {
@@ -67,13 +67,13 @@ export default function Home() {
 
           setAuthData(restoredAuthData)
           setIsLoggedIn(true)
-          console.log("[v0] Session restored successfully")
+          console.log("[NostrJournal] Session restored successfully")
         } else {
-          console.log("[v0] Session expired, clearing")
+          console.log("[NostrJournal] Session expired, clearing")
           localStorage.removeItem(SESSION_KEY)
         }
       } catch (error) {
-        console.error("[v0] Error checking session:", error)
+        console.error("[NostrJournal] Error checking session:", error)
         localStorage.removeItem(SESSION_KEY)
       } finally {
         setIsCheckingSession(false)
@@ -84,8 +84,8 @@ export default function Home() {
   }, [])
 
   const handleLoginSuccess = (data: AuthData) => {
-    console.log("[v0] 🎉 Login success handler called!")
-    console.log("[v0] 📦 Auth data received:", {
+    console.log("[NostrJournal] 🎉 Login success handler called!")
+    console.log("[NostrJournal] 📦 Auth data received:", {
       pubkey: data.pubkey,
       authMethod: data.authMethod,
       hasPrivateKey: !!data.privateKey,
@@ -98,13 +98,13 @@ export default function Home() {
 
     // Validate the data before storing
     if (!data.pubkey) {
-      console.error("[v0] ❌ ERROR: No pubkey in auth data!")
+      console.error("[NostrJournal] ❌ ERROR: No pubkey in auth data!")
       alert("Login failed: No pubkey received. Please try again.")
       return
     }
 
     if (data.pubkey.length !== 64) {
-      console.error("[v0] ❌ ERROR: Invalid pubkey length:", data.pubkey.length)
+      console.error("[NostrJournal] ❌ ERROR: Invalid pubkey length:", data.pubkey.length)
       alert("Login failed: Invalid pubkey format. Please try again.")
       return
     }
@@ -112,30 +112,30 @@ export default function Home() {
     // Validate based on auth method
     if (data.authMethod === "nsec") {
       if (!data.privateKey) {
-        console.error("[v0] ❌ ERROR: Nsec login missing privateKey!")
+        console.error("[NostrJournal] ❌ ERROR: Nsec login missing privateKey!")
         alert("Login failed: Private key missing.")
         return
       }
-      console.log("[v0] ✅ Nsec login data validated")
+      console.log("[NostrJournal] ✅ Nsec login data validated")
     }
 
     if (data.authMethod === "remote") {
       if (!data.bunkerUri) {
-        console.error("[v0] ❌ ERROR: Remote signer missing bunkerUri!")
+        console.error("[NostrJournal] ❌ ERROR: Remote signer missing bunkerUri!")
         alert("Login failed: Remote signer configuration incomplete.")
         return
       }
       if (!data.clientSecretKey) {
-        console.error("[v0] ❌ ERROR: Remote signer missing clientSecretKey!")
+        console.error("[NostrJournal] ❌ ERROR: Remote signer missing clientSecretKey!")
         alert("Login failed: Remote signer configuration incomplete.")
         return
       }
       if (!data.bunkerPubkey) {
-        console.error("[v0] ❌ ERROR: Remote signer missing bunkerPubkey!")
+        console.error("[NostrJournal] ❌ ERROR: Remote signer missing bunkerPubkey!")
         alert("Login failed: Remote signer configuration incomplete.")
         return
       }
-      console.log("[v0] ✅ Remote signer data validated")
+      console.log("[NostrJournal] ✅ Remote signer data validated")
     }
 
     try {
@@ -160,26 +160,26 @@ export default function Home() {
       }
 
       localStorage.setItem(SESSION_KEY, JSON.stringify(session))
-      console.log("[v0] 💾 Session saved to localStorage")
+      console.log("[NostrJournal] 💾 Session saved to localStorage")
 
       // CRITICAL: Update state to trigger re-render and show main app
       setAuthData(data)
       setIsLoggedIn(true)
-      console.log("[v0] ✅ State updated, app should now show main content")
+      console.log("[NostrJournal] ✅ State updated, app should now show main content")
     } catch (error) {
-      console.error("[v0] ❌ Error saving session:", error)
+      console.error("[NostrJournal] ❌ Error saving session:", error)
       alert("Login failed: Could not save session. Please try again.")
     }
   }
 
   const handleLogout = () => {
-    console.log("[v0] Logging out")
+    console.log("[NostrJournal] Logging out")
 
     try {
       localStorage.removeItem(SESSION_KEY)
-      console.log("[v0] Session cleared from localStorage")
+      console.log("[NostrJournal] Session cleared from localStorage")
     } catch (error) {
-      console.error("[v0] Error clearing session:", error)
+      console.error("[NostrJournal] Error clearing session:", error)
     }
 
     setAuthData(null)

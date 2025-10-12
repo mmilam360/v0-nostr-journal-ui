@@ -5,8 +5,8 @@ import * as nostrTools from "nostr-tools"
 import type { DecryptedNote } from "./nostr-crypto"
 import { getSmartRelayList, getRelays } from "./relay-manager"
 import { signEventWithRemote } from "./signer-manager"
-import { eventCache, getCachedOrFetchBatch } from "./event-cache"
-import { dedupeRelayFetch } from "./request-deduplicator"
+// Simple in-memory cache for events
+const eventCache = new Map<string, any>()
 
 // ===================================================================================
 // RELAY PUBLISHING: Proper WebSocket handling with OK response verification
@@ -142,7 +142,7 @@ async function encryptNote(note: DecryptedNote, authData: any): Promise<string> 
   // For remote signer, use local encryption with pubkey-based key (same as extension)
   // Remote signer doesn't expose private key for encryption, only for signing
   if (authData.authMethod === "remote") {
-    console.log("[v0] 🔐 Encrypting note with local encryption (remote signer)")
+    console.log("[NostrJournal] 🔐 Encrypting note with local encryption (remote signer)")
     // Use same encryption as extension - pubkey-based key
     const encoder = new TextEncoder()
     const encryptionKey = encoder.encode(authData.pubkey).slice(0, 32)
@@ -292,21 +292,21 @@ async function getCurrentRelays(): Promise<string[]> {
             // Use user's relays but limit to 3 for speed
             cachedRelays = relayUrls.slice(0, 3)
             lastRelayCheck = now
-            console.log("[v0] 🔄 Using user's saved relays:", cachedRelays)
+            console.log("[NostrJournal] 🔄 Using user's saved relays:", cachedRelays)
             return cachedRelays
           }
         }
       } catch (error) {
-        console.warn("[v0] ⚠️ Failed to parse saved relays:", error)
+        console.warn("[NostrJournal] ⚠️ Failed to parse saved relays:", error)
       }
     }
 
     // Fallback to smart relay selection
     cachedRelays = await getSmartRelayList()
     lastRelayCheck = now
-    console.log("[v0] 🔄 Updated relay list:", cachedRelays)
+    console.log("[NostrJournal] 🔄 Updated relay list:", cachedRelays)
   } catch (error) {
-    console.warn("[v0] ⚠️ Failed to get smart relay list, using fallback:", error)
+    console.warn("[NostrJournal] ⚠️ Failed to get smart relay list, using fallback:", error)
     cachedRelays = getRelays()
   }
 
@@ -325,14 +325,14 @@ export const fetchAllNotesFromNostr = async (authData: any): Promise<DecryptedNo
       const fetcher = NostrFetcher.init()
       try {
         const relays = await getCurrentRelays()
-        console.log("[v0] 📡 Fetching notes from relays:", relays)
+        console.log("[NostrJournal] 📡 Fetching notes from relays:", relays)
 
     // Step 1: Fetch note events (kind 30078) with caching
     const cacheKey = `events_${authData.pubkey}_30078`
     let events = eventCache.get(cacheKey)
     
     if (!events) {
-      console.log("[v0] Cache MISS - fetching events from relays")
+      console.log("[NostrJournal] Cache MISS - fetching events from relays")
       events = await fetcher.fetchAllEvents(
         relays,
         { kinds: [30078], authors: [authData.pubkey] },
@@ -341,7 +341,7 @@ export const fetchAllNotesFromNostr = async (authData: any): Promise<DecryptedNo
       // Cache for 5 minutes
       eventCache.set(cacheKey, events)
     } else {
-      console.log("[v0] Cache HIT - using cached events")
+      console.log("[NostrJournal] Cache HIT - using cached events")
     }
 
     console.log(`[v0] Found ${events.length} note events`)
@@ -351,7 +351,7 @@ export const fetchAllNotesFromNostr = async (authData: any): Promise<DecryptedNo
     let deletionEvents = eventCache.get(deletionCacheKey)
     
     if (!deletionEvents) {
-      console.log("[v0] Cache MISS - fetching deletion events from relays")
+      console.log("[NostrJournal] Cache MISS - fetching deletion events from relays")
       deletionEvents = await fetcher.fetchAllEvents(
         relays,
         { kinds: [5], authors: [authData.pubkey] },
@@ -360,7 +360,7 @@ export const fetchAllNotesFromNostr = async (authData: any): Promise<DecryptedNo
       // Cache for 5 minutes
       eventCache.set(deletionCacheKey, deletionEvents)
     } else {
-      console.log("[v0] Cache HIT - using cached deletion events")
+      console.log("[NostrJournal] Cache HIT - using cached deletion events")
     }
 
     console.log(`[v0] Found ${deletionEvents.length} deletion events`)
@@ -423,7 +423,7 @@ export const fetchAllNotesFromNostr = async (authData: any): Promise<DecryptedNo
           note.eventKind = event.kind // Store the kind used (30078 or 31078)
           return note
         } catch (error) {
-          console.error("[v0] Error decrypting note:", error)
+          console.error("[NostrJournal] Error decrypting note:", error)
           return null
         }
       }),
@@ -431,14 +431,14 @@ export const fetchAllNotesFromNostr = async (authData: any): Promise<DecryptedNo
 
     return notes.filter((note): note is DecryptedNote => note !== null)
   } catch (error) {
-    console.error("[v0] ❌ Error fetching notes from Nostr:", error)
+    console.error("[NostrJournal] ❌ Error fetching notes from Nostr:", error)
 
     // If this is a network error, try with fallback relays
     if (
       error instanceof Error &&
       (error.message.includes("timeout") || error.message.includes("connection") || error.message.includes("network"))
     ) {
-      console.log("[v0] 🔄 Network error detected, trying fallback relays...")
+      console.log("[NostrJournal] 🔄 Network error detected, trying fallback relays...")
       try {
         const fallbackRelays = getRelays()
         const fallbackEvents = await fetcher.fetchAllEvents(
@@ -471,7 +471,7 @@ export const fetchAllNotesFromNostr = async (authData: any): Promise<DecryptedNo
               note.eventKind = event.kind // Store the kind used (30078 or 31078)
               return note
             } catch (error) {
-              console.error("[v0] Error decrypting fallback note:", error)
+              console.error("[NostrJournal] Error decrypting fallback note:", error)
               return null
             }
           }),
@@ -480,7 +480,7 @@ export const fetchAllNotesFromNostr = async (authData: any): Promise<DecryptedNo
         console.log(`[v0] ✅ Fallback fetch successful: ${fallbackNotes.filter((n) => n !== null).length} notes`)
         return fallbackNotes.filter((note): note is DecryptedNote => note !== null)
       } catch (fallbackError) {
-        console.error("[v0] ❌ Fallback fetch also failed:", fallbackError)
+        console.error("[NostrJournal] ❌ Fallback fetch also failed:", fallbackError)
       }
     }
 
@@ -504,7 +504,7 @@ export const saveNoteToNostr = async (note: DecryptedNote, authData: any): Promi
   }
 
   try {
-    console.log("[v0] Saving individual note to Nostr:", note.title)
+    console.log("[NostrJournal] Saving individual note to Nostr:", note.title)
 
     // Encrypt with the appropriate method
     const encryptedContent = await encryptNote(note, authData)
@@ -537,7 +537,7 @@ export const saveNoteToNostr = async (note: DecryptedNote, authData: any): Promi
           authData.privateKey.match(/.{1,2}/g)?.map((byte: string) => Number.parseInt(byte, 16)) || [],
         )
         signedEvent = nostrTools.finalizeEvent(unsignedEvent, pkBytes)
-        console.log("[v0] Event signed locally using private key.")
+        console.log("[NostrJournal] Event signed locally using private key.")
         break
 
       case "remote":
@@ -547,7 +547,7 @@ export const saveNoteToNostr = async (note: DecryptedNote, authData: any): Promi
 
         // Use the signer manager - NO popup required!
         signedEvent = await signEventWithRemote(unsignedEvent, authData)
-        console.log("[v0] Event signed by remote signer.")
+        console.log("[NostrJournal] Event signed by remote signer.")
         break
 
       case "extension":
@@ -555,7 +555,7 @@ export const saveNoteToNostr = async (note: DecryptedNote, authData: any): Promi
           throw new Error("Nostr browser extension not found.")
         }
         signedEvent = await window.nostr.signEvent(unsignedEvent)
-        console.log("[v0] Received signed event from browser extension.")
+        console.log("[NostrJournal] Received signed event from browser extension.")
         break
 
       default:
@@ -598,7 +598,7 @@ export const saveNoteToNostr = async (note: DecryptedNote, authData: any): Promi
       eventKind: 30078,
     }
   } catch (error) {
-    console.error("[v0] Error saving note to Nostr:", error)
+    console.error("[NostrJournal] Error saving note to Nostr:", error)
     return {
       success: false,
       error: error instanceof Error ? error.message : "Unknown error",
@@ -612,7 +612,7 @@ export const saveNoteToNostr = async (note: DecryptedNote, authData: any): Promi
 export const deleteNoteOnNostr = async (noteToDelete: DecryptedNote, authData: any): Promise<void> => {
   // For notes without eventId (old notes), we'll try to find them by searching for the d-tag
   if (!noteToDelete.eventId) {
-    console.log("[v0] Note has no eventId, searching for it on Nostr...")
+    console.log("[NostrJournal] Note has no eventId, searching for it on Nostr...")
     
     try {
       const relays = await getCurrentRelays()
@@ -628,7 +628,7 @@ export const deleteNoteOnNostr = async (noteToDelete: DecryptedNote, authData: a
       if (events.length > 0) {
         // Found the event, use its ID for deletion
         const eventToDelete = events[0]
-        console.log("[v0] Found event to delete:", eventToDelete.id)
+        console.log("[NostrJournal] Found event to delete:", eventToDelete.id)
         
         const unsignedEvent: any = {
           kind: 5,
@@ -649,7 +649,7 @@ export const deleteNoteOnNostr = async (noteToDelete: DecryptedNote, authData: a
               authData.privateKey.match(/.{1,2}/g)?.map((byte: string) => Number.parseInt(byte, 16)) || [],
             )
             signedEvent = nostrTools.finalizeEvent(unsignedEvent, pkBytes)
-            console.log("[v0] Deletion event signed locally.")
+            console.log("[NostrJournal] Deletion event signed locally.")
             break
 
           case "remote":
@@ -657,7 +657,7 @@ export const deleteNoteOnNostr = async (noteToDelete: DecryptedNote, authData: a
               throw new Error("Remote signer connection data is missing.")
             }
             signedEvent = await signEventWithRemote(unsignedEvent, authData)
-            console.log("[v0] Deletion event signed by remote signer.")
+            console.log("[NostrJournal] Deletion event signed by remote signer.")
             break
 
           case "extension":
@@ -665,7 +665,7 @@ export const deleteNoteOnNostr = async (noteToDelete: DecryptedNote, authData: a
               throw new Error("Nostr browser extension not found.")
             }
             signedEvent = await window.nostr.signEvent(unsignedEvent)
-            console.log("[v0] Deletion event signed by browser extension.")
+            console.log("[NostrJournal] Deletion event signed by browser extension.")
             break
 
           default:
@@ -677,15 +677,15 @@ export const deleteNoteOnNostr = async (noteToDelete: DecryptedNote, authData: a
         const pool = new nostrTools.SimplePool()
         try {
           await Promise.any(pool.publish(relays, signedEvent))
-          console.log("[v0] ✅ Successfully published deletion event")
+          console.log("[NostrJournal] ✅ Successfully published deletion event")
         } finally {
           pool.close(relays)
         }
       } else {
-        console.log("[v0] Note not found on Nostr, it may have been created locally only")
+        console.log("[NostrJournal] Note not found on Nostr, it may have been created locally only")
       }
     } catch (error) {
-      console.error("[v0] Error searching for or deleting note:", error)
+      console.error("[NostrJournal] Error searching for or deleting note:", error)
     } finally {
       try {
         fetcher.shutdown()
@@ -697,7 +697,7 @@ export const deleteNoteOnNostr = async (noteToDelete: DecryptedNote, authData: a
   }
 
   try {
-    console.log("[v0] Creating NIP-09 deletion event for:", noteToDelete.title)
+    console.log("[NostrJournal] Creating NIP-09 deletion event for:", noteToDelete.title)
 
     const unsignedEvent: any = {
       kind: 5,
@@ -718,7 +718,7 @@ export const deleteNoteOnNostr = async (noteToDelete: DecryptedNote, authData: a
           authData.privateKey.match(/.{1,2}/g)?.map((byte: string) => Number.parseInt(byte, 16)) || [],
         )
         signedEvent = nostrTools.finalizeEvent(unsignedEvent, pkBytes)
-        console.log("[v0] Deletion event signed locally.")
+        console.log("[NostrJournal] Deletion event signed locally.")
         break
 
       case "remote":
@@ -728,7 +728,7 @@ export const deleteNoteOnNostr = async (noteToDelete: DecryptedNote, authData: a
 
         // Use signer manager
         signedEvent = await signEventWithRemote(unsignedEvent, authData)
-        console.log("[v0] Deletion event signed by remote signer.")
+        console.log("[NostrJournal] Deletion event signed by remote signer.")
         break
 
       case "extension":
@@ -736,7 +736,7 @@ export const deleteNoteOnNostr = async (noteToDelete: DecryptedNote, authData: a
           throw new Error("Nostr browser extension not found.")
         }
         signedEvent = await window.nostr.signEvent(unsignedEvent)
-        console.log("[v0] Deletion event signed by browser extension.")
+        console.log("[NostrJournal] Deletion event signed by browser extension.")
         break
 
       default:
@@ -761,7 +761,7 @@ export const deleteNoteOnNostr = async (noteToDelete: DecryptedNote, authData: a
       console.warn("[Storage] ⚠️ Deletion event failed on all relays")
     }
   } catch (error) {
-    console.error("[v0] Error publishing deletion event:", error)
+    console.error("[NostrJournal] Error publishing deletion event:", error)
     throw error
   }
 }
@@ -772,7 +772,7 @@ export async function syncNotes(
   localDeletedNotes: DeletedNote[] = [],
   authData: any,
 ): Promise<{ notes: DecryptedNote[]; deletedNotes: DeletedNote[]; synced: boolean }> {
-  console.log("[v0] Legacy syncNotes called - this will be replaced with individual note syncing")
+  console.log("[NostrJournal] Legacy syncNotes called - this will be replaced with individual note syncing")
 
   try {
     // Fetch all notes from Nostr
@@ -786,7 +786,7 @@ export async function syncNotes(
       synced: true,
     }
   } catch (error) {
-    console.error("[v0] Error in syncNotes:", error)
+    console.error("[NostrJournal] Error in syncNotes:", error)
     return {
       notes: localNotes,
       deletedNotes: localDeletedNotes,
@@ -801,7 +801,7 @@ export async function saveNotesToNostr(
   deletedNotes: DeletedNote[] = [],
   authData: any,
 ): Promise<NostrStorageResult> {
-  console.log("[v0] Legacy saveNotesToNostr called - migrating to individual note saves")
+  console.log("[NostrJournal] Legacy saveNotesToNostr called - migrating to individual note saves")
 
   try {
     // Save each note individually
@@ -814,7 +814,7 @@ export async function saveNotesToNostr(
       error: successCount === 0 ? "Failed to save any notes" : undefined,
     }
   } catch (error) {
-    console.error("[v0] Error in saveNotesToNostr:", error)
+    console.error("[NostrJournal] Error in saveNotesToNostr:", error)
     return {
       success: false,
       error: error instanceof Error ? error.message : "Unknown error",
@@ -825,7 +825,7 @@ export async function saveNotesToNostr(
 export async function loadNotesFromNostr(
   authData: any,
 ): Promise<{ notes: DecryptedNote[]; deletedNotes: DeletedNote[] }> {
-  console.log("[v0] Legacy loadNotesFromNostr called - using new fetch method")
+  console.log("[NostrJournal] Legacy loadNotesFromNostr called - using new fetch method")
 
   try {
     const notes = await fetchAllNotesFromNostr(authData)
@@ -835,7 +835,7 @@ export async function loadNotesFromNostr(
       deletedNotes: [],
     }
   } catch (error) {
-    console.error("[v0] Error in loadNotesFromNostr:", error)
+    console.error("[NostrJournal] Error in loadNotesFromNostr:", error)
     return {
       notes: [],
       deletedNotes: [],

@@ -20,7 +20,7 @@ export function ConnectionStatus({ onRetry, className = "" }: ConnectionStatusPr
   const checkConnection = async () => {
     setIsChecking(true)
     try {
-      console.log("[v0] 🔍 Checking relay connectivity...")
+      console.log("[NostrJournal] 🔍 Checking relay connectivity...")
       const relays = await getHealthyRelays()
       
       setHealthyRelays(relays)

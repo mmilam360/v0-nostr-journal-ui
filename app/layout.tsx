@@ -5,13 +5,11 @@ import { GeistMono } from "geist/font/mono"
 import { Suspense } from "react"
 import "./globals.css"
 import { ThemeProvider } from "@/lib/theme-provider"
-import { NostrProvider } from "@/lib/nostr-provider"
-import { QueryProvider } from "@/lib/query-provider"
 
 export const metadata: Metadata = {
   title: "Nostr Journal",
   description: "Private encrypted journal on Nostr",
-  generator: "v0.app",
+  generator: "Next.js",
 }
 
 export default function RootLayout({
@@ -31,13 +29,9 @@ export default function RootLayout({
         <meta name="format-detection" content="telephone=no" />
       </head>
       <body className={`font-sans ${GeistSans.variable} ${GeistMono.variable}`}>
-        <QueryProvider>
-          <ThemeProvider>
-            <NostrProvider>
-              <Suspense fallback={null}>{children}</Suspense>
-            </NostrProvider>
-          </ThemeProvider>
-        </QueryProvider>
+        <ThemeProvider>
+          <Suspense fallback={null}>{children}</Suspense>
+        </ThemeProvider>
       </body>
     </html>
   )

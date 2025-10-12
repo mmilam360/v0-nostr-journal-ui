@@ -89,7 +89,7 @@ export async function testRelayHealth(url: string, timeout = RELAY_CONFIG.timeou
 
 // Get healthy relays with fallback
 export async function getHealthyRelays(): Promise<string[]> {
-  console.log("[v0] 🔍 Testing relay health...")
+  console.log("[NostrJournal] 🔍 Testing relay health...")
   
   const allRelays = [...RELAY_CONFIG.primary, ...RELAY_CONFIG.fallback]
   const healthChecks = await Promise.allSettled(
@@ -169,7 +169,7 @@ export function saveRelays(relays: string[]): void {
   
   try {
     localStorage.setItem("nostr_user_relays", JSON.stringify(relays))
-    console.log("[v0] 💾 Saved relay configuration:", relays)
+    console.log("[NostrJournal] 💾 Saved relay configuration:", relays)
   } catch (error) {
     console.error("[v0] Failed to save relays:", error)
   }
@@ -187,28 +187,28 @@ export function getDefaultRelays(): string[] {
 // Initialize the persistent relay pool with smart relay selection
 export async function initializePersistentRelayPool(): Promise<void> {
   try {
-    const { initializeRelayPool } = await import('./relay-pool');
+    // Relay pool initialization removed - using direct relay connections
     const smartRelays = await getSmartRelayList();
     initializeRelayPool(smartRelays);
     console.log('[RelayManager] Persistent relay pool initialized with', smartRelays.length, 'relays');
   } catch (error) {
     console.error('[RelayManager] Failed to initialize relay pool:', error);
     // Fallback to default relays
-    const { initializeRelayPool } = await import('./relay-pool');
+    // Relay pool initialization removed - using direct relay connections
     initializeRelayPool(RELAY_CONFIG.primary);
   }
 }
 
 // Get the persistent relay pool instance
 export async function getPersistentRelayPool() {
-  const { getRelayPool } = await import('./relay-pool');
-  return getRelayPool();
+  // Relay pool removed - using direct relay connections
+  return null; // Relay pool removed
 }
 
 // Publish using the persistent pool
 export async function publishWithPersistentPool(event: any, relays?: string[]) {
-  const { publishToRelays } = await import('./relay-pool');
-  return publishToRelays(event, relays);
+  // Relay pool removed - using direct relay connections
+  return null; // Relay pool removed
 }
 
 // Subscribe using the persistent pool
@@ -218,18 +218,18 @@ export async function subscribeWithPersistentPool(
   onEvent?: (event: any) => void,
   onEose?: () => void
 ) {
-  const { subscribeToRelays } = await import('./relay-pool');
-  return subscribeToRelays(filters, relays, onEvent, onEose);
+  // Relay pool removed - using direct relay connections
+  return null; // Relay pool removed
 }
 
 // Get relay pool statistics
 export async function getPersistentPoolStats() {
-  const { getRelayStats } = await import('./relay-pool');
-  return getRelayStats();
+  // Relay pool removed - using direct relay connections
+  return null; // Relay pool removed
 }
 
 // Shutdown the persistent pool (call on app unmount)
 export async function shutdownPersistentRelayPool() {
-  const { shutdownRelayPool } = await import('./relay-pool');
-  shutdownRelayPool();
+  // Relay pool removed - using direct relay connections
+  // Relay pool removed - no cleanup needed
 }

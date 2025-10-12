@@ -32,7 +32,7 @@ export default function QrScannerModal({ isOpen, onClose, onScanSuccess, state: 
   }, [isOpen])
 
   const handleScanSuccess = (data: string) => {
-    console.log("[v0] QR code scanned successfully:", data.substring(0, 50) + "...")
+    console.log("[NostrJournal] QR code scanned successfully:", data.substring(0, 50) + "...")
     setInternalState("success")
 
     // Show success state briefly before calling onScanSuccess

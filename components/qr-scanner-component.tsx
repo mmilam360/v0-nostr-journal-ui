@@ -24,7 +24,7 @@ export function QrScannerComponent({ onScanSuccess, onScanError }: QrScannerComp
 
   const startCamera = async () => {
     try {
-      console.log("[v0] QrScannerComponent: Starting camera...")
+      console.log("[NostrJournal] QrScannerComponent: Starting camera...")
       setIsLoading(true)
 
       // Stop any existing stream
@@ -42,7 +42,7 @@ export function QrScannerComponent({ onScanSuccess, onScanError }: QrScannerComp
 
       const stream = await navigator.mediaDevices.getUserMedia(constraints)
       streamRef.current = stream
-      console.log("[v0] QrScannerComponent: Camera stream obtained")
+      console.log("[NostrJournal] QrScannerComponent: Camera stream obtained")
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream
@@ -51,7 +51,7 @@ export function QrScannerComponent({ onScanSuccess, onScanError }: QrScannerComp
         videoRef.current.autoplay = true
 
         videoRef.current.onloadedmetadata = () => {
-          console.log("[v0] QrScannerComponent: Video metadata loaded")
+          console.log("[NostrJournal] QrScannerComponent: Video metadata loaded")
           setIsLoading(false)
           startScanning()
         }
@@ -63,7 +63,7 @@ export function QrScannerComponent({ onScanSuccess, onScanError }: QrScannerComp
 
         try {
           await videoRef.current.play()
-          console.log("[v0] QrScannerComponent: Video playing")
+          console.log("[NostrJournal] QrScannerComponent: Video playing")
         } catch (playError) {
           console.error("[v0] QrScannerComponent: Video play error:", playError)
         }
@@ -75,12 +75,12 @@ export function QrScannerComponent({ onScanSuccess, onScanError }: QrScannerComp
   }
 
   const stopCamera = () => {
-    console.log("[v0] QrScannerComponent: Stopping camera...")
+    console.log("[NostrJournal] QrScannerComponent: Stopping camera...")
 
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => {
         track.stop()
-        console.log("[v0] QrScannerComponent: Stopped track:", track.kind)
+        console.log("[NostrJournal] QrScannerComponent: Stopped track:", track.kind)
       })
       streamRef.current = null
     }
@@ -98,7 +98,7 @@ export function QrScannerComponent({ onScanSuccess, onScanError }: QrScannerComp
   const startScanning = () => {
     if (scanIntervalRef.current) return
 
-    console.log("[v0] QrScannerComponent: Starting scan loop...")
+    console.log("[NostrJournal] QrScannerComponent: Starting scan loop...")
     scanIntervalRef.current = setInterval(() => {
       if (videoRef.current && canvasRef.current && videoRef.current.readyState === 4) {
         try {
@@ -124,7 +124,7 @@ export function QrScannerComponent({ onScanSuccess, onScanError }: QrScannerComp
           // For now, we'll use a placeholder that detects test patterns
           const qrResult = detectQRCode(imageData)
           if (qrResult) {
-            console.log("[v0] QrScannerComponent: QR code detected:", qrResult.substring(0, 50) + "...")
+            console.log("[NostrJournal] QrScannerComponent: QR code detected:", qrResult.substring(0, 50) + "...")
             stopCamera()
             onScanSuccess(qrResult)
           }

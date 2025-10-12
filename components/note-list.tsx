@@ -60,7 +60,7 @@ export default function NoteList({ notes, selectedNote, onSelectNote, onCreateNo
 
   const handleDeleteClick = (note: Note, e: React.MouseEvent) => {
     e.stopPropagation()
-    console.log("[v0] Note list delete clicked for:", note.id, note.title)
+    console.log("[NostrJournal] Note list delete clicked for:", note.id, note.title)
     onDeleteNote(note)
   }
 

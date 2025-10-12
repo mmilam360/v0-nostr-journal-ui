@@ -44,7 +44,7 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
       if (isNewNote || isContentUpdate) {
         // Save previous note if there were unsaved changes (only for new notes)
         if (isNewNote && previousNoteDataRef.current && hasUnsavedChanges) {
-          console.log("[v0] Saving previous note before switching:", previousNoteDataRef.current.id)
+          console.log("[NostrJournal] Saving previous note before switching:", previousNoteDataRef.current.id)
           const noteToSave = {
             ...note,
             id: previousNoteDataRef.current.id,
@@ -54,7 +54,7 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
           onUpdateNote(noteToSave)
         }
 
-        console.log("[v0] Updating note view:", note.id, isNewNote ? "(new note)" : "(content update)")
+        console.log("[NostrJournal] Updating note view:", note.id, isNewNote ? "(new note)" : "(content update)")
         setTitle(note.title)
         setContent(note.content)
         setHasUnsavedChanges(false)
@@ -73,14 +73,14 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
         const contentChanged = debouncedContent.trim() !== note.content.trim()
         
         if (titleChanged || contentChanged) {
-          console.log("[v0] Auto-saving note after 1.5s delay...")
+          console.log("[NostrJournal] Auto-saving note after 1.5s delay...")
           const updatedNote = { ...note, title: debouncedTitle, content: debouncedContent }
           onUpdateNote(updatedNote)
           setHasUnsavedChanges(false)
           previousNoteDataRef.current = { id: note.id, title: debouncedTitle, content: debouncedContent }
-          console.log("[v0] Auto-save completed")
+          console.log("[NostrJournal] Auto-save completed")
         } else {
-          console.log("[v0] Only whitespace changed, skipping auto-save")
+          console.log("[NostrJournal] Only whitespace changed, skipping auto-save")
           setHasUnsavedChanges(false)
           // Update the ref to prevent re-triggering
           previousNoteDataRef.current = { id: note.id, title: debouncedTitle, content: debouncedContent }
@@ -101,14 +101,14 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
 
   const handleSave = async () => {
     if (note && hasUnsavedChanges) {
-      console.log("[v0] Manual save triggered...")
+      console.log("[NostrJournal] Manual save triggered...")
 
       const updatedNote = { ...note, title, content }
       onUpdateNote(updatedNote)
       setHasUnsavedChanges(false)
       // Update previous note data ref
       previousNoteDataRef.current = { id: note.id, title, content }
-      console.log("[v0] Note saved immediately")
+      console.log("[NostrJournal] Note saved immediately")
     }
   }
 
@@ -163,18 +163,18 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
 
     if (start !== end) {
       const selected = textarea.value.substring(start, end).trim()
-      console.log("[v0] Text selection detected:", selected.length > 0 ? `"${selected.substring(0, 50)}..."` : "none")
+      console.log("[NostrJournal] Text selection detected:", selected.length > 0 ? `"${selected.substring(0, 50)}..."` : "none")
       setSelectedText(selected)
     } else {
-      console.log("[v0] No text selection")
+      console.log("[NostrJournal] No text selection")
       setSelectedText("")
     }
   }
 
   const handleDeleteClick = () => {
-    console.log("[v0] Delete button clicked for note:", note?.id)
+    console.log("[NostrJournal] Delete button clicked for note:", note?.id)
     if (note) {
-      console.log("[v0] Calling onDeleteNote for modal")
+      console.log("[NostrJournal] Calling onDeleteNote for modal")
       onDeleteNote(note)
     }
   }
@@ -183,10 +183,10 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
     if (!note) return
 
     if (selectedText && selectedText.length > 0) {
-      console.log("[v0] Publishing highlight:", selectedText.substring(0, 50) + "...")
+      console.log("[NostrJournal] Publishing highlight:", selectedText.substring(0, 50) + "...")
       onPublishHighlight(note, selectedText)
     } else {
-      console.log("[v0] Publishing full note")
+      console.log("[NostrJournal] Publishing full note")
       onPublishNote(note)
     }
   }

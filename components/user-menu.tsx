@@ -24,7 +24,7 @@ export default function UserMenu({ pubkey, onLogout, onShowProfile }: UserMenuPr
 
   const handleLogout = () => {
     localStorage.removeItem("nostrUserNsec")
-    console.log("[v0] Cleared session data on logout")
+    console.log("[NostrJournal] Cleared session data on logout")
     setIsOpen(false)
     onLogout()
   }

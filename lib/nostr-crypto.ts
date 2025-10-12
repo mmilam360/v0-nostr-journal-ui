@@ -130,9 +130,9 @@ export async function saveEncryptedNotes(pubkey: string, notes: DecryptedNote[])
 async function saveEncryptedNotesInternal(pubkey: string, notes: DecryptedNote[]): Promise<void> {
   try {
     const storageKey = generateStorageKey(pubkey)
-    console.log("[v0] Saving notes with storage key:", storageKey)
-    console.log("[v0] Saving notes count:", notes.length)
-    console.log("[v0] Saving note IDs:", notes.map(n => n.id))
+    console.log("[NostrJournal] Saving notes with storage key:", storageKey)
+    console.log("[NostrJournal] Saving notes count:", notes.length)
+    console.log("[NostrJournal] Saving note IDs:", notes.map(n => n.id))
     
     const notesData = JSON.stringify(notes)
 
@@ -146,7 +146,7 @@ async function saveEncryptedNotesInternal(pubkey: string, notes: DecryptedNote[]
     }
 
     localStorage.setItem(storageKey, JSON.stringify(encryptedStorage))
-    console.log("[v0] ✅ Successfully saved to localStorage at:", new Date().toLocaleString())
+    console.log("[NostrJournal] ✅ Successfully saved to localStorage at:", new Date().toLocaleString())
   } catch (error) {
     console.error("[v0] Error saving encrypted notes:", error)
     throw error
@@ -223,7 +223,7 @@ export async function encryptPrivateKey(privateKeyHex: string, password: string,
 
     const storageKey = generatePrivateKeyStorageKey(pubkey)
     localStorage.setItem(storageKey, JSON.stringify(encryptedStorage))
-    console.log("[v0] Private key encrypted and saved to localStorage")
+    console.log("[NostrJournal] Private key encrypted and saved to localStorage")
   } catch (error) {
     console.error("[v0] Error encrypting private key:", error)
     throw error
@@ -270,7 +270,7 @@ export async function decryptPrivateKey(password: string, pubkey: string): Promi
     const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv: ivArray }, key, encrypted)
 
     const privateKeyHex = decoder.decode(decrypted)
-    console.log("[v0] Private key decrypted successfully")
+    console.log("[NostrJournal] Private key decrypted successfully")
     return privateKeyHex
   } catch (error) {
     console.error("[v0] Error decrypting private key:", error)
@@ -288,5 +288,5 @@ export function hasStoredPrivateKey(pubkey: string): boolean {
 export function clearStoredPrivateKey(pubkey: string): void {
   const storageKey = generatePrivateKeyStorageKey(pubkey)
   localStorage.removeItem(storageKey)
-  console.log("[v0] Encrypted private key cleared from localStorage")
+  console.log("[NostrJournal] Encrypted private key cleared from localStorage")
 }
