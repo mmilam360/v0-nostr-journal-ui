@@ -1,0 +1,6 @@
+name = "nostr-journal-dev"
+compatibility_date = "2025-10-13"
+
+# For static sites, we might not need nodejs_compat
+# But enable it if needed for API routes
+compatibility_flags = ["nodejs_compat"]
