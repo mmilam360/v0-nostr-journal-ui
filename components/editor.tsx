@@ -192,11 +192,17 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
   }
 
   const getPublishButtonText = () => {
+    console.log("[NostrJournal] 🔍 Getting publish button text, selectedText:", selectedText ? `"${selectedText.substring(0, 30)}..."` : "none")
     if (selectedText && selectedText.length > 0) {
       return "Publish Highlight to Nostr"
     }
     return "Publish to Nostr"
   }
+
+  // Force re-render when selectedText changes
+  useEffect(() => {
+    console.log("[NostrJournal] 🔄 SelectedText changed:", selectedText ? `"${selectedText.substring(0, 30)}..."` : "none")
+  }, [selectedText])
 
   if (!note) {
     return (
@@ -282,7 +288,7 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
               className="bg-primary hover:bg-primary/90 disabled:opacity-50 text-xs px-2 no-select"
             >
               <Upload className="w-4 h-4" />
-              {selectedText ? "Highlight" : "Publish"}
+{getPublishButtonText()}
             </Button>
             <Button
               onClick={handleDeleteClick}
