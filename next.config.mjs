@@ -1,9 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: 'export',
+  // Enable API routes for Lightning functionality
   trailingSlash: true,
   skipTrailingSlashRedirect: true,
-  distDir: 'out',
   images: {
     unoptimized: true
   },
@@ -11,7 +10,7 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
-  // Ensure static export works properly
+  // Ensure proper build for Cloudflare Pages with Functions
   experimental: {
     outputFileTracingRoot: undefined,
   },

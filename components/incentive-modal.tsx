@@ -4,8 +4,8 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { X, Zap, Target, Gift, Wallet } from "lucide-react"
-import { SimpleIncentiveSetup } from "@/components/simple-incentive-setup"
-import { SimpleRewardClaimer } from "@/components/simple-reward-claimer"
+import { AutomatedIncentiveSetup } from "@/components/automated-incentive-setup"
+import { AutomatedRewardTracker } from "@/components/automated-reward-tracker"
 import type { AuthData } from "@/components/main-app"
 
 interface IncentiveModalProps {
@@ -52,7 +52,7 @@ export function IncentiveModal({
               <Target className="w-5 h-5 text-blue-500" />
               <h3 className="text-lg font-semibold">Set Up Your Daily Goal</h3>
             </div>
-            <SimpleIncentiveSetup 
+            <AutomatedIncentiveSetup 
               userPubkey={userPubkey}
               authData={authData}
             />
@@ -65,7 +65,7 @@ export function IncentiveModal({
                 <Gift className="w-5 h-5 text-green-500" />
                 <h3 className="text-lg font-semibold">Claim Your Reward</h3>
               </div>
-              <SimpleRewardClaimer
+              <AutomatedRewardTracker
                 userPubkey={userPubkey}
                 wordCount={selectedNote.content.split(/\s+/).length}
                 authData={authData}
