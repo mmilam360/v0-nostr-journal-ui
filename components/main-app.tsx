@@ -25,7 +25,7 @@ import {
 import TagsPanel from "@/components/tags-panel"
 import NoteList from "@/components/note-list"
 import Editor from "@/components/editor"
-import PublishModal from "@/components/publish-modal"
+import PublishConfirmationModal from "@/components/publish-confirmation-modal"
 import DeleteConfirmationModal from "@/components/delete-confirmation-modal"
 import ProfilePage from "@/components/profile-page"
 import { Button } from "@/components/ui/button"

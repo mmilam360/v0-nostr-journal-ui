@@ -12,6 +12,7 @@ Nostr Journal is a privacy-focused journaling application that leverages the Nos
 - **End-to-End Encryption**: All content encrypted with your cryptographic keys
 - **Cross-Device Sync**: Access your journal from any device using the same keys
 - **Multiple Authentication Methods**: Browser extension, private key import, or remote signer
+- **Publish to Nostr**: Share selected notes or highlights as public Kind 1 posts to Nostr feeds
 - **Lightning Integration**: Support development through Lightning payments
 - **Offline-First**: Works offline with sync when connection is available
 - **Open Source**: Fully transparent codebase for community review
@@ -146,6 +147,8 @@ The built files will be in the `.next/` directory.
 
 4. **Sync Across Devices**: Log in with the same keys on any device to access your notes
 
+5. **Publish to Nostr**: Select text in any note and click "Publish Highlight" to share it as a public Kind 1 post to Nostr feeds
+
 ### Authentication Methods
 
 #### Browser Extension (Recommended)
@@ -234,6 +237,7 @@ This project implements several Nostr NIPs (Nostr Implementation Possibilities):
 ### Event Kinds Used
 
 - **Kind 30001**: Journal entries (parameterized replaceable events)
+- **Kind 1**: Public posts (when publishing notes or highlights to Nostr feeds)
 - **Kind 5**: Deletion events (NIP-09)
 
 ### Relay Configuration
