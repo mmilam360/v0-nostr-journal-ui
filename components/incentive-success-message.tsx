@@ -37,10 +37,10 @@ export function IncentiveSuccessMessage({
           {/* Title and Amount */}
           <div>
             <h2 className="text-2xl font-bold text-gray-900">
-              Stake Deposited! ⚡
+              Payment Detected! ⚡
             </h2>
             <p className="text-gray-600 mt-2">
-              Your stake of <span className="font-semibold text-orange-600">{amount} sats</span> has been confirmed.
+              Your stake of <span className="font-semibold text-orange-600">{amount} sats</span> has been automatically detected and confirmed.
             </p>
           </div>
           

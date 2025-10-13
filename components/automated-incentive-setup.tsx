@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Target, Zap, Wallet, CheckCircle, AlertCircle, Clock, Copy, QrCode } from 'lucide-react'
 import { IncentiveSuccessMessage } from './incentive-success-message'
+import QRCode from 'qrcode.react'
 
 interface AutomatedIncentiveSetupProps {
   userPubkey: string
@@ -30,10 +31,49 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
   const [depositedAmount, setDepositedAmount] = useState(0)
   const [showQuitSuccess, setShowQuitSuccess] = useState(false)
   const [showQuitError, setShowQuitError] = useState(false)
+  const [showInvoiceError, setShowInvoiceError] = useState(false)
+  const [showPaymentError, setShowPaymentError] = useState(false)
+  const [showCopySuccess, setShowCopySuccess] = useState(false)
+  const [showCopyError, setShowCopyError] = useState(false)
+  const [paymentCheckInterval, setPaymentCheckInterval] = useState<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
     loadExistingSettings()
   }, [])
+
+  // Auto-check payment status every 1 second when invoice is created
+  useEffect(() => {
+    if (depositInvoice && !invoicePaid) {
+      console.log('[Setup] Starting automatic payment checking...')
+      const interval = setInterval(() => {
+        checkPaymentStatus(true) // Pass true for automatic checks
+      }, 1000) // Check every 1 second
+      
+      setPaymentCheckInterval(interval)
+      
+      // Cleanup interval after 5 minutes (300 seconds) to avoid infinite checking
+      setTimeout(() => {
+        if (interval) {
+          clearInterval(interval)
+          setPaymentCheckInterval(null)
+          console.log('[Setup] Stopped automatic payment checking after 5 minutes')
+        }
+      }, 300000)
+    } else if (invoicePaid && paymentCheckInterval) {
+      // Stop checking if payment is confirmed
+      clearInterval(paymentCheckInterval)
+      setPaymentCheckInterval(null)
+      console.log('[Setup] Payment confirmed, stopped automatic checking')
+    }
+    
+    // Cleanup on unmount or when invoice changes
+    return () => {
+      if (paymentCheckInterval) {
+        clearInterval(paymentCheckInterval)
+        setPaymentCheckInterval(null)
+      }
+    }
+  }, [depositInvoice, invoicePaid])
 
   const loadExistingSettings = async () => {
     try {
@@ -90,18 +130,22 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
       }
     } catch (error) {
       console.error('Error creating invoice:', error)
-      alert(`❌ Error creating stake invoice: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      setShowInvoiceError(true)
     } finally {
       setLoading(false)
     }
   }
 
-  const checkPaymentStatus = async () => {
+  const checkPaymentStatus = async (isAutoCheck = false) => {
     if (!depositInvoice) return
 
-    setLoading(true)
+    // Only show loading state for manual checks, not automatic ones
+    if (!isAutoCheck) {
+      setLoading(true)
+    }
+    
     try {
-      console.log('[Setup] 🔍 Checking payment status...')
+      console.log('[Setup] 🔍 Checking payment status...', isAutoCheck ? '(auto)' : '(manual)')
       
       // For now, simulate payment confirmation after a delay
       // In production, this would check actual Lightning payment status
@@ -159,9 +203,14 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
       
     } catch (error) {
       console.error('[Setup] ❌ Error checking payment:', error)
-      alert('❌ Error checking payment status. Please try again.')
+      if (!isAutoCheck) {
+        setShowPaymentError(true)
+      }
     } finally {
-      setLoading(false)
+      // Only clear loading state for manual checks
+      if (!isAutoCheck) {
+        setLoading(false)
+      }
     }
   }
 
@@ -174,10 +223,12 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
   const copyInvoice = async () => {
     try {
       await navigator.clipboard.writeText(depositInvoice)
-      alert('Invoice copied to clipboard!')
+      setShowCopySuccess(true)
+      setTimeout(() => setShowCopySuccess(false), 3000)
     } catch (error) {
       console.error('Failed to copy invoice:', error)
-      alert('Failed to copy invoice. Please copy manually.')
+      setShowCopyError(true)
+      setTimeout(() => setShowCopyError(false), 3000)
     }
   }
 
@@ -323,68 +374,62 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
             {loading ? 'Creating Invoice...' : `Create ${settings.stakeAmount} sats Stake Invoice`}
           </Button>
         ) : (
-          <div className="space-y-3">
-            <div className="bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-lg">
-              <div className="flex items-center gap-2 mb-2">
-                <AlertCircle className="w-4 h-4 text-yellow-600" />
+          <div className="space-y-4">
+            <div className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-lg">
+              <div className="flex items-center gap-2 mb-3">
+                <AlertCircle className="w-5 h-5 text-yellow-600" />
                 <span className="text-sm font-medium text-yellow-800 dark:text-yellow-200">Payment Required</span>
               </div>
-              <p className="text-xs text-yellow-700 dark:text-yellow-300 mb-2">
+              <p className="text-sm text-yellow-700 dark:text-yellow-300 mb-4">
                 Pay this Lightning invoice to activate your goals:
               </p>
-              <div className="bg-white dark:bg-gray-800 p-2 rounded border font-mono text-xs break-all mb-2">
-                {depositInvoice}
-              </div>
               
-              {/* Copy and QR Code Buttons */}
-              <div className="flex gap-2">
-                <Button 
-                  onClick={copyInvoice}
-                  variant="outline" 
-                  size="sm"
-                  className="flex-1"
-                >
-                  <Copy className="w-4 h-4 mr-2" />
-                  Copy Invoice
-                </Button>
-                <Button 
-                  onClick={() => setShowQRCode(!showQRCode)}
-                  variant="outline" 
-                  size="sm"
-                  className="flex-1"
-                >
-                  <QrCode className="w-4 h-4 mr-2" />
-                  {showQRCode ? 'Hide QR' : 'Show QR'}
-                </Button>
-              </div>
-              
-              {/* QR Code Display */}
-              {showQRCode && (
-                <div className="mt-3 p-3 bg-white dark:bg-gray-800 rounded border">
-                  <div className="flex justify-center">
-                    <div className="bg-white p-2 rounded">
-                      {/* Simple QR code placeholder - in production you'd use a QR library */}
-                      <div className="w-32 h-32 bg-gray-100 border-2 border-dashed border-gray-300 flex items-center justify-center text-xs text-gray-500">
-                        QR Code
-                        <br />
-                        {depositInvoice.substring(0, 20)}...
-                      </div>
-                    </div>
+              {/* QR Code Display - Always visible */}
+              <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border-2 border-dashed border-yellow-300 mb-4">
+                <div className="flex flex-col items-center">
+                  <div className="bg-white p-3 rounded-lg shadow-sm">
+                    <QRCode 
+                      value={depositInvoice}
+                      size={160}
+                      level="M"
+                      includeMargin={true}
+                      renderAs="svg"
+                    />
                   </div>
-                  <p className="text-xs text-center text-gray-600 mt-2">
+                  <p className="text-xs text-center text-gray-600 mt-3 font-medium">
                     Scan with Lightning wallet
                   </p>
                 </div>
-              )}
+              </div>
+              
+              {/* Invoice Text */}
+              <div className="bg-white dark:bg-gray-800 p-3 rounded border font-mono text-xs break-all mb-3">
+                {depositInvoice}
+              </div>
+              
+              {/* Copy Button */}
+              <Button 
+                onClick={copyInvoice}
+                variant="outline" 
+                size="sm"
+                className="w-full"
+              >
+                <Copy className="w-4 h-4 mr-2" />
+                Copy Invoice
+              </Button>
             </div>
             
-            <Button 
-              onClick={checkPaymentStatus}
-              className="w-full"
-            >
-              <Clock className="w-4 h-4 mr-2" />
-              Check Payment Status
-            </Button>
+            {/* Payment Status Indicator */}
+            <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg">
+              <div className="flex items-center gap-2">
+                <div className="animate-spin">
+                  <Clock className="w-4 h-4 text-blue-600" />
+                </div>
+                <span className="text-sm text-blue-700 dark:text-blue-300">
+                  Waiting for payment... (checking every second)
+                </span>
+              </div>
+            </div>
           </div>
         )}
         
@@ -397,6 +442,7 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
             <li>• Set any stake amount you're comfortable with</li>
             <li>• Write your daily word goal each day</li>
             <li>• Automatically receive rewards when goal is met</li>
+            <li>• <strong>Streak counter</strong> appears in header for active users</li>
             <li>• Missing days deduct from your stake balance</li>
             <li>• <strong>Quitting forfeits your stake</strong> - no refunds</li>
             <li>• Build a consistent writing habit with real commitment</li>
@@ -479,6 +525,66 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
             </Button>
           </div>
         </Card>
+      </div>
+    )}
+    
+    {/* Invoice Error Modal */}
+    {showInvoiceError && (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+        <Card className="max-w-md w-full p-6 relative animate-in zoom-in duration-300">
+          <div className="flex flex-col items-center text-center space-y-4">
+            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center">
+              <AlertCircle className="w-10 h-10 text-red-600" />
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900">Invoice Creation Failed</h2>
+              <p className="text-gray-600 mt-2">Failed to create stake invoice. Please try again.</p>
+            </div>
+            <Button onClick={() => setShowInvoiceError(false)} className="w-full bg-red-600 hover:bg-red-700">
+              Try Again
+            </Button>
+          </div>
+        </Card>
+      </div>
+    )}
+    
+    {/* Payment Error Modal */}
+    {showPaymentError && (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+        <Card className="max-w-md w-full p-6 relative animate-in zoom-in duration-300">
+          <div className="flex flex-col items-center text-center space-y-4">
+            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center">
+              <AlertCircle className="w-10 h-10 text-red-600" />
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900">Payment Check Failed</h2>
+              <p className="text-gray-600 mt-2">Failed to check payment status. Please try again.</p>
+            </div>
+            <Button onClick={() => setShowPaymentError(false)} className="w-full bg-red-600 hover:bg-red-700">
+              Try Again
+            </Button>
+          </div>
+        </Card>
+      </div>
+    )}
+    
+    {/* Copy Success Toast */}
+    {showCopySuccess && (
+      <div className="fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg animate-in slide-in-from-right duration-300 z-50">
+        <div className="flex items-center gap-2">
+          <CheckCircle className="w-5 h-5" />
+          <span>Invoice copied to clipboard!</span>
+        </div>
+      </div>
+    )}
+    
+    {/* Copy Error Toast */}
+    {showCopyError && (
+      <div className="fixed top-4 right-4 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg animate-in slide-in-from-right duration-300 z-50">
+        <div className="flex items-center gap-2">
+          <AlertCircle className="w-5 h-5" />
+          <span>Failed to copy invoice. Please copy manually.</span>
+        </div>
       </div>
     )}
   </>

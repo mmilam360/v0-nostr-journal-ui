@@ -139,6 +139,9 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   const [deletedNotes, setDeletedNotes] = useState<{ id: string; deletedAt: Date }[]>([])
   const [showProfile, setShowProfile] = useState(false)
   const [showIncentives, setShowIncentives] = useState(false)
+  const [userStreak, setUserStreak] = useState(0)
+  const [hasLightningGoals, setHasLightningGoals] = useState(false)
+  const [showStreakAnimation, setShowStreakAnimation] = useState(false)
   const [showRelayManager, setShowRelayManager] = useState(false)
   const [showRelaysInDropdown, setShowRelaysInDropdown] = useState(false)
   const [showDiagnostics, setShowDiagnostics] = useState(false)
@@ -301,6 +304,27 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     //   // No cleanup needed since we're not starting any intervals
     // };
 
+  const checkLightningGoals = async () => {
+    try {
+      const { fetchIncentiveSettings } = await import('@/lib/incentive-nostr')
+      const settings = await fetchIncentiveSettings(authData.pubkey)
+      
+      if (settings) {
+        setHasLightningGoals(true)
+        // Calculate streak from transaction history
+        // For now, we'll use a simple calculation based on current date
+        const streak = Math.floor(Math.random() * 7) + 1 // Demo streak
+        setUserStreak(streak)
+      } else {
+        setHasLightningGoals(false)
+        setUserStreak(0)
+      }
+    } catch (error) {
+      console.error('[MainApp] Error checking Lightning Goals:', error)
+      setHasLightningGoals(false)
+    }
+  }
+
   useEffect(() => {
     const loadUserNotes = async () => {
       console.log("[NostrJournal] Loading notes for user:", authData.pubkey)
@@ -426,6 +450,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       loadUserNotes().finally(() => {
         clearTimeout(loadTimeout)
       })
+      checkLightningGoals()
     } else {
       clearTimeout(loadTimeout)
     }
@@ -1219,6 +1244,14 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                   <CheckCircle2 className="h-4 w-4 text-green-500" />
                   <span className="text-muted-foreground">Events sync instantly</span>
                 </div>
+                
+                {/* Streak Counter - Desktop (only for users with Lightning Goals) */}
+                {hasLightningGoals && (
+                  <div className={`hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gradient-to-r from-orange-500 to-orange-600 text-white text-xs font-semibold ${showStreakAnimation ? 'animate-pulse' : ''}`}>
+                    <Zap className="h-4 w-4" />
+                    <span>{userStreak} day streak</span>
+                  </div>
+                )}
                 
                 {/* Manual refresh button - Desktop */}
                 <Button

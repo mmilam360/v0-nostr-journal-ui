@@ -9,9 +9,10 @@ interface AutomatedRewardTrackerProps {
   userPubkey: string
   authData: any
   currentWordCount: number // Pass from parent
+  onStreakUpdate?: (newStreak: number) => void // Callback to update streak in parent
 }
 
-export function AutomatedRewardTracker({ userPubkey, authData, currentWordCount }: AutomatedRewardTrackerProps) {
+export function AutomatedRewardTracker({ userPubkey, authData, currentWordCount, onStreakUpdate }: AutomatedRewardTrackerProps) {
   const [settings, setSettings] = useState<any>(null)
   const [todayProgress, setTodayProgress] = useState(0)
   const [balance, setBalance] = useState(0)
@@ -121,12 +122,15 @@ export function AutomatedRewardTracker({ userPubkey, authData, currentWordCount 
     
     // If goal just reached (wasn't met before, now is)
     if (goalReached && !goalMet) {
-      console.log('[Tracker] 🎯 Goal reached!')
+      console.log('[Tracker] 🎯 Goal reached! Auto-claiming reward...')
       setGoalMet(true)
       setShowZapAnimation(true)
       
       // Automatically record progress to Nostr
       await autoRecordProgress(goalReached)
+      
+      // Automatically claim reward without user action
+      await handleClaimReward()
       
       // Stop animation after 2 seconds
       setTimeout(() => setShowZapAnimation(false), 2000)
@@ -218,6 +222,13 @@ export function AutomatedRewardTracker({ userPubkey, authData, currentWordCount 
       setHasMetGoalToday(true)
       setBalance(currentBalance - result.amountSats)
       
+      // Update streak and notify parent component
+      const newStreak = streak + 1
+      setStreak(newStreak)
+      if (onStreakUpdate) {
+        onStreakUpdate(newStreak)
+      }
+      
       // Show success UI
       setShowRewardSuccess(true)
       
@@ -291,27 +302,31 @@ export function AutomatedRewardTracker({ userPubkey, authData, currentWordCount 
 
         {/* Goal Status */}
         {goalMet && !rewardSent && (
-          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-            <p className="text-sm font-semibold text-green-800 mb-2">
-              🎯 Goal Achieved!
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="animate-pulse">
+                <Zap className="w-5 h-5 text-blue-600" />
+              </div>
+              <p className="text-sm font-semibold text-blue-800">
+                🎯 Goal Achieved! Processing reward...
+              </p>
+            </div>
+            <p className="text-sm text-blue-700">
+              {settings.dailyRewardSats} sats will be sent automatically to your Lightning address.
             </p>
-            <p className="text-sm text-green-700 mb-3">
-              You've earned {settings.dailyRewardSats} sats today!
-            </p>
-            <Button
-              onClick={handleClaimReward}
-              disabled={claiming}
-              className="w-full bg-green-600 hover:bg-green-700"
-            >
-              {claiming ? 'Claiming...' : `Claim ${settings.dailyRewardSats} sats ⚡`}
-            </Button>
           </div>
         )}
         
         {rewardSent && (
-          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-            <p className="text-sm text-gray-600 text-center">
-              ✅ Today's reward already claimed!
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <CheckCircle className="w-5 h-5 text-green-600" />
+              <p className="text-sm font-semibold text-green-800">
+                ✅ Reward Sent Automatically!
+              </p>
+            </div>
+            <p className="text-sm text-green-700">
+              {settings.dailyRewardSats} sats sent to your Lightning address. Great job!
             </p>
           </div>
         )}
@@ -329,10 +344,10 @@ export function AutomatedRewardTracker({ userPubkey, authData, currentWordCount 
           <div className="bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-lg">
             <div className="flex items-center gap-2 text-yellow-700 dark:text-yellow-300">
               <AlertTriangle className="w-4 h-4" />
-              <span className="text-sm font-medium">Low Balance Warning</span>
+              <span className="text-sm font-medium">Don't Lose Your Streak!</span>
             </div>
             <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-1">
-              Your balance is low. Consider adding more sats to avoid penalties for missed days.
+              Your balance is low. Add more sats to keep your streak alive and avoid penalties for missed days.
             </p>
           </div>
         )}
