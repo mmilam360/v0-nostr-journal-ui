@@ -719,6 +719,9 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     setIsPublishing(true)
     try {
       console.log("[NostrJournal] Creating Nostr event for note content")
+      console.log("[NostrJournal] 📝 Content length:", noteToPublish.content.length)
+      console.log("[NostrJournal] 📝 Content preview:", noteToPublish.content.substring(0, 100))
+      console.log("[NostrJournal] 📝 Has line breaks:", noteToPublish.content.includes('\n'))
 
       const event = await createNostrEvent(authData.pubkey, noteToPublish.content, noteToPublish.tags)
 

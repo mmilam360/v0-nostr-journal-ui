@@ -6,6 +6,10 @@ import { signEventWithRemote } from "./signer-manager"
 import { validateEvent, logValidationResult } from "./event-validator"
 
 export const createNostrEvent = async (pubkey: string, content: string, tags: string[] = []) => {
+  console.log("[NostrPublish] 📝 Creating event with content length:", content.length)
+  console.log("[NostrPublish] 📝 Content preview:", content.substring(0, 100))
+  console.log("[NostrPublish] 📝 Has line breaks:", content.includes('\n'))
+  
   const event = {
     kind: 1,
     created_at: Math.floor(Date.now() / 1000),
@@ -13,6 +17,8 @@ export const createNostrEvent = async (pubkey: string, content: string, tags: st
     content: content,
     pubkey: pubkey,
   }
+  
+  console.log("[NostrPublish] ✅ Event created with content:", event.content.substring(0, 100))
   return event
 }
 

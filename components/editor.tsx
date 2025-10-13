@@ -155,9 +155,14 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
   }
 
   const handleTextSelection = () => {
+    console.log("[NostrJournal] 🔥 Text selection event fired!")
+    
     // Use setTimeout to ensure selection is captured after mouse/keyboard events
     setTimeout(() => {
-      if (!textareaRef.current) return
+      if (!textareaRef.current) {
+        console.log("[NostrJournal] ❌ No textarea ref")
+        return
+      }
 
       const textarea = textareaRef.current
       const start = textarea.selectionStart
@@ -165,16 +170,34 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
 
       console.log("[NostrJournal] 🔍 Text selection event - start:", start, "end:", end)
 
-      if (start !== end) {
-        const selected = textarea.value.substring(start, end).trim()
+      if (start !== end && start !== null && end !== null) {
+        const selected = textarea.value.substring(start, end)
         console.log("[NostrJournal] ✅ Text selection detected:", selected.length > 0 ? `"${selected.substring(0, 50)}..."` : "none")
         console.log("[NostrJournal] 📝 Selected text length:", selected.length)
+        console.log("[NostrJournal] 📝 Raw selected text:", selected)
+        console.log("[NostrJournal] 📝 Has line breaks:", selected.includes('\n'))
         setSelectedText(selected)
       } else {
         console.log("[NostrJournal] ❌ No text selection - clearing selectedText")
         setSelectedText("")
       }
-    }, 10)
+    }, 50) // Increased timeout
+  }
+
+  // Alternative selection handler using window.getSelection()
+  const handleWindowSelection = () => {
+    console.log("[NostrJournal] 🔥 Window selection event fired!")
+    const selection = window.getSelection()
+    if (selection && selection.toString()) {
+      const selected = selection.toString()
+      console.log("[NostrJournal] ✅ Window selection detected:", `"${selected.substring(0, 50)}..."`)
+      console.log("[NostrJournal] 📝 Window selection length:", selected.length)
+      console.log("[NostrJournal] 📝 Has line breaks:", selected.includes('\n'))
+      setSelectedText(selected)
+    } else {
+      console.log("[NostrJournal] ❌ No window selection")
+      setSelectedText("")
+    }
   }
 
   const handleDeleteClick = () => {
@@ -318,7 +341,10 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
           value={content}
           onChange={(e) => handleContentChange(e.target.value)}
           onSelect={handleTextSelection}
-          onMouseUp={handleTextSelection}
+          onMouseUp={() => {
+            handleTextSelection()
+            handleWindowSelection()
+          }}
           onKeyUp={handleTextSelection}
           onFocus={handleTextSelection}
           onMouseDown={handleTextSelection}
