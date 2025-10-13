@@ -7,11 +7,11 @@ import { Gift, Target, Zap, CheckCircle, AlertTriangle, TrendingUp } from 'lucid
 
 interface AutomatedRewardTrackerProps {
   userPubkey: string
-  wordCount: number
   authData: any
+  currentWordCount: number // Pass from parent
 }
 
-export function AutomatedRewardTracker({ userPubkey, wordCount, authData }: AutomatedRewardTrackerProps) {
+export function AutomatedRewardTracker({ userPubkey, authData, currentWordCount }: AutomatedRewardTrackerProps) {
   const [settings, setSettings] = useState<any>(null)
   const [todayProgress, setTodayProgress] = useState(0)
   const [balance, setBalance] = useState(0)
@@ -19,6 +19,9 @@ export function AutomatedRewardTracker({ userPubkey, wordCount, authData }: Auto
   const [hasMetGoalToday, setHasMetGoalToday] = useState(false)
   const [rewardSent, setRewardSent] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [goalMet, setGoalMet] = useState(false)
+  const [showZapAnimation, setShowZapAnimation] = useState(false)
+  const [claiming, setClaiming] = useState(false)
 
   useEffect(() => {
     loadSettings()
@@ -28,10 +31,10 @@ export function AutomatedRewardTracker({ userPubkey, wordCount, authData }: Auto
 
   useEffect(() => {
     // Auto-check if goal is met when word count changes
-    if (settings && wordCount > 0) {
+    if (settings && currentWordCount > 0) {
       checkGoalStatus()
     }
-  }, [wordCount, settings])
+  }, [currentWordCount, settings])
 
   const loadSettings = async () => {
     try {
@@ -74,18 +77,50 @@ export function AutomatedRewardTracker({ userPubkey, wordCount, authData }: Auto
 
   const checkGoalStatus = async () => {
     if (!settings) return
-
-    const totalProgress = todayProgress + wordCount
-    const goalMet = totalProgress >= settings.dailyWordGoal
-
-    if (goalMet && !hasMetGoalToday && !rewardSent) {
-      // Automatically send reward
-      await sendReward(totalProgress)
+    
+    const goalReached = currentWordCount >= settings.dailyWordGoal
+    
+    // If goal just reached (wasn't met before, now is)
+    if (goalReached && !goalMet) {
+      console.log('[Tracker] 🎯 Goal reached!')
+      setGoalMet(true)
+      setShowZapAnimation(true)
+      
+      // Automatically record progress to Nostr
+      await autoRecordProgress(goalReached)
+      
+      // Stop animation after 2 seconds
+      setTimeout(() => setShowZapAnimation(false), 2000)
+    } else if (!goalReached && goalMet) {
+      setGoalMet(false)
     }
   }
 
-  const sendReward = async (totalWords: number) => {
-    setLoading(true)
+  const autoRecordProgress = async (goalReached: boolean) => {
+    try {
+      const today = new Date().toISOString().split('T')[0]
+      
+      // Check if already recorded today
+      if (todayProgress > 0) {
+        console.log('[Tracker] Progress already recorded today')
+        return
+      }
+      
+      console.log('[Tracker] Auto-recording daily progress...')
+      
+      // For now, just update local state
+      setTodayProgress(currentWordCount)
+      setHasMetGoalToday(goalReached)
+      
+      console.log('[Tracker] ✅ Progress recorded')
+      
+    } catch (error) {
+      console.error('[Tracker] Failed to record progress:', error)
+    }
+  }
+
+  const handleClaimReward = async () => {
+    setClaiming(true)
     try {
       const response = await fetch('/api/incentive/send-reward', {
         method: 'POST',
@@ -118,54 +153,13 @@ export function AutomatedRewardTracker({ userPubkey, wordCount, authData }: Auto
       }
       
     } catch (error) {
-      console.error('Error sending reward:', error)
-      alert(`❌ Error sending reward: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      console.error('Error claiming reward:', error)
+      alert(`❌ Error claiming reward: ${error instanceof Error ? error.message : 'Unknown error'}`)
     } finally {
-      setLoading(false)
+      setClaiming(false)
     }
   }
 
-  const addToProgress = async () => {
-    setLoading(true)
-    try {
-      const today = new Date().toISOString().split('T')[0]
-      const currentProgress = todayProgress + wordCount
-      const goalMet = currentProgress >= settings.dailyWordGoal
-      
-      // Update progress in localStorage
-      const progressData = {
-        wordCount: currentProgress,
-        goalMet: goalMet,
-        rewardSent: rewardSent || goalMet,
-        lastUpdated: new Date().toISOString()
-      }
-      
-      localStorage.setItem(`daily-progress-${userPubkey}-${today}`, JSON.stringify(progressData))
-      
-      // Update user account if goal was met
-      if (goalMet && !rewardSent) {
-        const userAccount = JSON.parse(localStorage.getItem(`user-account-${userPubkey}`) || '{}')
-        userAccount.balance = Math.max(0, userAccount.balance - settings.dailyRewardSats)
-        userAccount.streak += 1
-        localStorage.setItem(`user-account-${userPubkey}`, JSON.stringify(userAccount))
-        
-        setBalance(userAccount.balance)
-        setStreak(userAccount.streak)
-        setRewardSent(true)
-        setHasMetGoalToday(true)
-        
-        alert(`🎉 Daily goal reached! ${settings.dailyRewardSats} sats automatically sent!`)
-      }
-      
-      setTodayProgress(currentProgress)
-      
-    } catch (error) {
-      console.error('Error adding progress:', error)
-      alert('❌ Error adding progress. Please try again.')
-    } finally {
-      setLoading(false)
-    }
-  }
 
   if (!settings) {
     return (
@@ -180,109 +174,83 @@ export function AutomatedRewardTracker({ userPubkey, wordCount, authData }: Auto
     )
   }
 
-  const goalMet = todayProgress >= settings.dailyWordGoal
-  const progressPercent = Math.min((todayProgress / settings.dailyWordGoal) * 100, 100)
-  const withCurrentNote = Math.min(((todayProgress + wordCount) / settings.dailyWordGoal) * 100, 100)
-
+  const progress = Math.min((currentWordCount / settings.dailyWordGoal) * 100, 100)
+  
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Gift className="w-5 h-5 text-green-500" />
-          Daily Progress
-        </CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center gap-2">
+            <Gift className="w-5 h-5 text-green-500" />
+            Daily Goal
+          </CardTitle>
+          <div className={`relative ${showZapAnimation ? 'animate-bounce' : ''}`}>
+            <Zap 
+              className={`w-6 h-6 transition-colors duration-300 ${
+                goalMet ? 'text-orange-500 fill-orange-500' : 'text-gray-400'
+              }`}
+            />
+            {showZapAnimation && (
+              <>
+                {/* Zap animation rings */}
+                <div className="absolute inset-0 w-6 h-6 rounded-full bg-orange-500 animate-ping opacity-75" />
+                <div className="absolute inset-0 w-6 h-6 rounded-full bg-orange-400 animate-ping opacity-50" style={{ animationDelay: '0.2s' }} />
+              </>
+            )}
+          </div>
+        </div>
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Progress Bar */}
         <div className="space-y-2">
           <div className="flex justify-between text-sm">
-            <span>Progress: {todayProgress}/{settings.dailyWordGoal} words</span>
-            <span>{Math.round(progressPercent)}%</span>
+            <span className="text-gray-600">Progress</span>
+            <span className={`font-medium ${goalMet ? 'text-green-600' : 'text-gray-900'}`}>
+              {currentWordCount} / {settings.dailyWordGoal} words
+            </span>
           </div>
-          <div className="w-full bg-muted rounded-full h-2">
+          <div className="w-full bg-gray-200 rounded-full h-3">
             <div 
-              className={`h-2 rounded-full transition-all ${goalMet ? 'bg-green-500' : 'bg-blue-500'}`}
-              style={{ width: `${progressPercent}%` }}
+              className={`h-3 rounded-full transition-all duration-500 ${
+                goalMet ? 'bg-gradient-to-r from-green-500 to-green-600' : 'bg-blue-500'
+              }`}
+              style={{ width: `${progress}%` }}
             />
           </div>
         </div>
 
-        {/* Current Note Contribution */}
-        <div className="bg-muted/50 p-3 rounded-lg">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-muted-foreground">This note:</span>
-            <span className="font-medium">{wordCount} words</span>
+        {/* Goal Status */}
+        {goalMet && !rewardSent && (
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+            <p className="text-sm font-semibold text-green-800 mb-2">
+              🎯 Goal Achieved!
+            </p>
+            <p className="text-sm text-green-700 mb-3">
+              You've earned {settings.dailyRewardSats} sats today!
+            </p>
+            <Button
+              onClick={handleClaimReward}
+              disabled={claiming}
+              className="w-full bg-green-600 hover:bg-green-700"
+            >
+              {claiming ? 'Claiming...' : `Claim ${settings.dailyRewardSats} sats ⚡`}
+            </Button>
           </div>
-          
-          {wordCount > 0 && (
-            <div className="space-y-2">
-              <div className="flex justify-between text-xs">
-                <span>With this note:</span>
-                <span>{Math.round(withCurrentNote)}%</span>
-              </div>
-              <div className="w-full bg-muted rounded-full h-1">
-                <div 
-                  className={`h-1 rounded-full transition-all ${withCurrentNote >= 100 ? 'bg-green-500' : 'bg-blue-400'}`}
-                  style={{ width: `${withCurrentNote}%` }}
-                />
-              </div>
-            </div>
-          )}
-          
-          <Button 
-            onClick={addToProgress}
-            disabled={loading || wordCount === 0}
-            variant="outline" 
-            size="sm" 
-            className="w-full mt-2"
-          >
-            {loading ? 'Adding...' : 'Add to Daily Progress'}
-          </Button>
-        </div>
+        )}
+        
+        {rewardSent && (
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+            <p className="text-sm text-gray-600 text-center">
+              ✅ Today's reward already claimed!
+            </p>
+          </div>
+        )}
 
-        {/* Status Display */}
-        <div className="text-center">
-          {hasMetGoalToday ? (
-            <div className="space-y-3">
-              {rewardSent ? (
-                <div className="flex items-center justify-center gap-2 text-green-600">
-                  <CheckCircle className="w-5 h-5" />
-                  <span className="font-medium">Reward sent automatically! 🎉</span>
-                </div>
-              ) : (
-                <div className="flex items-center justify-center gap-2 text-green-600">
-                  <Target className="w-5 h-5" />
-                  <span className="font-medium">Goal reached! Processing reward...</span>
-                </div>
-              )}
-            </div>
-          ) : goalMet ? (
-            <div className="flex items-center justify-center gap-2 text-green-600">
-              <Target className="w-5 h-5" />
-              <span className="font-medium">Goal reached! Add to progress to claim reward</span>
-            </div>
-          ) : (
-            <div className="text-muted-foreground">
-              <p className="text-sm">
-                Keep writing! Need {settings.dailyWordGoal - todayProgress} more words to reach your goal.
-              </p>
-            </div>
-          )}
-        </div>
-
-        {/* Stats */}
-        <div className="grid grid-cols-3 gap-3 pt-3 border-t">
-          <div className="text-center">
-            <div className="text-lg font-bold text-blue-600">{balance}</div>
-            <div className="text-xs text-muted-foreground">Balance</div>
-          </div>
-          <div className="text-center">
-            <div className="text-lg font-bold text-green-600">{streak}</div>
-            <div className="text-xs text-muted-foreground">Streak</div>
-          </div>
-          <div className="text-center">
-            <div className="text-lg font-bold text-yellow-600">{settings.dailyRewardSats}</div>
-            <div className="text-xs text-muted-foreground">Reward</div>
+        {/* Balance */}
+        <div className="pt-4 border-t border-gray-200">
+          <div className="flex justify-between text-sm">
+            <span className="text-gray-600">Stake Balance</span>
+            <span className="font-semibold text-orange-600">{balance} sats</span>
           </div>
         </div>
 

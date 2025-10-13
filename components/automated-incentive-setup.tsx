@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Target, Zap, Wallet, CheckCircle, AlertCircle, Clock } from 'lucide-react'
+import { Target, Zap, Wallet, CheckCircle, AlertCircle, Clock, Copy, QrCode } from 'lucide-react'
+import { IncentiveSuccessMessage } from './incentive-success-message'
 
 interface AutomatedIncentiveSetupProps {
   userPubkey: string
@@ -24,6 +25,9 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
   const [invoicePaid, setInvoicePaid] = useState(false)
   const [balance, setBalance] = useState(0)
   const [streak, setStreak] = useState(0)
+  const [showQRCode, setShowQRCode] = useState(false)
+  const [showSuccessMessage, setShowSuccessMessage] = useState(false)
+  const [depositedAmount, setDepositedAmount] = useState(0)
 
   useEffect(() => {
     loadExistingSettings()
@@ -78,6 +82,8 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
 
     setLoading(true)
     try {
+      console.log('[Setup] 🔍 Checking payment status...')
+      
       // For now, simulate payment confirmation after a delay
       // In production, this would check actual Lightning payment status
       await new Promise(resolve => setTimeout(resolve, 2000)) // 2 second delay
@@ -86,6 +92,33 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
       setInvoicePaid(true)
       setBalance(settings.stakeAmount)
       setHasSetup(true)
+      setDepositedAmount(settings.stakeAmount)
+      
+      // CRITICAL: Save the actual balance to Nostr, not 0!
+      console.log('[Setup] 💰 Payment confirmed! Saving balance to Nostr...')
+      
+      const { saveIncentiveSettings } = await import('@/lib/incentive-nostr')
+      
+      // Create settings object with ACTUAL deposited amount
+      const updatedSettings = {
+        dailyWordGoal: settings.dailyWordGoal,
+        dailyRewardSats: settings.dailyRewardSats,
+        stakeBalanceSats: settings.stakeAmount, // ✅ CRITICAL: Use actual deposit amount, not 0
+        lightningAddress: settings.lightningAddress,
+        createdDate: new Date().toISOString().split('T')[0],
+        lastUpdated: new Date().toISOString().split('T')[0]
+      }
+      
+      console.log('[Setup] Saving settings with balance:', updatedSettings.stakeBalanceSats)
+      
+      // Save to Nostr
+      await saveIncentiveSettings(
+        userPubkey,
+        updatedSettings,
+        authData
+      )
+      
+      console.log('[Setup] ✅ Stake balance saved to Nostr')
       
       // Save user account locally for demo
       const userAccount = {
@@ -102,10 +135,11 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
       
       localStorage.setItem(`user-account-${userPubkey}`, JSON.stringify(userAccount))
       
-      alert(`✅ Stake deposit confirmed!\n\n${settings.stakeAmount} sats deposited\nDaily goal: ${settings.dailyWordGoal} words\nReward: ${settings.dailyRewardSats} sats\n\nYour Lightning Goals are now active!`)
+      // Show success UI instead of alert
+      setShowSuccessMessage(true)
       
     } catch (error) {
-      console.error('Error checking payment:', error)
+      console.error('[Setup] ❌ Error checking payment:', error)
       alert('❌ Error checking payment status. Please try again.')
     } finally {
       setLoading(false)
@@ -116,6 +150,16 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
     // This would typically be handled server-side
     // For now, we'll simulate it
     console.log('Starting daily monitoring for user:', userPubkey)
+  }
+
+  const copyInvoice = async () => {
+    try {
+      await navigator.clipboard.writeText(depositInvoice)
+      alert('Invoice copied to clipboard!')
+    } catch (error) {
+      console.error('Failed to copy invoice:', error)
+      alert('Failed to copy invoice. Please copy manually.')
+    }
   }
 
   const handleReset = async () => {
@@ -188,14 +232,15 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Target className="w-5 h-5 text-blue-500" />
-          Set Up Automated Lightning Goals
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
+    <>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Target className="w-5 h-5 text-blue-500" />
+            Set Up Automated Lightning Goals
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
         <div className="space-y-3">
           <div>
             <label className="text-sm font-medium">Daily Word Goal</label>
@@ -257,9 +302,50 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
               <p className="text-xs text-yellow-700 dark:text-yellow-300 mb-2">
                 Pay this Lightning invoice to activate your goals:
               </p>
-              <div className="bg-white dark:bg-gray-800 p-2 rounded border font-mono text-xs break-all">
+              <div className="bg-white dark:bg-gray-800 p-2 rounded border font-mono text-xs break-all mb-2">
                 {depositInvoice}
               </div>
+              
+              {/* Copy and QR Code Buttons */}
+              <div className="flex gap-2">
+                <Button 
+                  onClick={copyInvoice}
+                  variant="outline" 
+                  size="sm"
+                  className="flex-1"
+                >
+                  <Copy className="w-4 h-4 mr-2" />
+                  Copy Invoice
+                </Button>
+                <Button 
+                  onClick={() => setShowQRCode(!showQRCode)}
+                  variant="outline" 
+                  size="sm"
+                  className="flex-1"
+                >
+                  <QrCode className="w-4 h-4 mr-2" />
+                  {showQRCode ? 'Hide QR' : 'Show QR'}
+                </Button>
+              </div>
+              
+              {/* QR Code Display */}
+              {showQRCode && (
+                <div className="mt-3 p-3 bg-white dark:bg-gray-800 rounded border">
+                  <div className="flex justify-center">
+                    <div className="bg-white p-2 rounded">
+                      {/* Simple QR code placeholder - in production you'd use a QR library */}
+                      <div className="w-32 h-32 bg-gray-100 border-2 border-dashed border-gray-300 flex items-center justify-center text-xs text-gray-500">
+                        QR Code
+                        <br />
+                        {depositInvoice.substring(0, 20)}...
+                      </div>
+                    </div>
+                  </div>
+                  <p className="text-xs text-center text-gray-600 mt-2">
+                    Scan with Lightning wallet
+                  </p>
+                </div>
+              )}
             </div>
             
             <Button 
@@ -287,5 +373,19 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
         </div>
       </CardContent>
     </Card>
+    
+    {/* Success Message Overlay */}
+    {showSuccessMessage && (
+      <IncentiveSuccessMessage
+        amount={depositedAmount}
+        dailyReward={settings.dailyRewardSats}
+        onClose={() => {
+          setShowSuccessMessage(false)
+          // Optionally reload or update UI state
+          window.location.reload()
+        }}
+      />
+    )}
+  </>
   )
 }

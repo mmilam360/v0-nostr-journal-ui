@@ -67,8 +67,8 @@ export function IncentiveModal({
               </div>
               <AutomatedRewardTracker
                 userPubkey={userPubkey}
-                wordCount={selectedNote.content.split(/\s+/).length}
                 authData={authData}
+                currentWordCount={selectedNote.content.split(/\s+/).length}
               />
             </div>
           )}
