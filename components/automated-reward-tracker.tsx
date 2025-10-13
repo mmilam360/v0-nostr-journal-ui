@@ -87,19 +87,39 @@ export function AutomatedRewardTracker({ userPubkey, wordCount, authData }: Auto
   const sendReward = async (totalWords: number) => {
     setLoading(true)
     try {
-      // For demo purposes, simulate sending reward
-      // In production, this would send actual Lightning payment
-      console.log(`[Demo] Sending ${settings.dailyRewardSats} sats to ${settings.lightningAddress}`)
-      
-      setRewardSent(true)
-      setHasMetGoalToday(true)
-      
-      // Show success notification
-      alert(`🎉 Goal reached! ${settings.dailyRewardSats} sats automatically sent to your Lightning address!`)
+      const response = await fetch('/api/incentive/send-reward', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userPubkey: userPubkey
+        })
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setRewardSent(true)
+        setHasMetGoalToday(true)
+        
+        // Show success notification
+        alert(`🎉 Goal reached! ${data.amountSats} sats automatically sent to your Lightning address!\n\nPayment Hash: ${data.paymentHash}`)
+        
+        // Update local balance
+        const userAccount = JSON.parse(localStorage.getItem(`user-account-${userPubkey}`) || '{}')
+        userAccount.balance = Math.max(0, userAccount.balance - data.amountSats)
+        userAccount.streak += 1
+        localStorage.setItem(`user-account-${userPubkey}`, JSON.stringify(userAccount))
+        
+        setBalance(userAccount.balance)
+        setStreak(userAccount.streak)
+        
+      } else {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to send reward')
+      }
       
     } catch (error) {
       console.error('Error sending reward:', error)
-      alert('❌ Error sending reward. Please try again.')
+      alert(`❌ Error sending reward: ${error instanceof Error ? error.message : 'Unknown error'}`)
     } finally {
       setLoading(false)
     }

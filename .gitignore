@@ -10,6 +10,10 @@
 # webpack cache (too large for Cloudflare Pages)
 .next/
 
+# Cloudflare
+.wrangler/
+functions/node_modules/
+
 # production
 /build
 
