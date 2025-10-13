@@ -56,11 +56,11 @@ export default function PublishConfirmationModal({
           
           {/* Note preview */}
           <div className="space-y-2">
-            <h4 className="font-medium text-sm">Content Preview:</h4>
+            <h4 className="font-medium text-sm">Content Preview (as Kind 1 post):</h4>
             <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border">
-              <p className="text-sm text-gray-700 dark:text-gray-300 line-clamp-3">
+              <div className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap font-mono leading-relaxed max-h-32 overflow-y-auto">
                 {note.content}
-              </p>
+              </div>
               {note.tags.length > 0 && (
                 <div className="flex flex-wrap gap-1 mt-2">
                   {note.tags.map((tag, index) => (
