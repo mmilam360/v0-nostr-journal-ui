@@ -29,6 +29,9 @@ import PublishConfirmationModal from "@/components/publish-confirmation-modal"
 import PublishModal from "@/components/publish-modal"
 import DeleteConfirmationModal from "@/components/delete-confirmation-modal"
 import ProfilePage from "@/components/profile-page"
+import { isIncentiveEnabled } from "@/lib/feature-flags"
+import { IncentiveSetup } from "@/components/incentive-setup"
+import { RewardClaimer } from "@/components/reward-claimer"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -1563,6 +1566,26 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
               onDeleteNote={handleDeleteNote}
                 authData={authData}
             />
+            
+            {/* Lightning Incentive System */}
+            {isIncentiveEnabled() && (
+              <div className="mt-6 px-8">
+                <IncentiveSetup 
+                  userPubkey={authData.pubkey}
+                  authData={authData}
+                />
+              </div>
+            )}
+            
+            {isIncentiveEnabled() && selectedNote && (
+              <div className="mt-4 px-8">
+                <RewardClaimer
+                  userPubkey={authData.pubkey}
+                  wordCount={selectedNote.content.split(/\s+/).length}
+                  authData={authData}
+                />
+              </div>
+            )}
           </div>
         </div>
 
