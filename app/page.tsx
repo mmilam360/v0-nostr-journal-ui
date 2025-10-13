@@ -201,7 +201,7 @@ export default function Home() {
       <main className="min-h-screen bg-slate-900">
         {/* Debug info */}
         <div className="fixed top-4 left-4 bg-red-500 text-white p-2 text-xs z-50">
-          DEBUG: isLoggedIn={isLoggedIn ? 'true' : 'false'}, authData={authData ? 'exists' : 'null'}
+          DEBUG: isLoggedIn={isLoggedIn ? 'true' : 'false'}, authData={authData ? 'exists' : 'null'}, timestamp={new Date().toISOString()}
         </div>
         
         {isLoggedIn && authData ? (
