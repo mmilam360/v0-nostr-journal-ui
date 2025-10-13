@@ -179,7 +179,7 @@ export async function markRewardClaimed(
  */
 export async function recordTransaction(
   userPubkey: string,
-  txType: 'deposit' | 'reward_payout' | 'refund',
+  txType: 'deposit' | 'reward_payout' | 'forfeit',
   amountSats: number,
   paymentHash: string,
   authData: any,

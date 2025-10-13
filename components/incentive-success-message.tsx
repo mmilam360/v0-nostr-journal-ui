@@ -66,6 +66,7 @@ export function IncentiveSuccessMessage({
               <li>1. Write your journal entry</li>
               <li>2. Hit your word goal (tracked automatically)</li>
               <li>3. Claim your daily reward ⚡</li>
+              <li>4. <strong>Remember:</strong> Quitting forfeits your stake!</li>
             </ul>
           </div>
           

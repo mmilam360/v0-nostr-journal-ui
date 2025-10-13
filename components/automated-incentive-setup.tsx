@@ -162,24 +162,27 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
     }
   }
 
-  const handleReset = async () => {
-    if (confirm('Are you sure you want to reset your Lightning Goals? This will cancel your stake and refund any remaining balance.')) {
+  const handleQuitChallenge = async () => {
+    if (confirm('⚠️ WARNING: Are you sure you want to quit the Lightning Goals challenge?\n\nThis will:\n• Cancel your daily goals\n• FORFEIT your remaining stake balance\n• Reset your progress streak\n\nYou will NOT receive a refund. This action cannot be undone.\n\nAre you absolutely sure?')) {
       try {
-        const response = await fetch('/api/incentive/reset-account', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ pubkey: userPubkey })
-        })
-
-        if (response.ok) {
-          setHasSetup(false)
-          setBalance(0)
-          setStreak(0)
-          setInvoicePaid(false)
-          setDepositInvoice('')
-        }
+        console.log('[Setup] User quitting challenge - forfeiting stake balance')
+        
+        // Clear local storage (simulate forfeiting stake)
+        localStorage.removeItem(`user-account-${userPubkey}`)
+        localStorage.removeItem(`daily-progress-${userPubkey}-${new Date().toISOString().split('T')[0]}`)
+        
+        // In a real implementation, you might want to record this as a forfeit event to Nostr
+        // but the stake is gone - no refund
+        
+        alert('Challenge quit. Your stake has been forfeited. You can start a new challenge anytime.')
+        setHasSetup(false)
+        setBalance(0)
+        setStreak(0)
+        setInvoicePaid(false)
+        setDepositInvoice('')
       } catch (error) {
-        console.error('Error resetting account:', error)
+        console.error('Error quitting challenge:', error)
+        alert('Failed to quit challenge. Please try again.')
       }
     }
   }
@@ -223,8 +226,8 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
             </p>
           </div>
           
-          <Button onClick={handleReset} variant="outline" size="sm" className="w-full">
-            Reset Goals & Refund
+          <Button onClick={handleQuitChallenge} variant="destructive" size="sm" className="w-full">
+            Quit Challenge (Forfeit Stake)
           </Button>
         </CardContent>
       </Card>
@@ -368,7 +371,8 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
             <li>• Write your daily word goal each day</li>
             <li>• Automatically receive rewards when goal is met</li>
             <li>• Missing days deduct from your stake balance</li>
-            <li>• Build a consistent writing habit with real incentives</li>
+            <li>• <strong>Quitting forfeits your stake</strong> - no refunds</li>
+            <li>• Build a consistent writing habit with real commitment</li>
           </ul>
         </div>
       </CardContent>
