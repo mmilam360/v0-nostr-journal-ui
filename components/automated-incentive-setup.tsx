@@ -276,7 +276,6 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
         setShowQuitError(true)
       }
     }
-  }
 
   if (hasSetup) {
     return (
