@@ -1,9 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: 'export',
+  // Remove static export to enable API routes
   trailingSlash: true,
   skipTrailingSlashRedirect: true,
-  distDir: 'out',
   images: {
     unoptimized: true
   },
@@ -11,13 +10,9 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
-  // Ensure static export works properly
+  // Ensure proper build for Cloudflare Pages
   experimental: {
     outputFileTracingRoot: undefined,
-  },
-  // Disable API routes for static export
-  async rewrites() {
-    return []
   },
 }
 

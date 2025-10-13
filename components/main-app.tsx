@@ -30,8 +30,7 @@ import PublishModal from "@/components/publish-modal"
 import DeleteConfirmationModal from "@/components/delete-confirmation-modal"
 import ProfilePage from "@/components/profile-page"
 import { isIncentiveEnabled } from "@/lib/feature-flags"
-import { IncentiveSetup } from "@/components/incentive-setup"
-import { RewardClaimer } from "@/components/reward-claimer"
+import { IncentiveModal } from "@/components/incentive-modal"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -139,6 +138,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   const [noteToDelete, setNoteToDelete] = useState<Note | null>(null)
   const [deletedNotes, setDeletedNotes] = useState<{ id: string; deletedAt: Date }[]>([])
   const [showProfile, setShowProfile] = useState(false)
+  const [showIncentives, setShowIncentives] = useState(false)
   const [showRelayManager, setShowRelayManager] = useState(false)
   const [showRelaysInDropdown, setShowRelaysInDropdown] = useState(false)
   const [showDiagnostics, setShowDiagnostics] = useState(false)
@@ -1446,6 +1446,19 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                     
                     <DropdownMenuSeparator />
                     
+                    {isIncentiveEnabled() && (
+                      <DropdownMenuItem 
+                        onClick={() => {
+                          console.log('[Dropdown] Lightning Goals clicked')
+                          setShowIncentives(true)
+                        }}
+                        className="text-blue-600 focus:text-blue-600"
+                      >
+                        <Zap className="w-4 h-4 mr-2" />
+                        Lightning Goals
+                      </DropdownMenuItem>
+                    )}
+                    
                     <DropdownMenuItem 
                       onClick={() => {
                         console.log('[Dropdown] Support clicked')
@@ -1566,26 +1579,6 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
               onDeleteNote={handleDeleteNote}
                 authData={authData}
             />
-            
-            {/* Lightning Incentive System */}
-            {isIncentiveEnabled() && (
-              <div className="mt-6 px-8">
-                <IncentiveSetup 
-                  userPubkey={authData.pubkey}
-                  authData={authData}
-                />
-              </div>
-            )}
-            
-            {isIncentiveEnabled() && selectedNote && (
-              <div className="mt-4 px-8">
-                <RewardClaimer
-                  userPubkey={authData.pubkey}
-                  wordCount={selectedNote.content.split(/\s+/).length}
-                  authData={authData}
-                />
-              </div>
-            )}
           </div>
         </div>
 
@@ -1667,6 +1660,17 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       open={showDonationModal}
       onOpenChange={setShowDonationModal}
     />
+    
+    {/* Lightning Incentive Modal */}
+    {isIncentiveEnabled() && (
+      <IncentiveModal
+        isOpen={showIncentives}
+        onClose={() => setShowIncentives(false)}
+        userPubkey={authData.pubkey}
+        authData={authData}
+        selectedNote={selectedNote}
+      />
+    )}
     
     </ErrorBoundary>
   )

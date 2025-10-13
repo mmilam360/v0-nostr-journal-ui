@@ -23,7 +23,6 @@ import { QRCodeSVG } from 'qrcode.react'
 import { Logo } from './logo'
 import { Nip46RemoteSigner } from 'nostr-signer-connector'
 import InfoModal from './info-modal'
-import { isIncentiveEnabled } from '@/lib/feature-flags'
 
 interface LoginPageHorizontalProps {
   onLoginSuccess: (data: any) => void
@@ -1164,15 +1163,6 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
           </div>
         </div>
         
-        {/* Feature Flag Test - Remove this after testing */}
-        <div className="mt-8 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-          <h3 className="text-sm font-semibold text-blue-800 dark:text-blue-200 mb-2">🔧 Dev Test - Feature Flags</h3>
-          <div className="text-xs text-blue-700 dark:text-blue-300">
-            <p>NEXT_PUBLIC_INCENTIVE_ENABLED: {process.env.NEXT_PUBLIC_INCENTIVE_ENABLED || 'undefined'}</p>
-            <p>isIncentiveEnabled(): {isIncentiveEnabled() ? '✅ true' : '❌ false'}</p>
-            <p>Environment: {process.env.NEXT_PUBLIC_ENV || 'undefined'}</p>
-          </div>
-        </div>
         
         <div className="flex justify-center mt-8">
           <Button

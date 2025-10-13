@@ -1,16 +1,18 @@
 "use client"
 
 import { useState } from "react"
-import { Circle, LogOut, ChevronDown, User, Settings } from "lucide-react"
+import { Circle, LogOut, ChevronDown, User, Settings, Zap } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { isIncentiveEnabled } from "@/lib/feature-flags"
 
 interface UserMenuProps {
   pubkey: string
   onLogout: () => void
   onShowProfile?: () => void
+  onShowIncentives?: () => void
 }
 
-export default function UserMenu({ pubkey, onLogout, onShowProfile }: UserMenuProps) {
+export default function UserMenu({ pubkey, onLogout, onShowProfile, onShowIncentives }: UserMenuProps) {
   const [isOpen, setIsOpen] = useState(false)
 
   const getTruncatedNpub = (pubkey: string) => {
@@ -65,6 +67,20 @@ export default function UserMenu({ pubkey, onLogout, onShowProfile }: UserMenuPr
                 >
                   <User className="w-4 h-4 mr-2" />
                   Profile
+                </Button>
+              )}
+              
+              {isIncentiveEnabled() && onShowIncentives && (
+                <Button
+                  onClick={() => {
+                    onShowIncentives()
+                    setIsOpen(false)
+                  }}
+                  variant="ghost"
+                  className="w-full justify-start text-foreground hover:bg-muted p-2 rounded-md"
+                >
+                  <Zap className="w-4 h-4 mr-2" />
+                  Lightning Goals
                 </Button>
               )}
               
