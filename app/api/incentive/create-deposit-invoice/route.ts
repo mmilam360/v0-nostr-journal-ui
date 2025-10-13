@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { NostrWebLNProvider } from '@getalby/sdk'
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(request: Request) {
   try {
     const { pubkey, amount, dailyReward, wordGoal, lightningAddress } = await request.json()
