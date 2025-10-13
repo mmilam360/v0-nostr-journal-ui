@@ -410,10 +410,19 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
         <div className="border-t border-border pt-3 mt-3">
           <div className="flex items-center justify-between text-xs">
             <div className="flex items-center gap-3">
-              {/* Encryption indicator */}
-              <div className="flex items-center gap-1 text-green-600 dark:text-green-400">
-                <Lock className="w-3 h-3" />
-                <span>Encrypted</span>
+              {/* Encryption indicator and word count */}
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-1 text-green-600 dark:text-green-400">
+                  <Lock className="w-3 h-3" />
+                  <span>Encrypted</span>
+                </div>
+                
+                {/* Word/Character count */}
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <span>{content.split(/\s+/).filter(word => word.length > 0).length} words</span>
+                  <span>•</span>
+                  <span>{content.length} chars</span>
+                </div>
               </div>
               
               {/* Sync status */}

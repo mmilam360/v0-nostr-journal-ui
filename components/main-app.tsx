@@ -1255,6 +1255,20 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                 </div>
                 
                 
+                {/* Lightning Goals Button */}
+                {isIncentiveEnabled() && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowIncentives(true)}
+                    className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                    title="Lightning Goals"
+                  >
+                    <Zap className="w-4 h-4" />
+                    <span className="hidden sm:inline ml-2">Goals</span>
+                  </Button>
+                )}
+
                 {/* Theme toggle with system option */}
                 <DropdownMenu>
                   <DropdownMenuTrigger>
@@ -1446,18 +1460,6 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                     
                     <DropdownMenuSeparator />
                     
-                    {isIncentiveEnabled() && (
-                      <DropdownMenuItem 
-                        onClick={() => {
-                          console.log('[Dropdown] Lightning Goals clicked')
-                          setShowIncentives(true)
-                        }}
-                        className="text-blue-600 focus:text-blue-600"
-                      >
-                        <Zap className="w-4 h-4 mr-2" />
-                        Lightning Goals
-                      </DropdownMenuItem>
-                    )}
                     
                     <DropdownMenuItem 
                       onClick={() => {
