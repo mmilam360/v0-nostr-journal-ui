@@ -13,6 +13,28 @@ export async function POST(request: Request) {
       )
     }
     
+    // SECURITY: Validate word count is reasonable (prevent gaming)
+    if (wordCount <= 0 || wordCount > 10000) {
+      return NextResponse.json(
+        { error: 'Invalid word count. Must be between 1 and 10,000 words.' },
+        { status: 400 }
+      )
+    }
+    
+    // SECURITY: Rate limiting - prevent rapid submissions
+    const now = Date.now()
+    global.userRateLimit = global.userRateLimit || {}
+    const userRateLimit = global.userRateLimit[pubkey]
+    
+    if (userRateLimit && (now - userRateLimit.lastSubmission) < 5000) { // 5 second cooldown
+      return NextResponse.json(
+        { error: 'Please wait 5 seconds between submissions' },
+        { status: 429 }
+      )
+    }
+    
+    global.userRateLimit[pubkey] = { lastSubmission: now }
+    
     // Get user account
     const userAccounts = global.userAccounts || {}
     const userAccount = userAccounts[pubkey]

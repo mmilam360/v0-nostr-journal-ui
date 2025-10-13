@@ -14,6 +14,8 @@ const nextConfig = {
   experimental: {
     outputFileTracingRoot: undefined,
   },
+  // Ensure proper output for Cloudflare Pages
+  output: undefined, // Let Next.js decide the output
 }
 
 export default nextConfig

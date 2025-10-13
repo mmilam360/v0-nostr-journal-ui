@@ -45,6 +45,24 @@ export async function POST(request: Request) {
       )
     }
     
+    // SECURITY: Verify this is the user's agreed-upon reward amount
+    const expectedReward = userAccount.settings.dailyRewardSats
+    if (wordCount < userAccount.settings.dailyWordGoal) {
+      return NextResponse.json(
+        { error: `Goal not met. Need ${userAccount.settings.dailyWordGoal} words, got ${wordCount}` },
+        { status: 400 }
+      )
+    }
+    
+    // SECURITY: Verify user hasn't exceeded their daily limit
+    const dailyRewardLimit = expectedReward
+    if (progress && progress.totalRewardsSent >= dailyRewardLimit) {
+      return NextResponse.json(
+        { error: 'Daily reward limit already reached' },
+        { status: 400 }
+      )
+    }
+    
     // Verify sufficient balance
     if (userAccount.balance < userAccount.settings.dailyRewardSats) {
       return NextResponse.json(
@@ -106,15 +124,19 @@ export async function POST(request: Request) {
       userAccount.streak += 1
       userAccounts[pubkey] = userAccount
       
-      // Mark reward as sent
+      // Mark reward as sent and track total rewards
       if (!progress) {
         global.dailyProgress[`${pubkey}-${today}`] = {
           wordCount: wordCount,
           goalMet: true,
-          rewardSent: true
+          rewardSent: true,
+          totalRewardsSent: expectedReward,
+          lastRewardTime: new Date().toISOString()
         }
       } else {
         progress.rewardSent = true
+        progress.totalRewardsSent = (progress.totalRewardsSent || 0) + expectedReward
+        progress.lastRewardTime = new Date().toISOString()
       }
       
       return NextResponse.json({
