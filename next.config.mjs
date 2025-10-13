@@ -15,6 +15,10 @@ const nextConfig = {
   experimental: {
     outputFileTracingRoot: undefined,
   },
+  // Disable API routes for static export
+  async rewrites() {
+    return []
+  },
 }
 
 export default nextConfig
