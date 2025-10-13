@@ -1,4 +1,5 @@
-name = "nostr-journal-dev"
+# wrangler.toml
+name = 'nostr-journal-dev-incentives'
 compatibility_date = "2025-10-13"
 
 # For static sites, we might not need nodejs_compat
