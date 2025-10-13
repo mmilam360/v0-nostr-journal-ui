@@ -155,23 +155,26 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
   }
 
   const handleTextSelection = () => {
-    if (!textareaRef.current) return
+    // Use setTimeout to ensure selection is captured after mouse/keyboard events
+    setTimeout(() => {
+      if (!textareaRef.current) return
 
-    const textarea = textareaRef.current
-    const start = textarea.selectionStart
-    const end = textarea.selectionEnd
+      const textarea = textareaRef.current
+      const start = textarea.selectionStart
+      const end = textarea.selectionEnd
 
-    console.log("[NostrJournal] 🔍 Text selection event - start:", start, "end:", end)
+      console.log("[NostrJournal] 🔍 Text selection event - start:", start, "end:", end)
 
-    if (start !== end) {
-      const selected = textarea.value.substring(start, end).trim()
-      console.log("[NostrJournal] ✅ Text selection detected:", selected.length > 0 ? `"${selected.substring(0, 50)}..."` : "none")
-      console.log("[NostrJournal] 📝 Selected text length:", selected.length)
-      setSelectedText(selected)
-    } else {
-      console.log("[NostrJournal] ❌ No text selection - clearing selectedText")
-      setSelectedText("")
-    }
+      if (start !== end) {
+        const selected = textarea.value.substring(start, end).trim()
+        console.log("[NostrJournal] ✅ Text selection detected:", selected.length > 0 ? `"${selected.substring(0, 50)}..."` : "none")
+        console.log("[NostrJournal] 📝 Selected text length:", selected.length)
+        setSelectedText(selected)
+      } else {
+        console.log("[NostrJournal] ❌ No text selection - clearing selectedText")
+        setSelectedText("")
+      }
+    }, 10)
   }
 
   const handleDeleteClick = () => {
@@ -294,7 +297,7 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
               className="bg-primary hover:bg-primary/90 disabled:opacity-50 text-xs px-2 no-select"
             >
               <Upload className="w-4 h-4" />
-{getPublishButtonText()}
+              {getPublishButtonText()}
             </Button>
             <Button
               onClick={handleDeleteClick}
@@ -318,6 +321,8 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
           onMouseUp={handleTextSelection}
           onKeyUp={handleTextSelection}
           onFocus={handleTextSelection}
+          onMouseDown={handleTextSelection}
+          onMouseMove={handleTextSelection}
           placeholder="Start writing..."
           className="w-full h-full bg-transparent border-none text-foreground placeholder-muted-foreground resize-none text-base leading-relaxed focus:outline-none"
         />

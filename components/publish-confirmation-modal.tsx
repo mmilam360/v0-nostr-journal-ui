@@ -3,7 +3,7 @@
 import React from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { Globe, Zap, CheckCircle } from "lucide-react"
+import { Globe, Zap, CheckCircle, Loader2 } from "lucide-react"
 
 interface Note {
   id: string
@@ -18,12 +18,14 @@ interface PublishConfirmationModalProps {
   note: Note
   onConfirm: () => void
   onCancel: () => void
+  isLoading?: boolean
 }
 
 export default function PublishConfirmationModal({ 
   note, 
   onConfirm, 
-  onCancel 
+  onCancel,
+  isLoading = false
 }: PublishConfirmationModalProps) {
   return (
     <Dialog open={true} onOpenChange={onCancel}>
@@ -54,9 +56,8 @@ export default function PublishConfirmationModal({
           
           {/* Note preview */}
           <div className="space-y-2">
-            <h4 className="font-medium text-sm">Note Preview:</h4>
+            <h4 className="font-medium text-sm">Content Preview:</h4>
             <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border">
-              <h5 className="font-medium text-sm mb-2">{note.title}</h5>
               <p className="text-sm text-gray-700 dark:text-gray-300 line-clamp-3">
                 {note.content}
               </p>
@@ -86,10 +87,15 @@ export default function PublishConfirmationModal({
             </Button>
             <Button
               onClick={onConfirm}
-              className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
+              disabled={isLoading}
+              className="flex-1 bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50"
             >
-              <CheckCircle className="w-4 h-4 mr-2" />
-              Publish to Nostr
+              {isLoading ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <CheckCircle className="w-4 h-4 mr-2" />
+              )}
+              {isLoading ? "Publishing..." : "Publish to Nostr"}
             </Button>
           </div>
           

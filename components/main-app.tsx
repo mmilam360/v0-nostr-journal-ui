@@ -125,6 +125,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   const [noteToPublish, setNoteToPublish] = useState<Note | null>(null)
   const [showPublishModal, setShowPublishModal] = useState(false)
   const [publishedEventId, setPublishedEventId] = useState("")
+  const [isPublishing, setIsPublishing] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
   const [syncStatus, setSyncStatus] = useState<"synced" | "syncing" | "offline" | "error">("offline")
@@ -713,10 +714,11 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   }
 
   const handleConfirmPublish = async () => {
-    if (!noteToPublish) return
+    if (!noteToPublish || isPublishing) return
 
+    setIsPublishing(true)
     try {
-      console.log("[NostrJournal] Creating Nostr event for note:", noteToPublish.title)
+      console.log("[NostrJournal] Creating Nostr event for note content")
 
       const event = await createNostrEvent(authData.pubkey, noteToPublish.content, noteToPublish.tags)
 
@@ -735,6 +737,8 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       alert(`Failed to publish to Nostr: ${errorMessage}`)
       setShowPublishConfirmation(false)
       setNoteToPublish(null)
+    } finally {
+      setIsPublishing(false)
     }
   }
 
@@ -1590,10 +1594,11 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
         </div>
 
         {showPublishConfirmation && noteToPublish && (
-          <PublishConfirmationModal
-            note={noteToPublish}
-            onConfirm={handleConfirmPublish}
+          <PublishConfirmationModal 
+            note={noteToPublish} 
+            onConfirm={handleConfirmPublish} 
             onCancel={handleCancelPublish}
+            isLoading={isPublishing}
           />
         )}
 
