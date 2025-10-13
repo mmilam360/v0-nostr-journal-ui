@@ -16,7 +16,7 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
     dailyWordGoal: 500,
     dailyRewardSats: 500,
     lightningAddress: '',
-    stakeAmount: 10000 // Minimum 10k sats stake
+    stakeAmount: 1000 // Default 1k sats stake, no minimum
   })
   const [hasSetup, setHasSetup] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -218,13 +218,13 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
           </div>
           
           <div>
-            <label className="text-sm font-medium">Stake Amount (minimum 10,000 sats)</label>
+            <label className="text-sm font-medium">Stake Amount (sats)</label>
             <Input
               type="number"
               value={settings.stakeAmount}
-              onChange={(e) => setSettings({...settings, stakeAmount: Math.max(parseInt(e.target.value) || 10000, 10000)})}
-              placeholder="10000"
-              min="10000"
+              onChange={(e) => setSettings({...settings, stakeAmount: Math.max(parseInt(e.target.value) || 1000, 1)})}
+              placeholder="1000"
+              min="1"
             />
           </div>
           
@@ -242,7 +242,7 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
         {!depositInvoice ? (
           <Button 
             onClick={handleCreateStakeInvoice} 
-            disabled={loading || settings.stakeAmount < 10000}
+            disabled={loading || settings.stakeAmount < 1}
             className="w-full"
           >
             {loading ? 'Creating Invoice...' : `Create ${settings.stakeAmount} sats Stake Invoice`}
@@ -278,7 +278,7 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
             <span className="font-medium">How it works:</span>
           </div>
           <ul className="space-y-1">
-            <li>• Pay Lightning invoice to stake sats</li>
+            <li>• Set any stake amount you're comfortable with</li>
             <li>• Write your daily word goal each day</li>
             <li>• Automatically receive rewards when goal is met</li>
             <li>• Missing days deduct from your stake balance</li>
