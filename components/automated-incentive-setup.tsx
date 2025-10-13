@@ -28,6 +28,8 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
   const [showQRCode, setShowQRCode] = useState(false)
   const [showSuccessMessage, setShowSuccessMessage] = useState(false)
   const [depositedAmount, setDepositedAmount] = useState(0)
+  const [showQuitSuccess, setShowQuitSuccess] = useState(false)
+  const [showQuitError, setShowQuitError] = useState(false)
 
   useEffect(() => {
     loadExistingSettings()
@@ -35,17 +37,34 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
 
   const loadExistingSettings = async () => {
     try {
-      // Check if user has existing setup in localStorage
-      const userAccount = localStorage.getItem(`user-account-${userPubkey}`)
-      if (userAccount) {
-        const data = JSON.parse(userAccount)
-        setSettings(data.settings)
-        setBalance(data.balance)
-        setStreak(data.streak)
+      const { fetchIncentiveSettings } = await import('@/lib/incentive-nostr')
+      const incentiveSettings = await fetchIncentiveSettings(userPubkey)
+      
+      if (incentiveSettings) {
+        const dailyGoal = parseInt(
+          incentiveSettings.tags.find((t: string[]) => t[0] === 'daily_word_goal')?.[1] || '0'
+        )
+        const dailyReward = parseInt(
+          incentiveSettings.tags.find((t: string[]) => t[0] === 'daily_reward_sats')?.[1] || '0'
+        )
+        const stakeBalance = parseInt(
+          incentiveSettings.tags.find((t: string[]) => t[0] === 'stake_balance_sats')?.[1] || '0'
+        )
+        const lightningAddress = incentiveSettings.tags.find(
+          (t: string[]) => t[0] === 'lightning_address'
+        )?.[1]
+        
+        setSettings({
+          dailyWordGoal: dailyGoal,
+          dailyRewardSats: dailyReward,
+          stakeAmount: stakeBalance, // Use existing balance as stake amount
+          lightningAddress: lightningAddress
+        })
+        setBalance(stakeBalance)
         setHasSetup(true)
       }
     } catch (error) {
-      console.error('Error loading settings:', error)
+      console.error('[Setup] Error loading settings:', error)
     }
   }
 
@@ -167,14 +186,22 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
       try {
         console.log('[Setup] User quitting challenge - forfeiting stake balance')
         
-        // Clear local storage (simulate forfeiting stake)
-        localStorage.removeItem(`user-account-${userPubkey}`)
-        localStorage.removeItem(`daily-progress-${userPubkey}-${new Date().toISOString().split('T')[0]}`)
+        // Record forfeit event to Nostr
+        const { recordTransaction } = await import('@/lib/incentive-nostr')
+        await recordTransaction(
+          userPubkey,
+          'forfeit',
+          balance, // Forfeit the entire remaining balance
+          'forfeit-' + Date.now(),
+          authData
+        )
         
-        // In a real implementation, you might want to record this as a forfeit event to Nostr
-        // but the stake is gone - no refund
+        // Clear the stake balance to 0
+        const { updateStakeBalance } = await import('@/lib/incentive-nostr')
+        await updateStakeBalance(userPubkey, 0, authData)
         
-        alert('Challenge quit. Your stake has been forfeited. You can start a new challenge anytime.')
+        // Show success UI instead of alert
+        setShowQuitSuccess(true)
         setHasSetup(false)
         setBalance(0)
         setStreak(0)
@@ -182,7 +209,7 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
         setDepositInvoice('')
       } catch (error) {
         console.error('Error quitting challenge:', error)
-        alert('Failed to quit challenge. Please try again.')
+        setShowQuitError(true)
       }
     }
   }
@@ -389,6 +416,70 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
           window.location.reload()
         }}
       />
+    )}
+    
+    {/* Quit Success Modal */}
+    {showQuitSuccess && (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+        <Card className="max-w-md w-full p-6 relative animate-in zoom-in duration-300">
+          <div className="flex flex-col items-center text-center space-y-4">
+            {/* Warning Icon */}
+            <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center">
+              <AlertCircle className="w-10 h-10 text-orange-600" />
+            </div>
+            
+            {/* Message */}
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900">
+                Challenge Quit
+              </h2>
+              <p className="text-gray-600 mt-2">
+                Your stake has been forfeited. You can start a new challenge anytime.
+              </p>
+            </div>
+            
+            {/* CTA Button */}
+            <Button 
+              onClick={() => setShowQuitSuccess(false)}
+              className="w-full bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700"
+            >
+              Start New Challenge →
+            </Button>
+          </div>
+        </Card>
+      </div>
+    )}
+    
+    {/* Quit Error Modal */}
+    {showQuitError && (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+        <Card className="max-w-md w-full p-6 relative animate-in zoom-in duration-300">
+          <div className="flex flex-col items-center text-center space-y-4">
+            {/* Error Icon */}
+            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center">
+              <AlertCircle className="w-10 h-10 text-red-600" />
+            </div>
+            
+            {/* Error Message */}
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900">
+                Error Quitting Challenge
+              </h2>
+              <p className="text-gray-600 mt-2">
+                Failed to quit challenge. Please try again.
+              </p>
+            </div>
+            
+            {/* CTA Button */}
+            <Button 
+              onClick={() => setShowQuitError(false)}
+              className="w-full bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700"
+            >
+              Try Again
+            </Button>
+          </div>
+        </Card>
+      </div>
     )}
   </>
   )

@@ -22,6 +22,9 @@ export function AutomatedRewardTracker({ userPubkey, authData, currentWordCount 
   const [goalMet, setGoalMet] = useState(false)
   const [showZapAnimation, setShowZapAnimation] = useState(false)
   const [claiming, setClaiming] = useState(false)
+  const [showRewardSuccess, setShowRewardSuccess] = useState(false)
+  const [showRewardError, setShowRewardError] = useState(false)
+  const [paymentResult, setPaymentResult] = useState<any>(null)
 
   useEffect(() => {
     loadSettings()
@@ -38,40 +41,76 @@ export function AutomatedRewardTracker({ userPubkey, authData, currentWordCount 
 
   const loadSettings = async () => {
     try {
-      const userAccount = localStorage.getItem(`user-account-${userPubkey}`)
-      if (userAccount) {
-        const data = JSON.parse(userAccount)
-        setSettings(data.settings)
-        setBalance(data.balance)
-        setStreak(data.streak)
+      const { fetchIncentiveSettings } = await import('@/lib/incentive-nostr')
+      const incentiveSettings = await fetchIncentiveSettings(userPubkey)
+      
+      if (incentiveSettings) {
+        const dailyGoal = parseInt(
+          incentiveSettings.tags.find((t: string[]) => t[0] === 'daily_word_goal')?.[1] || '0'
+        )
+        const dailyReward = parseInt(
+          incentiveSettings.tags.find((t: string[]) => t[0] === 'daily_reward_sats')?.[1] || '0'
+        )
+        const stakeBalance = parseInt(
+          incentiveSettings.tags.find((t: string[]) => t[0] === 'stake_balance_sats')?.[1] || '0'
+        )
+        const lightningAddress = incentiveSettings.tags.find(
+          (t: string[]) => t[0] === 'lightning_address'
+        )?.[1]
+        
+        setSettings({
+          dailyWordGoal: dailyGoal,
+          dailyRewardSats: dailyReward,
+          stakeBalanceSats: stakeBalance,
+          lightningAddress: lightningAddress
+        })
+        setBalance(stakeBalance)
       }
     } catch (error) {
-      console.error('Error loading settings:', error)
+      console.error('[Tracker] Error loading settings:', error)
     }
   }
 
   const loadTodayProgress = async () => {
     try {
+      const { fetchTodayProgress } = await import('@/lib/incentive-nostr')
       const today = new Date().toISOString().split('T')[0]
-      const progress = localStorage.getItem(`daily-progress-${userPubkey}-${today}`)
+      const progress = await fetchTodayProgress(userPubkey, today)
+      
       if (progress) {
-        const data = JSON.parse(progress)
-        setTodayProgress(data.wordCount || 0)
-        setHasMetGoalToday(data.goalMet || false)
-        setRewardSent(data.rewardSent || false)
+        const wordCount = parseInt(
+          progress.tags.find((t: string[]) => t[0] === 'word_count')?.[1] || '0'
+        )
+        const goalMet = progress.tags.some(
+          (t: string[]) => t[0] === 'goal_met' && t[1] === 'true'
+        )
+        const rewardClaimed = progress.tags.some(
+          (t: string[]) => t[0] === 'reward_claimed' && t[1] === 'true'
+        )
+        
+        setTodayProgress(wordCount)
+        setHasMetGoalToday(goalMet)
+        setRewardSent(rewardClaimed)
       }
     } catch (error) {
-      console.error('Error loading progress:', error)
+      console.error('[Tracker] Error loading progress:', error)
     }
   }
 
   const checkDailyStatus = async () => {
     try {
-      // For demo purposes, we'll skip penalty checking
-      // In production, this would check for missed days and apply penalties
-      console.log('Daily status check skipped for demo')
+      const response = await fetch('/api/incentive/check-daily-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pubkey: userPubkey })
+      })
+      if (response.ok) {
+        const data = await response.json()
+        setBalance(data.balance)
+        setStreak(data.streak)
+      }
     } catch (error) {
-      console.error('Error checking daily status:', error)
+      console.error('[Tracker] Error checking daily status:', error)
     }
   }
 
@@ -106,13 +145,23 @@ export function AutomatedRewardTracker({ userPubkey, authData, currentWordCount 
         return
       }
       
-      console.log('[Tracker] Auto-recording daily progress...')
+      console.log('[Tracker] Auto-recording daily progress to Nostr...')
       
-      // For now, just update local state
+      const { recordDailyProgress } = await import('@/lib/incentive-nostr')
+      
+      await recordDailyProgress(
+        userPubkey,
+        today,
+        currentWordCount,
+        goalReached,
+        authData
+      )
+      
+      // Update local state
       setTodayProgress(currentWordCount)
       setHasMetGoalToday(goalReached)
       
-      console.log('[Tracker] ✅ Progress recorded')
+      console.log('[Tracker] ✅ Progress recorded to Nostr')
       
     } catch (error) {
       console.error('[Tracker] Failed to record progress:', error)
@@ -122,39 +171,59 @@ export function AutomatedRewardTracker({ userPubkey, authData, currentWordCount 
   const handleClaimReward = async () => {
     setClaiming(true)
     try {
+      console.log('[Tracker] 🎉 Claiming reward...')
+      
+      // Call API to send reward
       const response = await fetch('/api/incentive/send-reward', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userPubkey: userPubkey
-        })
+        body: JSON.stringify({ userPubkey })
       })
 
-      if (response.ok) {
-        const data = await response.json()
-        setRewardSent(true)
-        setHasMetGoalToday(true)
-        
-        // Show success notification
-        alert(`🎉 Goal reached! ${data.amountSats} sats automatically sent to your Lightning address!\n\nPayment Hash: ${data.paymentHash}`)
-        
-        // Update local balance
-        const userAccount = JSON.parse(localStorage.getItem(`user-account-${userPubkey}`) || '{}')
-        userAccount.balance = Math.max(0, userAccount.balance - data.amountSats)
-        userAccount.streak += 1
-        localStorage.setItem(`user-account-${userPubkey}`, JSON.stringify(userAccount))
-        
-        setBalance(userAccount.balance)
-        setStreak(userAccount.streak)
-        
-      } else {
-        const errorData = await response.json()
-        throw new Error(errorData.error || 'Failed to send reward')
+      const result = await response.json()
+
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to claim reward')
       }
+
+      console.log('[Tracker] ✅ Reward claimed!', result.paymentHash)
+      
+      // Store payment result for UI
+      setPaymentResult(result)
+      
+      // Update progress to mark as claimed
+      const { markRewardClaimed, updateStakeBalance } = await import('@/lib/incentive-nostr')
+      
+      const today = new Date().toISOString().split('T')[0]
+      await markRewardClaimed(
+        userPubkey,
+        today,
+        result.paymentHash,
+        result.amountSats,
+        authData
+      )
+      
+      // Update stake balance
+      const currentBalance = parseInt(
+        settings.stakeBalanceSats
+      )
+      await updateStakeBalance(
+        userPubkey,
+        currentBalance - result.amountSats,
+        authData
+      )
+      
+      // Update state
+      setRewardSent(true)
+      setHasMetGoalToday(true)
+      setBalance(currentBalance - result.amountSats)
+      
+      // Show success UI
+      setShowRewardSuccess(true)
       
     } catch (error) {
-      console.error('Error claiming reward:', error)
-      alert(`❌ Error claiming reward: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      console.error('[Tracker] ❌ Error claiming reward:', error)
+      setShowRewardError(true)
     } finally {
       setClaiming(false)
     }
@@ -177,6 +246,7 @@ export function AutomatedRewardTracker({ userPubkey, authData, currentWordCount 
   const progress = Math.min((currentWordCount / settings.dailyWordGoal) * 100, 100)
   
   return (
+    <>
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
@@ -268,5 +338,83 @@ export function AutomatedRewardTracker({ userPubkey, authData, currentWordCount 
         )}
       </CardContent>
     </Card>
+    
+    {/* Reward Success Modal */}
+    {showRewardSuccess && (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+        <Card className="max-w-md w-full p-6 relative animate-in zoom-in duration-300">
+          <div className="flex flex-col items-center text-center space-y-4">
+            {/* Success Icon */}
+            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center animate-in zoom-in duration-500">
+              <CheckCircle className="w-10 h-10 text-green-600" />
+            </div>
+            
+            {/* Title and Amount */}
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900">
+                Reward Claimed! 🎉
+              </h2>
+              <p className="text-gray-600 mt-2">
+                <span className="font-semibold text-green-600">{settings.dailyRewardSats} sats</span> sent to your Lightning address!
+              </p>
+            </div>
+            
+            {/* Payment Info */}
+            <div className="w-full bg-green-50 border border-green-200 rounded-lg p-4">
+              <div className="flex items-center justify-center gap-2 mb-2">
+                <Zap className="w-5 h-5 text-green-500" />
+                <p className="text-sm font-semibold text-green-800">
+                  Payment Hash: {paymentResult?.paymentHash || 'Processing...'}
+                </p>
+              </div>
+              <p className="text-xs text-green-700">
+                Real Lightning payment sent to your address
+              </p>
+            </div>
+            
+            {/* CTA Button */}
+            <Button 
+              onClick={() => setShowRewardSuccess(false)}
+              className="w-full bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700"
+            >
+              Continue Writing →
+            </Button>
+          </div>
+        </Card>
+      </div>
+    )}
+    
+    {/* Reward Error Modal */}
+    {showRewardError && (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+        <Card className="max-w-md w-full p-6 relative animate-in zoom-in duration-300">
+          <div className="flex flex-col items-center text-center space-y-4">
+            {/* Error Icon */}
+            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center">
+              <AlertTriangle className="w-10 h-10 text-red-600" />
+            </div>
+            
+            {/* Error Message */}
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900">
+                Reward Claim Failed
+              </h2>
+              <p className="text-gray-600 mt-2">
+                There was an error claiming your reward. Please try again.
+              </p>
+            </div>
+            
+            {/* CTA Button */}
+            <Button 
+              onClick={() => setShowRewardError(false)}
+              className="w-full bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700"
+            >
+              Try Again
+            </Button>
+          </div>
+        </Card>
+      </div>
+    )}
+  </>
   )
 }
