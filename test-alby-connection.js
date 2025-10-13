@@ -8,7 +8,7 @@ async function testConnection() {
     console.log('🔗 Testing Alby Hub connection...');
     
     // Replace with your actual connection string
-    const connectionString = 'YOUR_ALBY_HUB_CONNECTION_STRING_HERE';
+    const connectionString = 'nostr+walletconnect://3f4507eae61f124d149f03af9694872c7ac465338c1b91c876765daa23db32df?relay=wss://relay.getalby.com/v1&secret=0ead00bf77911f39274b5c3e0f0ea43810d130228866523bd699cb45d62f4b5d&lud16=michaelmilam@getalby.com';
     
     if (connectionString.includes('YOUR_ALBY_HUB_CONNECTION_STRING_HERE')) {
       console.log('❌ Please replace YOUR_ALBY_HUB_CONNECTION_STRING_HERE with your actual connection string');
