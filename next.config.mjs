@@ -1,6 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Enable API routes for Lightning functionality
+  // Use static export for frontend, API routes as Cloudflare Functions
+  output: 'export',
   trailingSlash: true,
   skipTrailingSlashRedirect: true,
   images: {
@@ -10,12 +11,10 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
-  // Ensure proper build for Cloudflare Pages with Functions
+  // Optimize for Cloudflare Pages
   experimental: {
     outputFileTracingRoot: undefined,
   },
-  // Ensure proper output for Cloudflare Pages
-  output: undefined, // Let Next.js decide the output
 }
 
 export default nextConfig

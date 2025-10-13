@@ -7,6 +7,9 @@
 /.next/
 /out/
 
+# webpack cache (too large for Cloudflare Pages)
+.next/
+
 # production
 /build
 

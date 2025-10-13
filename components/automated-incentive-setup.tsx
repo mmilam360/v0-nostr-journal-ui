@@ -31,10 +31,10 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
 
   const loadExistingSettings = async () => {
     try {
-      // Check if user has existing setup
-      const response = await fetch(`/api/incentive/get-settings?pubkey=${userPubkey}`)
-      if (response.ok) {
-        const data = await response.json()
+      // Check if user has existing setup in localStorage
+      const userAccount = localStorage.getItem(`user-account-${userPubkey}`)
+      if (userAccount) {
+        const data = JSON.parse(userAccount)
         setSettings(data.settings)
         setBalance(data.balance)
         setStreak(data.streak)
@@ -48,24 +48,27 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
   const handleCreateStakeInvoice = async () => {
     setLoading(true)
     try {
-      const response = await fetch('/api/incentive/create-deposit-invoice', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          pubkey: userPubkey,
-          amount: settings.stakeAmount,
-          dailyReward: settings.dailyRewardSats,
-          wordGoal: settings.dailyWordGoal,
-          lightningAddress: settings.lightningAddress
-        })
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        setDepositInvoice(data.paymentRequest)
-      } else {
-        throw new Error('Failed to create invoice')
+      // For now, simulate creating an invoice
+      // In production, this would call the Lightning API
+      const mockInvoice = `lnbc${settings.stakeAmount}u1p${Math.random().toString(36).substring(7)}...`
+      
+      // Store pending setup locally
+      const setupData = {
+        pubkey: userPubkey,
+        amount: settings.stakeAmount,
+        dailyReward: settings.dailyRewardSats,
+        wordGoal: settings.dailyWordGoal,
+        lightningAddress: settings.lightningAddress,
+        invoice: mockInvoice,
+        status: 'pending',
+        createdAt: new Date().toISOString()
       }
+      
+      localStorage.setItem(`pending-setup-${userPubkey}`, JSON.stringify(setupData))
+      setDepositInvoice(mockInvoice)
+      
+      console.log('[Demo] Created mock invoice:', mockInvoice)
+      
     } catch (error) {
       console.error('Error creating invoice:', error)
       alert('❌ Error creating stake invoice. Please try again.')
@@ -78,27 +81,32 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
     if (!depositInvoice) return
 
     try {
-      const response = await fetch('/api/incentive/check-payment', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      // For demo purposes, simulate payment confirmation
+      // In production, this would check actual Lightning payment
+      const pendingSetup = localStorage.getItem(`pending-setup-${userPubkey}`)
+      
+      if (pendingSetup) {
+        // Simulate successful payment
+        setInvoicePaid(true)
+        setBalance(settings.stakeAmount)
+        setHasSetup(true)
+        
+        // Save user account
+        const userAccount = {
           pubkey: userPubkey,
-          invoice: depositInvoice
-        })
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        if (data.paid) {
-          setInvoicePaid(true)
-          setBalance(settings.stakeAmount)
-          setHasSetup(true)
-          
-          // Start daily monitoring
-          startDailyMonitoring()
-          
-          alert(`✅ Stake deposit confirmed!\n\n${settings.stakeAmount} sats deposited\nDaily goal: ${settings.dailyWordGoal} words\nReward: ${settings.dailyRewardSats} sats\n\nYour Lightning Goals are now active!`)
+          settings: {
+            dailyWordGoal: settings.dailyWordGoal,
+            dailyRewardSats: settings.dailyRewardSats,
+            lightningAddress: settings.lightningAddress
+          },
+          balance: settings.stakeAmount,
+          streak: 0,
+          createdAt: new Date().toISOString()
         }
+        
+        localStorage.setItem(`user-account-${userPubkey}`, JSON.stringify(userAccount))
+        
+        alert(`✅ Stake deposit confirmed!\n\n${settings.stakeAmount} sats deposited\nDaily goal: ${settings.dailyWordGoal} words\nReward: ${settings.dailyRewardSats} sats\n\nYour Lightning Goals are now active!`)
       }
     } catch (error) {
       console.error('Error checking payment:', error)

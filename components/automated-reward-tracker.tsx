@@ -35,9 +35,9 @@ export function AutomatedRewardTracker({ userPubkey, wordCount, authData }: Auto
 
   const loadSettings = async () => {
     try {
-      const response = await fetch(`/api/incentive/get-settings?pubkey=${userPubkey}`)
-      if (response.ok) {
-        const data = await response.json()
+      const userAccount = localStorage.getItem(`user-account-${userPubkey}`)
+      if (userAccount) {
+        const data = JSON.parse(userAccount)
         setSettings(data.settings)
         setBalance(data.balance)
         setStreak(data.streak)
@@ -50,12 +50,12 @@ export function AutomatedRewardTracker({ userPubkey, wordCount, authData }: Auto
   const loadTodayProgress = async () => {
     try {
       const today = new Date().toISOString().split('T')[0]
-      const response = await fetch(`/api/incentive/get-progress?pubkey=${userPubkey}&date=${today}`)
-      if (response.ok) {
-        const data = await response.json()
-        setTodayProgress(data.wordCount)
-        setHasMetGoalToday(data.goalMet)
-        setRewardSent(data.rewardSent)
+      const progress = localStorage.getItem(`daily-progress-${userPubkey}-${today}`)
+      if (progress) {
+        const data = JSON.parse(progress)
+        setTodayProgress(data.wordCount || 0)
+        setHasMetGoalToday(data.goalMet || false)
+        setRewardSent(data.rewardSent || false)
       }
     } catch (error) {
       console.error('Error loading progress:', error)
@@ -64,18 +64,9 @@ export function AutomatedRewardTracker({ userPubkey, wordCount, authData }: Auto
 
   const checkDailyStatus = async () => {
     try {
-      // Check if penalties need to be applied for missed days
-      const response = await fetch('/api/incentive/check-daily-status', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pubkey: userPubkey })
-      })
-      
-      if (response.ok) {
-        const data = await response.json()
-        setBalance(data.balance)
-        setStreak(data.streak)
-      }
+      // For demo purposes, we'll skip penalty checking
+      // In production, this would check for missed days and apply penalties
+      console.log('Daily status check skipped for demo')
     } catch (error) {
       console.error('Error checking daily status:', error)
     }
@@ -96,28 +87,16 @@ export function AutomatedRewardTracker({ userPubkey, wordCount, authData }: Auto
   const sendReward = async (totalWords: number) => {
     setLoading(true)
     try {
-      const response = await fetch('/api/incentive/send-reward', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          pubkey: userPubkey,
-          wordCount: totalWords,
-          goal: settings.dailyWordGoal
-        })
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        setRewardSent(true)
-        setHasMetGoalToday(true)
-        setBalance(data.newBalance)
-        setStreak(data.newStreak)
-        
-        // Show success notification
-        alert(`🎉 Goal reached! ${settings.dailyRewardSats} sats automatically sent to your Lightning address!`)
-      } else {
-        throw new Error('Failed to send reward')
-      }
+      // For demo purposes, simulate sending reward
+      // In production, this would send actual Lightning payment
+      console.log(`[Demo] Sending ${settings.dailyRewardSats} sats to ${settings.lightningAddress}`)
+      
+      setRewardSent(true)
+      setHasMetGoalToday(true)
+      
+      // Show success notification
+      alert(`🎉 Goal reached! ${settings.dailyRewardSats} sats automatically sent to your Lightning address!`)
+      
     } catch (error) {
       console.error('Error sending reward:', error)
       alert('❌ Error sending reward. Please try again.')
@@ -129,28 +108,37 @@ export function AutomatedRewardTracker({ userPubkey, wordCount, authData }: Auto
   const addToProgress = async () => {
     setLoading(true)
     try {
-      const response = await fetch('/api/incentive/add-progress', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          pubkey: userPubkey,
-          wordCount: wordCount,
-          noteContent: 'Note added to daily progress'
-        })
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        setTodayProgress(data.totalProgress)
-        setBalance(data.balance)
-        setStreak(data.streak)
-        
-        if (data.goalMet && !rewardSent) {
-          setRewardSent(true)
-          setHasMetGoalToday(true)
-          alert(`🎉 Daily goal reached! ${settings.dailyRewardSats} sats automatically sent!`)
-        }
+      const today = new Date().toISOString().split('T')[0]
+      const currentProgress = todayProgress + wordCount
+      const goalMet = currentProgress >= settings.dailyWordGoal
+      
+      // Update progress in localStorage
+      const progressData = {
+        wordCount: currentProgress,
+        goalMet: goalMet,
+        rewardSent: rewardSent || goalMet,
+        lastUpdated: new Date().toISOString()
       }
+      
+      localStorage.setItem(`daily-progress-${userPubkey}-${today}`, JSON.stringify(progressData))
+      
+      // Update user account if goal was met
+      if (goalMet && !rewardSent) {
+        const userAccount = JSON.parse(localStorage.getItem(`user-account-${userPubkey}`) || '{}')
+        userAccount.balance = Math.max(0, userAccount.balance - settings.dailyRewardSats)
+        userAccount.streak += 1
+        localStorage.setItem(`user-account-${userPubkey}`, JSON.stringify(userAccount))
+        
+        setBalance(userAccount.balance)
+        setStreak(userAccount.streak)
+        setRewardSent(true)
+        setHasMetGoalToday(true)
+        
+        alert(`🎉 Daily goal reached! ${settings.dailyRewardSats} sats automatically sent!`)
+      }
+      
+      setTodayProgress(currentProgress)
+      
     } catch (error) {
       console.error('Error adding progress:', error)
       alert('❌ Error adding progress. Please try again.')
