@@ -1,32 +1,20 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  webpack: (config, { isServer }) => {
-    if (isServer) {
-      config.externals = config.externals || [];
-      config.externals.push({
-        'nostr-tools': 'commonjs nostr-tools'
-      });
-    }
-
-    config.resolve.fallback = {
-      ...config.resolve.fallback,
-      net: false,
-      tls: false,
-      fs: false,
-    };
-
-    return config;
+  output: 'export',
+  trailingSlash: true,
+  skipTrailingSlashRedirect: true,
+  distDir: 'out',
+  images: {
+    unoptimized: true
   },
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
+  // Skip type checking for now to fix deployment
   typescript: {
     ignoreBuildErrors: true,
   },
-  images: {
-    unoptimized: true,
+  // Ensure static export works properly
+  experimental: {
+    outputFileTracingRoot: undefined,
   },
-  reactStrictMode: true,
 }
 
 export default nextConfig

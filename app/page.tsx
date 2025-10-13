@@ -2,7 +2,6 @@
 import { useState, useEffect } from "react"
 import LoginPageHorizontal from "@/components/login-page-horizontal"
 import { MainApp } from "@/components/main-app"
-import { InstantMainApp } from "@/components/instant-main-app"
 import type { AuthData } from "@/components/main-app"
 import { ErrorBoundary } from "@/components/error-boundary"
 
@@ -152,7 +151,7 @@ export default function Home() {
         session.relays = data.relays
         session.sessionData = data.sessionData
         if (data.clientSecretKey) {
-          session.clientSecretKey = Array.from(data.clientSecretKey)
+          session.clientSecretKey = data.clientSecretKey.map(Number)
         }
       } else if (data.authMethod === "nsec") {
         session.nsec = data.nsec
