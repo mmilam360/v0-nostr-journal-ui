@@ -1,7 +1,0 @@
-# wrangler.toml
-name = 'nostr-journal-dev-incentives'
-compatibility_date = "2025-10-13"
-pages_build_output_dir = ".next"
-
-# Enable Node.js compatibility for API routes
-compatibility_flags = ["nodejs_compat"]
