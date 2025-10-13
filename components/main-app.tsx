@@ -26,6 +26,7 @@ import TagsPanel from "@/components/tags-panel"
 import NoteList from "@/components/note-list"
 import Editor from "@/components/editor"
 import PublishConfirmationModal from "@/components/publish-confirmation-modal"
+import PublishModal from "@/components/publish-modal"
 import DeleteConfirmationModal from "@/components/delete-confirmation-modal"
 import ProfilePage from "@/components/profile-page"
 import { Button } from "@/components/ui/button"
@@ -894,7 +895,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     const highlightNote = {
       ...note,
       content: highlightedText,
-      title: `${note.title} (Highlight)`,
+      // Keep original title for display purposes, but only content gets published
     }
 
     setNoteToPublish(highlightNote)

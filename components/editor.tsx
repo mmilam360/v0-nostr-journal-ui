@@ -161,12 +161,15 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
     const start = textarea.selectionStart
     const end = textarea.selectionEnd
 
+    console.log("[NostrJournal] 🔍 Text selection event - start:", start, "end:", end)
+
     if (start !== end) {
       const selected = textarea.value.substring(start, end).trim()
-      console.log("[NostrJournal] Text selection detected:", selected.length > 0 ? `"${selected.substring(0, 50)}..."` : "none")
+      console.log("[NostrJournal] ✅ Text selection detected:", selected.length > 0 ? `"${selected.substring(0, 50)}..."` : "none")
+      console.log("[NostrJournal] 📝 Selected text length:", selected.length)
       setSelectedText(selected)
     } else {
-      console.log("[NostrJournal] No text selection")
+      console.log("[NostrJournal] ❌ No text selection - clearing selectedText")
       setSelectedText("")
     }
   }
@@ -193,9 +196,12 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
 
   const getPublishButtonText = () => {
     console.log("[NostrJournal] 🔍 Getting publish button text, selectedText:", selectedText ? `"${selectedText.substring(0, 30)}..."` : "none")
+    console.log("[NostrJournal] 🔍 SelectedText length:", selectedText.length)
     if (selectedText && selectedText.length > 0) {
+      console.log("[NostrJournal] ✅ Returning highlight text")
       return "Publish Highlight to Nostr"
     }
+    console.log("[NostrJournal] 📝 Returning regular text")
     return "Publish to Nostr"
   }
 
