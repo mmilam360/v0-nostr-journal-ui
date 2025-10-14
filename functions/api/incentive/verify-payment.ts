@@ -56,75 +56,67 @@ export async function onRequestPost(context: any) {
     
     console.log('[Payment Verify] Checking payment status for hash:', paymentHash)
     
-    // Check if the invoice has been paid
-    // Note: We'll try multiple approaches for payment verification
+    // Check if the invoice has been paid using NIP-47 lookup_invoice
     try {
-      console.log('[Payment Verify] Attempting to verify payment...')
+      console.log('[Payment Verify] Attempting to verify payment with NIP-47...')
       
-      // Approach 1: Try NIP-47 lookup_invoice if available
-      let paymentStatus = null
-      try {
-        if (typeof nwc.lookupInvoice === 'function') {
-          paymentStatus = await nwc.lookupInvoice(paymentHash)
-          console.log('[Payment Verify] NIP-47 lookup_invoice result:', paymentStatus)
-        } else {
-          console.log('[Payment Verify] lookup_invoice method not available')
-        }
-      } catch (nip47Error) {
-        console.log('[Payment Verify] NIP-47 lookup failed:', nip47Error.message)
-      }
+      // Use the proper NIP-47 lookup_invoice method
+      const invoiceStatus = await nwc.lookupInvoice({ payment_hash: paymentHash })
       
-      // Approach 2: Try alternative verification methods
-      if (!paymentStatus) {
-        try {
-          // Try to get payment info using other methods
-          if (typeof nwc.getInfo === 'function') {
-            const info = await nwc.getInfo()
-            console.log('[Payment Verify] NWC info:', info)
-          }
-          
-          // For now, we'll implement a simple timeout-based verification
-          // In a real implementation, you'd want to check your Lightning node directly
-          console.log('[Payment Verify] Using fallback verification method')
-          
-          // TODO: Implement proper Lightning node payment verification
-          // This is a temporary fallback - in production you'd want to:
-          // 1. Connect directly to your Lightning node
-          // 2. Check the invoice status using your node's API
-          // 3. Verify the payment hash against your node's payment history
-          
-          return new Response(
-            JSON.stringify({
-              success: true,
-              paid: false,
-              paymentHash: paymentHash,
-              error: 'Payment verification method not yet implemented - using fallback',
-              message: 'Please contact support to verify your payment manually'
-            }),
-            { 
-              status: 200,
-              headers: { 
-                'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*'
-              }
-            }
-          )
-          
-        } catch (fallbackError) {
-          console.error('[Payment Verify] Fallback verification error:', fallbackError)
-        }
-      }
+      console.log('[Payment Verify] Invoice status:', {
+        state: invoiceStatus.state,
+        amount: invoiceStatus.amount,
+        settled_at: invoiceStatus.settled_at,
+        type: invoiceStatus.type
+      })
       
-      // If we got a payment status from NIP-47
-      if (paymentStatus && paymentStatus.paid) {
+      // Check if the payment is settled
+      if (invoiceStatus.state === 'settled') {
         console.log('[Payment Verify] ✅ Payment confirmed!')
         return new Response(
           JSON.stringify({
             success: true,
             paid: true,
             paymentHash: paymentHash,
-            amountSats: paymentStatus.amount || 0,
-            paidAt: paymentStatus.paid_at || Date.now()
+            amountSats: invoiceStatus.amount || 0,
+            settledAt: invoiceStatus.settled_at,
+            transactionType: invoiceStatus.type
+          }),
+          { 
+            status: 200,
+            headers: { 
+              'Content-Type': 'application/json',
+              'Access-Control-Allow-Origin': '*'
+            }
+          }
+        )
+      } else if (invoiceStatus.state === 'pending') {
+        console.log('[Payment Verify] ⏳ Payment pending')
+        return new Response(
+          JSON.stringify({
+            success: true,
+            paid: false,
+            paymentHash: paymentHash,
+            state: 'pending',
+            message: 'Payment is pending'
+          }),
+          { 
+            status: 200,
+            headers: { 
+              'Content-Type': 'application/json',
+              'Access-Control-Allow-Origin': '*'
+            }
+          }
+        )
+      } else if (invoiceStatus.state === 'failed') {
+        console.log('[Payment Verify] ❌ Payment failed')
+        return new Response(
+          JSON.stringify({
+            success: true,
+            paid: false,
+            paymentHash: paymentHash,
+            state: 'failed',
+            message: 'Payment failed'
           }),
           { 
             status: 200,
@@ -135,12 +127,13 @@ export async function onRequestPost(context: any) {
           }
         )
       } else {
-        console.log('[Payment Verify] ⏳ Payment not yet received')
+        console.log('[Payment Verify] ⏳ Payment not yet received (state:', invoiceStatus.state, ')')
         return new Response(
           JSON.stringify({
             success: true,
             paid: false,
             paymentHash: paymentHash,
+            state: invoiceStatus.state,
             message: 'Payment verification in progress...'
           }),
           { 
@@ -152,17 +145,44 @@ export async function onRequestPost(context: any) {
           }
         )
       }
-    } catch (lookupError) {
-      console.error('[Payment Verify] Verification error:', lookupError)
       
-      // Return error response
+    } catch (lookupError) {
+      console.error('[Payment Verify] NIP-47 lookup error:', lookupError)
+      
+      // Check if it's a specific NIP-47 error
+      if (lookupError.code) {
+        console.log('[Payment Verify] NIP-47 error code:', lookupError.code)
+        
+        // Handle specific NIP-47 error codes
+        if (lookupError.code === 'NOT_FOUND') {
+          return new Response(
+            JSON.stringify({
+              success: true,
+              paid: false,
+              paymentHash: paymentHash,
+              error: 'Invoice not found',
+              message: 'Invoice may not exist or may have expired'
+            }),
+            { 
+              status: 200,
+              headers: { 
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+              }
+            }
+          )
+        }
+      }
+      
+      // Return error response for other errors
       return new Response(
         JSON.stringify({
           success: false,
           paid: false,
           paymentHash: paymentHash,
           error: 'Payment verification failed',
-          details: lookupError instanceof Error ? lookupError.message : 'Unknown error'
+          details: lookupError instanceof Error ? lookupError.message : 'Unknown error',
+          code: lookupError.code || 'UNKNOWN_ERROR'
         }),
         { 
           status: 500,

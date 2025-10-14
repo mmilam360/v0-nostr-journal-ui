@@ -542,36 +542,6 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
               </div>
             </div>
             
-            {/* Manual Verification Button */}
-            <div className="bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-lg">
-              <div className="flex items-center gap-2 mb-2">
-                <AlertCircle className="w-4 h-4 text-yellow-600" />
-                <span className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
-                  Payment Verification Issue?
-                </span>
-              </div>
-              <p className="text-xs text-yellow-700 dark:text-yellow-300 mb-3">
-                If you've paid the invoice but it's not being detected automatically:
-              </p>
-              <Button 
-                onClick={() => {
-                  if (confirm('⚠️ MANUAL VERIFICATION\n\nHave you actually paid the Lightning invoice?\n\nThis will credit your stake without automatic verification.\n\nOnly click "Yes" if you have confirmed the payment in your wallet.')) {
-                    // Manual verification - credit the stake
-                    setInvoicePaid(true)
-                    setBalance(settings.stakeAmount)
-                    setHasSetup(true)
-                    setDepositedAmount(settings.stakeAmount)
-                    setShowSuccessMessage(true)
-                    console.log('[Setup] Manual payment verification confirmed')
-                  }
-                }}
-                variant="outline"
-                size="sm"
-                className="w-full text-xs"
-              >
-                I've Paid - Manual Verify
-              </Button>
-            </div>
           </div>
         )}
         
