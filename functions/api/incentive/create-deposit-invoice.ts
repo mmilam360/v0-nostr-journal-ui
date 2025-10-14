@@ -106,11 +106,25 @@ export async function onRequestPost(context: any) {
       
       if (!paymentHash) {
         console.error('[Deposit] ❌ No payment hash found in response!')
+        console.error('[Deposit] Available fields:', Object.keys(invoice))
+        console.error('[Deposit] Full response for debugging:', JSON.stringify(invoice, null, 2))
+        
         return new Response(
           JSON.stringify({ 
             success: false,
             error: 'Invoice creation failed: No payment hash in response',
-            debug: { availableFields: Object.keys(invoice) }
+            debug: { 
+              availableFields: Object.keys(invoice),
+              fullResponse: invoice,
+              fieldValues: {
+                payment_hash: invoice.payment_hash,
+                paymentHash: invoice.paymentHash,
+                hash: invoice.hash,
+                invoice: invoice.invoice,
+                paymentRequest: invoice.paymentRequest,
+                payment_request: invoice.payment_request
+              }
+            }
           }),
           { 
             status: 500,
