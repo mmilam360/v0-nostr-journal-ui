@@ -60,11 +60,44 @@ export async function onRequestPost(context: any) {
     let paymentHash = null
     
     try {
-      // Create invoice
-      const invoice = await nwc.makeInvoice({
-        amount: amountSats,
-        memo: `Journal incentive stake - ${userPubkey.substring(0, 8)}`
-      })
+      // Try direct Alby API first for complete invoice data
+      let invoice = null
+      
+      try {
+        console.log('[Deposit] Attempting direct Alby API call...')
+        
+        const albyResponse = await fetch('https://api.getalby.com/invoices', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${ALBY_ACCESS_TOKEN}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            amount: amountSats,
+            memo: `Journal incentive stake - ${userPubkey.substring(0, 8)}`,
+            webhook_url: `${process.env.NEXT_PUBLIC_APP_URL || 'https://nostr-journal-incentive-demo.pages.dev'}/api/incentive/webhook`
+          })
+        })
+        
+        if (albyResponse.ok) {
+          invoice = await albyResponse.json()
+          console.log('[Deposit] ✅ Direct Alby API successful!')
+          console.log('[Deposit] Direct Alby response:', JSON.stringify(invoice, null, 2))
+        } else {
+          console.log('[Deposit] Direct Alby API failed, falling back to NIP-47...')
+          throw new Error('Direct Alby API failed')
+        }
+      } catch (albyError) {
+        console.log('[Deposit] Direct Alby API error:', albyError.message)
+        console.log('[Deposit] Falling back to NIP-47 makeInvoice...')
+        
+        // Fallback to NIP-47
+        invoice = await nwc.makeInvoice({
+          amount: amountSats,
+          memo: `Journal incentive stake - ${userPubkey.substring(0, 8)}`
+        })
+        console.log('[Deposit] ✅ NIP-47 makeInvoice successful!')
+      }
       
       console.log('[Deposit] ✅ Invoice created successfully!')
       console.log('[Deposit] Full response type:', typeof invoice)
@@ -95,8 +128,8 @@ export async function onRequestPost(context: any) {
         }
       })
       
-      // Extract the invoice string - we know it's in paymentRequest field
-      invoiceString = invoice.paymentRequest
+      // Extract the invoice string - handle both direct Alby API and NIP-47 responses
+      invoiceString = invoice.payment_request || invoice.paymentRequest || invoice.invoice
       
       console.log('[Deposit] Extracted invoice string:', invoiceString)
       

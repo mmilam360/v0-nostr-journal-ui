@@ -56,11 +56,34 @@ export async function onRequestPost(context: any) {
     
       console.log('[Payment Verify] Checking payment status for hash:', paymentHash)
       
-      // Check if the invoice has been paid using NIP-47 lookup_invoice
+      // Try direct Alby API first for more reliable verification
+      let invoiceStatus = null
+      let verificationMethod = ''
+      
       try {
-        console.log('[Payment Verify] Attempting to verify payment with NIP-47...')
+        console.log('[Payment Verify] Attempting direct Alby API verification...')
         
-        // Check if we have a payment hash (64 hex chars) or invoice string
+        const albyResponse = await fetch(`https://api.getalby.com/invoices/${paymentHash}`, {
+          headers: {
+            'Authorization': `Bearer ${context.env.ALBY_ACCESS_TOKEN}`,
+            'Content-Type': 'application/json'
+          }
+        })
+        
+        if (albyResponse.ok) {
+          invoiceStatus = await albyResponse.json()
+          verificationMethod = 'Direct Alby API'
+          console.log('[Payment Verify] ✅ Direct Alby API successful!')
+          console.log('[Payment Verify] Alby response:', JSON.stringify(invoiceStatus, null, 2))
+        } else {
+          console.log('[Payment Verify] Direct Alby API failed, falling back to NIP-47...')
+          throw new Error('Direct Alby API failed')
+        }
+      } catch (albyError) {
+        console.log('[Payment Verify] Direct Alby API error:', albyError.message)
+        console.log('[Payment Verify] Falling back to NIP-47 lookupInvoice...')
+        
+        // Fallback to NIP-47
         let lookupRequest
         if (paymentHash.length === 64 && /^[a-fA-F0-9]{64}$/.test(paymentHash)) {
           // We have a proper payment hash
@@ -72,17 +95,24 @@ export async function onRequestPost(context: any) {
           console.log('[Payment Verify] Using invoice string for lookup:', paymentHash.substring(0, 50) + '...')
         }
         
-        const invoiceStatus = await nwc.lookupInvoice(lookupRequest)
+        invoiceStatus = await nwc.lookupInvoice(lookupRequest)
+        verificationMethod = 'NIP-47'
+      }
       
-      console.log('[Payment Verify] Invoice status:', {
+      console.log('[Payment Verify] Invoice status (via', verificationMethod, '):', {
         state: invoiceStatus.state,
+        settled: invoiceStatus.settled,
         amount: invoiceStatus.amount,
         settled_at: invoiceStatus.settled_at,
         type: invoiceStatus.type
       })
       
-      // Check if the payment is settled
-      if (invoiceStatus.state === 'settled') {
+      // Check if the payment is settled (handle both Alby API and NIP-47 formats)
+      const isSettled = invoiceStatus.state === 'settled' || 
+                       invoiceStatus.settled === true ||
+                       invoiceStatus.status === 'SETTLED'
+      
+      if (isSettled) {
         console.log('[Payment Verify] ✅ Payment confirmed!')
         return new Response(
           JSON.stringify({
@@ -101,7 +131,7 @@ export async function onRequestPost(context: any) {
             }
           }
         )
-      } else if (invoiceStatus.state === 'pending') {
+      } else if (invoiceStatus.state === 'pending' || invoiceStatus.status === 'PENDING') {
         console.log('[Payment Verify] ⏳ Payment pending')
         return new Response(
           JSON.stringify({
