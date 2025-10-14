@@ -505,38 +505,50 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
                 Pay this Lightning invoice to activate your goals:
               </p>
               
-              {/* QR Code Display - Always visible */}
-              <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border-2 border-dashed border-yellow-300 mb-4">
-                <div className="flex flex-col items-center">
-                  <div className="bg-white p-3 rounded-lg shadow-sm">
+              {/* Modern QR Code Display */}
+              <div className="bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 p-6 rounded-xl border border-amber-200 dark:border-amber-800 mb-4">
+                <div className="flex flex-col items-center space-y-4">
+                  {/* QR Code Container */}
+                  <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-lg border border-amber-200 dark:border-amber-700">
                     {qrCodeDataUrl && (
                       <img 
                         src={qrCodeDataUrl} 
                         alt="Lightning Invoice QR Code"
-                        className="w-40 h-40"
+                        className="w-48 h-48 rounded-lg"
                       />
                     )}
                   </div>
-                  <p className="text-xs text-center text-gray-600 mt-3 font-medium">
-                    Scan with Lightning wallet
-                  </p>
+                  
+                  {/* QR Code Description */}
+                  <div className="text-center">
+                    <p className="text-sm font-medium text-amber-800 dark:text-amber-200 mb-1">
+                      Scan with Lightning Wallet
+                    </p>
+                    <p className="text-xs text-amber-600 dark:text-amber-400">
+                      Use any Lightning wallet to pay this invoice
+                    </p>
+                  </div>
                 </div>
               </div>
               
-              {/* Invoice Text */}
-              <div className="bg-white dark:bg-gray-800 p-3 rounded border font-mono text-xs break-all mb-3">
-                {depositInvoice}
+              {/* Invoice Text Container */}
+              <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-amber-200 dark:border-amber-700 mb-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-2 h-2 bg-amber-500 rounded-full"></div>
+                  <span className="text-sm font-medium text-amber-800 dark:text-amber-200">Lightning Invoice</span>
+                </div>
+                <div className="bg-gray-50 dark:bg-gray-900 p-3 rounded-lg border font-mono text-xs break-all text-gray-700 dark:text-gray-300">
+                  {depositInvoice}
+                </div>
               </div>
               
-              {/* Copy Button */}
+              {/* Modern Copy Button */}
               <Button 
                 onClick={copyInvoice}
-                variant="outline" 
-                size="sm"
-                className="w-full"
+                className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-medium py-3 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 border-0"
               >
                 <Copy className="w-4 h-4 mr-2" />
-                Copy Invoice
+                {showCopySuccess ? 'Copied!' : 'Copy Invoice'}
               </Button>
             </div>
             

@@ -60,9 +60,9 @@ export async function onRequestPost(context: any) {
       try {
         console.log('[Payment Verify] Attempting to verify payment with NIP-47...')
         
-        // Use the payment hash for lookup
-        const lookupRequest = { payment_hash: paymentHash }
-        console.log('[Payment Verify] Using payment hash for lookup:', paymentHash)
+        // Use the invoice string for lookup (since we're storing invoice string as paymentHash)
+        const lookupRequest = { invoice: paymentHash }
+        console.log('[Payment Verify] Using invoice string for lookup:', paymentHash.substring(0, 50) + '...')
         
         const invoiceStatus = await nwc.lookupInvoice(lookupRequest)
       

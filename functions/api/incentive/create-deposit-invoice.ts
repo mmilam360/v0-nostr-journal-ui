@@ -1,5 +1,4 @@
 import { NostrWebLNProvider } from '@getalby/sdk'
-import * as bolt11 from 'bolt11'
 
 export async function onRequestPost(context: any) {
   console.log('[Deposit] Function called')
@@ -103,41 +102,10 @@ export async function onRequestPost(context: any) {
         )
       }
       
-      // Decode the Lightning invoice to extract the payment hash
-      try {
-        console.log('[Deposit] Decoding Lightning invoice to extract payment hash...')
-        
-        // Use bolt11 library to properly decode the Lightning invoice
-        const decoded = bolt11.decode(invoiceString)
-        paymentHash = decoded.paymentHash
-        console.log('[Deposit] ✅ Successfully decoded payment hash:', paymentHash)
-        
-        if (!paymentHash) {
-          console.error('[Deposit] ❌ No payment hash found in decoded invoice')
-          paymentHash = invoiceString // Fallback to invoice string
-        }
-        
-      } catch (decodeError) {
-        console.error('[Deposit] ❌ Error decoding invoice with bolt11:', decodeError)
-        
-        // Fallback: try using the Alby SDK's decodeInvoice method if available
-        try {
-          if (typeof nwc.decodeInvoice === 'function') {
-            console.log('[Deposit] Trying Alby SDK decodeInvoice as fallback...')
-            const decodedInvoice = await nwc.decodeInvoice(invoiceString)
-            paymentHash = decodedInvoice.payment_hash || decodedInvoice.paymentHash
-            console.log('[Deposit] Alby SDK decoded payment hash:', paymentHash)
-          }
-        } catch (albyError) {
-          console.error('[Deposit] ❌ Alby SDK decodeInvoice also failed:', albyError)
-        }
-        
-        // Final fallback: use invoice string
-        if (!paymentHash) {
-          console.log('[Deposit] Using invoice string as final fallback')
-          paymentHash = invoiceString
-        }
-      }
+      // For now, we'll use the invoice string for verification
+      // The NIP-47 lookup_invoice method can accept either payment_hash or invoice
+      console.log('[Deposit] Using invoice string for payment verification (Cloudflare Workers compatible)')
+      paymentHash = invoiceString
       
       console.log('[Deposit] FINAL - Invoice string:', invoiceString)
       console.log('[Deposit] FINAL - Payment hash:', paymentHash)
