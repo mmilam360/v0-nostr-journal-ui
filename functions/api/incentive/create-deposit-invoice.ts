@@ -71,13 +71,29 @@ export async function onRequestPost(context: any) {
       console.log('[Deposit] Full response:', JSON.stringify(invoice, null, 2))
       console.log('[Deposit] Available fields:', Object.keys(invoice))
       
-      // Log specific field attempts
-      console.log('[Deposit] payment_hash:', invoice.payment_hash)
-      console.log('[Deposit] paymentHash:', invoice.paymentHash)
-      console.log('[Deposit] hash:', invoice.hash)
-      console.log('[Deposit] invoice:', invoice.invoice)
-      console.log('[Deposit] paymentRequest:', invoice.paymentRequest)
-      console.log('[Deposit] payment_request:', invoice.payment_request)
+      // Log ALL possible payment hash fields
+      const possibleHashFields = [
+        'payment_hash', 'paymentHash', 'hash', 'r_hash', 'rHash',
+        'checking_id', 'checkingId', 'id', 'invoice_id', 'invoiceId'
+      ]
+      
+      console.log('[Deposit] === PAYMENT HASH FIELD ANALYSIS ===')
+      possibleHashFields.forEach(field => {
+        const value = invoice[field]
+        if (value !== undefined) {
+          console.log(`[Deposit] invoice.${field}:`, value, `(type: ${typeof value}, length: ${value?.length || 'N/A'})`)
+        }
+      })
+      
+      // Log the invoice string fields
+      const possibleInvoiceFields = ['invoice', 'paymentRequest', 'payment_request', 'bolt11', 'payment_request_string']
+      console.log('[Deposit] === INVOICE STRING FIELD ANALYSIS ===')
+      possibleInvoiceFields.forEach(field => {
+        const value = invoice[field]
+        if (value !== undefined) {
+          console.log(`[Deposit] invoice.${field}:`, value?.substring(0, 100) + '...', `(type: ${typeof value}, length: ${value?.length || 'N/A'})`)
+        }
+      })
       
       // Extract the invoice string - we know it's in paymentRequest field
       invoiceString = invoice.paymentRequest
@@ -102,12 +118,30 @@ export async function onRequestPost(context: any) {
         )
       }
       
-      // Try to extract payment hash from Lightning invoice using bech32 decoding
-      try {
-        console.log('[Deposit] Attempting to extract payment hash from Lightning invoice...')
+      // First, try to get payment hash directly from Alby response
+      let directPaymentHash = null
+      const directHashFields = ['payment_hash', 'paymentHash', 'hash', 'r_hash', 'rHash', 'checking_id', 'checkingId']
+      
+      for (const field of directHashFields) {
+        if (invoice[field]) {
+          directPaymentHash = invoice[field]
+          console.log(`[Deposit] ✅ Found direct payment hash in ${field}:`, directPaymentHash)
+          break
+        }
+      }
+      
+      if (directPaymentHash) {
+        paymentHash = directPaymentHash
+        console.log('[Deposit] ✅ Using direct payment hash from Alby response:', paymentHash)
+      } else {
+        console.log('[Deposit] No direct payment hash found, attempting bech32 decoding...')
         
-        // Lightning invoices are bech32 encoded, so we need to decode them
-        // The payment hash is in the data part of the bech32 encoded string
+        // Fallback: Try to extract payment hash from Lightning invoice using bech32 decoding
+        try {
+          console.log('[Deposit] Attempting to extract payment hash from Lightning invoice...')
+          
+          // Lightning invoices are bech32 encoded, so we need to decode them
+          // The payment hash is in the data part of the bech32 encoded string
         
         // Simple bech32 decoder for Lightning invoices
         function simpleBech32Decode(bech32String: string) {
@@ -236,10 +270,11 @@ export async function onRequestPost(context: any) {
           }
         }
         
-      } catch (decodeError) {
-        console.error('[Deposit] Error extracting payment hash:', decodeError)
-        console.log('[Deposit] Using invoice string as fallback')
-        paymentHash = invoiceString
+        } catch (decodeError) {
+          console.error('[Deposit] Error extracting payment hash:', decodeError)
+          console.log('[Deposit] Using invoice string as fallback')
+          paymentHash = invoiceString
+        }
       }
       
       console.log('[Deposit] FINAL - Invoice string:', invoiceString)
