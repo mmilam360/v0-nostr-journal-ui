@@ -164,7 +164,12 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
       if (response.ok) {
         const data = await response.json()
         setDepositInvoice(data.invoice)
+        
+        // CRITICAL: Store payment hash for verification
+        localStorage.setItem(`payment-hash-${userPubkey}`, data.paymentHash)
+        
         console.log('[Lightning] Created real invoice:', data.paymentHash)
+        console.log('[Lightning] ✅ Payment hash stored for verification')
       } else {
         const errorData = await response.json()
         throw new Error(errorData.error || 'Failed to create invoice')
@@ -188,59 +193,95 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
     try {
       console.log('[Setup] 🔍 Checking payment status...', isAutoCheck ? '(auto)' : '(manual)')
       
-      // For now, simulate payment confirmation after a delay
-      // In production, this would check actual Lightning payment status
-      await new Promise(resolve => setTimeout(resolve, 2000)) // 2 second delay
+      // Extract payment hash from invoice (this should be stored when invoice is created)
+      const paymentHash = localStorage.getItem(`payment-hash-${userPubkey}`)
       
-      // Simulate successful payment
-      setInvoicePaid(true)
-      setBalance(settings.stakeAmount)
-      setHasSetup(true)
-      setDepositedAmount(settings.stakeAmount)
-      
-      // CRITICAL: Save the actual balance to Nostr, not 0!
-      console.log('[Setup] 💰 Payment confirmed! Saving balance to Nostr...')
-      
-      const { saveIncentiveSettings } = await import('@/lib/incentive-nostr')
-      
-      // Create settings object with ACTUAL deposited amount
-      const updatedSettings = {
-        dailyWordGoal: settings.dailyWordGoal,
-        dailyRewardSats: settings.dailyRewardSats,
-        stakeBalanceSats: settings.stakeAmount, // ✅ CRITICAL: Use actual deposit amount, not 0
-        lightningAddress: settings.lightningAddress,
-        createdDate: new Date().toISOString().split('T')[0],
-        lastUpdated: new Date().toISOString().split('T')[0]
+      if (!paymentHash) {
+        console.error('[Setup] ❌ No payment hash found for verification')
+        if (!isAutoCheck) {
+          setShowPaymentError(true)
+        }
+        return
       }
       
-      console.log('[Setup] Saving settings with balance:', updatedSettings.stakeBalanceSats)
+      console.log('[Setup] 🔍 Verifying payment with hash:', paymentHash)
       
-      // Save to Nostr
-      await saveIncentiveSettings(
-        userPubkey,
-        updatedSettings,
-        authData
-      )
+      // Call the real payment verification API
+      const response = await fetch('/api/incentive/verify-payment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paymentHash })
+      })
       
-      console.log('[Setup] ✅ Stake balance saved to Nostr')
+      if (!response.ok) {
+        throw new Error(`Payment verification failed: ${response.status}`)
+      }
       
-      // Save user account locally for demo
-      const userAccount = {
-        pubkey: userPubkey,
-        settings: {
+      const result = await response.json()
+      
+      if (result.success && result.paid) {
+        console.log('[Setup] ✅ Payment confirmed! Amount:', result.amountSats, 'sats')
+        
+        // Payment is confirmed - now credit the stake
+        setInvoicePaid(true)
+        setBalance(settings.stakeAmount)
+        setHasSetup(true)
+        setDepositedAmount(settings.stakeAmount)
+        
+        // CRITICAL: Save the actual balance to Nostr
+        console.log('[Setup] 💰 Payment confirmed! Saving balance to Nostr...')
+        
+        const { saveIncentiveSettings } = await import('@/lib/incentive-nostr')
+        
+        // Create settings object with ACTUAL deposited amount
+        const updatedSettings = {
           dailyWordGoal: settings.dailyWordGoal,
           dailyRewardSats: settings.dailyRewardSats,
-          lightningAddress: settings.lightningAddress
-        },
-        balance: settings.stakeAmount,
-        streak: 0,
-        createdAt: new Date().toISOString()
+          stakeBalanceSats: settings.stakeAmount, // ✅ CRITICAL: Use actual deposit amount, not 0
+          lightningAddress: settings.lightningAddress,
+          createdDate: new Date().toISOString().split('T')[0],
+          lastUpdated: new Date().toISOString().split('T')[0]
+        }
+        
+        console.log('[Setup] Saving settings with balance:', updatedSettings.stakeBalanceSats)
+        
+        // Save to Nostr
+        await saveIncentiveSettings(
+          userPubkey,
+          updatedSettings,
+          authData
+        )
+        
+        console.log('[Setup] ✅ Stake balance saved to Nostr')
+        
+        // Save user account locally for demo
+        const userAccount = {
+          pubkey: userPubkey,
+          settings: {
+            dailyWordGoal: settings.dailyWordGoal,
+            dailyRewardSats: settings.dailyRewardSats,
+            lightningAddress: settings.lightningAddress
+          },
+          balance: settings.stakeAmount,
+          streak: 0,
+          createdAt: new Date().toISOString()
+        }
+        
+        localStorage.setItem(`user-account-${userPubkey}`, JSON.stringify(userAccount))
+        
+        // Clear the payment hash since payment is confirmed
+        localStorage.removeItem(`payment-hash-${userPubkey}`)
+        
+        // Show success UI
+        setShowSuccessMessage(true)
+      } else {
+        console.log('[Setup] ⏳ Payment not yet received')
+        // Payment not yet received - continue waiting
+        if (!isAutoCheck) {
+          // Only show error for manual checks, not automatic ones
+          setShowPaymentError(true)
+        }
       }
-      
-      localStorage.setItem(`user-account-${userPubkey}`, JSON.stringify(userAccount))
-      
-      // Show success UI instead of alert
-      setShowSuccessMessage(true)
       
     } catch (error) {
       console.error('[Setup] ❌ Error checking payment:', error)
