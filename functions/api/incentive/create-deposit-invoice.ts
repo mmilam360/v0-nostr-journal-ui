@@ -62,6 +62,7 @@ export async function onRequestPost(context: any) {
     
     let invoiceString = null
     let paymentHash = null
+    let directPaymentHash = null
     
     try {
       // Try direct Alby API first for complete invoice data
@@ -162,7 +163,6 @@ export async function onRequestPost(context: any) {
       }
       
       // First, try to get payment hash directly from Alby response
-      let directPaymentHash = null
       const directHashFields = ['payment_hash', 'paymentHash', 'hash', 'r_hash', 'rHash', 'checking_id', 'checkingId']
       
       console.log('[Deposit] 🔍 Searching for direct payment hash in fields:', directHashFields)
