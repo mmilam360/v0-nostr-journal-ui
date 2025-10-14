@@ -311,9 +311,9 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       
       if (settings) {
         setHasLightningGoals(true)
-        // Calculate streak from transaction history
-        // For now, we'll use a simple calculation based on current date
-        const streak = Math.floor(Math.random() * 7) + 1 // Demo streak
+        // Calculate actual streak from transaction history
+        const { calculateStreak } = await import('@/lib/incentive-nostr')
+        const streak = await calculateStreak(authData.pubkey)
         setUserStreak(streak)
       } else {
         setHasLightningGoals(false)
@@ -1246,12 +1246,6 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                 </div>
                 
                 {/* Streak Counter - Desktop (only for users with Lightning Goals) */}
-                {hasLightningGoals && (
-                  <div className={`hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gradient-to-r from-orange-500 to-orange-600 text-white text-xs font-semibold ${showStreakAnimation ? 'animate-pulse' : ''}`}>
-                    <Zap className="h-4 w-4" />
-                    <span>{userStreak} day streak</span>
-                  </div>
-                )}
                 
                 {/* Manual refresh button - Desktop */}
                 <Button
@@ -1288,17 +1282,23 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                 </div>
                 
                 
-                {/* Lightning Goals Button */}
+                {/* Dynamic Goals/Streak Button */}
                 {isIncentiveEnabled() && (
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={() => setShowIncentives(true)}
-                    className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900/20"
-                    title="Lightning Goals"
+                    className={hasLightningGoals 
+                      ? "text-orange-600 hover:text-orange-700 hover:bg-orange-50 dark:hover:bg-orange-900/20" 
+                      : "text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                    }
+                    title={hasLightningGoals ? `${userStreak} day streak` : "Set up Lightning Goals"}
                   >
-                    <Zap className="w-4 h-4" />
-                    <span className="hidden sm:inline ml-2">Goals</span>
+                    {hasLightningGoals ? (
+                      <span className="font-semibold">{userStreak} day streak</span>
+                    ) : (
+                      <span className="hidden sm:inline">Goals</span>
+                    )}
                   </Button>
                 )}
 
