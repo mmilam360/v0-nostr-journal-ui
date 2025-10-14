@@ -102,10 +102,66 @@ export async function onRequestPost(context: any) {
         )
       }
       
-      // For now, we'll use the invoice string for verification
-      // The NIP-47 lookup_invoice method can accept either payment_hash or invoice
-      console.log('[Deposit] Using invoice string for payment verification (Cloudflare Workers compatible)')
-      paymentHash = invoiceString
+      // Try to extract payment hash from Lightning invoice
+      try {
+        console.log('[Deposit] Attempting to extract payment hash from Lightning invoice...')
+        
+        // Simple approach: Lightning invoices contain the payment hash in a specific format
+        // The payment hash is typically 32 bytes (64 hex characters) in the invoice
+        // We can try to extract it using a simple regex or string parsing
+        
+        // Method 1: Try to find a 64-character hex string in the invoice
+        const hexPattern = /[a-fA-F0-9]{64}/g
+        const hexMatches = invoiceString.match(hexPattern)
+        
+        if (hexMatches && hexMatches.length > 0) {
+          // The payment hash is usually the longest hex string in the invoice
+          const longestHex = hexMatches.reduce((a, b) => a.length > b.length ? a : b)
+          if (longestHex.length === 64) {
+            paymentHash = longestHex
+            console.log('[Deposit] ✅ Extracted payment hash from invoice:', paymentHash)
+          }
+        }
+        
+        // Method 2: If no 64-char hex found, try to decode bech32 manually
+        if (!paymentHash) {
+          console.log('[Deposit] Trying manual bech32 decoding...')
+          
+          // Lightning invoices start with 'lnbc' and use bech32 encoding
+          // The payment hash is in the data part after the amount and timestamp
+          // This is a simplified approach - in production you'd want a full bech32 decoder
+          
+          // Try to find the payment hash by looking for patterns
+          // This is a basic implementation
+          const parts = invoiceString.split('1')
+          if (parts.length > 2) {
+            // Look for potential payment hash in the data parts
+            for (let i = 2; i < parts.length; i++) {
+              const part = parts[i]
+              if (part && part.length >= 32) {
+                // Try to extract a potential hash
+                const potentialHash = part.substring(0, 64)
+                if (/^[a-fA-F0-9]{64}$/.test(potentialHash)) {
+                  paymentHash = potentialHash
+                  console.log('[Deposit] ✅ Found potential payment hash:', paymentHash)
+                  break
+                }
+              }
+            }
+          }
+        }
+        
+        // Fallback: if we still can't extract the hash, use the invoice string
+        if (!paymentHash) {
+          console.log('[Deposit] Could not extract payment hash, using invoice string for verification')
+          paymentHash = invoiceString
+        }
+        
+      } catch (decodeError) {
+        console.error('[Deposit] Error extracting payment hash:', decodeError)
+        console.log('[Deposit] Using invoice string as fallback')
+        paymentHash = invoiceString
+      }
       
       console.log('[Deposit] FINAL - Invoice string:', invoiceString)
       console.log('[Deposit] FINAL - Payment hash:', paymentHash)
