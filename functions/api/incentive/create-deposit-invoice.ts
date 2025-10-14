@@ -54,7 +54,11 @@ export async function onRequestPost(context: any) {
     
     await nwc.enable()
     
+    console.log('[Deposit] === NEW INVOICE CREATION REQUEST ===')
     console.log('[Deposit] Creating invoice with amount:', amountSats)
+    console.log('[Deposit] User pubkey:', userPubkey)
+    console.log('[Deposit] Timestamp:', new Date().toISOString())
+    console.log('[Deposit] Request ID:', Math.random().toString(36).substring(7))
     
     let invoiceString = null
     let paymentHash = null
@@ -83,8 +87,12 @@ export async function onRequestPost(context: any) {
           invoice = await albyResponse.json()
           console.log('[Deposit] ✅ Direct Alby API successful!')
           console.log('[Deposit] Direct Alby response:', JSON.stringify(invoice, null, 2))
+          console.log('[Deposit] 🔍 Direct Alby payment_hash field:', invoice.payment_hash)
+          console.log('[Deposit] 🔍 Direct Alby payment_request field:', invoice.payment_request?.substring(0, 100) + '...')
         } else {
-          console.log('[Deposit] Direct Alby API failed, falling back to NIP-47...')
+          console.log('[Deposit] ❌ Direct Alby API failed with status:', albyResponse.status)
+          const errorText = await albyResponse.text()
+          console.log('[Deposit] Direct Alby API error response:', errorText)
           throw new Error('Direct Alby API failed')
         }
       } catch (albyError) {
@@ -92,11 +100,13 @@ export async function onRequestPost(context: any) {
         console.log('[Deposit] Falling back to NIP-47 makeInvoice...')
         
         // Fallback to NIP-47
+        console.log('[Deposit] 🔄 Attempting NIP-47 makeInvoice...')
         invoice = await nwc.makeInvoice({
           amount: amountSats,
           memo: `Journal incentive stake - ${userPubkey.substring(0, 8)}`
         })
         console.log('[Deposit] ✅ NIP-47 makeInvoice successful!')
+        console.log('[Deposit] 🔍 NIP-47 response:', JSON.stringify(invoice, null, 2))
       }
       
       console.log('[Deposit] ✅ Invoice created successfully!')
@@ -155,9 +165,12 @@ export async function onRequestPost(context: any) {
       let directPaymentHash = null
       const directHashFields = ['payment_hash', 'paymentHash', 'hash', 'r_hash', 'rHash', 'checking_id', 'checkingId']
       
+      console.log('[Deposit] 🔍 Searching for direct payment hash in fields:', directHashFields)
       for (const field of directHashFields) {
-        if (invoice[field]) {
-          directPaymentHash = invoice[field]
+        const value = invoice[field]
+        console.log(`[Deposit] Checking field '${field}':`, value ? `${value.substring(0, 20)}...` : 'undefined')
+        if (value) {
+          directPaymentHash = value
           console.log(`[Deposit] ✅ Found direct payment hash in ${field}:`, directPaymentHash)
           break
         }
@@ -331,13 +344,20 @@ export async function onRequestPost(context: any) {
       )
     }
     
+    const responseData = {
+      success: true,
+      invoice: invoiceString,
+      paymentHash: paymentHash,
+      amountSats: amountSats,
+      timestamp: new Date().toISOString(),
+      requestId: Math.random().toString(36).substring(7),
+      source: directPaymentHash ? 'Direct Alby API' : 'NIP-47/Bech32'
+    }
+    
+    console.log('[Deposit] 🎯 FINAL RESPONSE:', JSON.stringify(responseData, null, 2))
+    
     return new Response(
-      JSON.stringify({
-        success: true,
-        invoice: invoiceString,
-        paymentHash: paymentHash,
-        amountSats: amountSats
-      }),
+      JSON.stringify(responseData),
       { 
         status: 200,
         headers: { 
