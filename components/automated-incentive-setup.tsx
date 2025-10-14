@@ -1,10 +1,10 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Target, Zap, Wallet, CheckCircle, AlertCircle, Clock, Copy } from 'lucide-react'
+import { Target, Zap, Wallet, CheckCircle, AlertCircle, Clock, Copy, QrCode } from 'lucide-react'
 import { IncentiveSuccessMessage } from './incentive-success-message'
 import QRCode from 'qrcode'
 
@@ -26,6 +26,7 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
   const [invoicePaid, setInvoicePaid] = useState(false)
   const [balance, setBalance] = useState(0)
   const [streak, setStreak] = useState(0)
+  const [showQRCode, setShowQRCode] = useState(false)
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>('')
   const [showSuccessMessage, setShowSuccessMessage] = useState(false)
   const [depositedAmount, setDepositedAmount] = useState(0)
@@ -35,12 +36,11 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
   const [showPaymentError, setShowPaymentError] = useState(false)
   const [showCopySuccess, setShowCopySuccess] = useState(false)
   const [showCopyError, setShowCopyError] = useState(false)
-  const [showQuitConfirmation, setShowQuitConfirmation] = useState(false)
   const [paymentCheckInterval, setPaymentCheckInterval] = useState<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
     loadExistingSettings()
-  }, [userPubkey]) // Only load when userPubkey changes, not on every render
+  }, [])
 
   // Generate QR code when invoice is created
   useEffect(() => {
@@ -88,7 +88,7 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
         setPaymentCheckInterval(null)
       }
     }
-  }, [depositInvoice, invoicePaid, checkPaymentStatus])
+  }, [depositInvoice, invoicePaid])
 
   const loadExistingSettings = async () => {
     try {
@@ -151,7 +151,7 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
     }
   }
 
-  const checkPaymentStatus = useCallback(async (isAutoCheck = false) => {
+  const checkPaymentStatus = async (isAutoCheck = false) => {
     if (!depositInvoice) return
 
     // Only show loading state for manual checks, not automatic ones
@@ -227,7 +227,7 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
         setLoading(false)
       }
     }
-  }, [depositInvoice, settings.stakeAmount, userPubkey, authData])
+  }
 
   const startDailyMonitoring = () => {
     // This would typically be handled server-side
@@ -248,48 +248,37 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
   }
 
   const handleQuitChallenge = async () => {
-    // Show confirmation modal instead of browser popup
-    setShowQuitConfirmation(true)
-  }
-
-  const confirmQuitChallenge = async () => {
-    setShowQuitConfirmation(false)
-    
-    try {
-      console.log('[Setup] User quitting challenge - forfeiting stake balance')
-      
-      // Record forfeit event to Nostr
-      const { recordTransaction } = await import('@/lib/incentive-nostr')
-      await recordTransaction(
-        userPubkey,
-        'forfeit',
-        balance, // Forfeit the entire remaining balance
-        'forfeit-' + Date.now(),
-        authData
-      )
-      
-      // Clear the stake balance to 0
-      const { updateStakeBalance } = await import('@/lib/incentive-nostr')
-      await updateStakeBalance(userPubkey, 0, authData)
-      
-      // Reset all state to allow new setup
-      setHasSetup(false)
-      setBalance(0)
-      setStreak(0)
-      setSettings({
-        dailyWordGoal: 500,
-        dailyRewardSats: 500,
-        lightningAddress: '',
-        stakeAmount: 1000
-      })
-      
-      // Show success UI instead of alert
-      setShowQuitSuccess(true)
+    if (confirm('⚠️ WARNING: Are you sure you want to quit the Lightning Goals challenge?\n\nThis will:\n• Cancel your daily goals\n• FORFEIT your remaining stake balance\n• Reset your progress streak\n\nYou will NOT receive a refund. This action cannot be undone.\n\nAre you absolutely sure?')) {
+      try {
+        console.log('[Setup] User quitting challenge - forfeiting stake balance')
+        
+        // Record forfeit event to Nostr
+        const { recordTransaction } = await import('@/lib/incentive-nostr')
+        await recordTransaction(
+          userPubkey,
+          'forfeit',
+          balance, // Forfeit the entire remaining balance
+          'forfeit-' + Date.now(),
+          authData
+        )
+        
+        // Clear the stake balance to 0
+        const { updateStakeBalance } = await import('@/lib/incentive-nostr')
+        await updateStakeBalance(userPubkey, 0, authData)
+        
+        // Show success UI instead of alert
+        setShowQuitSuccess(true)
+        setHasSetup(false)
+        setBalance(0)
+        setStreak(0)
+        setInvoicePaid(false)
+        setDepositInvoice('')
       } catch (error) {
         console.error('Error quitting challenge:', error)
         setShowQuitError(true)
       }
     }
+  }
 
   if (hasSetup) {
     return (
@@ -354,7 +343,7 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
             <Input
               type="number"
               value={settings.dailyWordGoal}
-              onChange={(e) => setSettings({...settings, dailyWordGoal: parseInt(e.target.value) || 0})}
+              onChange={(e) => setSettings({...settings, dailyWordGoal: parseInt(e.target.value) || 500})}
               placeholder="500"
             />
           </div>
@@ -364,7 +353,7 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
             <Input
               type="number"
               value={settings.dailyRewardSats}
-              onChange={(e) => setSettings({...settings, dailyRewardSats: parseInt(e.target.value) || 0})}
+              onChange={(e) => setSettings({...settings, dailyRewardSats: parseInt(e.target.value) || 500})}
               placeholder="500"
             />
           </div>
@@ -374,7 +363,7 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
             <Input
               type="number"
               value={settings.stakeAmount}
-              onChange={(e) => setSettings({...settings, stakeAmount: Math.max(parseInt(e.target.value) || 0, 1)})}
+              onChange={(e) => setSettings({...settings, stakeAmount: Math.max(parseInt(e.target.value) || 1000, 1)})}
               placeholder="1000"
               min="1"
             />
@@ -412,16 +401,16 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
               
               {/* QR Code Display - Always visible */}
               <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border-2 border-dashed border-yellow-300 mb-4">
-                  <div className="flex flex-col items-center">
-                    <div className="bg-white p-3 rounded-lg shadow-sm">
-                      {qrCodeDataUrl && (
-                        <img 
-                          src={qrCodeDataUrl} 
-                          alt="Lightning Invoice QR Code"
-                          className="w-40 h-40"
-                        />
-                      )}
-                    </div>
+                <div className="flex flex-col items-center">
+                  <div className="bg-white p-3 rounded-lg shadow-sm">
+                    {qrCodeDataUrl && (
+                      <img 
+                        src={qrCodeDataUrl} 
+                        alt="Lightning Invoice QR Code"
+                        className="w-40 h-40"
+                      />
+                    )}
+                  </div>
                   <p className="text-xs text-center text-gray-600 mt-3 font-medium">
                     Scan with Lightning wallet
                   </p>
@@ -610,63 +599,6 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
         <div className="flex items-center gap-2">
           <AlertCircle className="w-5 h-5" />
           <span>Failed to copy invoice. Please copy manually.</span>
-        </div>
-      </div>
-    )}
-
-    {/* Quit Confirmation Modal */}
-    {showQuitConfirmation && (
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg max-w-md w-full">
-          <div className="text-center">
-            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <AlertCircle className="w-8 h-8 text-red-600" />
-            </div>
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-              Quit Lightning Goals Challenge?
-            </h3>
-            <p className="text-gray-600 dark:text-gray-300 mb-4">
-              This will cancel your daily goals and forfeit your remaining stake balance of <span className="font-semibold text-orange-600">{balance} sats</span>. You will NOT receive a refund.
-            </p>
-            <div className="flex gap-3">
-              <Button 
-                onClick={() => setShowQuitConfirmation(false)} 
-                variant="outline" 
-                className="flex-1"
-              >
-                Cancel
-              </Button>
-              <Button 
-                onClick={confirmQuitChallenge} 
-                variant="destructive" 
-                className="flex-1"
-              >
-                Quit Challenge
-              </Button>
-            </div>
-          </div>
-        </div>
-      </div>
-    )}
-
-    {/* Quit Success Modal */}
-    {showQuitSuccess && (
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg max-w-md w-full">
-          <div className="text-center">
-            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <CheckCircle className="w-8 h-8 text-green-600" />
-            </div>
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-              Challenge Quit Successfully
-            </h3>
-            <p className="text-gray-600 dark:text-gray-300 mb-4">
-              Your Lightning Goals challenge has been cancelled. Your stake has been forfeited as agreed.
-            </p>
-            <Button onClick={() => setShowQuitSuccess(false)} className="w-full">
-              Close
-            </Button>
-          </div>
         </div>
       </div>
     )}

@@ -8,15 +8,8 @@ const RELAYS = [
   'wss://purplepag.es'
 ]
 
-// Lazy initialization of pool to avoid module-level initialization issues
-let pool: SimplePool | null = null
-
-function getPool(): SimplePool {
-  if (!pool) {
-    pool = new SimplePool()
-  }
-  return pool
-}
+// Create a simple pool for this module
+const pool = new SimplePool()
 
 export interface IncentiveSettings {
   dailyWordGoal: number
@@ -53,7 +46,7 @@ export async function saveIncentiveSettings(
   }
   
   const signedEvent = await signEventWithRemote(event, authData)
-  await getPool().publish(RELAYS, signedEvent)
+  await pool.publish(RELAYS, signedEvent)
 }
 
 /**
@@ -62,7 +55,7 @@ export async function saveIncentiveSettings(
 export async function fetchIncentiveSettings(
   userPubkey: string
 ): Promise<any | null> {
-  const events = await getPool().querySync(RELAYS, {
+  const events = await pool.querySync(RELAYS, {
     kinds: [30078],
     authors: [userPubkey],
     "#d": ["journal-incentive-settings"],
@@ -103,7 +96,7 @@ export async function updateStakeBalance(
   }
   
   const signedEvent = await signEventWithRemote(event, authData)
-  await getPool().publish(RELAYS, signedEvent)
+  await pool.publish(RELAYS, signedEvent)
 }
 
 /**
@@ -132,7 +125,7 @@ export async function recordDailyProgress(
   }
   
   const signedEvent = await signEventWithRemote(event, authData)
-  await getPool().publish(RELAYS, signedEvent)
+  await pool.publish(RELAYS, signedEvent)
 }
 
 /**
@@ -142,7 +135,7 @@ export async function fetchTodayProgress(
   userPubkey: string,
   date: string
 ): Promise<any | null> {
-  const events = await getPool().querySync(RELAYS, {
+  const events = await pool.querySync(RELAYS, {
     kinds: [30078],
     authors: [userPubkey],
     "#d": [`journal-progress-${date}`],
@@ -178,7 +171,7 @@ export async function markRewardClaimed(
   }
   
   const signedEvent = await signEventWithRemote(event, authData)
-  await getPool().publish(RELAYS, signedEvent)
+  await pool.publish(RELAYS, signedEvent)
 }
 
 /**
@@ -214,7 +207,7 @@ export async function recordTransaction(
   }
   
   const signedEvent = await signEventWithRemote(event, authData)
-  await getPool().publish(RELAYS, signedEvent)
+  await pool.publish(RELAYS, signedEvent)
 }
 
 /**
@@ -224,7 +217,7 @@ export async function fetchTransactionHistory(
   userPubkey: string,
   limit: number = 50
 ): Promise<any[]> {
-  const events = await getPool().querySync(RELAYS, {
+  const events = await pool.querySync(RELAYS, {
     kinds: [30078],
     authors: [userPubkey],
     "#app": ["nostr-journal"],
@@ -240,7 +233,7 @@ export async function fetchTransactionHistory(
  * Calculate current streak
  */
 export async function calculateStreak(userPubkey: string): Promise<number> {
-  const events = await getPool().querySync(RELAYS, {
+  const events = await pool.querySync(RELAYS, {
     kinds: [30078],
     authors: [userPubkey],
     "#app": ["nostr-journal"],
