@@ -19,7 +19,7 @@ import {
 } from 'lucide-react'
 import { generateSecretKey, getPublicKey, nip19 } from 'nostr-tools'
 import { bytesToHex } from '@noble/hashes/utils'
-import { QRCodeSVG } from 'qrcode.react'
+import QRCode from 'qrcode'
 import { Logo } from './logo'
 import { Nip46RemoteSigner } from 'nostr-signer-connector'
 import InfoModal from './info-modal'
@@ -46,12 +46,27 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
   const [error, setError] = useState('')
   const [bunkerUrl, setBunkerUrl] = useState('')
   const [connectUri, setConnectUri] = useState('')
+  const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>('')
   const [nsecInput, setNsecInput] = useState('')
   const [showNsec, setShowNsec] = useState(false)
   const [remoteSignerMode, setRemoteSignerMode] = useState<'client' | 'signer'>('client')
   
   // Mobile detection for mobile-specific fixes
   const [isMobile, setIsMobile] = useState(false)
+
+  // Generate QR code when connectUri changes
+  useEffect(() => {
+    if (connectUri) {
+      QRCode.toDataURL(connectUri, {
+        width: 240,
+        margin: 2,
+        color: {
+          dark: '#000000',
+          light: '#FFFFFF'
+        }
+      }).then(setQrCodeDataUrl).catch(console.error)
+    }
+  }, [connectUri])
   
   // Mobile connection timeout management
   const [connectionTimeoutRef, setConnectionTimeoutRef] = useState<NodeJS.Timeout | null>(null)
@@ -879,12 +894,13 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                         {connectUri ? (
                           <div className="flex flex-col items-center space-y-4">
                             <div className="w-64 h-64 bg-white rounded-xl flex items-center justify-center p-6 shadow-lg">
-                        <QRCodeSVG 
-                                value={connectUri} 
-                                size={240} 
-                                level="L"
-                          includeMargin={true}
-                        />
+                        {qrCodeDataUrl && (
+                          <img 
+                            src={qrCodeDataUrl} 
+                            alt="NIP-46 Connection QR Code"
+                            className="w-60 h-60"
+                          />
+                        )}
                       </div>
                             <div className="text-center">
                               <p className="text-sm text-muted-foreground">

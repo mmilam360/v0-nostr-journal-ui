@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Target, Zap, Wallet, CheckCircle, AlertCircle, Clock, Copy } from 'lucide-react'
 import { IncentiveSuccessMessage } from './incentive-success-message'
-import { QRCodeSVG } from 'qrcode.react'
+import QRCode from 'qrcode'
 
 interface AutomatedIncentiveSetupProps {
   userPubkey: string
@@ -26,7 +26,7 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
   const [invoicePaid, setInvoicePaid] = useState(false)
   const [balance, setBalance] = useState(0)
   const [streak, setStreak] = useState(0)
-  const [showQRCode, setShowQRCode] = useState(false)
+  const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>('')
   const [showSuccessMessage, setShowSuccessMessage] = useState(false)
   const [depositedAmount, setDepositedAmount] = useState(0)
   const [showQuitSuccess, setShowQuitSuccess] = useState(false)
@@ -41,6 +41,20 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
   useEffect(() => {
     loadExistingSettings()
   }, [userPubkey]) // Only load when userPubkey changes, not on every render
+
+  // Generate QR code when invoice is created
+  useEffect(() => {
+    if (depositInvoice) {
+      QRCode.toDataURL(depositInvoice, {
+        width: 160,
+        margin: 2,
+        color: {
+          dark: '#000000',
+          light: '#FFFFFF'
+        }
+      }).then(setQrCodeDataUrl).catch(console.error)
+    }
+  }, [depositInvoice])
 
   // Auto-check payment status every 1 second when invoice is created
   useEffect(() => {
@@ -398,15 +412,16 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
               
               {/* QR Code Display - Always visible */}
               <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border-2 border-dashed border-yellow-300 mb-4">
-                <div className="flex flex-col items-center">
-                  <div className="bg-white p-3 rounded-lg shadow-sm">
-                      <QRCodeSVG 
-                        value={depositInvoice}
-                        size={160}
-                        level="M"
-                        includeMargin={true}
-                      />
-                  </div>
+                  <div className="flex flex-col items-center">
+                    <div className="bg-white p-3 rounded-lg shadow-sm">
+                      {qrCodeDataUrl && (
+                        <img 
+                          src={qrCodeDataUrl} 
+                          alt="Lightning Invoice QR Code"
+                          className="w-40 h-40"
+                        />
+                      )}
+                    </div>
                   <p className="text-xs text-center text-gray-600 mt-3 font-medium">
                     Scan with Lightning wallet
                   </p>

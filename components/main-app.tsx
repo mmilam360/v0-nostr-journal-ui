@@ -30,7 +30,20 @@ import PublishModal from "@/components/publish-modal"
 import DeleteConfirmationModal from "@/components/delete-confirmation-modal"
 import ProfilePage from "@/components/profile-page"
 import { isIncentiveEnabled } from "@/lib/feature-flags"
-import { IncentiveModal } from "@/components/incentive-modal"
+import dynamic from "next/dynamic"
+
+// Dynamically import IncentiveModal to avoid SSR issues with QRCode
+const IncentiveModal = dynamic(() => import("@/components/incentive-modal").then(mod => ({ default: mod.IncentiveModal })), {
+  ssr: false,
+  loading: () => (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white dark:bg-gray-800 p-6 rounded-lg max-w-md w-full">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-4"></div>
+        <p className="text-center text-gray-600">Loading Lightning Goals...</p>
+      </div>
+    </div>
+  )
+})
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
