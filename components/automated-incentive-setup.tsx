@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Target, Zap, Wallet, CheckCircle, AlertCircle, Clock, Copy } from 'lucide-react'
 import { IncentiveSuccessMessage } from './incentive-success-message'
-import QRCode from 'qrcode.react'
+import { QRCodeSVG } from 'qrcode.react'
 
 interface AutomatedIncentiveSetupProps {
   userPubkey: string
@@ -400,13 +400,12 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
               <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border-2 border-dashed border-yellow-300 mb-4">
                 <div className="flex flex-col items-center">
                   <div className="bg-white p-3 rounded-lg shadow-sm">
-                    <QRCode 
-                      value={depositInvoice}
-                      size={160}
-                      level="M"
-                      includeMargin={true}
-                      renderAs="svg"
-                    />
+                      <QRCodeSVG 
+                        value={depositInvoice}
+                        size={160}
+                        level="M"
+                        includeMargin={true}
+                      />
                   </div>
                   <p className="text-xs text-center text-gray-600 mt-3 font-medium">
                     Scan with Lightning wallet
