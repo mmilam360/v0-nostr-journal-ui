@@ -57,12 +57,65 @@ export async function onRequestPost(context: any) {
     console.log('[Payment Verify] Checking payment status for hash:', paymentHash)
     
     // Check if the invoice has been paid
-    // Note: This uses the NIP-47 lookup_invoice method
+    // Note: We'll try multiple approaches for payment verification
     try {
-      const paymentStatus = await nwc.lookupInvoice(paymentHash)
+      console.log('[Payment Verify] Attempting to verify payment...')
       
-      console.log('[Payment Verify] Payment status:', paymentStatus)
+      // Approach 1: Try NIP-47 lookup_invoice if available
+      let paymentStatus = null
+      try {
+        if (typeof nwc.lookupInvoice === 'function') {
+          paymentStatus = await nwc.lookupInvoice(paymentHash)
+          console.log('[Payment Verify] NIP-47 lookup_invoice result:', paymentStatus)
+        } else {
+          console.log('[Payment Verify] lookup_invoice method not available')
+        }
+      } catch (nip47Error) {
+        console.log('[Payment Verify] NIP-47 lookup failed:', nip47Error.message)
+      }
       
+      // Approach 2: Try alternative verification methods
+      if (!paymentStatus) {
+        try {
+          // Try to get payment info using other methods
+          if (typeof nwc.getInfo === 'function') {
+            const info = await nwc.getInfo()
+            console.log('[Payment Verify] NWC info:', info)
+          }
+          
+          // For now, we'll implement a simple timeout-based verification
+          // In a real implementation, you'd want to check your Lightning node directly
+          console.log('[Payment Verify] Using fallback verification method')
+          
+          // TODO: Implement proper Lightning node payment verification
+          // This is a temporary fallback - in production you'd want to:
+          // 1. Connect directly to your Lightning node
+          // 2. Check the invoice status using your node's API
+          // 3. Verify the payment hash against your node's payment history
+          
+          return new Response(
+            JSON.stringify({
+              success: true,
+              paid: false,
+              paymentHash: paymentHash,
+              error: 'Payment verification method not yet implemented - using fallback',
+              message: 'Please contact support to verify your payment manually'
+            }),
+            { 
+              status: 200,
+              headers: { 
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+              }
+            }
+          )
+          
+        } catch (fallbackError) {
+          console.error('[Payment Verify] Fallback verification error:', fallbackError)
+        }
+      }
+      
+      // If we got a payment status from NIP-47
       if (paymentStatus && paymentStatus.paid) {
         console.log('[Payment Verify] ✅ Payment confirmed!')
         return new Response(
@@ -87,7 +140,8 @@ export async function onRequestPost(context: any) {
           JSON.stringify({
             success: true,
             paid: false,
-            paymentHash: paymentHash
+            paymentHash: paymentHash,
+            message: 'Payment verification in progress...'
           }),
           { 
             status: 200,
@@ -99,19 +153,19 @@ export async function onRequestPost(context: any) {
         )
       }
     } catch (lookupError) {
-      console.error('[Payment Verify] Lookup error:', lookupError)
+      console.error('[Payment Verify] Verification error:', lookupError)
       
-      // If lookup_invoice is not supported, return not paid
-      // This is a fallback - in production, you'd want proper error handling
+      // Return error response
       return new Response(
         JSON.stringify({
-          success: true,
+          success: false,
           paid: false,
           paymentHash: paymentHash,
-          error: 'Payment verification temporarily unavailable'
+          error: 'Payment verification failed',
+          details: lookupError instanceof Error ? lookupError.message : 'Unknown error'
         }),
         { 
-          status: 200,
+          status: 500,
           headers: { 
             'Content-Type': 'application/json',
             'Access-Control-Allow-Origin': '*'
