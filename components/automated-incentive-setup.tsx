@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Target, Zap, Wallet, CheckCircle, AlertCircle, Clock, Copy, QrCode } from 'lucide-react'
+import { Target, Zap, Wallet, CheckCircle, AlertCircle, Clock, Copy } from 'lucide-react'
 import { IncentiveSuccessMessage } from './incentive-success-message'
 import QRCode from 'qrcode.react'
 
