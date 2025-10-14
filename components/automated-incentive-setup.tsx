@@ -109,17 +109,43 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
           (t: string[]) => t[0] === 'lightning_address'
         )?.[1]
         
+        console.log('[Setup] Loaded settings:', {
+          dailyGoal,
+          dailyReward,
+          stakeBalance,
+          lightningAddress: lightningAddress ? 'set' : 'not set'
+        })
+        
+        // If stake balance is 0, treat as no active setup
+        if (stakeBalance <= 0) {
+          console.log('[Setup] Stake balance is 0 - no active setup')
+          setHasSetup(false)
+          setBalance(0)
+          setSettings({
+            dailyWordGoal: 500,
+            dailyRewardSats: 500,
+            lightningAddress: '',
+            stakeAmount: 1000
+          })
+          return
+        }
+        
         setSettings({
           dailyWordGoal: dailyGoal,
           dailyRewardSats: dailyReward,
           stakeAmount: stakeBalance, // Use existing balance as stake amount
-          lightningAddress: lightningAddress
+          lightningAddress: lightningAddress || ''
         })
         setBalance(stakeBalance)
         setHasSetup(true)
+        console.log('[Setup] ✅ Active setup found with balance:', stakeBalance)
+      } else {
+        console.log('[Setup] No incentive settings found')
+        setHasSetup(false)
       }
     } catch (error) {
       console.error('[Setup] Error loading settings:', error)
+      setHasSetup(false)
     }
   }
 
@@ -262,17 +288,42 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
           authData
         )
         
-        // Clear the stake balance to 0
+        // Clear the stake balance to 0 in Nostr
         const { updateStakeBalance } = await import('@/lib/incentive-nostr')
         await updateStakeBalance(userPubkey, 0, authData)
         
-        // Show success UI instead of alert
-        setShowQuitSuccess(true)
+        console.log('[Setup] ✅ Stake balance updated to 0 in Nostr')
+        
+        // Wait a moment for the Nostr update to propagate
+        await new Promise(resolve => setTimeout(resolve, 1000))
+        
+        // Reset all UI state
         setHasSetup(false)
         setBalance(0)
         setStreak(0)
         setInvoicePaid(false)
         setDepositInvoice('')
+        setQrCodeDataUrl('')
+        
+        // Reset settings to defaults
+        setSettings({
+          dailyWordGoal: 500,
+          dailyRewardSats: 500,
+          lightningAddress: '',
+          stakeAmount: 1000
+        })
+        
+        console.log('[Setup] ✅ UI state reset completely')
+        
+        // Show success UI
+        setShowQuitSuccess(true)
+        
+        // Force reload settings after a delay to ensure Nostr has updated
+        setTimeout(() => {
+          console.log('[Setup] 🔄 Reloading settings to verify quit was successful')
+          loadExistingSettings()
+        }, 2000)
+        
       } catch (error) {
         console.error('Error quitting challenge:', error)
         setShowQuitError(true)

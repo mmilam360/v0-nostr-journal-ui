@@ -1300,7 +1300,11 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => setShowIncentives(true)}
+                    onClick={() => {
+                      // Refresh incentive settings when opening Goals modal
+                      checkLightningGoals()
+                      setShowIncentives(true)
+                    }}
                     className={hasLightningGoals 
                       ? "text-orange-600 hover:text-orange-700 hover:bg-orange-50 dark:hover:bg-orange-900/20" 
                       : "text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900/20"
