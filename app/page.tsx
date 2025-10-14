@@ -57,6 +57,13 @@ export default function Home() {
 
         if (age < session.expiresIn) {
           console.log("[NostrJournal] Valid session found, restoring auth state")
+          console.log("[NostrJournal] Session data:", {
+            pubkey: session.pubkey,
+            authMethod: session.authMethod,
+            hasClientSecretKey: !!session.clientSecretKey,
+            clientSecretKeyType: typeof session.clientSecretKey,
+            clientSecretKeyLength: session.clientSecretKey?.length
+          })
 
           // Restore auth data based on method
           const restoredAuthData: AuthData = {
@@ -70,7 +77,14 @@ export default function Home() {
             restoredAuthData.relays = session.relays
             restoredAuthData.sessionData = session.sessionData
             if (session.clientSecretKey) {
-              restoredAuthData.clientSecretKey = new Uint8Array(session.clientSecretKey)
+              try {
+                restoredAuthData.clientSecretKey = new Uint8Array(session.clientSecretKey)
+                console.log("[NostrJournal] ✅ clientSecretKey restored successfully")
+              } catch (error) {
+                console.error("[NostrJournal] ❌ Error restoring clientSecretKey:", error)
+                console.error("[NostrJournal] clientSecretKey value:", session.clientSecretKey)
+                // Continue without clientSecretKey - might cause issues but won't crash
+              }
             }
           } else if (session.authMethod === "nsec") {
             restoredAuthData.nsec = session.nsec
@@ -164,7 +178,15 @@ export default function Home() {
         session.relays = data.relays
         session.sessionData = data.sessionData
         if (data.clientSecretKey) {
-          session.clientSecretKey = data.clientSecretKey.map(Number)
+          // Handle both Uint8Array and regular arrays
+          if (data.clientSecretKey instanceof Uint8Array) {
+            session.clientSecretKey = Array.from(data.clientSecretKey)
+          } else if (Array.isArray(data.clientSecretKey)) {
+            session.clientSecretKey = data.clientSecretKey.map(Number)
+          } else {
+            console.error("[NostrJournal] ❌ ERROR: clientSecretKey is not an array or Uint8Array:", typeof data.clientSecretKey)
+            throw new Error("Invalid clientSecretKey format")
+          }
         }
       } else if (data.authMethod === "nsec") {
         session.nsec = data.nsec

@@ -72,6 +72,12 @@ export async function signEventWithRemote(unsignedEvent: any, authData: AuthData
     } else if (authData.authMethod === "remote") {
       // Use NIP-46 remote signer for signing
       console.log("[SignerManager] Using NIP-46 remote signer for signing")
+      console.log("[SignerManager] Auth data structure:", {
+        hasSessionData: !!authData.sessionData,
+        hasBunkerUri: !!authData.bunkerUri,
+        hasBunkerPubkey: !!authData.bunkerPubkey,
+        hasClientSecretKey: !!authData.clientSecretKey
+      })
       
       // Check if remote signer manager is available
       if (!remoteSignerManager.isAvailable()) {
