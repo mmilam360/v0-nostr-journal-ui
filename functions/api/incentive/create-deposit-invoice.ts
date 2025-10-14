@@ -60,9 +60,15 @@ export async function onRequestPost(context: any) {
     console.log('[Deposit] Timestamp:', new Date().toISOString())
     console.log('[Deposit] Request ID:', Math.random().toString(36).substring(7))
     
+    // Debug environment variables
+    console.log('[DEBUG] Context env keys:', Object.keys(context.env))
+    console.log('[DEBUG] Has ALBY_ACCESS_TOKEN:', !!context.env.ALBY_ACCESS_TOKEN)
+    console.log('[DEBUG] Has NWC_CONNECTION_URL:', !!context.env.NWC_CONNECTION_URL)
+    
     let invoiceString = null
     let paymentHash = null
     let directPaymentHash = null
+    let decodedPaymentHash = null
     
     try {
       // Try direct Alby API first for complete invoice data
@@ -176,6 +182,7 @@ export async function onRequestPost(context: any) {
         }
       }
       
+      // Select final payment hash with clear priority
       if (directPaymentHash) {
         paymentHash = directPaymentHash
         console.log('[Deposit] ✅ Using direct payment hash from Alby response:', paymentHash)
@@ -287,8 +294,9 @@ export async function onRequestPost(context: any) {
         // Try to decode the invoice
         const decodedHash = simpleBech32Decode(invoiceString)
         if (decodedHash) {
+          decodedPaymentHash = decodedHash
           paymentHash = decodedHash
-          console.log('[Deposit] ✅ Successfully extracted payment hash:', paymentHash)
+          console.log('[Deposit] ✅ Successfully extracted payment hash via bech32:', paymentHash)
         } else {
           console.log('[Deposit] Could not decode payment hash from bech32, trying Alby SDK...')
           
@@ -323,8 +331,19 @@ export async function onRequestPost(context: any) {
         }
       }
       
-      console.log('[Deposit] FINAL - Invoice string:', invoiceString)
-      console.log('[Deposit] FINAL - Payment hash:', paymentHash)
+      // Validate that we have both invoice and payment hash
+      if (!invoiceString) {
+        throw new Error('No invoice string received from Alby or NWC')
+      }
+      
+      if (!paymentHash) {
+        throw new Error('Could not extract payment hash from invoice')
+      }
+      
+      console.log('[Deposit] 🎯 FINAL VALIDATION:')
+      console.log('[Deposit] 🎯 Invoice string:', invoiceString?.substring(0, 80) + '...')
+      console.log('[Deposit] 🎯 Payment hash:', paymentHash)
+      console.log('[Deposit] 🎯 Hash source:', directPaymentHash ? 'Direct API' : decodedPaymentHash ? 'Bech32 Decoded' : 'Fallback')
       
     } catch (invoiceError) {
       console.error('[Deposit] ❌ Error creating invoice:', invoiceError)
