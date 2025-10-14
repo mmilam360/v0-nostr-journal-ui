@@ -54,14 +54,17 @@ export async function onRequestPost(context: any) {
     
     await nwc.enable()
     
-    console.log('[Payment Verify] Checking payment status for hash:', paymentHash)
-    
-    // Check if the invoice has been paid using NIP-47 lookup_invoice
-    try {
-      console.log('[Payment Verify] Attempting to verify payment with NIP-47...')
+      console.log('[Payment Verify] Checking payment status for hash:', paymentHash)
       
-      // Use the proper NIP-47 lookup_invoice method
-      const invoiceStatus = await nwc.lookupInvoice({ payment_hash: paymentHash })
+      // Check if the invoice has been paid using NIP-47 lookup_invoice
+      try {
+        console.log('[Payment Verify] Attempting to verify payment with NIP-47...')
+        
+        // Use the invoice string for lookup (since we're storing the invoice string as paymentHash)
+        const lookupRequest = { invoice: paymentHash }
+        console.log('[Payment Verify] Using invoice string for lookup:', paymentHash.substring(0, 50) + '...')
+        
+        const invoiceStatus = await nwc.lookupInvoice(lookupRequest)
       
       console.log('[Payment Verify] Invoice status:', {
         state: invoiceStatus.state,

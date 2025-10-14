@@ -79,12 +79,10 @@ export async function onRequestPost(context: any) {
       console.log('[Deposit] paymentRequest:', invoice.paymentRequest)
       console.log('[Deposit] payment_request:', invoice.payment_request)
       
-      // Extract the correct fields - try different possible field names
-      invoiceString = invoice.invoice || invoice.paymentRequest || invoice.payment_request
-      paymentHash = invoice.payment_hash || invoice.paymentHash || invoice.hash
+      // Extract the invoice string - we know it's in paymentRequest field
+      invoiceString = invoice.paymentRequest
       
-      console.log('[Deposit] FINAL - Extracted invoice string:', invoiceString)
-      console.log('[Deposit] FINAL - Extracted payment hash:', paymentHash)
+      console.log('[Deposit] Extracted invoice string:', invoiceString)
       
       if (!invoiceString) {
         console.error('[Deposit] ❌ No invoice string found in response!')
@@ -104,37 +102,13 @@ export async function onRequestPost(context: any) {
         )
       }
       
-      if (!paymentHash) {
-        console.error('[Deposit] ❌ No payment hash found in response!')
-        console.error('[Deposit] Available fields:', Object.keys(invoice))
-        console.error('[Deposit] Full response for debugging:', JSON.stringify(invoice, null, 2))
-        
-        return new Response(
-          JSON.stringify({ 
-            success: false,
-            error: 'Invoice creation failed: No payment hash in response',
-            debug: { 
-              availableFields: Object.keys(invoice),
-              fullResponse: invoice,
-              fieldValues: {
-                payment_hash: invoice.payment_hash,
-                paymentHash: invoice.paymentHash,
-                hash: invoice.hash,
-                invoice: invoice.invoice,
-                paymentRequest: invoice.paymentRequest,
-                payment_request: invoice.payment_request
-              }
-            }
-          }),
-          { 
-            status: 500,
-            headers: { 
-              'Content-Type': 'application/json',
-              'Access-Control-Allow-Origin': '*'
-            }
-          }
-        )
-      }
+      // Since we don't have a payment hash directly, we'll use the invoice string for verification
+      // The NIP-47 lookup_invoice method can accept either payment_hash or invoice
+      console.log('[Deposit] Using invoice string for payment verification')
+      paymentHash = invoiceString // Use the invoice string itself as the identifier
+      
+      console.log('[Deposit] FINAL - Invoice string:', invoiceString)
+      console.log('[Deposit] FINAL - Payment hash:', paymentHash)
       
     } catch (invoiceError) {
       console.error('[Deposit] ❌ Error creating invoice:', invoiceError)
