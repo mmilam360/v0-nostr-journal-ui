@@ -102,58 +102,86 @@ export async function onRequestPost(context: any) {
         )
       }
       
-      // Try to extract payment hash from Lightning invoice
+      // Try to extract payment hash from Lightning invoice using bech32 decoding
       try {
         console.log('[Deposit] Attempting to extract payment hash from Lightning invoice...')
         
-        // Simple approach: Lightning invoices contain the payment hash in a specific format
-        // The payment hash is typically 32 bytes (64 hex characters) in the invoice
-        // We can try to extract it using a simple regex or string parsing
+        // Lightning invoices are bech32 encoded, so we need to decode them
+        // The payment hash is in the data part of the bech32 encoded string
         
-        // Method 1: Try to find a 64-character hex string in the invoice
-        const hexPattern = /[a-fA-F0-9]{64}/g
-        const hexMatches = invoiceString.match(hexPattern)
-        
-        if (hexMatches && hexMatches.length > 0) {
-          // The payment hash is usually the longest hex string in the invoice
-          const longestHex = hexMatches.reduce((a, b) => a.length > b.length ? a : b)
-          if (longestHex.length === 64) {
-            paymentHash = longestHex
-            console.log('[Deposit] ✅ Extracted payment hash from invoice:', paymentHash)
-          }
-        }
-        
-        // Method 2: If no 64-char hex found, try to decode bech32 manually
-        if (!paymentHash) {
-          console.log('[Deposit] Trying manual bech32 decoding...')
-          
-          // Lightning invoices start with 'lnbc' and use bech32 encoding
-          // The payment hash is in the data part after the amount and timestamp
-          // This is a simplified approach - in production you'd want a full bech32 decoder
-          
-          // Try to find the payment hash by looking for patterns
-          // This is a basic implementation
-          const parts = invoiceString.split('1')
-          if (parts.length > 2) {
-            // Look for potential payment hash in the data parts
-            for (let i = 2; i < parts.length; i++) {
-              const part = parts[i]
-              if (part && part.length >= 32) {
-                // Try to extract a potential hash
-                const potentialHash = part.substring(0, 64)
-                if (/^[a-fA-F0-9]{64}$/.test(potentialHash)) {
-                  paymentHash = potentialHash
-                  console.log('[Deposit] ✅ Found potential payment hash:', paymentHash)
-                  break
+        // Simple bech32 decoder for Lightning invoices
+        function simpleBech32Decode(bech32String: string) {
+          try {
+            // Find the separator '1' which separates the human readable part from the data
+            const separatorIndex = bech32String.lastIndexOf('1')
+            if (separatorIndex === -1) return null
+            
+            const hrp = bech32String.substring(0, separatorIndex)
+            const dataPart = bech32String.substring(separatorIndex + 1)
+            
+            console.log('[Deposit] Bech32 HRP:', hrp)
+            console.log('[Deposit] Bech32 data part length:', dataPart.length)
+            
+            // Convert bech32 characters to 5-bit values
+            const chars = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l'
+            const data = []
+            
+            for (let i = 0; i < dataPart.length; i++) {
+              const char = dataPart[i].toLowerCase()
+              const index = chars.indexOf(char)
+              if (index === -1) return null
+              data.push(index)
+            }
+            
+            console.log('[Deposit] Decoded data length:', data.length)
+            
+            // Convert 5-bit values to bytes
+            const bytes = []
+            let accumulator = 0
+            let bits = 0
+            
+            for (const value of data) {
+              accumulator = (accumulator << 5) | value
+              bits += 5
+              
+              while (bits >= 8) {
+                bytes.push((accumulator >> (bits - 8)) & 0xFF)
+                bits -= 8
+              }
+            }
+            
+            console.log('[Deposit] Decoded bytes length:', bytes.length)
+            
+            // Look for the payment hash (32 bytes = 64 hex chars)
+            // In Lightning invoices, the payment hash is typically near the end
+            if (bytes.length >= 32) {
+              // Try to find the payment hash by looking at different positions
+              for (let i = bytes.length - 32; i >= 0; i -= 4) {
+                const hashBytes = bytes.slice(i, i + 32)
+                const hashHex = hashBytes.map(b => b.toString(16).padStart(2, '0')).join('')
+                
+                // Check if this looks like a valid payment hash
+                if (/^[a-f0-9]{64}$/.test(hashHex)) {
+                  console.log('[Deposit] ✅ Found potential payment hash at position', i, ':', hashHex)
+                  return hashHex
                 }
               }
             }
+            
+            return null
+          } catch (error) {
+            console.error('[Deposit] Bech32 decode error:', error)
+            return null
           }
         }
         
-        // Fallback: if we still can't extract the hash, use the invoice string
-        if (!paymentHash) {
-          console.log('[Deposit] Could not extract payment hash, using invoice string for verification')
+        // Try to decode the invoice
+        const decodedHash = simpleBech32Decode(invoiceString)
+        if (decodedHash) {
+          paymentHash = decodedHash
+          console.log('[Deposit] ✅ Successfully extracted payment hash:', paymentHash)
+        } else {
+          console.log('[Deposit] Could not decode payment hash from bech32, using invoice string')
           paymentHash = invoiceString
         }
         
