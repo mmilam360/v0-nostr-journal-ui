@@ -172,6 +172,16 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
         console.log('[Lightning] ✅ Payment hash stored for verification')
       } else {
         const errorData = await response.json()
+        console.error('[Lightning] ❌ Invoice creation failed:', errorData)
+        
+        // Log debug information if available
+        if (errorData.debug) {
+          console.error('[Lightning] Debug info:', errorData.debug)
+          console.error('[Lightning] Available fields:', errorData.debug.availableFields)
+          console.error('[Lightning] Field values:', errorData.debug.fieldValues)
+          console.error('[Lightning] Full response:', errorData.debug.fullResponse)
+        }
+        
         throw new Error(errorData.error || 'Failed to create invoice')
       }
     } catch (error) {
