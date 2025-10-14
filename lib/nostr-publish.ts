@@ -1,6 +1,6 @@
 "use client"
 
-import * as nostrTools from "nostr-tools"
+import { getEventHash, getPublicKey, nip04, SimplePool, finalizeEvent } from "nostr-tools"
 import { getSmartRelayList, getRelays } from "./relay-manager"
 import { signEventWithRemote } from "./signer-manager"
 import { validateEvent, logValidationResult } from "./event-validator"
@@ -42,7 +42,7 @@ export const publishToNostr = async (unsignedEvent: any, authData: any): Promise
       const privateKeyBytes = new Uint8Array(
         authData.privateKey.match(/.{1,2}/g)?.map((byte: string) => Number.parseInt(byte, 16)) || [],
       )
-      signedEvent = nostrTools.finalizeEvent(unsignedEvent, privateKeyBytes)
+      signedEvent = finalizeEvent(unsignedEvent, privateKeyBytes)
       console.log("[Publish] ✅ Event signed locally using private key")
       console.log("[Publish] 🔑 Signed event pubkey:", signedEvent.pubkey)
       break

@@ -1,7 +1,7 @@
 "use client"
 
 import { NostrFetcher } from "nostr-fetch"
-import * as nostrTools from "nostr-tools"
+import { nip04, SimplePool, finalizeEvent } from "nostr-tools"
 import type { DecryptedNote } from "./nostr-crypto"
 import { getSmartRelayList, getRelays } from "./relay-manager"
 import { signEventWithRemote } from "./signer-manager"
@@ -536,7 +536,7 @@ export const saveNoteToNostr = async (note: DecryptedNote, authData: any): Promi
         const pkBytes = new Uint8Array(
           authData.privateKey.match(/.{1,2}/g)?.map((byte: string) => Number.parseInt(byte, 16)) || [],
         )
-        signedEvent = nostrTools.finalizeEvent(unsignedEvent, pkBytes)
+        signedEvent = finalizeEvent(unsignedEvent, pkBytes)
         console.log("[NostrJournal] Event signed locally using private key.")
         break
 
@@ -648,7 +648,7 @@ export const deleteNoteOnNostr = async (noteToDelete: DecryptedNote, authData: a
             const pkBytes = new Uint8Array(
               authData.privateKey.match(/.{1,2}/g)?.map((byte: string) => Number.parseInt(byte, 16)) || [],
             )
-            signedEvent = nostrTools.finalizeEvent(unsignedEvent, pkBytes)
+            signedEvent = finalizeEvent(unsignedEvent, pkBytes)
             console.log("[NostrJournal] Deletion event signed locally.")
             break
 
@@ -674,7 +674,7 @@ export const deleteNoteOnNostr = async (noteToDelete: DecryptedNote, authData: a
 
         console.log(`[v0] 📤 Publishing kind:5 deletion for event ${eventToDelete.id}`)
 
-        const pool = new nostrTools.SimplePool()
+        const pool = new SimplePool()
         try {
           await Promise.any(pool.publish(relays, signedEvent))
           console.log("[NostrJournal] ✅ Successfully published deletion event")
@@ -717,7 +717,7 @@ export const deleteNoteOnNostr = async (noteToDelete: DecryptedNote, authData: a
         const pkBytes = new Uint8Array(
           authData.privateKey.match(/.{1,2}/g)?.map((byte: string) => Number.parseInt(byte, 16)) || [],
         )
-        signedEvent = nostrTools.finalizeEvent(unsignedEvent, pkBytes)
+        signedEvent = finalizeEvent(unsignedEvent, pkBytes)
         console.log("[NostrJournal] Deletion event signed locally.")
         break
 

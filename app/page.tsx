@@ -1,9 +1,22 @@
 "use client"
 import { useState, useEffect } from "react"
+import dynamic from "next/dynamic"
 import LoginPageHorizontal from "@/components/login-page-horizontal"
-import { MainApp } from "@/components/main-app"
 import type { AuthData } from "@/components/main-app"
 import { ErrorBoundary } from "@/components/error-boundary"
+
+// Dynamically import MainApp to avoid SSR issues and bundling problems
+const MainApp = dynamic(() => import("@/components/main-app").then(mod => ({ default: mod.MainApp })), {
+  ssr: false,
+  loading: () => (
+    <main className="min-h-screen bg-slate-900 flex items-center justify-center">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-4"></div>
+        <p className="text-slate-400">Loading...</p>
+      </div>
+    </main>
+  )
+})
 
 const SESSION_KEY = "nostr_session"
 const SESSION_DURATION = 24 * 60 * 60 * 1000 // 24 hours in milliseconds
