@@ -62,13 +62,23 @@ export async function onRequestPost(context: any) {
       memo: `Journal incentive stake - ${userPubkey.substring(0, 8)}`
     })
     
-    console.log('[Deposit] ✅ Invoice created:', invoice.payment_hash)
+    console.log('[Deposit] ✅ Invoice created - full response:', JSON.stringify(invoice, null, 2))
+    console.log('[Deposit] Available fields:', Object.keys(invoice))
+    console.log('[Deposit] Payment hash field:', invoice.payment_hash)
+    console.log('[Deposit] Invoice field:', invoice.invoice)
+    
+    // Extract the correct fields - try different possible field names
+    const invoiceString = invoice.invoice || invoice.paymentRequest || invoice.payment_request
+    const paymentHash = invoice.payment_hash || invoice.paymentHash || invoice.hash
+    
+    console.log('[Deposit] Extracted invoice string:', invoiceString)
+    console.log('[Deposit] Extracted payment hash:', paymentHash)
     
     return new Response(
       JSON.stringify({
         success: true,
-        invoice: invoice.invoice,
-        paymentHash: invoice.payment_hash,
+        invoice: invoiceString,
+        paymentHash: paymentHash,
         amountSats: amountSats
       }),
       { 
