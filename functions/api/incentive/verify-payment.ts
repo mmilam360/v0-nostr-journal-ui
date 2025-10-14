@@ -187,6 +187,27 @@ export async function onRequestPost(context: any) {
         )
       }
       
+    } catch (verificationError) {
+      console.error('[Payment Verify] Verification error:', verificationError)
+      
+      return new Response(
+        JSON.stringify({
+          success: false,
+          paid: false,
+          paymentHash: paymentHash,
+          error: 'Payment verification failed',
+          details: verificationError instanceof Error ? verificationError.message : 'Unknown error'
+        }),
+        { 
+          status: 500,
+          headers: { 
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*'
+          }
+        }
+      )
+    }
+    
     } catch (lookupError) {
       console.error('[Payment Verify] NIP-47 lookup error:', lookupError)
       
