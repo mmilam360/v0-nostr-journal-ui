@@ -54,25 +54,91 @@ export async function onRequestPost(context: any) {
     
     await nwc.enable()
     
-    console.log('[Deposit] Creating invoice...')
+    console.log('[Deposit] Creating invoice with amount:', amountSats)
     
-    // Create invoice
-    const invoice = await nwc.makeInvoice({
-      amount: amountSats,
-      memo: `Journal incentive stake - ${userPubkey.substring(0, 8)}`
-    })
+    let invoiceString = null
+    let paymentHash = null
     
-    console.log('[Deposit] ✅ Invoice created - full response:', JSON.stringify(invoice, null, 2))
-    console.log('[Deposit] Available fields:', Object.keys(invoice))
-    console.log('[Deposit] Payment hash field:', invoice.payment_hash)
-    console.log('[Deposit] Invoice field:', invoice.invoice)
-    
-    // Extract the correct fields - try different possible field names
-    const invoiceString = invoice.invoice || invoice.paymentRequest || invoice.payment_request
-    const paymentHash = invoice.payment_hash || invoice.paymentHash || invoice.hash
-    
-    console.log('[Deposit] Extracted invoice string:', invoiceString)
-    console.log('[Deposit] Extracted payment hash:', paymentHash)
+    try {
+      // Create invoice
+      const invoice = await nwc.makeInvoice({
+        amount: amountSats,
+        memo: `Journal incentive stake - ${userPubkey.substring(0, 8)}`
+      })
+      
+      console.log('[Deposit] ✅ Invoice created successfully!')
+      console.log('[Deposit] Full response type:', typeof invoice)
+      console.log('[Deposit] Full response:', JSON.stringify(invoice, null, 2))
+      console.log('[Deposit] Available fields:', Object.keys(invoice))
+      
+      // Log specific field attempts
+      console.log('[Deposit] payment_hash:', invoice.payment_hash)
+      console.log('[Deposit] paymentHash:', invoice.paymentHash)
+      console.log('[Deposit] hash:', invoice.hash)
+      console.log('[Deposit] invoice:', invoice.invoice)
+      console.log('[Deposit] paymentRequest:', invoice.paymentRequest)
+      console.log('[Deposit] payment_request:', invoice.payment_request)
+      
+      // Extract the correct fields - try different possible field names
+      invoiceString = invoice.invoice || invoice.paymentRequest || invoice.payment_request
+      paymentHash = invoice.payment_hash || invoice.paymentHash || invoice.hash
+      
+      console.log('[Deposit] FINAL - Extracted invoice string:', invoiceString)
+      console.log('[Deposit] FINAL - Extracted payment hash:', paymentHash)
+      
+      if (!invoiceString) {
+        console.error('[Deposit] ❌ No invoice string found in response!')
+        return new Response(
+          JSON.stringify({ 
+            success: false,
+            error: 'Invoice creation failed: No invoice string in response',
+            debug: { availableFields: Object.keys(invoice) }
+          }),
+          { 
+            status: 500,
+            headers: { 
+              'Content-Type': 'application/json',
+              'Access-Control-Allow-Origin': '*'
+            }
+          }
+        )
+      }
+      
+      if (!paymentHash) {
+        console.error('[Deposit] ❌ No payment hash found in response!')
+        return new Response(
+          JSON.stringify({ 
+            success: false,
+            error: 'Invoice creation failed: No payment hash in response',
+            debug: { availableFields: Object.keys(invoice) }
+          }),
+          { 
+            status: 500,
+            headers: { 
+              'Content-Type': 'application/json',
+              'Access-Control-Allow-Origin': '*'
+            }
+          }
+        )
+      }
+      
+    } catch (invoiceError) {
+      console.error('[Deposit] ❌ Error creating invoice:', invoiceError)
+      return new Response(
+        JSON.stringify({ 
+          success: false,
+          error: 'Failed to create invoice: ' + (invoiceError.message || 'Unknown error'),
+          details: invoiceError.stack
+        }),
+        { 
+          status: 500,
+          headers: { 
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*'
+          }
+        }
+      )
+    }
     
     return new Response(
       JSON.stringify({
