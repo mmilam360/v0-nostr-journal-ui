@@ -1,6 +1,4 @@
-import { onRequestPost } from '@cloudflare/next-on-pages'
-
-export const onRequest = onRequestPost(async (context) => {
+export async function onRequestPost(context: any) {
   const { request, env } = context
   
   try {
@@ -66,4 +64,6 @@ export const onRequest = onRequestPost(async (context) => {
       }
     })
   }
-})
+}
+
+export const onRequest = onRequestPost
