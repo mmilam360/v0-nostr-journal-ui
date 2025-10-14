@@ -153,18 +153,47 @@ export async function onRequestPost(context: any) {
             console.log('[Deposit] Decoded bytes length:', bytes.length)
             
             // Look for the payment hash (32 bytes = 64 hex chars)
-            // In Lightning invoices, the payment hash is typically near the end
+            // In Lightning invoices, the payment hash has a specific structure
+            // It's typically found in the routing information section
+            
             if (bytes.length >= 32) {
-              // Try to find the payment hash by looking at different positions
-              for (let i = bytes.length - 32; i >= 0; i -= 4) {
+              const potentialHashes = []
+              
+              // Search through the decoded bytes for potential payment hashes
+              for (let i = 0; i <= bytes.length - 32; i++) {
                 const hashBytes = bytes.slice(i, i + 32)
                 const hashHex = hashBytes.map(b => b.toString(16).padStart(2, '0')).join('')
                 
                 // Check if this looks like a valid payment hash
                 if (/^[a-f0-9]{64}$/.test(hashHex)) {
-                  console.log('[Deposit] ✅ Found potential payment hash at position', i, ':', hashHex)
-                  return hashHex
+                  potentialHashes.push({
+                    position: i,
+                    hash: hashHex,
+                    // Payment hash is usually not at the very beginning or very end
+                    score: (i > 10 && i < bytes.length - 42) ? 1 : 0
+                  })
+                  console.log('[Deposit] Found potential payment hash at position', i, ':', hashHex)
                 }
+              }
+              
+              console.log('[Deposit] Total potential hashes found:', potentialHashes.length)
+              
+              if (potentialHashes.length > 0) {
+                // Try to find the most likely payment hash
+                // Payment hash is usually not the first or last hash in the invoice
+                const sortedHashes = potentialHashes.sort((a, b) => {
+                  // Prefer hashes that are not at the extremes
+                  if (a.score !== b.score) return b.score - a.score
+                  // Among equally scored hashes, prefer those in the middle range
+                  const aMiddle = Math.abs(a.position - bytes.length / 2)
+                  const bMiddle = Math.abs(b.position - bytes.length / 2)
+                  return aMiddle - bMiddle
+                })
+                
+                const selectedHash = sortedHashes[0]
+                console.log('[Deposit] ✅ Selected payment hash at position', selectedHash.position, ':', selectedHash.hash)
+                console.log('[Deposit] All potential hashes:', potentialHashes.map(h => `${h.hash} (pos: ${h.position})`))
+                return selectedHash.hash
               }
             }
             
@@ -181,8 +210,30 @@ export async function onRequestPost(context: any) {
           paymentHash = decodedHash
           console.log('[Deposit] ✅ Successfully extracted payment hash:', paymentHash)
         } else {
-          console.log('[Deposit] Could not decode payment hash from bech32, using invoice string')
-          paymentHash = invoiceString
+          console.log('[Deposit] Could not decode payment hash from bech32, trying Alby SDK...')
+          
+          // Fallback: try using the Alby SDK's decodeInvoice method if available
+          try {
+            if (typeof nwc.decodeInvoice === 'function') {
+              console.log('[Deposit] Trying Alby SDK decodeInvoice method...')
+              const decodedInvoice = await nwc.decodeInvoice(invoiceString)
+              console.log('[Deposit] Alby SDK decoded invoice:', decodedInvoice)
+              
+              if (decodedInvoice && (decodedInvoice.payment_hash || decodedInvoice.paymentHash)) {
+                paymentHash = decodedInvoice.payment_hash || decodedInvoice.paymentHash
+                console.log('[Deposit] ✅ Alby SDK extracted payment hash:', paymentHash)
+              } else {
+                console.log('[Deposit] Alby SDK decodeInvoice did not return payment hash')
+                paymentHash = invoiceString
+              }
+            } else {
+              console.log('[Deposit] Alby SDK decodeInvoice method not available')
+              paymentHash = invoiceString
+            }
+          } catch (albyError) {
+            console.error('[Deposit] Alby SDK decodeInvoice error:', albyError)
+            paymentHash = invoiceString
+          }
         }
         
       } catch (decodeError) {
