@@ -62,13 +62,13 @@ export async function onRequestPost(context: any) {
       memo: `Journal incentive stake - ${userPubkey.substring(0, 8)}`
     })
     
-    console.log('[Deposit] ✅ Invoice created:', invoice.paymentHash)
+    console.log('[Deposit] ✅ Invoice created:', invoice.payment_hash)
     
     return new Response(
       JSON.stringify({
         success: true,
-        invoice: invoice.paymentRequest,
-        paymentHash: invoice.paymentHash,
+        invoice: invoice.invoice,
+        paymentHash: invoice.payment_hash,
         amountSats: amountSats
       }),
       { 
