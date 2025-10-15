@@ -116,7 +116,6 @@ export async function onRequestPost(context: any) {
     
     // Try direct Alby API first for more reliable verification
     let invoiceStatus = null
-    let verificationMethod = ''
     
     try {
       console.log('[Payment Verify] Attempting direct Alby API verification...')
