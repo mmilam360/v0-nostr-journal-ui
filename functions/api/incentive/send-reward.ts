@@ -157,16 +157,16 @@ export async function onRequestPost(context: any) {
       )
     }
     
-    console.log('[Reward] All checks passed, connecting to Alby Hub...')
+    console.log('[Reward] All checks passed, connecting to NWC...')
     
-    // Connect to Alby Hub
-    const albyUrl = context.env.APP_LIGHTNING_NODE_URL
+    // Connect to NWC (same connection as other APIs)
+    const nwcUrl = context.env.NWC_CONNECTION_URL
     
-    if (!albyUrl) {
+    if (!nwcUrl) {
       return new Response(
         JSON.stringify({ 
           success: false,
-          error: 'Server configuration error: Missing Lightning node connection' 
+          error: 'Server configuration error: Missing NWC connection' 
         }),
         { 
           status: 500, 
@@ -178,8 +178,9 @@ export async function onRequestPost(context: any) {
       )
     }
     
+    console.log('[Reward] Using NWC connection (same as verification)')
     const nwc = new NostrWebLNProvider({
-      nostrWalletConnectUrl: albyUrl
+      nostrWalletConnectUrl: nwcUrl
     })
     
     await nwc.enable()
