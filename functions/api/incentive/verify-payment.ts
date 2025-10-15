@@ -1,5 +1,5 @@
 import { NostrWebLNProvider } from '@getalby/sdk'
-import * as bolt11 from 'bolt11'
+import { decode } from 'light-bolt11-decoder'
 
 export async function onRequestPost(context: any) {
   console.log('[Payment Verify] Function called')
@@ -61,8 +61,9 @@ export async function onRequestPost(context: any) {
       
       // Extract real payment hash from invoice
       try {
-        const decoded = bolt11.decode(invoiceString)
-        const realHash = decoded.tagsObject?.payment_hash
+        const decoded = decode(invoiceString)
+        const hashSection = decoded.sections?.find(s => s.name === 'payment_hash')
+        const realHash = hashSection?.value
         
         if (!realHash || realHash.length !== 64 || !/^[a-f0-9]{64}$/i.test(realHash)) {
           throw new Error(`Invalid payment hash in invoice: ${realHash}`)

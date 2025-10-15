@@ -1,5 +1,5 @@
 import { NostrWebLNProvider } from '@getalby/sdk'
-import * as bolt11 from 'bolt11'
+import { decode } from 'light-bolt11-decoder'
 
 export async function onRequestPost(context: any) {
   console.log('[API] ========================================')
@@ -324,19 +324,20 @@ export async function onRequestPost(context: any) {
         
         try {
           // Decode the BOLT11 invoice to get the real payment hash
-          console.log('[API] 🔍 Decoding BOLT11 invoice...')
-          const decoded = bolt11.decode(invoiceString)
+          console.log('[API] 🔍 Decoding BOLT11 invoice with light-bolt11-decoder...')
+          const decoded = decode(invoiceString)
           
           console.log('[API] 🔍 Decoded invoice sections:', {
-            paymentHash: decoded.tagsObject?.payment_hash,
-            amount: decoded.satoshis,
-            timestamp: decoded.timestamp,
-            expiry: decoded.timeExpireDate,
-            memo: decoded.tagsObject?.description
+            paymentHash: decoded.sections?.find(s => s.name === 'payment_hash')?.value,
+            amount: decoded.sections?.find(s => s.name === 'amount')?.value,
+            timestamp: decoded.sections?.find(s => s.name === 'timestamp')?.value,
+            expiry: decoded.sections?.find(s => s.name === 'expiry')?.value,
+            memo: decoded.sections?.find(s => s.name === 'description')?.value
           })
           
-          // Extract the payment hash (it's in hex format)
-          const realPaymentHash = decoded.tagsObject?.payment_hash
+          // Extract the payment hash from sections
+          const hashSection = decoded.sections?.find(s => s.name === 'payment_hash')
+          const realPaymentHash = hashSection?.value
           
           if (!realPaymentHash || realPaymentHash.length !== 64) {
             throw new Error(`Invalid payment hash extracted: ${realPaymentHash}`)
