@@ -550,7 +550,10 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
               value={settings.dailyWordGoal}
               onChange={(e) => {
                 const value = e.target.value
-                setSettings({...settings, dailyWordGoal: value === '' ? 0 : parseInt(value) || 0})
+                // Only update if value is a valid number or empty string
+                if (value === '' || /^\d+$/.test(value)) {
+                  setSettings({...settings, dailyWordGoal: value === '' ? 0 : parseInt(value)})
+                }
               }}
               placeholder="500"
             />
@@ -563,7 +566,10 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
               value={settings.dailyRewardSats}
               onChange={(e) => {
                 const value = e.target.value
-                setSettings({...settings, dailyRewardSats: value === '' ? 0 : parseInt(value) || 0})
+                // Only update if value is a valid number or empty string
+                if (value === '' || /^\d+$/.test(value)) {
+                  setSettings({...settings, dailyRewardSats: value === '' ? 0 : parseInt(value)})
+                }
               }}
               placeholder="500"
             />
@@ -576,7 +582,10 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
               value={settings.stakeAmount}
               onChange={(e) => {
                 const value = e.target.value
-                setSettings({...settings, stakeAmount: value === '' ? 0 : Math.max(parseInt(value) || 0, 0)})
+                // Only update if value is a valid number or empty string
+                if (value === '' || /^\d+$/.test(value)) {
+                  setSettings({...settings, stakeAmount: value === '' ? 0 : Math.max(parseInt(value), 0)})
+                }
               }}
               placeholder="1000"
               min="1"
