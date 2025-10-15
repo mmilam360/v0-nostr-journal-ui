@@ -151,6 +151,11 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
 
   const handleCreateStakeInvoice = async () => {
     setLoading(true)
+    
+    // CRITICAL: Clear any existing payment hash before creating new invoice
+    localStorage.removeItem(`payment-hash-${userPubkey}`)
+    console.log('[Lightning] 🧹 Cleared old payment hash before creating new invoice')
+    
     try {
       const response = await fetch('/api/incentive/create-deposit-invoice', {
         method: 'POST',
@@ -168,7 +173,9 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
         // CRITICAL: Store payment hash for verification
         localStorage.setItem(`payment-hash-${userPubkey}`, data.paymentHash)
         
-        console.log('[Lightning] Created real invoice:', data.paymentHash)
+        console.log('[Lightning] 🆕 NEW INVOICE CREATED:')
+        console.log('[Lightning] 🆕 Payment hash:', data.paymentHash)
+        console.log('[Lightning] 🆕 Invoice string:', data.invoice?.substring(0, 50) + '...')
         console.log('[Lightning] ✅ Payment hash stored for verification')
       } else {
         const errorData = await response.json()
@@ -214,7 +221,9 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
         return
       }
       
-      console.log('[Setup] 🔍 Verifying payment with hash:', paymentHash)
+      console.log('[Setup] 🔍 Using stored payment hash for verification:', paymentHash)
+      console.log('[Setup] 🔍 Hash length:', paymentHash.length)
+      console.log('[Setup] 🔍 Hash format:', /^[a-f0-9]{64}$/.test(paymentHash) ? 'Valid hex' : 'Invalid format')
       
       // Call the real payment verification API
       const response = await fetch('/api/incentive/verify-payment', {
