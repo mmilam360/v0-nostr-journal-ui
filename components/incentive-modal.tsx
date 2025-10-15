@@ -30,18 +30,18 @@ export function IncentiveModal({
   const [hasSetup, setHasSetup] = useState(false)
 
   // Check if user has Lightning Goals setup
-  useEffect(() => {
-    const checkSetup = async () => {
-      try {
-        const { fetchIncentiveSettings } = await import('@/lib/incentive-nostr')
-        const settings = await fetchIncentiveSettings(userPubkey)
-        setHasSetup(!!settings)
-      } catch (error) {
-        console.error('[IncentiveModal] Error checking setup:', error)
-        setHasSetup(false)
-      }
+  const checkSetup = async () => {
+    try {
+      const { fetchIncentiveSettings } = await import('@/lib/incentive-nostr')
+      const settings = await fetchIncentiveSettings(userPubkey)
+      setHasSetup(!!settings)
+    } catch (error) {
+      console.error('[IncentiveModal] Error checking setup:', error)
+      setHasSetup(false)
     }
-    
+  }
+
+  useEffect(() => {
     if (isOpen && userPubkey) {
       checkSetup()
     }
@@ -75,17 +75,19 @@ export function IncentiveModal({
         </CardHeader>
         
         <CardContent className="space-y-6">
-          {/* Setup Section */}
-          <div>
-            <div className="flex items-center gap-2 mb-4">
-              <Target className="w-5 h-5 text-blue-500" />
-              <h3 className="text-lg font-semibold">Set Up Your Daily Goal</h3>
+          {/* Setup Section - Only show if user doesn't have setup */}
+          {!hasSetup && (
+            <div>
+              <div className="flex items-center gap-2 mb-4">
+                <Target className="w-5 h-5 text-blue-500" />
+                <h3 className="text-lg font-semibold">Set Up Your Daily Goal</h3>
+              </div>
+              <AutomatedIncentiveSetup 
+                userPubkey={userPubkey}
+                authData={authData}
+              />
             </div>
-            <AutomatedIncentiveSetup 
-              userPubkey={userPubkey}
-              authData={authData}
-            />
-          </div>
+          )}
 
           {/* Reward Section - Only show if user has setup */}
           {hasSetup && (
@@ -95,6 +97,10 @@ export function IncentiveModal({
                 authData={authData}
                 currentWordCount={lastSavedWordCount || undefined}
                 onWordCountProcessed={onWordCountProcessed}
+                onCancelStake={() => {
+                  // Refresh the modal state after stake cancellation
+                  checkSetup()
+                }}
               />
             </div>
           )}
