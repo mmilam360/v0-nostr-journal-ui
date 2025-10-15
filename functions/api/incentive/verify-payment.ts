@@ -438,7 +438,7 @@ export async function onRequestPost(context: any) {
                   'Access-Control-Allow-Origin': '*'
                 }
               })
-              } else if (now > expiryTime) {
+            } else if (now > expiryTime) {
                 console.log('[Payment Verify] ❌ Invoice has expired')
                 return new Response(JSON.stringify({
                   success: false,
