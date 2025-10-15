@@ -11,8 +11,8 @@ export const onRequestGet: onRequestGet = async (context) => {
     results.nwc.available = true
     
     try {
-      const { webln } = await import('@getalby/sdk')
-      const nwc = new webln.NostrWebLNProvider({
+      const sdk = await import('@getalby/sdk')
+      const nwc = new sdk.NostrWebLNProvider({
         nostrWalletConnectUrl: context.env.NWC_CONNECTION_URL
       })
       

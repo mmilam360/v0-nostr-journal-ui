@@ -44,8 +44,8 @@ export const onRequestPost: onRequestPost = async (context) => {
       try {
         console.log('[Verify] 🔌 Attempting Method 1: NWC lookupInvoice (Alby Recommended)...')
         
-        const { webln } = await import('@getalby/sdk')
-        const nwc = new webln.NostrWebLNProvider({
+        const sdk = await import('@getalby/sdk')
+        const nwc = new sdk.NostrWebLNProvider({
           nostrWalletConnectUrl: context.env.NWC_CONNECTION_URL
         })
         

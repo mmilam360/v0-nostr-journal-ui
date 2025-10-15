@@ -1,4 +1,4 @@
-import { NostrWebLNProvider } from '@getalby/sdk'
+// Import will be done dynamically to avoid bundling issues
 import { decode } from 'light-bolt11-decoder'
 
 export async function onRequestPost(context: any) {
@@ -61,7 +61,8 @@ export async function onRequestPost(context: any) {
     console.log('[Invoice] 🔌 Connecting to YOUR wallet via NWC...')
     
     // Connect to YOUR wallet via NWC (same connection used for verification)
-    const nwc = new NostrWebLNProvider({
+    const sdk = await import('@getalby/sdk')
+    const nwc = new sdk.NostrWebLNProvider({
       nostrWalletConnectUrl: nwcUrl
     })
     
