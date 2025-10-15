@@ -55,14 +55,40 @@ export async function saveIncentiveSettings(
 export async function fetchIncentiveSettings(
   userPubkey: string
 ): Promise<any | null> {
-  const events = await pool.querySync(RELAYS, {
+  // First, get all incentive settings events
+  const settingsEvents = await pool.querySync(RELAYS, {
     kinds: [30078],
     authors: [userPubkey],
-    "#d": ["journal-incentive-settings"],
-    limit: 1
+    "#d": ["journal-incentive-settings"]
   })
   
-  return events[0] || null
+  if (settingsEvents.length === 0) {
+    return null
+  }
+  
+  // Get all deletion events (kind 5) for this user
+  const deletionEvents = await pool.querySync(RELAYS, {
+    kinds: [5],
+    authors: [userPubkey]
+  })
+  
+  // Check if the latest settings event has been deleted
+  const latestSettings = settingsEvents[0] // Most recent settings event
+  
+  // Look for deletion events that reference this settings event
+  const isDeleted = deletionEvents.some(deletionEvent => {
+    return deletionEvent.tags.some(tag => 
+      tag[0] === 'e' && tag[1] === latestSettings.id
+    )
+  })
+  
+  if (isDeleted) {
+    console.log('[IncentiveNostr] Settings event has been deleted, returning null')
+    return null
+  }
+  
+  console.log('[IncentiveNostr] Found valid settings event:', latestSettings.id)
+  return latestSettings
 }
 
 /**
@@ -135,14 +161,40 @@ export async function fetchTodayProgress(
   userPubkey: string,
   date: string
 ): Promise<any | null> {
-  const events = await pool.querySync(RELAYS, {
+  // First, get all progress events for this date
+  const progressEvents = await pool.querySync(RELAYS, {
     kinds: [30078],
     authors: [userPubkey],
-    "#d": [`journal-progress-${date}`],
-    limit: 1
+    "#d": [`journal-progress-${date}`]
   })
   
-  return events[0] || null
+  if (progressEvents.length === 0) {
+    return null
+  }
+  
+  // Get all deletion events (kind 5) for this user
+  const deletionEvents = await pool.querySync(RELAYS, {
+    kinds: [5],
+    authors: [userPubkey]
+  })
+  
+  // Check if the latest progress event has been deleted
+  const latestProgress = progressEvents[0] // Most recent progress event
+  
+  // Look for deletion events that reference this progress event
+  const isDeleted = deletionEvents.some(deletionEvent => {
+    return deletionEvent.tags.some(tag => 
+      tag[0] === 'e' && tag[1] === latestProgress.id
+    )
+  })
+  
+  if (isDeleted) {
+    console.log('[IncentiveNostr] Progress event has been deleted, returning null')
+    return null
+  }
+  
+  console.log('[IncentiveNostr] Found valid progress event:', latestProgress.id)
+  return latestProgress
 }
 
 /**
@@ -312,8 +364,57 @@ export async function resetIncentiveSettings(
       console.log('[IncentiveNostr] No existing settings found to reset')
     }
     
+    // Also clear all progress events for this user
+    await clearAllProgressEvents(userPubkey, authData)
+    
   } catch (error) {
     console.error('[IncentiveNostr] ❌ Error resetting incentive settings:', error)
+    throw error
+  }
+}
+
+/**
+ * Clear all progress events for a user when they cancel their stake
+ */
+export async function clearAllProgressEvents(
+  userPubkey: string,
+  authData: any
+): Promise<void> {
+  console.log('[IncentiveNostr] Clearing all progress events for user:', userPubkey)
+  
+  try {
+    // Get all progress events for this user
+    const progressEvents = await pool.querySync(RELAYS, {
+      kinds: [30078],
+      authors: [userPubkey],
+      "#d": ["journal-progress-"] // This will match any progress events
+    })
+    
+    console.log('[IncentiveNostr] Found', progressEvents.length, 'progress events to delete')
+    
+    // Create deletion events for each progress event
+    for (const progressEvent of progressEvents) {
+      const deleteEvent = {
+        kind: 5,
+        created_at: Math.floor(Date.now() / 1000),
+        tags: [
+          ["e", progressEvent.id],
+          ["p", userPubkey]
+        ],
+        content: "Deleted progress event due to stake cancellation",
+        pubkey: userPubkey
+      }
+      
+      const signedDeleteEvent = await signEventWithRemote(deleteEvent, authData)
+      await pool.publish(RELAYS, signedDeleteEvent)
+      
+      console.log('[IncentiveNostr] Deleted progress event:', progressEvent.id)
+    }
+    
+    console.log('[IncentiveNostr] ✅ All progress events cleared successfully')
+    
+  } catch (error) {
+    console.error('[IncentiveNostr] ❌ Error clearing progress events:', error)
     throw error
   }
 }
