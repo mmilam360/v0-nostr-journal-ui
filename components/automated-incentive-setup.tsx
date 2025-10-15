@@ -292,7 +292,22 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
       })
       
       if (!response.ok) {
-        throw new Error(`Payment verification failed: ${response.status}`)
+        const errorData = await response.json()
+        console.error('[Setup] ❌ Payment verification failed:', errorData)
+        
+        // Provide helpful error messages based on the error type
+        if (errorData.details?.note?.includes('very recent')) {
+          console.log('[Setup] ⏳ Invoice is very recent, waiting for payment to process...')
+        } else if (errorData.details?.note?.includes('processing')) {
+          console.log('[Setup] ⏳ Payment may be processing, continuing to check...')
+        } else if (errorData.details?.recommendation?.includes('webhook')) {
+          console.log('[Setup] 💡 Recommendation: Set up webhook system for better verification')
+        } else {
+          console.error('[Setup] ❌ Payment verification error:', errorData.error)
+        }
+        
+        // Don't throw error for verification failures - keep checking
+        return
       }
       
       const result = await response.json()

@@ -242,11 +242,56 @@ export async function onRequestPost(context: any) {
       console.error('[Payment Verify] Error type:', lookupError.constructor.name)
       console.error('[Payment Verify] Error message:', lookupError.message)
       
-      // Fallback: Try multiple verification methods
-      console.log('[Payment Verify] 🔄 Trying alternative verification methods...')
+      // NEW APPROACH: Try webhook-based verification first
+      console.log('[Payment Verify] 🔄 Trying webhook-based verification...')
       
-      // Method 1: Try Direct Alby API
-      console.log('[Payment Verify] 🔍 Method 1: Direct Alby API...')
+      try {
+        // Check if we have webhook data stored from when payment was received
+        const webhookData = await context.env.PAYMENT_WEBHOOK_DATA?.get(actualPaymentHash)
+        
+        if (webhookData) {
+          const webhookInfo = JSON.parse(webhookData)
+          console.log('[Payment Verify] ✅ Found webhook data for payment:', webhookInfo)
+          
+          const isPaid = webhookInfo.settled === true || 
+                         webhookInfo.state === 'SETTLED' ||
+                         webhookInfo.status === 'SETTLED' ||
+                         webhookInfo.paid === true
+          
+          console.log('[Payment Verify] 💰 Amount (webhook):', webhookInfo.amount)
+          console.log('[Payment Verify] ✅ Is Paid (webhook):', isPaid)
+          
+          if (isPaid) {
+            console.log('[Payment Verify] 🎉 PAYMENT CONFIRMED via webhook!')
+          } else {
+            console.log('[Payment Verify] ⏳ Payment still pending (webhook)')
+          }
+          
+          return new Response(JSON.stringify({
+            success: true,
+            paid: isPaid,
+            amount: webhookInfo.amount,
+            settledAt: webhookInfo.settled_at || webhookInfo.settledAt,
+            state: webhookInfo.state || webhookInfo.status,
+            verificationMethod: 'Webhook Data',
+            fallbackUsed: false
+          }), {
+            headers: { 
+              'Content-Type': 'application/json',
+              'Cache-Control': 'no-cache',
+              'Access-Control-Allow-Origin': '*'
+            }
+          })
+        } else {
+          console.log('[Payment Verify] ⚠️ No webhook data found, trying Alby API...')
+        }
+        
+      } catch (webhookError) {
+        console.log('[Payment Verify] ⚠️ Webhook verification failed:', webhookError.message)
+      }
+      
+      // Fallback: Try Direct Alby API
+      console.log('[Payment Verify] 🔍 Method 2: Direct Alby API...')
       
       try {
         const albyToken = context.env.ALBY_ACCESS_TOKEN
@@ -342,33 +387,126 @@ export async function onRequestPost(context: any) {
       } catch (albyError) {
         console.error('[Payment Verify] ❌ Alby API also failed:', albyError.message)
         
-        // SECURITY FIX: Remove overly aggressive fallback methods that cause false positives
-        // Only use legitimate verification methods that actually check payment status
+        // NEW APPROACH: Try polling-based verification
+        console.log('[Payment Verify] 🔍 Method 3: Polling-based verification...')
         
-        console.error('[Payment Verify] ❌ All legitimate verification methods failed')
-        console.error('[Payment Verify] This means the payment has NOT been confirmed')
-        console.error('[Payment Verify] Returning false to prevent false positive')
-        
-        return new Response(
-          JSON.stringify({
-            success: false,
-            paid: false,
-            paymentHash: paymentHash,
-            error: 'Payment verification failed - payment not confirmed',
-            details: {
-              nwcError: lookupError.message,
-              albyError: albyError.message,
-              note: 'Payment must be confirmed through legitimate channels (NWC or Alby API)'
+        try {
+          // For now, implement a simple time-based check
+          // In a real implementation, you'd poll multiple sources
+          
+          if (invoiceString) {
+            const decoded = decode(invoiceString)
+            const timestamp = decoded.sections?.find(s => s.name === 'timestamp')?.value
+            const expiry = decoded.sections?.find(s => s.name === 'expiry')?.value
+            
+            if (timestamp && expiry) {
+              const invoiceTime = parseInt(timestamp) * 1000
+              const expiryTime = invoiceTime + (parseInt(expiry) * 1000)
+              const now = Date.now()
+              const timeSinceInvoice = now - invoiceTime
+              
+              console.log('[Payment Verify] Invoice created:', new Date(invoiceTime))
+              console.log('[Payment Verify] Time since invoice:', Math.round(timeSinceInvoice / 1000), 'seconds')
+              console.log('[Payment Verify] Invoice expires:', new Date(expiryTime))
+              console.log('[Payment Verify] Invoice expired:', now > expiryTime)
+              
+              // If invoice was created more than 30 seconds ago and hasn't expired,
+              // and we have the correct payment hash, assume payment might be processing
+              if (timeSinceInvoice > 30000 && now < expiryTime) {
+                console.log('[Payment Verify] ⏳ Invoice is recent and valid - payment may be processing')
+                console.log('[Payment Verify] ⚠️ This is a temporary assumption - implement proper polling')
+                
+                // For now, return false but indicate the invoice is valid
+                return new Response(JSON.stringify({
+                  success: false,
+                  paid: false,
+                  paymentHash: paymentHash,
+                  error: 'Payment verification methods failed - invoice is valid but payment not confirmed',
+                  details: {
+                    nwcError: lookupError.message,
+                    albyError: albyError.message,
+                    note: 'Invoice is valid and recent - payment may be processing. Try again in a few seconds.',
+                    invoiceValid: true,
+                    timeSinceInvoice: Math.round(timeSinceInvoice / 1000) + ' seconds',
+                    recommendation: 'Implement webhook system or polling for better verification'
+                  }
+                }), { 
+                  status: 500,
+                  headers: { 
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*'
+                  }
+                })
+              } else if (now > expiryTime) {
+                console.log('[Payment Verify] ❌ Invoice has expired')
+                return new Response(JSON.stringify({
+                  success: false,
+                  paid: false,
+                  paymentHash: paymentHash,
+                  error: 'Invoice has expired - payment verification failed',
+                  details: {
+                    note: 'Invoice expired at ' + new Date(expiryTime),
+                    recommendation: 'Create a new invoice'
+                  }
+                }), { 
+                  status: 400,
+                  headers: { 
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*'
+                  }
+                })
+              } else {
+                console.log('[Payment Verify] ⏳ Invoice is very recent - payment may still be processing')
+                return new Response(JSON.stringify({
+                  success: false,
+                  paid: false,
+                  paymentHash: paymentHash,
+                  error: 'Invoice is very recent - payment may still be processing',
+                  details: {
+                    note: 'Invoice created ' + Math.round(timeSinceInvoice / 1000) + ' seconds ago',
+                    recommendation: 'Wait a few more seconds and try again'
+                  }
+                }), { 
+                  status: 500,
+                  headers: { 
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*'
+                  }
+                })
+              }
+            } else {
+              throw new Error('Could not extract timestamp/expiry from invoice')
             }
-          }),
-          { 
-            status: 500,
-            headers: { 
-              'Content-Type': 'application/json',
-              'Access-Control-Allow-Origin': '*'
-            }
+          } else {
+            throw new Error('No invoice string for time-based verification')
           }
-        )
+          
+        } catch (pollingError) {
+          console.error('[Payment Verify] ❌ All verification methods failed:', pollingError.message)
+          
+          return new Response(
+            JSON.stringify({
+              success: false,
+              paid: false,
+              paymentHash: paymentHash,
+              error: 'All payment verification methods failed',
+              details: {
+                nwcError: lookupError.message,
+                albyError: albyError.message,
+                pollingError: pollingError.message,
+                note: 'Consider implementing webhook system for reliable payment verification',
+                recommendation: 'Set up Alby webhooks to get notified when payments are received'
+              }
+            }),
+            { 
+              status: 500,
+              headers: { 
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+              }
+            }
+          )
+        }
       }
     }
     
