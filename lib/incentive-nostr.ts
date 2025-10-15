@@ -223,6 +223,33 @@ export async function getCurrentStake(userPubkey: string): Promise<{
   })
   
   if (creationEvents.length === 0) {
+    // Fallback: Check for old settings events for migration
+    console.log('[IncentiveNostr] No new stake events found, checking old settings...')
+    const oldSettings = await fetchIncentiveSettings(userPubkey)
+    
+    if (oldSettings) {
+      // Parse old settings and return as new format
+      const dailyWordGoal = parseInt(oldSettings.tags.find(t => t[0] === 'daily_word_goal')?.[1] || '0')
+      const dailyRewardSats = parseInt(oldSettings.tags.find(t => t[0] === 'daily_reward_sats')?.[1] || '0')
+      const currentBalance = parseInt(oldSettings.tags.find(t => t[0] === 'stake_balance_sats')?.[1] || '0')
+      const lightningAddress = oldSettings.tags.find(t => t[0] === 'lightning_address')?.[1] || ''
+      const createdAt = oldSettings.tags.find(t => t[0] === 'created_date')?.[1] || new Date().toISOString().split('T')[0]
+      
+      console.log('[IncentiveNostr] Found old settings, returning as new format:', {
+        dailyWordGoal, dailyRewardSats, currentBalance, lightningAddress
+      })
+      
+      return {
+        stakeId: `migrated-${oldSettings.id}`,
+        dailyWordGoal,
+        dailyRewardSats,
+        currentBalance,
+        lightningAddress,
+        createdAt,
+        isActive: currentBalance > 0
+      }
+    }
+    
     return null
   }
   
