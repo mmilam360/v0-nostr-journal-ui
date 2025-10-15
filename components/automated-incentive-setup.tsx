@@ -628,10 +628,57 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
               {/* Modern Copy Button */}
               <Button 
                 onClick={copyInvoice}
-                className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-medium py-3 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 border-0"
+                className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-medium py-3 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 border-0 mb-2"
               >
                 <Copy className="w-4 h-4 mr-2" />
                 {showCopySuccess ? 'Copied!' : 'Copy Invoice'}
+              </Button>
+              
+              {/* Manual Verification Button (for testing) */}
+              <Button
+                onClick={async () => {
+                  try {
+                    console.log('[Manual] 🔧 Manual payment verification requested')
+                    const paymentHash = localStorage.getItem(`payment-hash-${userPubkey}`)
+                    const invoiceString = localStorage.getItem(`invoice-string-${userPubkey}`)
+                    
+                    if (!paymentHash) {
+                      alert('No payment hash found')
+                      return
+                    }
+                    
+                    const response = await fetch('/api/incentive/manual-verify', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        paymentHash,
+                        invoiceString,
+                        amountSats: settings.stakeAmount
+                      })
+                    })
+                    
+                    const result = await response.json()
+                    console.log('[Manual] 📋 Manual verification result:', result)
+                    
+                    if (result.success && result.paid) {
+                      alert('✅ Payment manually verified! (Testing mode)')
+                      // Trigger payment confirmation
+                      setInvoicePaid(true)
+                      setBalance(settings.stakeAmount)
+                      setHasSetup(true)
+                      setDepositedAmount(settings.stakeAmount)
+                    } else {
+                      alert(`❌ Manual verification failed: ${result.error}`)
+                    }
+                  } catch (error) {
+                    console.error('[Manual] ❌ Error:', error)
+                    alert('Manual verification failed')
+                  }
+                }}
+                className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-medium py-3 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 border-0"
+              >
+                <Zap className="w-4 h-4 mr-2" />
+                Manual Verify (Testing)
               </Button>
             </div>
             
