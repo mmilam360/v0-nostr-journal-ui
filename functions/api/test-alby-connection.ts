@@ -2,11 +2,31 @@ import { onRequestGet } from 'wrangler'
 
 export const onRequestGet: onRequestGet = async (context) => {
   const results = {
-    albyApi: { available: false, working: false, error: null },
-    nwc: { available: false, working: false, error: null }
+    nwc: { available: false, working: false, error: null, priority: 'Primary (Alby Recommended)' },
+    albyApi: { available: false, working: false, error: null, priority: 'Fallback' }
   }
   
-  // Test Alby API
+  // Test NWC first (Alby recommended)
+  if (context.env.NWC_CONNECTION_URL) {
+    results.nwc.available = true
+    
+    try {
+      const { webln } = await import('@getalby/sdk')
+      const nwc = new webln.NostrWebLNProvider({
+        nostrWalletConnectUrl: context.env.NWC_CONNECTION_URL
+      })
+      
+      await nwc.enable()
+      const info = await nwc.getInfo()
+      
+      results.nwc.working = true
+      results.nwc.info = info
+    } catch (error) {
+      results.nwc.error = error.message
+    }
+  }
+  
+  // Test Alby API (fallback)
   if (context.env.ALBY_ACCESS_TOKEN) {
     results.albyApi.available = true
     
@@ -29,26 +49,6 @@ export const onRequestGet: onRequestGet = async (context) => {
       }
     } catch (error) {
       results.albyApi.error = error.message
-    }
-  }
-  
-  // Test NWC
-  if (context.env.NWC_CONNECTION_URL) {
-    results.nwc.available = true
-    
-    try {
-      const { webln } = await import('@getalby/sdk')
-      const nwc = new webln.NostrWebLNProvider({
-        nostrWalletConnectUrl: context.env.NWC_CONNECTION_URL
-      })
-      
-      await nwc.enable()
-      const info = await nwc.getInfo()
-      
-      results.nwc.working = true
-      results.nwc.info = info
-    } catch (error) {
-      results.nwc.error = error.message
     }
   }
   

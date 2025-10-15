@@ -37,66 +37,12 @@ export const onRequestPost: onRequestPost = async (context) => {
     let usedMethod = ''
     
     // =====================================================
-    // METHOD 1: Direct Alby API (MOST RELIABLE)
+    // METHOD 1: NWC lookupInvoice (RECOMMENDED BY ALBY)
     // =====================================================
     
-    if (hasAlbyToken) {
+    if (hasNWC) {
       try {
-        console.log('[Verify] 📡 Attempting Method 1: Direct Alby API...')
-        
-        // Try the incoming invoices endpoint
-        const albyResponse = await fetch(
-          `https://api.getalby.com/invoices/incoming/${paymentHash}`,
-          {
-            method: 'GET',
-            headers: {
-              'Authorization': `Bearer ${context.env.ALBY_ACCESS_TOKEN}`,
-              'Content-Type': 'application/json'
-            }
-          }
-        )
-        
-        console.log('[Verify] Alby API response status:', albyResponse.status)
-        
-        if (albyResponse.ok) {
-          const invoice = await albyResponse.json()
-          console.log('[Verify] ✅ Found invoice via Alby API')
-          console.log('[Verify] Invoice data:', JSON.stringify(invoice, null, 2))
-          
-          verificationResult = {
-            paid: invoice.settled === true || invoice.state === 'SETTLED',
-            amount: invoice.amount,
-            settledAt: invoice.settled_at,
-            state: invoice.state,
-            paymentHash: invoice.payment_hash || paymentHash,
-            expiresAt: invoice.expires_at,
-            createdAt: invoice.created_at
-          }
-          
-          usedMethod = 'Alby Direct API'
-          
-        } else if (albyResponse.status === 404) {
-          console.log('[Verify] ⚠️ Invoice not found via Alby API (404)')
-          // Continue to try other methods
-        } else {
-          const errorText = await albyResponse.text()
-          console.log('[Verify] ⚠️ Alby API error:', albyResponse.status, errorText)
-          // Continue to try other methods
-        }
-        
-      } catch (apiError) {
-        console.log('[Verify] ⚠️ Alby API method failed:', apiError.message)
-        // Continue to try other methods
-      }
-    }
-    
-    // =====================================================
-    // METHOD 2: NWC lookupInvoice (FALLBACK)
-    // =====================================================
-    
-    if (!verificationResult && hasNWC) {
-      try {
-        console.log('[Verify] 🔌 Attempting Method 2: NWC lookupInvoice...')
+        console.log('[Verify] 🔌 Attempting Method 1: NWC lookupInvoice (Alby Recommended)...')
         
         const { webln } = await import('@getalby/sdk')
         const nwc = new webln.NostrWebLNProvider({
@@ -142,12 +88,66 @@ export const onRequestPost: onRequestPost = async (context) => {
           paymentHash: paymentHash
         }
         
-        usedMethod = 'NWC lookupInvoice'
+        usedMethod = 'NWC lookupInvoice (Alby Recommended)'
         
       } catch (nwcError) {
         console.log('[Verify] ⚠️ NWC method failed:', nwcError.message)
         console.log('[Verify] NWC error details:', nwcError)
         // Continue to next method
+      }
+    }
+    
+    // =====================================================
+    // METHOD 2: Direct Alby API (FALLBACK)
+    // =====================================================
+    
+    if (!verificationResult && hasAlbyToken) {
+      try {
+        console.log('[Verify] 📡 Attempting Method 2: Direct Alby API (Fallback)...')
+        
+        // Try the incoming invoices endpoint
+        const albyResponse = await fetch(
+          `https://api.getalby.com/invoices/incoming/${paymentHash}`,
+          {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${context.env.ALBY_ACCESS_TOKEN}`,
+              'Content-Type': 'application/json'
+            }
+          }
+        )
+        
+        console.log('[Verify] Alby API response status:', albyResponse.status)
+        
+        if (albyResponse.ok) {
+          const invoice = await albyResponse.json()
+          console.log('[Verify] ✅ Found invoice via Alby API')
+          console.log('[Verify] Invoice data:', JSON.stringify(invoice, null, 2))
+          
+          verificationResult = {
+            paid: invoice.settled === true || invoice.state === 'SETTLED',
+            amount: invoice.amount,
+            settledAt: invoice.settled_at,
+            state: invoice.state,
+            paymentHash: invoice.payment_hash || paymentHash,
+            expiresAt: invoice.expires_at,
+            createdAt: invoice.created_at
+          }
+          
+          usedMethod = 'Alby Direct API (Fallback)'
+          
+        } else if (albyResponse.status === 404) {
+          console.log('[Verify] ⚠️ Invoice not found via Alby API (404)')
+          // Continue to try other methods
+        } else {
+          const errorText = await albyResponse.text()
+          console.log('[Verify] ⚠️ Alby API error:', albyResponse.status, errorText)
+          // Continue to try other methods
+        }
+        
+      } catch (apiError) {
+        console.log('[Verify] ⚠️ Alby API method failed:', apiError.message)
+        // Continue to try other methods
       }
     }
     
@@ -199,9 +199,9 @@ export const onRequestPost: onRequestPost = async (context) => {
           hasAlbyToken: hasAlbyToken,
           hasNWC: hasNWC,
           attemptedMethods: [
-            hasAlbyToken ? 'Alby API' : null,
-            hasNWC ? 'NWC' : null,
-            invoiceString ? 'BOLT11 decode' : null
+            hasNWC ? 'NWC (Alby Recommended)' : null,
+            hasAlbyToken ? 'Alby API (Fallback)' : null,
+            invoiceString ? 'BOLT11 decode (Last Resort)' : null
           ].filter(Boolean)
         }
       }), {
