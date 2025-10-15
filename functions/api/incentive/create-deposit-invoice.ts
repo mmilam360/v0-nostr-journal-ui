@@ -85,7 +85,19 @@ export async function onRequestPost(context: any) {
       let invoice = null
       
       try {
-        console.log('[Deposit] Attempting direct Alby API call...')
+        console.log('[API] 🚀 ATTEMPTING DIRECT ALBY API CALL...')
+        console.log('[API] 🔑 ALBY_ACCESS_TOKEN available:', !!ALBY_ACCESS_TOKEN)
+        console.log('[API] 🔑 ALBY_ACCESS_TOKEN length:', ALBY_ACCESS_TOKEN?.length || 0)
+        
+        const uniqueMemo = `Journal stake deposit - User: ${userPubkey.substring(0, 8)} - ID: ${timestamp || Date.now()}-${requestId || Math.random()}`
+        console.log('[API] 📝 Unique memo for Alby:', uniqueMemo)
+        
+        const albyRequest = {
+          amount: amountSats,
+          memo: uniqueMemo,
+          webhook_url: `${process.env.NEXT_PUBLIC_APP_URL || 'https://nostr-journal-incentive-demo.pages.dev'}/api/incentive/webhook`
+        }
+        console.log('[API] 📤 Alby request body:', JSON.stringify(albyRequest, null, 2))
         
         const albyResponse = await fetch('https://api.getalby.com/invoices', {
           method: 'POST',
@@ -93,37 +105,41 @@ export async function onRequestPost(context: any) {
             'Authorization': `Bearer ${ALBY_ACCESS_TOKEN}`,
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({
-            amount: amountSats,
-            memo: `Journal stake deposit - User: ${userPubkey.substring(0, 8)} - ID: ${timestamp || Date.now()}-${requestId || Math.random()}`,
-            webhook_url: `${process.env.NEXT_PUBLIC_APP_URL || 'https://nostr-journal-incentive-demo.pages.dev'}/api/incentive/webhook`
-          })
+          body: JSON.stringify(albyRequest)
         })
+        
+        console.log('[API] 📡 Alby response status:', albyResponse.status)
+        console.log('[API] 📡 Alby response headers:', Object.fromEntries(albyResponse.headers.entries()))
         
         if (albyResponse.ok) {
           invoice = await albyResponse.json()
-          console.log('[Deposit] ✅ Direct Alby API successful!')
-          console.log('[Deposit] Direct Alby response:', JSON.stringify(invoice, null, 2))
-          console.log('[Deposit] 🔍 Direct Alby payment_hash field:', invoice.payment_hash)
-          console.log('[Deposit] 🔍 Direct Alby payment_request field:', invoice.payment_request?.substring(0, 100) + '...')
+          console.log('[API] ✅ Direct Alby API successful!')
+          console.log('[API] 📋 Direct Alby response:', JSON.stringify(invoice, null, 2))
+          console.log('[API] 🔍 Direct Alby payment_hash field:', invoice.payment_hash)
+          console.log('[API] 🔍 Direct Alby payment_request field:', invoice.payment_request?.substring(0, 100) + '...')
         } else {
-          console.log('[Deposit] ❌ Direct Alby API failed with status:', albyResponse.status)
+          console.log('[API] ❌ Direct Alby API failed with status:', albyResponse.status)
           const errorText = await albyResponse.text()
-          console.log('[Deposit] Direct Alby API error response:', errorText)
-          throw new Error('Direct Alby API failed')
+          console.log('[API] ❌ Direct Alby API error response:', errorText)
+          throw new Error(`Direct Alby API failed: ${albyResponse.status} - ${errorText}`)
         }
       } catch (albyError) {
-        console.log('[Deposit] Direct Alby API error:', albyError.message)
-        console.log('[Deposit] Falling back to NIP-47 makeInvoice...')
+        console.log('[API] ❌ Direct Alby API error:', albyError.message)
+        console.log('[API] 🔄 FALLING BACK TO NIP-47 makeInvoice...')
         
         // Fallback to NIP-47
-        console.log('[Deposit] 🔄 Attempting NIP-47 makeInvoice...')
+        console.log('[API] 🔄 Attempting NIP-47 makeInvoice...')
+        const nip47Memo = `Journal stake deposit - User: ${userPubkey.substring(0, 8)} - ID: ${timestamp || Date.now()}-${requestId || Math.random()}`
+        console.log('[API] 📝 NIP-47 memo:', nip47Memo)
+        
         invoice = await nwc.makeInvoice({
           amount: amountSats,
-          memo: `Journal stake deposit - User: ${userPubkey.substring(0, 8)} - ID: ${timestamp || Date.now()}-${requestId || Math.random()}`
+          memo: nip47Memo
         })
-        console.log('[Deposit] ✅ NIP-47 makeInvoice successful!')
-        console.log('[Deposit] 🔍 NIP-47 response:', JSON.stringify(invoice, null, 2))
+        console.log('[API] ✅ NIP-47 makeInvoice successful!')
+        console.log('[API] 📋 NIP-47 response:', JSON.stringify(invoice, null, 2))
+        console.log('[API] 🔍 NIP-47 paymentRequest:', invoice.paymentRequest?.substring(0, 100) + '...')
+        console.log('[API] 🔍 NIP-47 paymentHash (if exists):', invoice.paymentHash)
       }
       
       console.log('[Deposit] ✅ Invoice created successfully!')
@@ -302,11 +318,18 @@ export async function onRequestPost(context: any) {
         }
         
         // Try to decode the invoice
+        console.log('[API] 🔍 BECH32 DECODING PROCESS:')
+        console.log('[API] 🔍 Invoice string length:', invoiceString.length)
+        console.log('[API] 🔍 Invoice string preview:', invoiceString.substring(0, 100) + '...')
+        console.log('[API] 🔍 Invoice string suffix:', '...' + invoiceString.substring(invoiceString.length - 100))
+        
         const decodedHash = simpleBech32Decode(invoiceString)
         if (decodedHash) {
           decodedPaymentHash = decodedHash
           paymentHash = decodedHash
-          console.log('[Deposit] ✅ Successfully extracted payment hash via bech32:', paymentHash)
+          console.log('[API] ✅ Successfully extracted payment hash via bech32:', paymentHash)
+          console.log('[API] 🔍 Decoded hash length:', paymentHash.length)
+          console.log('[API] 🔍 Hash format check:', /^[a-f0-9]{64}$/.test(paymentHash) ? 'Valid 64-char hex' : 'Invalid format')
         } else {
           console.log('[Deposit] Could not decode payment hash from bech32, trying Alby SDK...')
           
