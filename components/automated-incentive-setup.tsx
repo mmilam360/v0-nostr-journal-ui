@@ -156,12 +156,16 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
     
     setLoading(true)
     
-    // CRITICAL: Clear any existing payment hash before creating new invoice
+    // CRITICAL: Clear any existing payment hash and invoice string before creating new invoice
     const oldHash = localStorage.getItem(`payment-hash-${userPubkey}`)
+    const oldInvoice = localStorage.getItem(`invoice-string-${userPubkey}`)
     console.log('[Frontend] 🧹 OLD HASH BEFORE CLEARING:', oldHash)
+    console.log('[Frontend] 🧹 OLD INVOICE BEFORE CLEARING:', oldInvoice?.substring(0, 50) + '...')
     localStorage.removeItem(`payment-hash-${userPubkey}`)
-    console.log('[Frontend] 🧹 Cleared old payment hash before creating new invoice')
+    localStorage.removeItem(`invoice-string-${userPubkey}`)
+    console.log('[Frontend] 🧹 Cleared old payment hash and invoice string before creating new invoice')
     console.log('[Frontend] 🧹 Hash after clearing:', localStorage.getItem(`payment-hash-${userPubkey}`))
+    console.log('[Frontend] 🧹 Invoice after clearing:', localStorage.getItem(`invoice-string-${userPubkey}`))
     
     // Clear old state completely
     console.log('[Frontend] 🗑️ Clearing old invoice state')
@@ -208,9 +212,11 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
         
         setDepositInvoice(data.invoice)
         
-        // CRITICAL: Store payment hash for verification
+        // CRITICAL: Store payment hash and invoice string for verification
         console.log('[Lightning] 💾 STORING PAYMENT HASH:', data.paymentHash)
+        console.log('[Lightning] 💾 STORING INVOICE STRING:', data.invoice?.substring(0, 50) + '...')
         localStorage.setItem(`payment-hash-${userPubkey}`, data.paymentHash)
+        localStorage.setItem(`invoice-string-${userPubkey}`, data.invoice)
         
         console.log('[Lightning] 🆕 NEW INVOICE CREATED:')
         console.log('[Lightning] 🆕 Payment hash:', data.paymentHash)
@@ -254,8 +260,9 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
     try {
       console.log('[Setup] 🔍 Checking payment status...', isAutoCheck ? '(auto)' : '(manual)')
       
-      // Extract payment hash from invoice (this should be stored when invoice is created)
+      // Extract payment hash and invoice string from localStorage
       const paymentHash = localStorage.getItem(`payment-hash-${userPubkey}`)
+      const invoiceString = localStorage.getItem(`invoice-string-${userPubkey}`)
       
       if (!paymentHash) {
         console.error('[Setup] ❌ No payment hash found for verification')
@@ -268,12 +275,20 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
       console.log('[Setup] 🔍 Using stored payment hash for verification:', paymentHash)
       console.log('[Setup] 🔍 Hash length:', paymentHash.length)
       console.log('[Setup] 🔍 Hash format:', /^[a-f0-9]{64}$/.test(paymentHash) ? 'Valid hex' : 'Invalid format')
+      console.log('[Setup] 🔍 Invoice string available:', !!invoiceString)
+      console.log('[Setup] 🔍 Invoice preview:', invoiceString?.substring(0, 50) + '...')
       
       // Call the real payment verification API
+      const verificationRequest = { 
+        paymentHash,
+        ...(invoiceString && { invoiceString })
+      }
+      console.log('[Setup] 📤 Sending verification request:', verificationRequest)
+      
       const response = await fetch('/api/incentive/verify-payment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ paymentHash })
+        body: JSON.stringify(verificationRequest)
       })
       
       if (!response.ok) {

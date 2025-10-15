@@ -5,15 +5,73 @@ export async function onRequestPost(context: any) {
   
   try {
     const body = await context.request.json()
-    const { paymentHash } = body
+    const { paymentHash, invoiceString } = body
     
-    console.log('[Payment Verify] Request:', { paymentHash })
+    console.log('[Payment Verify] Request:', { paymentHash, hasInvoiceString: !!invoiceString })
+    console.log('[Payment Verify] Hash format check:', {
+      length: paymentHash?.length,
+      isNip47Format: paymentHash?.startsWith('nip47-'),
+      isHexFormat: /^[a-f0-9]{64}$/.test(paymentHash),
+      preview: paymentHash?.substring(0, 20) + '...'
+    })
+    console.log('[Payment Verify] Invoice string:', invoiceString?.substring(0, 50) + '...')
     
     if (!paymentHash) {
       return new Response(
         JSON.stringify({ 
           success: false,
           error: 'Missing required field: paymentHash' 
+        }),
+        { 
+          status: 400,
+          headers: { 
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*'
+          }
+        }
+      )
+    }
+    
+    // Handle different payment hash formats
+    let verificationMethod = ''
+    let actualPaymentHash = paymentHash
+    
+    if (paymentHash.startsWith('nip47-')) {
+      // This is our custom NIP-47 format - we need to use the invoice string for verification
+      console.log('[Payment Verify] 🔍 Detected NIP-47 format hash')
+      console.log('[Payment Verify] 🔍 NIP-47 hash:', paymentHash)
+      
+      if (!invoiceString) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: 'NIP-47 format requires invoice string for verification',
+            details: 'Missing invoiceString in request body'
+          }),
+          { 
+            status: 400,
+            headers: { 
+              'Content-Type': 'application/json',
+              'Access-Control-Allow-Origin': '*'
+            }
+          }
+        )
+      }
+      
+      console.log('[Payment Verify] ✅ Using invoice string for NIP-47 verification')
+      verificationMethod = 'NIP-47 Invoice String'
+      actualPaymentHash = invoiceString // Use invoice string for lookup
+    } else if (/^[a-f0-9]{64}$/.test(paymentHash)) {
+      // This is a standard 64-char hex payment hash
+      console.log('[Payment Verify] ✅ Standard 64-char hex payment hash detected')
+      verificationMethod = 'Standard Payment Hash'
+      actualPaymentHash = paymentHash
+    } else {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'Invalid payment hash format',
+          details: 'Expected either 64-character hex hash or nip47- format'
         }),
         { 
           status: 400,

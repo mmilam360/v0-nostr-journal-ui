@@ -400,6 +400,7 @@ export async function onRequestPost(context: any) {
       success: true,
       invoice: invoiceString,
       paymentHash: paymentHash,
+      invoiceString: invoiceString, // Include the actual invoice for verification
       amountSats: amountSats,
       timestamp: new Date().toISOString(),
       requestId: requestId,
