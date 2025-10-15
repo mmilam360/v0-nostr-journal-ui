@@ -153,30 +153,52 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
     setLoading(true)
     
     // CRITICAL: Clear any existing payment hash before creating new invoice
+    const oldHash = localStorage.getItem(`payment-hash-${userPubkey}`)
+    console.log('[Lightning] 🧹 OLD HASH BEFORE CLEARING:', oldHash)
     localStorage.removeItem(`payment-hash-${userPubkey}`)
     console.log('[Lightning] 🧹 Cleared old payment hash before creating new invoice')
+    console.log('[Lightning] 🧹 Hash after clearing:', localStorage.getItem(`payment-hash-${userPubkey}`))
     
     try {
+      // Add timestamp to prevent caching
+      const requestBody = {
+        userPubkey: userPubkey,
+        amountSats: settings.stakeAmount,
+        timestamp: new Date().getTime(),
+        requestId: Math.random().toString(36).substring(7)
+      }
+      
+      console.log('[Lightning] 📤 SENDING REQUEST:', JSON.stringify(requestBody, null, 2))
+      
       const response = await fetch('/api/incentive/create-deposit-invoice', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userPubkey: userPubkey,
-          amountSats: settings.stakeAmount
-        })
+        headers: { 
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        },
+        body: JSON.stringify(requestBody)
       })
 
       if (response.ok) {
         const data = await response.json()
+        console.log('[Lightning] 📥 RAW API RESPONSE:', JSON.stringify(data, null, 2))
+        
         setDepositInvoice(data.invoice)
         
         // CRITICAL: Store payment hash for verification
+        console.log('[Lightning] 💾 STORING PAYMENT HASH:', data.paymentHash)
         localStorage.setItem(`payment-hash-${userPubkey}`, data.paymentHash)
         
         console.log('[Lightning] 🆕 NEW INVOICE CREATED:')
         console.log('[Lightning] 🆕 Payment hash:', data.paymentHash)
         console.log('[Lightning] 🆕 Invoice string:', data.invoice?.substring(0, 50) + '...')
+        console.log('[Lightning] 🆕 Full invoice length:', data.invoice?.length)
         console.log('[Lightning] ✅ Payment hash stored for verification')
+        
+        // Verify it was actually stored
+        const storedHash = localStorage.getItem(`payment-hash-${userPubkey}`)
+        console.log('[Lightning] ✅ VERIFICATION - Hash in localStorage:', storedHash)
       } else {
         const errorData = await response.json()
         console.error('[Lightning] ❌ Invoice creation failed:', errorData)
