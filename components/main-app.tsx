@@ -339,6 +339,58 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     }
   }
 
+  // Direct reward check function for automatic triggering on note save
+  const checkRewardEligibility = async (wordCount: number) => {
+    if (!isIncentiveEnabled || !authData) return
+    
+    try {
+      console.log('[MainApp] 🎯 Checking reward eligibility for word count:', wordCount)
+      
+      // Fetch current incentive settings
+      const { fetchIncentiveSettings } = await import('@/lib/incentive-nostr')
+      const settings = await fetchIncentiveSettings(authData.pubkey)
+      
+      if (!settings) {
+        console.log('[MainApp] 🎯 No incentive settings found')
+        return
+      }
+      
+      const goalReached = wordCount >= settings.dailyWordGoal
+      console.log('[MainApp] 🎯 Goal check:', wordCount, '>=', settings.dailyWordGoal, '=', goalReached)
+      
+      if (goalReached) {
+        console.log('[MainApp] 🎯 Goal reached! Triggering automatic reward claim...')
+        
+        // Call the send-reward API directly
+        const response = await fetch('/api/incentive/send-reward', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            userPubkey: authData.pubkey,
+            authData: authData
+          })
+        })
+        
+        if (response.ok) {
+          const result = await response.json()
+          console.log('[MainApp] 🎯 Reward sent successfully:', result)
+          
+          // Update streak and refresh Lightning Goals data
+          await checkLightningGoals()
+          
+          // Show success notification (optional)
+          console.log('[MainApp] 🎯 Daily goal completed! Reward sent.')
+        } else {
+          console.error('[MainApp] 🎯 Failed to send reward:', await response.text())
+        }
+      }
+    } catch (error) {
+      console.error('[MainApp] 🎯 Error checking reward eligibility:', error)
+    }
+  }
+
   useEffect(() => {
     const loadUserNotes = async () => {
       console.log("[NostrJournal] Loading notes for user:", authData.pubkey)
@@ -741,11 +793,8 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
               console.log("[NostrJournal] ⚡ Word count:", wordCount, "- triggering automatic reward check")
               setLastSavedWordCount(wordCount)
               
-              // Call the reward checking function directly if it's available
-              if (typeof window !== 'undefined' && (window as any).checkRewardForWordCount) {
-                console.log("[NostrJournal] ⚡ Calling external reward check function...")
-                await (window as any).checkRewardForWordCount(wordCount)
-              }
+              // Call the direct reward eligibility check
+              await checkRewardEligibility(wordCount)
             }
           } catch (rewardError) {
             console.error("[NostrJournal] ⚠️ Error checking reward eligibility:", rewardError)
