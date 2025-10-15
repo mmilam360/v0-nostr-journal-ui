@@ -31,8 +31,14 @@ export const onRequestGet: onRequestGet = async (context) => {
     
     console.log('[Test] ✅ LN client created successfully')
     
-    // Get wallet info using the LN client
-    const info = await ln.getInfo()
+    // Get wallet info using NostrWebLNProvider (LN client doesn't have getInfo)
+    const { NostrWebLNProvider } = await import('@getalby/sdk')
+    const nwc = new NostrWebLNProvider({
+      nostrWalletConnectUrl: context.env.NWC_CONNECTION_URL
+    })
+    await nwc.enable()
+    
+    const info = await nwc.getInfo()
     test.wallet_info = {
       alias: info.alias,
       lightning_address: info.lightning_address,

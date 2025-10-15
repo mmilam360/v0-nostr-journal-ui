@@ -68,9 +68,15 @@ export async function onRequestPost(context: any) {
     
     console.log('[Invoice] ✅ LN client created successfully')
     
-    // Check wallet info to confirm we're connected to the right wallet
+    // Check wallet info using NostrWebLNProvider (LN client doesn't have getInfo)
     try {
-      const info = await ln.getInfo()
+      const { NostrWebLNProvider } = await import('@getalby/sdk')
+      const nwc = new NostrWebLNProvider({
+        nostrWalletConnectUrl: nwcUrl
+      })
+      await nwc.enable()
+      
+      const info = await nwc.getInfo()
       console.log('[Invoice] 📱 Connected to wallet:', info.alias || 'Unknown')
       console.log('[Invoice] 📱 Lightning address:', info.lightning_address || 'Unknown')
       console.log('[Invoice] 📱 Available methods:', info.methods?.join(', ') || 'Unknown')
