@@ -44,6 +44,13 @@ export function AutomatedRewardTracker({ userPubkey, authData, currentWordCount,
     checkDailyStatus()
   }, [])
 
+  // Reload progress when timezone changes
+  useEffect(() => {
+    if (userTimezone) {
+      loadTodayProgress()
+    }
+  }, [userTimezone])
+
   useEffect(() => {
     // Auto-check if goal is met when word count changes
     if (settings && currentWordCount > 0) {
@@ -102,9 +109,24 @@ export function AutomatedRewardTracker({ userPubkey, authData, currentWordCount,
           (t: string[]) => t[0] === 'reward_claimed' && t[1] === 'true'
         )
         
+        // Extract payment hash if reward was claimed
+        const paymentHashTag = progress.tags.find((t: string[]) => t[0] === 'payment_hash')
+        const amountTag = progress.tags.find((t: string[]) => t[0] === 'reward_amount')
+        
         setTodayProgress(wordCount)
         setHasMetGoalToday(goalMet)
+        setGoalMet(goalMet) // Also set goalMet for UI consistency
         setRewardSent(rewardClaimed)
+        
+        // If reward was claimed, set the payment result for display
+        if (rewardClaimed && paymentHashTag) {
+          setPaymentResult({
+            paymentHash: paymentHashTag[1],
+            amountSats: amountTag ? parseInt(amountTag[1]) : settings?.dailyRewardSats || 0
+          })
+        }
+        
+        console.log('[Tracker] ✅ Loaded progress:', { wordCount, goalMet, rewardClaimed, paymentHash: paymentHashTag?.[1] })
       }
     } catch (error) {
       console.error('[Tracker] Error loading progress:', error)
@@ -340,6 +362,39 @@ export function AutomatedRewardTracker({ userPubkey, authData, currentWordCount,
       }
     }
   }
+
+  // Function to check and process reward for a given word count (can be called externally)
+  const checkRewardForWordCount = async (wordCount: number) => {
+    if (!settings || rewardSent) return
+    
+    console.log('[Tracker] 🎯 External reward check triggered for word count:', wordCount)
+    
+    const goalReached = wordCount >= settings.dailyWordGoal
+    
+    if (goalReached && !goalMet) {
+      console.log('[Tracker] 🎯 Goal reached via external trigger! Auto-claiming reward...')
+      setGoalMet(true)
+      setShowZapAnimation(true)
+      
+      // Automatically record progress to Nostr
+      await autoRecordProgress(goalReached)
+      
+      // Automatically claim reward without user action (only if not already claimed)
+      if (!rewardSent) {
+        await handleClaimReward()
+      }
+      
+      // Stop animation after 2 seconds
+      setTimeout(() => setShowZapAnimation(false), 2000)
+    }
+  }
+
+  // Expose the function to parent components
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      (window as any).checkRewardForWordCount = checkRewardForWordCount
+    }
+  }, [settings, rewardSent, goalMet])
 
   if (!settings) {
     return (

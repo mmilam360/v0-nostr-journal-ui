@@ -738,10 +738,14 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
             
             // Trigger reward check if word count is provided
             if (wordCount > 0) {
-              console.log("[NostrJournal] ⚡ Word count:", wordCount, "- triggering reward check")
+              console.log("[NostrJournal] ⚡ Word count:", wordCount, "- triggering automatic reward check")
               setLastSavedWordCount(wordCount)
-              // The reward tracking will happen automatically in the AutomatedRewardTracker
-              // when it receives the updated word count through props
+              
+              // Call the reward checking function directly if it's available
+              if (typeof window !== 'undefined' && (window as any).checkRewardForWordCount) {
+                console.log("[NostrJournal] ⚡ Calling external reward check function...")
+                await (window as any).checkRewardForWordCount(wordCount)
+              }
             }
           } catch (rewardError) {
             console.error("[NostrJournal] ⚠️ Error checking reward eligibility:", rewardError)
@@ -1335,7 +1339,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                     {hasLightningGoals ? (
                       <span className="font-semibold">{userStreak} day streak</span>
                     ) : (
-                      <span className="hidden sm:inline">Goals</span>
+                      <span className="hidden sm:inline">Set Up Daily Goal</span>
                     )}
                   </Button>
                 )}

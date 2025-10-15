@@ -37,6 +37,19 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
   const [showCopySuccess, setShowCopySuccess] = useState(false)
   const [showCopyError, setShowCopyError] = useState(false)
   const [paymentCheckInterval, setPaymentCheckInterval] = useState<NodeJS.Timeout | null>(null)
+  const [originalSettings, setOriginalSettings] = useState<any>(null)
+
+  // Check if settings have changed from original
+  const settingsHaveChanged = () => {
+    if (!originalSettings || !depositInvoice) return false
+    
+    return (
+      settings.dailyWordGoal !== originalSettings.dailyWordGoal ||
+      settings.dailyRewardSats !== originalSettings.dailyRewardSats ||
+      settings.stakeAmount !== originalSettings.stakeAmount ||
+      settings.lightningAddress !== originalSettings.lightningAddress
+    )
+  }
 
   useEffect(() => {
     loadExistingSettings()
@@ -211,6 +224,9 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
         console.log('[Lightning] 📥 RAW API RESPONSE:', JSON.stringify(data, null, 2))
         
         setDepositInvoice(data.invoice)
+        
+        // Store original settings when invoice is created
+        setOriginalSettings({ ...settings })
         
         // CRITICAL: Store payment hash and invoice string for verification
         console.log('[Lightning] 💾 STORING PAYMENT HASH:', data.paymentHash)
@@ -532,7 +548,10 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
             <Input
               type="number"
               value={settings.dailyWordGoal}
-              onChange={(e) => setSettings({...settings, dailyWordGoal: parseInt(e.target.value) || 0})}
+              onChange={(e) => {
+                const value = e.target.value
+                setSettings({...settings, dailyWordGoal: value === '' ? 0 : parseInt(value) || 0})
+              }}
               placeholder="500"
             />
           </div>
@@ -542,7 +561,10 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
             <Input
               type="number"
               value={settings.dailyRewardSats}
-              onChange={(e) => setSettings({...settings, dailyRewardSats: parseInt(e.target.value) || 0})}
+              onChange={(e) => {
+                const value = e.target.value
+                setSettings({...settings, dailyRewardSats: value === '' ? 0 : parseInt(value) || 0})
+              }}
               placeholder="500"
             />
           </div>
@@ -552,7 +574,10 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
             <Input
               type="number"
               value={settings.stakeAmount}
-              onChange={(e) => setSettings({...settings, stakeAmount: Math.max(parseInt(e.target.value) || 0, 0)})}
+              onChange={(e) => {
+                const value = e.target.value
+                setSettings({...settings, stakeAmount: value === '' ? 0 : Math.max(parseInt(value) || 0, 0)})
+              }}
               placeholder="1000"
               min="1"
             />
@@ -636,17 +661,21 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
                   {showCopySuccess ? 'Copied!' : 'Copy Invoice'}
                 </Button>
                 
-                <Button 
-                  onClick={() => {
-                    setDepositInvoice(null)
-                    setInvoicePaid(false)
-                  }}
-                  variant="outline"
-                  className="w-full border-gray-300 text-gray-700 hover:bg-gray-50"
-                >
-                  <RefreshCw className="w-4 h-4 mr-2" />
-                  Generate New Invoice
-                </Button>
+                {/* Only show "Generate New Invoice" if settings have changed */}
+                {settingsHaveChanged() && (
+                  <Button 
+                    onClick={() => {
+                      setDepositInvoice(null)
+                      setInvoicePaid(false)
+                      setOriginalSettings(null)
+                    }}
+                    variant="outline"
+                    className="w-full border-gray-300 text-gray-700 hover:bg-gray-50"
+                  >
+                    <Zap className="w-4 h-4 mr-2" />
+                    Generate Lightning Invoice (New)
+                  </Button>
+                )}
               </div>
               
             </div>
