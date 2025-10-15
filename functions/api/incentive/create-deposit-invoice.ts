@@ -1,5 +1,5 @@
 // Static imports for Cloudflare Workers compatibility
-import { webln } from '@getalby/sdk'
+import { NostrWebLNProvider } from '@getalby/sdk'
 import { decode } from 'light-bolt11-decoder'
 
 export async function onRequestPost(context: any) {
@@ -61,8 +61,8 @@ export async function onRequestPost(context: any) {
     console.log('[Invoice] 🔌 Using NWC connection (preview):', nwcUrl.substring(0, 40) + '...')
     console.log('[Invoice] 🔌 Connecting to YOUR wallet via NWC...')
     
-    // Use webln.NostrWebLNProvider (simplified approach)
-    const nwc = new webln.NostrWebLNProvider({
+    // Use NostrWebLNProvider (simplified approach)
+    const nwc = new NostrWebLNProvider({
       nostrWalletConnectUrl: nwcUrl
     })
     

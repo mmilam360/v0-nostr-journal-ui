@@ -1,5 +1,5 @@
 import { onRequestPost } from 'wrangler'
-import { webln } from '@getalby/sdk'
+import { NostrWebLNProvider } from '@getalby/sdk'
 import { decode } from 'light-bolt11-decoder'
 
 export const onRequestPost: onRequestPost = async (context) => {
@@ -46,8 +46,8 @@ export const onRequestPost: onRequestPost = async (context) => {
       try {
         console.log('[Verify] 🔌 Attempting Method 1: NWC lookupInvoice (Alby Recommended)...')
         
-        // Use the imported webln.NostrWebLNProvider for lookup operations
-        const nwc = new webln.NostrWebLNProvider({
+        // Use the imported NostrWebLNProvider for lookup operations
+        const nwc = new NostrWebLNProvider({
           nostrWalletConnectUrl: context.env.NWC_CONNECTION_URL
         })
         

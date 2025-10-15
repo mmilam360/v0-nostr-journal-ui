@@ -1,5 +1,5 @@
 // Import at the top of the file (static import for Cloudflare Workers)
-import { webln } from '@getalby/sdk'
+import { NostrWebLNProvider } from '@getalby/sdk'
 
 export async function onRequestGet(context: any) {
   const test = {
@@ -24,7 +24,7 @@ export async function onRequestGet(context: any) {
   try {
     // Create NWC connection using static import
     console.log('[Test] Creating NWC connection...')
-    const nwc = new webln.NostrWebLNProvider({
+    const nwc = new NostrWebLNProvider({
       nostrWalletConnectUrl: context.env.NWC_CONNECTION_URL
     })
     
