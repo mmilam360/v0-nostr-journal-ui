@@ -320,18 +320,18 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
 
   const checkLightningGoals = async () => {
     try {
-      const { fetchIncentiveSettings } = await import('@/lib/incentive-nostr')
-      const settings = await fetchIncentiveSettings(authData.pubkey)
+      const { getCurrentStake } = await import('@/lib/incentive-nostr')
+      const stake = await getCurrentStake(authData.pubkey)
       
-      if (settings) {
+      if (stake && stake.isActive) {
         setHasLightningGoals(true)
-        // Calculate actual streak from transaction history
-        const { calculateStreak } = await import('@/lib/incentive-nostr')
-        const streak = await calculateStreak(authData.pubkey)
-        setUserStreak(streak)
+        // For now, set streak to 0 - we'll implement proper streak calculation later
+        setUserStreak(0)
+        console.log('[MainApp] ✅ Active stake found:', stake.stakeId, 'Balance:', stake.currentBalance)
       } else {
         setHasLightningGoals(false)
         setUserStreak(0)
+        console.log('[MainApp] ❌ No active stake found')
       }
     } catch (error) {
       console.error('[MainApp] Error checking Lightning Goals:', error)
@@ -346,23 +346,21 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     try {
       console.log('[MainApp] 🎯 Checking reward eligibility for word count:', wordCount)
       
-      // Fetch current incentive settings
-      const { fetchIncentiveSettings } = await import('@/lib/incentive-nostr')
-      const incentiveSettings = await fetchIncentiveSettings(authData.pubkey)
+      // Fetch current stake using new system
+      const { getCurrentStake } = await import('@/lib/incentive-nostr')
+      const stake = await getCurrentStake(authData.pubkey)
       
-      if (!incentiveSettings) {
-        console.log('[MainApp] 🎯 No incentive settings found')
+      if (!stake || !stake.isActive) {
+        console.log('[MainApp] 🎯 No active stake found')
         return
       }
       
-      // Parse the settings from Nostr event tags
-      const dailyWordGoal = parseInt(
-        incentiveSettings.tags.find((t: string[]) => t[0] === 'daily_word_goal')?.[1] || '0'
-      )
+      const dailyWordGoal = stake.dailyWordGoal
       
       console.log('[MainApp] 🎯 Parsed settings:', {
         dailyWordGoal,
-        tags: incentiveSettings.tags
+        stakeId: stake.stakeId,
+        currentBalance: stake.currentBalance
       })
       
       if (dailyWordGoal === 0) {

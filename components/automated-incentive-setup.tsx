@@ -343,31 +343,28 @@ export function AutomatedIncentiveSetup({ userPubkey, authData, onPaymentSuccess
           onPaymentSuccess()
         }
         
-        // CRITICAL: Save the actual balance to Nostr
-        console.log('[Setup] 💰 Payment confirmed! Saving balance to Nostr...')
+        // CRITICAL: Create stake using new structured event system
+        console.log('[Setup] 💰 Payment confirmed! Creating stake with new event system...')
         
-        const { saveIncentiveSettings } = await import('@/lib/incentive-nostr')
+        const { createStake } = await import('@/lib/incentive-nostr')
         
-        // Create settings object with ACTUAL deposited amount
-        const updatedSettings = {
-          dailyWordGoal: settings.dailyWordGoal,
-          dailyRewardSats: settings.dailyRewardSats,
-          stakeBalanceSats: settings.stakeAmount, // ✅ CRITICAL: Use actual deposit amount, not 0
-          lightningAddress: settings.lightningAddress,
-          createdDate: new Date().toISOString().split('T')[0],
-          lastUpdated: new Date().toISOString().split('T')[0]
+        // Get payment hash from localStorage
+        const paymentHash = localStorage.getItem(`payment-hash-${userPubkey}`)
+        if (!paymentHash) {
+          console.error('[Setup] ❌ No payment hash found for stake creation')
+          return
         }
         
-        console.log('[Setup] Saving settings with balance:', updatedSettings.stakeBalanceSats)
+        // Create stake with proper event tracking
+        const stakeId = await createStake(userPubkey, {
+          dailyWordGoal: settings.dailyWordGoal,
+          dailyRewardSats: settings.dailyRewardSats,
+          initialStakeSats: settings.stakeAmount,
+          lightningAddress: settings.lightningAddress,
+          paymentHash: paymentHash
+        }, authData)
         
-        // Save to Nostr
-        await saveIncentiveSettings(
-          userPubkey,
-          updatedSettings,
-          authData
-        )
-        
-        console.log('[Setup] ✅ Stake balance saved to Nostr')
+        console.log('[Setup] ✅ Stake created with ID:', stakeId)
         
         // Save user account locally for demo
         const userAccount = {

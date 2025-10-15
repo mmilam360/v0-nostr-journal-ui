@@ -36,10 +36,10 @@ export function IncentiveModal({
   const checkSetup = async () => {
     try {
       console.log('[IncentiveModal] 🔄 Checking setup status...')
-      const { fetchIncentiveSettings } = await import('@/lib/incentive-nostr')
-      const settings = await fetchIncentiveSettings(userPubkey)
-      const hasSetupValue = !!settings
-      console.log('[IncentiveModal] 🔄 Setup status:', hasSetupValue)
+      const { getCurrentStake } = await import('@/lib/incentive-nostr')
+      const stake = await getCurrentStake(userPubkey)
+      const hasSetupValue = !!stake && stake.isActive
+      console.log('[IncentiveModal] 🔄 Setup status:', hasSetupValue, stake ? `(Stake ID: ${stake.stakeId})` : '')
       setHasSetup(hasSetupValue)
       
       // Reset payment in progress state
