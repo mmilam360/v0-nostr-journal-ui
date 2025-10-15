@@ -33,6 +33,7 @@ export function AutomatedRewardTracker({ userPubkey, authData, currentWordCount,
   const [userTimezone, setUserTimezone] = useState<string>('')
   const [showStreakAnimation, setShowStreakAnimation] = useState(false)
   const [isNewStake, setIsNewStake] = useState(false)
+  const [invoicePaid, setInvoicePaid] = useState(false)
 
   useEffect(() => {
     // Detect user timezone
@@ -65,6 +66,12 @@ export function AutomatedRewardTracker({ userPubkey, authData, currentWordCount,
       setPaymentResult(null)
       setShowZapAnimation(false)
       setIsNewStake(true)
+      setInvoicePaid(true) // Show payment success for new stake
+      
+      // Hide the success message after 5 seconds
+      setTimeout(() => {
+        setInvoicePaid(false)
+      }, 5000)
       
       // Don't reload progress immediately - let it start fresh
       console.log('[Tracker] 🔄 Progress reset complete, starting fresh')
