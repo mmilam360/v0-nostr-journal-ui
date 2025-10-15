@@ -30,8 +30,15 @@ export function AutomatedRewardTracker({ userPubkey, authData, currentWordCount,
   const [paymentResult, setPaymentResult] = useState<any>(null)
   const [showCancelModal, setShowCancelModal] = useState(false)
   const [cancelling, setCancelling] = useState(false)
+  const [userTimezone, setUserTimezone] = useState<string>('')
+  const [showStreakAnimation, setShowStreakAnimation] = useState(false)
 
   useEffect(() => {
+    // Detect user timezone
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
+    setUserTimezone(timezone)
+    console.log('[Tracker] User timezone detected:', timezone)
+    
     loadSettings()
     loadTodayProgress()
     checkDailyStatus()
@@ -79,7 +86,9 @@ export function AutomatedRewardTracker({ userPubkey, authData, currentWordCount,
   const loadTodayProgress = async () => {
     try {
       const { fetchTodayProgress } = await import('@/lib/incentive-nostr')
-      const today = new Date().toISOString().split('T')[0]
+      // Use timezone-aware date
+      const today = new Date().toLocaleDateString('en-CA', { timeZone: userTimezone || 'UTC' })
+      console.log('[Tracker] Loading progress for today (timezone-aware):', today)
       const progress = await fetchTodayProgress(userPubkey, today)
       
       if (progress) {
@@ -150,9 +159,13 @@ export function AutomatedRewardTracker({ userPubkey, authData, currentWordCount,
     }
   }
 
+  const getTodayInTimezone = () => {
+    return new Date().toLocaleDateString('en-CA', { timeZone: userTimezone || 'UTC' })
+  }
+
   const autoRecordProgress = async (goalReached: boolean) => {
     try {
-      const today = new Date().toISOString().split('T')[0]
+      const today = getTodayInTimezone()
       
       // Check if already recorded today
       if (todayProgress > 0) {
@@ -167,7 +180,7 @@ export function AutomatedRewardTracker({ userPubkey, authData, currentWordCount,
       await recordDailyProgress(
         userPubkey,
         today,
-        currentWordCount,
+        currentWordCount || 0,
         goalReached,
         authData
       )
@@ -195,7 +208,7 @@ export function AutomatedRewardTracker({ userPubkey, authData, currentWordCount,
       console.log('[Tracker] 🎉 Claiming reward...')
       
       // Double-check reward hasn't been claimed today
-      const today = new Date().toISOString().split('T')[0]
+      const today = getTodayInTimezone()
       const { fetchTodayProgress } = await import('@/lib/incentive-nostr')
       const progress = await fetchTodayProgress(userPubkey, today)
       
@@ -257,12 +270,17 @@ export function AutomatedRewardTracker({ userPubkey, authData, currentWordCount,
         stakeBalanceSats: newBalance
       }))
       
-      // Update streak and notify parent component
+      // Update streak and notify parent component with animation
       const newStreak = streak + 1
       setStreak(newStreak)
+      setShowStreakAnimation(true)
+      
       if (onStreakUpdate) {
         onStreakUpdate(newStreak)
       }
+      
+      // Stop streak animation after 3 seconds
+      setTimeout(() => setShowStreakAnimation(false), 3000)
       
       // Show success UI
       setShowRewardSuccess(true)
@@ -336,49 +354,54 @@ export function AutomatedRewardTracker({ userPubkey, authData, currentWordCount,
     )
   }
 
-  const progress = currentWordCount ? Math.min((currentWordCount / settings.dailyWordGoal) * 100, 100) : 0
+  const currentProgress = currentWordCount || todayProgress
+  const progress = Math.min((currentProgress / settings.dailyWordGoal) * 100, 100)
+  const daysUntilEmpty = Math.floor(balance / settings.dailyRewardSats)
   
   return (
     <>
+    {/* Daily Progress Box */}
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2">
-            <Gift className="w-5 h-5 text-green-500" />
-            Daily Goal
-          </CardTitle>
-          <div className={`relative ${showZapAnimation ? 'animate-bounce' : ''}`}>
-            <Zap 
-              className={`w-6 h-6 transition-colors duration-300 ${
-                goalMet ? 'text-orange-500 fill-orange-500' : 'text-gray-400'
-              }`}
-            />
-            {showZapAnimation && (
-              <>
-                {/* Zap animation rings */}
-                <div className="absolute inset-0 w-6 h-6 rounded-full bg-orange-500 animate-ping opacity-75" />
-                <div className="absolute inset-0 w-6 h-6 rounded-full bg-orange-400 animate-ping opacity-50" style={{ animationDelay: '0.2s' }} />
-              </>
-            )}
-          </div>
-        </div>
+        <CardTitle className="flex items-center gap-2">
+          <Target className="w-5 h-5 text-blue-500" />
+          Daily Progress
+        </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Progress Bar */}
         <div className="space-y-2">
           <div className="flex justify-between text-sm">
             <span className="text-gray-600">Progress</span>
-            <span className={`font-medium ${goalMet ? 'text-green-600' : 'text-gray-900'}`}>
-              {currentWordCount || todayProgress} / {settings.dailyWordGoal} words
+            <span className={`font-medium ${goalMet || rewardSent ? 'text-green-600' : 'text-gray-900'}`}>
+              {currentProgress} / {settings.dailyWordGoal} words
             </span>
           </div>
           <div className="w-full bg-gray-200 rounded-full h-3">
             <div 
               className={`h-3 rounded-full transition-all duration-500 ${
-                goalMet ? 'bg-gradient-to-r from-green-500 to-green-600' : 'bg-blue-500'
+                goalMet || rewardSent ? 'bg-gradient-to-r from-green-500 to-green-600' : 'bg-blue-500'
               }`}
               style={{ width: `${progress}%` }}
             />
+          </div>
+        </div>
+
+        {/* Zap Icon */}
+        <div className="flex justify-center">
+          <div className={`relative ${showZapAnimation ? 'animate-bounce' : ''}`}>
+            <Zap 
+              className={`w-8 h-8 transition-colors duration-300 ${
+                goalMet || rewardSent ? 'text-green-500 fill-green-500' : 'text-gray-400'
+              }`}
+            />
+            {showZapAnimation && (
+              <>
+                {/* Zap animation rings */}
+                <div className="absolute inset-0 w-8 h-8 rounded-full bg-green-500 animate-ping opacity-75" />
+                <div className="absolute inset-0 w-8 h-8 rounded-full bg-green-400 animate-ping opacity-50" style={{ animationDelay: '0.2s' }} />
+              </>
+            )}
           </div>
         </div>
 
@@ -404,70 +427,102 @@ export function AutomatedRewardTracker({ userPubkey, authData, currentWordCount,
             <div className="flex items-center gap-2 mb-2">
               <CheckCircle className="w-5 h-5 text-green-600" />
               <p className="text-sm font-semibold text-green-800">
-                ✅ Reward Sent Successfully!
+                ✅ Goal Complete! Reward Sent
               </p>
             </div>
             <div className="space-y-2">
               <p className="text-sm text-green-700">
                 {settings.dailyRewardSats} sats sent to your Lightning address.
               </p>
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-green-600 font-mono bg-green-100 px-2 py-1 rounded">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs text-green-600 font-mono bg-green-100 px-2 py-1 rounded flex-1 min-w-0 break-all">
                   {paymentResult.paymentHash}
                 </span>
                 <Button
                   size="sm"
                   variant="outline"
                   onClick={copyPaymentHash}
-                  className="h-6 px-2 text-xs"
+                  className="h-6 px-2 text-xs flex-shrink-0"
                 >
+                  <Copy className="w-3 h-3 mr-1" />
                   Copy
                 </Button>
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => window.open(`https://amboss.space/payment/${paymentResult.paymentHash}`, '_blank')}
-                  className="h-6 px-2 text-xs"
+                  onClick={() => window.open(`https://mempool.space/lightning`, '_blank')}
+                  className="h-6 px-2 text-xs flex-shrink-0"
                 >
+                  <ExternalLink className="w-3 h-3 mr-1" />
                   View
                 </Button>
               </div>
             </div>
           </div>
         )}
+      </CardContent>
+    </Card>
 
-        {/* Balance */}
-        <div className="pt-4 border-t border-gray-200">
-          <div className="flex justify-between text-sm">
-            <span className="text-gray-600">Stake Balance</span>
-            <span className="font-semibold text-orange-600">{balance} sats</span>
+    {/* Lightning Goals Summary */}
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Gift className="w-5 h-5 text-green-500" />
+          Lightning Goals Summary
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {/* Summary Stats */}
+        <div className="grid grid-cols-2 gap-4">
+          <div className="text-center">
+            <p className="text-sm text-gray-600">Daily Goal</p>
+            <p className="font-semibold">{settings.dailyWordGoal} words</p>
+          </div>
+          <div className="text-center">
+            <p className="text-sm text-gray-600">Reward</p>
+            <p className="font-semibold text-green-600">{settings.dailyRewardSats} sats</p>
+          </div>
+          <div className="text-center">
+            <p className="text-sm text-gray-600">Balance</p>
+            <p className="font-semibold text-orange-600">{balance} sats</p>
+          </div>
+          <div className="text-center">
+            <p className="text-sm text-gray-600">Streak</p>
+            <div className="flex items-center justify-center gap-1">
+              <p className={`font-semibold ${showStreakAnimation ? 'animate-pulse text-green-600' : ''}`}>
+                {streak} days
+              </p>
+              {showStreakAnimation && <TrendingUp className="w-4 h-4 text-green-600 animate-bounce" />}
+            </div>
           </div>
         </div>
 
-        {/* Warning for low balance */}
-        {balance < settings.dailyRewardSats * 3 && (
+        {/* Low Balance Warning - Only show if 3 days or less */}
+        {daysUntilEmpty <= 3 && daysUntilEmpty > 0 && (
           <div className="bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-lg">
             <div className="flex items-center gap-2 text-yellow-700 dark:text-yellow-300">
               <AlertTriangle className="w-4 h-4" />
               <span className="text-sm font-medium">Don't Lose Your Streak!</span>
             </div>
             <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-1">
-              Your balance is low. Add more sats to keep your streak alive and avoid penalties for missed days.
+              Your balance will last {daysUntilEmpty} more day{daysUntilEmpty === 1 ? '' : 's'}. Add more sats to keep your streak alive.
             </p>
           </div>
         )}
+      </CardContent>
+    </Card>
 
-        {/* Cancel Stake Button */}
-        <div className="pt-4 border-t border-gray-200">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowCancelModal(true)}
-            className="w-full text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300"
-          >
-            Cancel Stake & Reset
-          </Button>
-        </div>
+    {/* Cancel Stake Button */}
+    <Card>
+      <CardContent className="p-4">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setShowCancelModal(true)}
+          className="w-full text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300"
+        >
+          Cancel Stake & Reset
+        </Button>
       </CardContent>
     </Card>
     

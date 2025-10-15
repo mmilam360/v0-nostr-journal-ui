@@ -29,10 +29,35 @@ export function IncentiveModal({
 }: IncentiveModalProps) {
   const [hasSetup, setHasSetup] = useState(false)
 
+  // Check if user has Lightning Goals setup
+  useEffect(() => {
+    const checkSetup = async () => {
+      try {
+        const { fetchIncentiveSettings } = await import('@/lib/incentive-nostr')
+        const settings = await fetchIncentiveSettings(userPubkey)
+        setHasSetup(!!settings)
+      } catch (error) {
+        console.error('[IncentiveModal] Error checking setup:', error)
+        setHasSetup(false)
+      }
+    }
+    
+    if (isOpen && userPubkey) {
+      checkSetup()
+    }
+  }, [isOpen, userPubkey])
+
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+    <div 
+      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          onClose()
+        }
+      }}
+    >
       <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="flex items-center gap-2">
@@ -62,19 +87,17 @@ export function IncentiveModal({
             />
           </div>
 
-          {/* Reward Section */}
-          <div>
-            <div className="flex items-center gap-2 mb-4">
-              <Gift className="w-5 h-5 text-green-500" />
-              <h3 className="text-lg font-semibold">Daily Goal Progress</h3>
+          {/* Reward Section - Only show if user has setup */}
+          {hasSetup && (
+            <div>
+              <AutomatedRewardTracker
+                userPubkey={userPubkey}
+                authData={authData}
+                currentWordCount={lastSavedWordCount || undefined}
+                onWordCountProcessed={onWordCountProcessed}
+              />
             </div>
-            <AutomatedRewardTracker
-              userPubkey={userPubkey}
-              authData={authData}
-              currentWordCount={lastSavedWordCount || undefined}
-              onWordCountProcessed={onWordCountProcessed}
-            />
-          </div>
+          )}
 
           {/* Info Section */}
           <div className="bg-muted/50 p-4 rounded-lg">

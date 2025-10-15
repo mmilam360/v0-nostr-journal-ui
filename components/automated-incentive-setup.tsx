@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Target, Zap, Wallet, CheckCircle, AlertCircle, Clock, Copy, QrCode } from 'lucide-react'
+import { Target, Zap, Wallet, CheckCircle, AlertCircle, Clock, Copy, QrCode, RefreshCw } from 'lucide-react'
 import { IncentiveSuccessMessage } from './incentive-success-message'
 import QRCode from 'qrcode'
 
@@ -532,7 +532,7 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
             <Input
               type="number"
               value={settings.dailyWordGoal}
-              onChange={(e) => setSettings({...settings, dailyWordGoal: parseInt(e.target.value) || 500})}
+              onChange={(e) => setSettings({...settings, dailyWordGoal: parseInt(e.target.value) || 0})}
               placeholder="500"
             />
           </div>
@@ -542,7 +542,7 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
             <Input
               type="number"
               value={settings.dailyRewardSats}
-              onChange={(e) => setSettings({...settings, dailyRewardSats: parseInt(e.target.value) || 500})}
+              onChange={(e) => setSettings({...settings, dailyRewardSats: parseInt(e.target.value) || 0})}
               placeholder="500"
             />
           </div>
@@ -552,7 +552,7 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
             <Input
               type="number"
               value={settings.stakeAmount}
-              onChange={(e) => setSettings({...settings, stakeAmount: Math.max(parseInt(e.target.value) || 1000, 1)})}
+              onChange={(e) => setSettings({...settings, stakeAmount: Math.max(parseInt(e.target.value) || 0, 0)})}
               placeholder="1000"
               min="1"
             />
@@ -560,6 +560,7 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
           
           <div>
             <label className="text-sm font-medium">Lightning Address</label>
+            <p className="text-xs text-gray-500 mb-2">Where your daily rewards will be sent</p>
             <Input
               type="text"
               value={settings.lightningAddress}
@@ -626,60 +627,28 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
               </div>
               
               {/* Modern Copy Button */}
-              <Button 
-                onClick={copyInvoice}
-                className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-medium py-3 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 border-0 mb-2"
-              >
-                <Copy className="w-4 h-4 mr-2" />
-                {showCopySuccess ? 'Copied!' : 'Copy Invoice'}
-              </Button>
+              <div className="space-y-2">
+                <Button 
+                  onClick={copyInvoice}
+                  className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-medium py-3 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 border-0"
+                >
+                  <Copy className="w-4 h-4 mr-2" />
+                  {showCopySuccess ? 'Copied!' : 'Copy Invoice'}
+                </Button>
+                
+                <Button 
+                  onClick={() => {
+                    setDepositInvoice(null)
+                    setInvoicePaid(false)
+                  }}
+                  variant="outline"
+                  className="w-full border-gray-300 text-gray-700 hover:bg-gray-50"
+                >
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                  Generate New Invoice
+                </Button>
+              </div>
               
-              {/* Manual Verification Button (for testing) */}
-              <Button
-                onClick={async () => {
-                  try {
-                    console.log('[Manual] 🔧 Manual payment verification requested')
-                    const paymentHash = localStorage.getItem(`payment-hash-${userPubkey}`)
-                    const invoiceString = localStorage.getItem(`invoice-string-${userPubkey}`)
-                    
-                    if (!paymentHash) {
-                      alert('No payment hash found')
-                      return
-                    }
-                    
-                    const response = await fetch('/api/incentive/manual-verify', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({
-                        paymentHash,
-                        invoiceString,
-                        amountSats: settings.stakeAmount
-                      })
-                    })
-                    
-                    const result = await response.json()
-                    console.log('[Manual] 📋 Manual verification result:', result)
-                    
-                    if (result.success && result.paid) {
-                      alert('✅ Payment manually verified! (Testing mode)')
-                      // Trigger payment confirmation
-                      setInvoicePaid(true)
-                      setBalance(settings.stakeAmount)
-                      setHasSetup(true)
-                      setDepositedAmount(settings.stakeAmount)
-                    } else {
-                      alert(`❌ Manual verification failed: ${result.error}`)
-                    }
-                  } catch (error) {
-                    console.error('[Manual] ❌ Error:', error)
-                    alert('Manual verification failed')
-                  }
-                }}
-                className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-medium py-3 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 border-0"
-              >
-                <Zap className="w-4 h-4 mr-2" />
-                Manual Verify (Testing)
-              </Button>
             </div>
             
             {/* Payment Status Indicator */}
