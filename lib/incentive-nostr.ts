@@ -271,3 +271,49 @@ export async function calculateStreak(userPubkey: string): Promise<number> {
   
   return streak
 }
+
+/**
+ * Reset/Cancel user's incentive settings (delete the settings event)
+ */
+export async function resetIncentiveSettings(
+  userPubkey: string,
+  authData: any
+): Promise<void> {
+  console.log('[IncentiveNostr] Resetting incentive settings for user:', userPubkey)
+  
+  try {
+    // Find the existing settings event to delete
+    const settingsEvent = await pool.querySync(RELAYS, {
+      kinds: [30078],
+      authors: [userPubkey],
+      "#d": ["journal-incentive-settings"]
+    })
+    
+    if (settingsEvent.length > 0) {
+      console.log('[IncentiveNostr] Found existing settings event, deleting...')
+      
+      // Create a deletion event (kind 5)
+      const deleteEvent = {
+        kind: 5,
+        created_at: Math.floor(Date.now() / 1000),
+        tags: [
+          ["e", settingsEvent[0].id],
+          ["p", userPubkey]
+        ],
+        content: "Deleted incentive settings",
+        pubkey: userPubkey
+      }
+      
+      const signedDeleteEvent = await signEventWithRemote(deleteEvent, authData)
+      await pool.publish(RELAYS, signedDeleteEvent)
+      
+      console.log('[IncentiveNostr] ✅ Incentive settings reset successfully')
+    } else {
+      console.log('[IncentiveNostr] No existing settings found to reset')
+    }
+    
+  } catch (error) {
+    console.error('[IncentiveNostr] ❌ Error resetting incentive settings:', error)
+    throw error
+  }
+}

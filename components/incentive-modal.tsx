@@ -14,6 +14,8 @@ interface IncentiveModalProps {
   userPubkey: string
   authData: AuthData
   selectedNote?: any
+  lastSavedWordCount?: number | null
+  onWordCountProcessed?: () => void
 }
 
 export function IncentiveModal({ 
@@ -21,7 +23,9 @@ export function IncentiveModal({
   onClose, 
   userPubkey, 
   authData, 
-  selectedNote 
+  selectedNote,
+  lastSavedWordCount,
+  onWordCountProcessed
 }: IncentiveModalProps) {
   const [hasSetup, setHasSetup] = useState(false)
 
@@ -59,19 +63,18 @@ export function IncentiveModal({
           </div>
 
           {/* Reward Section */}
-          {selectedNote && (
-            <div>
-              <div className="flex items-center gap-2 mb-4">
-                <Gift className="w-5 h-5 text-green-500" />
-                <h3 className="text-lg font-semibold">Claim Your Reward</h3>
-              </div>
-              <AutomatedRewardTracker
-                userPubkey={userPubkey}
-                authData={authData}
-                currentWordCount={selectedNote.content.split(/\s+/).length}
-              />
+          <div>
+            <div className="flex items-center gap-2 mb-4">
+              <Gift className="w-5 h-5 text-green-500" />
+              <h3 className="text-lg font-semibold">Daily Goal Progress</h3>
             </div>
-          )}
+            <AutomatedRewardTracker
+              userPubkey={userPubkey}
+              authData={authData}
+              currentWordCount={lastSavedWordCount || undefined}
+              onWordCountProcessed={onWordCountProcessed}
+            />
+          </div>
 
           {/* Info Section */}
           <div className="bg-muted/50 p-4 rounded-lg">

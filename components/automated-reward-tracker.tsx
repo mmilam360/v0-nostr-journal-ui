@@ -3,16 +3,18 @@
 import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Gift, Target, Zap, CheckCircle, AlertTriangle, TrendingUp } from 'lucide-react'
+import { Gift, Target, Zap, CheckCircle, AlertTriangle, TrendingUp, Copy, ExternalLink } from 'lucide-react'
 
 interface AutomatedRewardTrackerProps {
   userPubkey: string
   authData: any
-  currentWordCount: number // Pass from parent
+  currentWordCount?: number // Optional - only passed when note is saved
   onStreakUpdate?: (newStreak: number) => void // Callback to update streak in parent
+  onCancelStake?: () => void // Callback to handle stake cancellation
+  onWordCountProcessed?: () => void // Callback to clear word count after processing
 }
 
-export function AutomatedRewardTracker({ userPubkey, authData, currentWordCount, onStreakUpdate }: AutomatedRewardTrackerProps) {
+export function AutomatedRewardTracker({ userPubkey, authData, currentWordCount, onStreakUpdate, onCancelStake, onWordCountProcessed }: AutomatedRewardTrackerProps) {
   const [settings, setSettings] = useState<any>(null)
   const [todayProgress, setTodayProgress] = useState(0)
   const [balance, setBalance] = useState(0)
@@ -26,6 +28,8 @@ export function AutomatedRewardTracker({ userPubkey, authData, currentWordCount,
   const [showRewardSuccess, setShowRewardSuccess] = useState(false)
   const [showRewardError, setShowRewardError] = useState(false)
   const [paymentResult, setPaymentResult] = useState<any>(null)
+  const [showCancelModal, setShowCancelModal] = useState(false)
+  const [cancelling, setCancelling] = useState(false)
 
   useEffect(() => {
     loadSettings()
@@ -116,7 +120,7 @@ export function AutomatedRewardTracker({ userPubkey, authData, currentWordCount,
   }
 
   const checkGoalStatus = async () => {
-    if (!settings) return
+    if (!settings || !currentWordCount) return
     
     const goalReached = currentWordCount >= settings.dailyWordGoal
     
@@ -132,6 +136,11 @@ export function AutomatedRewardTracker({ userPubkey, authData, currentWordCount,
       // Automatically claim reward without user action (only if not already claimed)
       if (!rewardSent) {
         await handleClaimReward()
+      }
+      
+      // Notify parent that word count has been processed
+      if (onWordCountProcessed) {
+        onWordCountProcessed()
       }
       
       // Stop animation after 2 seconds
@@ -266,6 +275,53 @@ export function AutomatedRewardTracker({ userPubkey, authData, currentWordCount,
     }
   }
 
+  const handleCancelStake = async () => {
+    setCancelling(true)
+    try {
+      console.log('[Tracker] 🗑️ Cancelling stake...')
+      
+      // Call API to cancel stake (reset settings)
+      const { resetIncentiveSettings } = await import('@/lib/incentive-nostr')
+      
+      await resetIncentiveSettings(userPubkey, authData)
+      
+      // Reset all local state
+      setSettings(null)
+      setTodayProgress(0)
+      setBalance(0)
+      setStreak(0)
+      setHasMetGoalToday(false)
+      setRewardSent(false)
+      setGoalMet(false)
+      setShowZapAnimation(false)
+      setPaymentResult(null)
+      
+      // Notify parent component
+      if (onCancelStake) {
+        onCancelStake()
+      }
+      
+      console.log('[Tracker] ✅ Stake cancelled successfully')
+      
+    } catch (error) {
+      console.error('[Tracker] ❌ Error cancelling stake:', error)
+      alert('Failed to cancel stake. Please try again.')
+    } finally {
+      setCancelling(false)
+      setShowCancelModal(false)
+    }
+  }
+
+  const copyPaymentHash = async () => {
+    if (paymentResult?.paymentHash) {
+      try {
+        await navigator.clipboard.writeText(paymentResult.paymentHash)
+        alert('Payment hash copied to clipboard!')
+      } catch (error) {
+        console.error('Failed to copy:', error)
+      }
+    }
+  }
 
   if (!settings) {
     return (
@@ -280,7 +336,7 @@ export function AutomatedRewardTracker({ userPubkey, authData, currentWordCount,
     )
   }
 
-  const progress = Math.min((currentWordCount / settings.dailyWordGoal) * 100, 100)
+  const progress = currentWordCount ? Math.min((currentWordCount / settings.dailyWordGoal) * 100, 100) : 0
   
   return (
     <>
@@ -313,7 +369,7 @@ export function AutomatedRewardTracker({ userPubkey, authData, currentWordCount,
           <div className="flex justify-between text-sm">
             <span className="text-gray-600">Progress</span>
             <span className={`font-medium ${goalMet ? 'text-green-600' : 'text-gray-900'}`}>
-              {currentWordCount} / {settings.dailyWordGoal} words
+              {currentWordCount || todayProgress} / {settings.dailyWordGoal} words
             </span>
           </div>
           <div className="w-full bg-gray-200 rounded-full h-3">
@@ -343,17 +399,40 @@ export function AutomatedRewardTracker({ userPubkey, authData, currentWordCount,
           </div>
         )}
         
-        {rewardSent && (
+        {rewardSent && paymentResult && (
           <div className="bg-green-50 border border-green-200 rounded-lg p-4">
             <div className="flex items-center gap-2 mb-2">
               <CheckCircle className="w-5 h-5 text-green-600" />
               <p className="text-sm font-semibold text-green-800">
-                ✅ Reward Sent Automatically!
+                ✅ Reward Sent Successfully!
               </p>
             </div>
-            <p className="text-sm text-green-700">
-              {settings.dailyRewardSats} sats sent to your Lightning address. Great job!
-            </p>
+            <div className="space-y-2">
+              <p className="text-sm text-green-700">
+                {settings.dailyRewardSats} sats sent to your Lightning address.
+              </p>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-green-600 font-mono bg-green-100 px-2 py-1 rounded">
+                  {paymentResult.paymentHash}
+                </span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={copyPaymentHash}
+                  className="h-6 px-2 text-xs"
+                >
+                  Copy
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => window.open(`https://amboss.space/payment/${paymentResult.paymentHash}`, '_blank')}
+                  className="h-6 px-2 text-xs"
+                >
+                  View
+                </Button>
+              </div>
+            </div>
           </div>
         )}
 
@@ -377,49 +456,71 @@ export function AutomatedRewardTracker({ userPubkey, authData, currentWordCount,
             </p>
           </div>
         )}
+
+        {/* Cancel Stake Button */}
+        <div className="pt-4 border-t border-gray-200">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowCancelModal(true)}
+            className="w-full text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300"
+          >
+            Cancel Stake & Reset
+          </Button>
+        </div>
       </CardContent>
     </Card>
     
-    {/* Reward Success Modal */}
-    {showRewardSuccess && (
+    {/* Cancel Stake Confirmation Modal */}
+    {showCancelModal && (
       <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
         <Card className="max-w-md w-full p-6 relative animate-in zoom-in duration-300">
           <div className="flex flex-col items-center text-center space-y-4">
-            {/* Success Icon */}
-            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center animate-in zoom-in duration-500">
-              <CheckCircle className="w-10 h-10 text-green-600" />
+            {/* Warning Icon */}
+            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center">
+              <AlertTriangle className="w-10 h-10 text-red-600" />
             </div>
             
-            {/* Title and Amount */}
+            {/* Title and Message */}
             <div>
               <h2 className="text-2xl font-bold text-gray-900">
-                Reward Claimed! 🎉
+                Cancel Stake?
               </h2>
               <p className="text-gray-600 mt-2">
-                <span className="font-semibold text-green-600">{settings.dailyRewardSats} sats</span> sent to your Lightning address!
+                This will reset your Lightning Goals setup and you'll lose your current streak.
               </p>
             </div>
             
-            {/* Payment Info */}
-            <div className="w-full bg-green-50 border border-green-200 rounded-lg p-4">
+            {/* Balance Info */}
+            <div className="w-full bg-yellow-50 border border-yellow-200 rounded-lg p-4">
               <div className="flex items-center justify-center gap-2 mb-2">
-                <Zap className="w-5 h-5 text-green-500" />
-                <p className="text-sm font-semibold text-green-800">
-                  Payment Hash: {paymentResult?.paymentHash || 'Processing...'}
+                <Zap className="w-5 h-5 text-yellow-600" />
+                <p className="text-sm font-semibold text-yellow-800">
+                  Remaining Balance: {balance} sats
                 </p>
               </div>
-              <p className="text-xs text-green-700">
-                Real Lightning payment sent to your address
+              <p className="text-xs text-yellow-700">
+                This balance will be forfeited when you cancel your stake
               </p>
             </div>
             
-            {/* CTA Button */}
-            <Button 
-              onClick={() => setShowRewardSuccess(false)}
-              className="w-full bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700"
-            >
-              Continue Writing →
-            </Button>
+            {/* Action Buttons */}
+            <div className="flex gap-3 w-full">
+              <Button 
+                onClick={() => setShowCancelModal(false)}
+                variant="outline"
+                className="flex-1"
+              >
+                Keep Stake
+              </Button>
+              <Button 
+                onClick={handleCancelStake}
+                disabled={cancelling}
+                className="flex-1 bg-red-600 hover:bg-red-700"
+              >
+                {cancelling ? 'Cancelling...' : 'Cancel Stake'}
+              </Button>
+            </div>
           </div>
         </Card>
       </div>

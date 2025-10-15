@@ -152,6 +152,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   const [deletedNotes, setDeletedNotes] = useState<{ id: string; deletedAt: Date }[]>([])
   const [showProfile, setShowProfile] = useState(false)
   const [showIncentives, setShowIncentives] = useState(false)
+  const [lastSavedWordCount, setLastSavedWordCount] = useState<number | null>(null)
   const [userStreak, setUserStreak] = useState(0)
   const [hasLightningGoals, setHasLightningGoals] = useState(false)
   const [showStreakAnimation, setShowStreakAnimation] = useState(false)
@@ -728,6 +729,26 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
         setSelectedNote(finalNote)
         
         console.log("[NostrJournal] ✅ Note update complete!")
+        
+        // Check for Lightning Goals reward eligibility after successful save
+        if (isIncentiveEnabled) {
+          try {
+            console.log("[NostrJournal] ⚡ Checking Lightning Goals reward eligibility...")
+            const wordCount = finalNote.content.split(/\s+/).filter(word => word.trim().length > 0).length
+            
+            // Trigger reward check if word count is provided
+            if (wordCount > 0) {
+              console.log("[NostrJournal] ⚡ Word count:", wordCount, "- triggering reward check")
+              setLastSavedWordCount(wordCount)
+              // The reward tracking will happen automatically in the AutomatedRewardTracker
+              // when it receives the updated word count through props
+            }
+          } catch (rewardError) {
+            console.error("[NostrJournal] ⚠️ Error checking reward eligibility:", rewardError)
+            // Don't fail the note save if reward check fails
+          }
+        }
+        
       } else {
         console.error("[NostrJournal] ❌ Failed to save updated note to relays:", result.error || "Unknown error")
         alert(`Failed to update note: ${result.error || "Unknown error"}`)
@@ -1721,6 +1742,8 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
         userPubkey={authData.pubkey}
         authData={authData}
         selectedNote={selectedNote}
+        lastSavedWordCount={lastSavedWordCount}
+        onWordCountProcessed={() => setLastSavedWordCount(null)}
       />
     )}
     
