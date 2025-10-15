@@ -139,11 +139,11 @@ export async function onRequestPost(context: any) {
       )
     }
     
-    console.log('[Payment Verify] Connecting to YOUR app's Alby Hub...')
+    console.log('[Payment Verify] Connecting to YOUR app Alby Hub...')
     
-    // Connect to YOUR app's Alby Hub (where payments are received)
+    // Connect to YOUR app Alby Hub (where payments are received)
     const nwc = new NostrWebLNProvider({
-      nostrWalletConnectUrl: albyUrl // YOUR app's NWC connection
+      nostrWalletConnectUrl: albyUrl // YOUR app NWC connection
     })
     
     console.log('[Payment Verify] 🔌 NWC object created')
