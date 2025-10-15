@@ -342,174 +342,33 @@ export async function onRequestPost(context: any) {
       } catch (albyError) {
         console.error('[Payment Verify] ❌ Alby API also failed:', albyError.message)
         
-        // Method 2: Try Proof of Payment (PoP) verification
-        console.log('[Payment Verify] 🔍 Method 2: Proof of Payment verification...')
+        // SECURITY FIX: Remove overly aggressive fallback methods that cause false positives
+        // Only use legitimate verification methods that actually check payment status
         
-        try {
-          // For PoP, we need to check if we can verify the payment using cryptographic proof
-          // This involves checking if the payment hash matches what we expect from the invoice
-          
-          if (invoiceString) {
-            console.log('[Payment Verify] 🔍 Verifying payment using invoice cryptographic proof...')
-            
-            // Decode the invoice to get the payment hash
-            const decoded = decode(invoiceString)
-            const invoicePaymentHash = decoded.sections?.find(s => s.name === 'payment_hash')?.value
-            
-            console.log('[Payment Verify] Invoice payment hash:', invoicePaymentHash)
-            console.log('[Payment Verify] Expected payment hash:', actualPaymentHash)
-            console.log('[Payment Verify] Hashes match:', invoicePaymentHash === actualPaymentHash)
-            
-            if (invoicePaymentHash === actualPaymentHash) {
-              console.log('[Payment Verify] ✅ Payment hash matches invoice - payment is valid')
-              
-              // For now, we'll assume payment is valid if we have the correct hash
-              // In a real implementation, you'd need the payment preimage to cryptographically prove payment
-              // But since we can't get the preimage from the user, we'll use a different approach
-              
-              return new Response(JSON.stringify({
-                success: true,
-                paid: true, // Assume paid if hash matches and invoice is valid
-                amount: decoded.sections?.find(s => s.name === 'amount')?.value || 500,
-                verificationMethod: 'Proof of Payment (Hash Match)',
-                note: 'Payment verified by hash matching - preimage verification not available',
-                fallbackUsed: true
-              }), {
-                headers: { 
-                  'Content-Type': 'application/json',
-                  'Cache-Control': 'no-cache',
-                  'Access-Control-Allow-Origin': '*'
-                }
-              })
-            } else {
-              throw new Error('Payment hash does not match invoice')
+        console.error('[Payment Verify] ❌ All legitimate verification methods failed')
+        console.error('[Payment Verify] This means the payment has NOT been confirmed')
+        console.error('[Payment Verify] Returning false to prevent false positive')
+        
+        return new Response(
+          JSON.stringify({
+            success: false,
+            paid: false,
+            paymentHash: paymentHash,
+            error: 'Payment verification failed - payment not confirmed',
+            details: {
+              nwcError: lookupError.message,
+              albyError: albyError.message,
+              note: 'Payment must be confirmed through legitimate channels (NWC or Alby API)'
             }
-          } else {
-            throw new Error('No invoice string available for PoP verification')
-          }
-          
-        } catch (popError) {
-          console.error('[Payment Verify] ❌ PoP verification failed:', popError.message)
-          
-          // Method 3: Try webhook-based verification (check if payment was received)
-          console.log('[Payment Verify] 🔍 Method 3: Webhook-based verification...')
-          
-          try {
-            // Check if we have webhook data stored (this would be set by webhook endpoint)
-            const webhookData = await context.env.PAYMENT_WEBHOOK_DATA?.get(actualPaymentHash)
-            
-            if (webhookData) {
-              const webhookInfo = JSON.parse(webhookData)
-              console.log('[Payment Verify] ✅ Found webhook data:', webhookInfo)
-              
-              return new Response(JSON.stringify({
-                success: true,
-                paid: webhookInfo.settled || webhookInfo.paid || false,
-                amount: webhookInfo.amount,
-                verificationMethod: 'Webhook Data',
-                fallbackUsed: true
-              }), {
-                headers: { 
-                  'Content-Type': 'application/json',
-                  'Cache-Control': 'no-cache',
-                  'Access-Control-Allow-Origin': '*'
-                }
-              })
-            } else {
-              throw new Error('No webhook data found')
-            }
-            
-          } catch (webhookError) {
-            console.error('[Payment Verify] ❌ Webhook verification failed:', webhookError.message)
-            
-            // Method 4: Time-based assumption (if invoice is recent and hash is correct)
-            console.log('[Payment Verify] 🔍 Method 4: Time-based verification...')
-            
-            try {
-              if (invoiceString) {
-                const decoded = decode(invoiceString)
-                const timestamp = decoded.sections?.find(s => s.name === 'timestamp')?.value
-                const expiry = decoded.sections?.find(s => s.name === 'expiry')?.value
-                
-                if (timestamp && expiry) {
-                  const invoiceTime = parseInt(timestamp) * 1000 // Convert to milliseconds
-                  const expiryTime = invoiceTime + (parseInt(expiry) * 1000)
-                  const now = Date.now()
-                  
-                  console.log('[Payment Verify] Invoice timestamp:', new Date(invoiceTime))
-                  console.log('[Payment Verify] Invoice expiry:', new Date(expiryTime))
-                  console.log('[Payment Verify] Current time:', new Date(now))
-                  console.log('[Payment Verify] Invoice expired:', now > expiryTime)
-                  
-                  // If invoice hasn't expired and we have the correct hash, assume payment is valid
-                  if (now < expiryTime) {
-                    console.log('[Payment Verify] ✅ Invoice not expired - assuming payment valid')
-                    
-                    return new Response(JSON.stringify({
-                      success: true,
-                      paid: true, // Assume paid if invoice is valid and not expired
-                      amount: decoded.sections?.find(s => s.name === 'amount')?.value || 500,
-                      verificationMethod: 'Time-based Assumption',
-                      note: 'Payment assumed valid - invoice not expired and hash matches',
-                      fallbackUsed: true
-                    }), {
-                      headers: { 
-                        'Content-Type': 'application/json',
-                        'Cache-Control': 'no-cache',
-                        'Access-Control-Allow-Origin': '*'
-                      }
-                    })
-                  } else {
-                    throw new Error('Invoice has expired')
-                  }
-                } else {
-                  throw new Error('Could not extract timestamp/expiry from invoice')
-                }
-              } else {
-                throw new Error('No invoice string for time-based verification')
-              }
-              
-            } catch (timeError) {
-              console.error('[Payment Verify] ❌ All verification methods failed:', {
-                nwcError: lookupError.message,
-                albyError: albyError.message,
-                popError: popError.message,
-                webhookError: webhookError.message,
-                timeError: timeError.message
-              })
-              
-              return new Response(
-                JSON.stringify({
-                  success: false,
-                  paid: false,
-                  paymentHash: paymentHash,
-                  error: 'All payment verification methods failed',
-                  details: {
-                    nwcError: lookupError.message,
-                    albyError: albyError.message,
-                    popError: popError.message,
-                    webhookError: webhookError.message,
-                    timeError: timeError.message,
-                    errorTypes: {
-                      nwcErrorType: lookupError.constructor.name,
-                      albyErrorType: albyError.constructor.name,
-                      popErrorType: popError.constructor.name,
-                      webhookErrorType: webhookError.constructor.name,
-                      timeErrorType: timeError.constructor.name
-                    }
-                  }
-                }),
-                { 
-                  status: 500,
-                  headers: { 
-                    'Content-Type': 'application/json',
-                    'Access-Control-Allow-Origin': '*'
-                  }
-                }
-              )
+          }),
+          { 
+            status: 500,
+            headers: { 
+              'Content-Type': 'application/json',
+              'Access-Control-Allow-Origin': '*'
             }
           }
-        }
+        )
       }
     }
     
