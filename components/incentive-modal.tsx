@@ -16,25 +16,35 @@ interface IncentiveModalProps {
   selectedNote?: any
   lastSavedWordCount?: number | null
   onWordCountProcessed?: () => void
+  onSetupStatusChange?: (hasSetup: boolean) => void
 }
 
 export function IncentiveModal({ 
   isOpen, 
   onClose, 
   userPubkey, 
-  authData, 
+  authData,
   selectedNote,
   lastSavedWordCount,
-  onWordCountProcessed
+  onWordCountProcessed,
+  onSetupStatusChange
 }: IncentiveModalProps) {
   const [hasSetup, setHasSetup] = useState(false)
 
   // Check if user has Lightning Goals setup
   const checkSetup = async () => {
     try {
+      console.log('[IncentiveModal] 🔄 Checking setup status...')
       const { fetchIncentiveSettings } = await import('@/lib/incentive-nostr')
       const settings = await fetchIncentiveSettings(userPubkey)
-      setHasSetup(!!settings)
+      const hasSetupValue = !!settings
+      console.log('[IncentiveModal] 🔄 Setup status:', hasSetupValue)
+      setHasSetup(hasSetupValue)
+      
+      // Notify parent component of setup status change
+      if (onSetupStatusChange) {
+        onSetupStatusChange(hasSetupValue)
+      }
     } catch (error) {
       console.error('[IncentiveModal] Error checking setup:', error)
       setHasSetup(false)

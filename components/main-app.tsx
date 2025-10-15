@@ -392,8 +392,13 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
           const result = await response.json()
           console.log('[MainApp] 🎯 Reward sent successfully:', result)
           
-          // Update streak and refresh Lightning Goals data
+          // Force refresh Lightning Goals data with cache busting
           await checkLightningGoals()
+          
+          // Trigger a small delay then refresh again to ensure data is updated
+          setTimeout(async () => {
+            await checkLightningGoals()
+          }, 1000)
           
           // Show success notification (optional)
           console.log('[MainApp] 🎯 Daily goal completed! Reward sent.')
@@ -1812,6 +1817,13 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
         selectedNote={selectedNote}
         lastSavedWordCount={lastSavedWordCount}
         onWordCountProcessed={() => setLastSavedWordCount(null)}
+        onSetupStatusChange={(hasSetup) => {
+          // Update header when setup status changes
+          setHasLightningGoals(hasSetup)
+          if (!hasSetup) {
+            setUserStreak(0)
+          }
+        }}
       />
     )}
     
