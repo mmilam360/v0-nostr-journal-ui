@@ -120,8 +120,8 @@ export function AutomatedRewardTracker({ userPubkey, authData, currentWordCount,
     
     const goalReached = currentWordCount >= settings.dailyWordGoal
     
-    // If goal just reached (wasn't met before, now is)
-    if (goalReached && !goalMet) {
+    // If goal just reached (wasn't met before, now is) AND reward not already claimed today
+    if (goalReached && !goalMet && !rewardSent) {
       console.log('[Tracker] 🎯 Goal reached! Auto-claiming reward...')
       setGoalMet(true)
       setShowZapAnimation(true)
@@ -129,8 +129,10 @@ export function AutomatedRewardTracker({ userPubkey, authData, currentWordCount,
       // Automatically record progress to Nostr
       await autoRecordProgress(goalReached)
       
-      // Automatically claim reward without user action
-      await handleClaimReward()
+      // Automatically claim reward without user action (only if not already claimed)
+      if (!rewardSent) {
+        await handleClaimReward()
+      }
       
       // Stop animation after 2 seconds
       setTimeout(() => setShowZapAnimation(false), 2000)
@@ -173,9 +175,26 @@ export function AutomatedRewardTracker({ userPubkey, authData, currentWordCount,
   }
 
   const handleClaimReward = async () => {
+    // Prevent multiple claims
+    if (rewardSent || claiming) {
+      console.log('[Tracker] ⚠️ Reward already claimed or currently claiming, skipping...')
+      return
+    }
+    
     setClaiming(true)
     try {
       console.log('[Tracker] 🎉 Claiming reward...')
+      
+      // Double-check reward hasn't been claimed today
+      const today = new Date().toISOString().split('T')[0]
+      const { fetchTodayProgress } = await import('@/lib/incentive-nostr')
+      const progress = await fetchTodayProgress(userPubkey, today)
+      
+      if (progress?.tags.some((t: string[]) => t[0] === 'reward_claimed' && t[1] === 'true')) {
+        console.log('[Tracker] ⚠️ Reward already claimed today, skipping...')
+        setRewardSent(true)
+        return
+      }
       
       // Call API to send reward
       const response = await fetch('/api/incentive/send-reward', {
@@ -198,7 +217,6 @@ export function AutomatedRewardTracker({ userPubkey, authData, currentWordCount,
       // Update progress to mark as claimed
       const { markRewardClaimed, updateStakeBalance } = await import('@/lib/incentive-nostr')
       
-      const today = new Date().toISOString().split('T')[0]
       await markRewardClaimed(
         userPubkey,
         today,
@@ -207,20 +225,28 @@ export function AutomatedRewardTracker({ userPubkey, authData, currentWordCount,
         authData
       )
       
-      // Update stake balance
-      const currentBalance = parseInt(
-        settings.stakeBalanceSats
-      )
+      // Update stake balance (atomic operation)
+      const currentBalance = parseInt(settings.stakeBalanceSats)
+      const newBalance = currentBalance - result.amountSats
+      
+      console.log('[Tracker] 💰 Updating balance:', currentBalance, '->', newBalance)
+      
       await updateStakeBalance(
         userPubkey,
-        currentBalance - result.amountSats,
+        newBalance,
         authData
       )
       
-      // Update state
+      // Update state atomically
       setRewardSent(true)
       setHasMetGoalToday(true)
-      setBalance(currentBalance - result.amountSats)
+      setBalance(newBalance)
+      
+      // Update settings to reflect new balance
+      setSettings(prev => ({
+        ...prev,
+        stakeBalanceSats: newBalance
+      }))
       
       // Update streak and notify parent component
       const newStreak = streak + 1
