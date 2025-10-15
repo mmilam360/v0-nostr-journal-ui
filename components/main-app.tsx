@@ -1817,11 +1817,14 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
         selectedNote={selectedNote}
         lastSavedWordCount={lastSavedWordCount}
         onWordCountProcessed={() => setLastSavedWordCount(null)}
-        onSetupStatusChange={(hasSetup) => {
+        onSetupStatusChange={async (hasSetup) => {
           // Update header when setup status changes
           setHasLightningGoals(hasSetup)
           if (!hasSetup) {
             setUserStreak(0)
+          } else {
+            // Refresh Lightning Goals data when setup is active
+            await checkLightningGoals()
           }
         }}
       />

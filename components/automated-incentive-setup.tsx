@@ -485,51 +485,9 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
     }
   }
 
+  // Note: hasSetup case is now handled by AutomatedRewardTracker in IncentiveModal
   if (hasSetup) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <CheckCircle className="w-5 h-5 text-green-500" />
-            Lightning Goals Active
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            <div>
-              <span className="text-muted-foreground">Daily Goal:</span>
-              <div className="font-medium">{settings.dailyWordGoal} words</div>
-            </div>
-            <div>
-              <span className="text-muted-foreground">Daily Reward:</span>
-              <div className="font-medium">{settings.dailyRewardSats} sats</div>
-            </div>
-            <div>
-              <span className="text-muted-foreground">Stake Balance:</span>
-              <div className="font-medium">{balance} sats</div>
-            </div>
-            <div>
-              <span className="text-muted-foreground">Current Streak:</span>
-              <div className="font-medium">{streak} days</div>
-            </div>
-          </div>
-          
-          <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg">
-            <div className="flex items-center gap-2 text-blue-700 dark:text-blue-300">
-              <Zap className="w-4 h-4" />
-              <span className="text-sm font-medium">Automated System</span>
-            </div>
-            <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
-              Rewards are automatically sent when you reach your daily goal. Missing days deduct from your stake.
-            </p>
-          </div>
-          
-          <Button onClick={handleQuitChallenge} variant="destructive" size="sm" className="w-full">
-            Quit Challenge (Forfeit Stake)
-          </Button>
-        </CardContent>
-      </Card>
-    )
+    return null
   }
 
   return (

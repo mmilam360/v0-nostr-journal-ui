@@ -52,6 +52,21 @@ export function AutomatedRewardTracker({ userPubkey, authData, currentWordCount,
   }, [userTimezone])
 
   useEffect(() => {
+    // Reset progress when settings change (new stake created)
+    if (settings) {
+      console.log('[Tracker] 🔄 Settings changed, resetting daily progress...')
+      setTodayProgress(0)
+      setHasMetGoalToday(false)
+      setRewardSent(false)
+      setGoalMet(false)
+      setPaymentResult(null)
+      
+      // Reload progress for today
+      loadTodayProgress()
+    }
+  }, [settings?.dailyWordGoal, settings?.dailyRewardSats, settings?.stakeAmount])
+
+  useEffect(() => {
     // Auto-check if goal is met when word count changes
     if (settings && currentWordCount > 0) {
       checkGoalStatus()
