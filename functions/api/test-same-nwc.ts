@@ -68,10 +68,13 @@ export async function onRequestGet(context: any) {
       
       console.log('[Test] ✅ Invoice created')
       console.log('[Test] Invoice keys:', Object.keys(invoice))
+      console.log('[Test] Payment request length:', invoice.paymentRequest?.length)
       console.log('[Test] Payment request:', invoice.paymentRequest?.substring(0, 80) + '...')
+      console.log('[Test] Full invoice string:', invoice.paymentRequest)
       
       test.tests.create_invoice.status = 'success'
       test.tests.create_invoice.invoice_preview = invoice.paymentRequest?.substring(0, 50) + '...'
+      test.tests.create_invoice.full_length = invoice.paymentRequest?.length
       
       // Decode invoice to get payment hash
       try {
@@ -84,45 +87,92 @@ export async function onRequestGet(context: any) {
         test.tests.create_invoice.payment_hash = paymentHash
         
         // Test: Lookup the invoice we just created
+        console.log('[Test] ===========================================')
+        console.log('[Test] 🧪 TESTING INVOICE LOOKUP')
+        console.log('[Test] Payment hash to lookup:', paymentHash)
+        console.log('[Test] Invoice string length:', invoice.paymentRequest?.length)
+        console.log('[Test] ===========================================')
+        
+        let lookupSuccess = false
+        
+        // Try Method 1: Lookup by payment_hash
         try {
-          console.log('[Test] Looking up invoice by payment_hash...')
+          console.log('[Test] Method 1: Looking up by payment_hash...')
           
           const lookupResult = await nwc.lookupInvoice({
             payment_hash: paymentHash
           })
           
-          console.log('[Test] ✅ Lookup successful')
-          console.log('[Test] Lookup result:', lookupResult)
+          console.log('[Test] ✅ Method 1 successful!')
+          console.log('[Test] Lookup result:', JSON.stringify(lookupResult, null, 2))
           
-          test.tests.lookup_invoice.status = 'success'
+          test.tests.lookup_invoice.status = 'success (payment_hash)'
           test.tests.lookup_invoice.found = true
           test.tests.lookup_invoice.paid = lookupResult.settled || lookupResult.paid || false
           test.tests.lookup_invoice.amount = lookupResult.amount || lookupResult.value
+          test.tests.lookup_invoice.state = lookupResult.state || lookupResult.status
+          lookupSuccess = true
           
-        } catch (lookupError) {
-          console.log('[Test] ❌ Lookup failed:', lookupError.message)
-          test.tests.lookup_invoice.status = 'failed'
-          test.tests.lookup_invoice.error = lookupError.message
-          test.tests.lookup_invoice.error_type = lookupError.constructor.name
+        } catch (hashError) {
+          console.log('[Test] ❌ Method 1 failed:', hashError.message)
+          console.log('[Test] Hash error type:', hashError.constructor.name)
           
-          // Try alternative: lookup by invoice string
+          // Try Method 2: Lookup by invoice string
           try {
-            console.log('[Test] Trying lookup by invoice string...')
+            console.log('[Test] Method 2: Trying lookup by invoice string...')
+            console.log('[Test] Invoice string preview:', invoice.paymentRequest?.substring(0, 100))
             
             const lookupResult2 = await nwc.lookupInvoice({
               invoice: invoice.paymentRequest
             })
             
-            console.log('[Test] ✅ Lookup by invoice string successful')
+            console.log('[Test] ✅ Method 2 successful!')
+            console.log('[Test] Lookup result 2:', JSON.stringify(lookupResult2, null, 2))
             
-            test.tests.lookup_invoice.status = 'success (via invoice string)'
+            test.tests.lookup_invoice.status = 'success (invoice string)'
             test.tests.lookup_invoice.found = true
             test.tests.lookup_invoice.paid = lookupResult2.settled || lookupResult2.paid || false
+            test.tests.lookup_invoice.amount = lookupResult2.amount || lookupResult2.value
+            test.tests.lookup_invoice.state = lookupResult2.state || lookupResult2.status
+            lookupSuccess = true
             
           } catch (invoiceStringError) {
-            console.log('[Test] ❌ Lookup by invoice string also failed:', invoiceStringError.message)
-            test.tests.lookup_invoice.fallback_error = invoiceStringError.message
+            console.log('[Test] ❌ Method 2 also failed:', invoiceStringError.message)
+            console.log('[Test] Invoice string error type:', invoiceStringError.constructor.name)
+            
+            // Try Method 3: Different parameter names
+            try {
+              console.log('[Test] Method 3: Trying different parameter names...')
+              
+              const lookupResult3 = await nwc.lookupInvoice({
+                paymentHash: paymentHash  // Try camelCase instead of snake_case
+              })
+              
+              console.log('[Test] ✅ Method 3 successful!')
+              test.tests.lookup_invoice.status = 'success (camelCase)'
+              test.tests.lookup_invoice.found = true
+              test.tests.lookup_invoice.paid = lookupResult3.settled || lookupResult3.paid || false
+              lookupSuccess = true
+              
+            } catch (camelCaseError) {
+              console.log('[Test] ❌ Method 3 also failed:', camelCaseError.message)
+              
+              // All methods failed
+              test.tests.lookup_invoice.status = 'failed'
+              test.tests.lookup_invoice.error = `All methods failed: payment_hash(${hashError.message}), invoice_string(${invoiceStringError.message}), camelCase(${camelCaseError.message})`
+              test.tests.lookup_invoice.error_details = {
+                payment_hash_error: hashError.message,
+                invoice_string_error: invoiceStringError.message,
+                camelCase_error: camelCaseError.message
+              }
+            }
           }
+        }
+        
+        if (!lookupSuccess) {
+          console.log('[Test] ❌ ALL LOOKUP METHODS FAILED')
+          console.log('[Test] This suggests the invoice might not be immediately available for lookup')
+          console.log('[Test] or there might be a timing issue with the wallet')
         }
         
       } catch (decodeError) {
