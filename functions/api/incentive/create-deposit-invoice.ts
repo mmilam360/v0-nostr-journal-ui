@@ -87,6 +87,10 @@ export async function onRequestPost(context: any) {
     
     console.log('[Invoice] 💰 Creating invoice for', amountSats, 'sats...')
     
+    // Declare variables outside try block for proper scope
+    let invoiceString = null
+    let paymentHash = null
+    
     try {
       // Create invoice via NWC (same connection that will verify payments)
       const invoice = await nwc.makeInvoice({
@@ -96,8 +100,9 @@ export async function onRequestPost(context: any) {
       
       console.log('[Invoice] ✅ Invoice created successfully!')
       console.log('[Invoice] 📋 Invoice response:', JSON.stringify(invoice, null, 2))
+      
       // Extract invoice string and payment hash
-      const invoiceString = invoice.paymentRequest || invoice.payment_request || invoice.invoice
+      invoiceString = invoice.paymentRequest || invoice.payment_request || invoice.invoice
       console.log('[Invoice] 📄 Invoice string:', invoiceString?.substring(0, 80) + '...')
       
       if (!invoiceString) {
@@ -117,7 +122,7 @@ export async function onRequestPost(context: any) {
       
       // Extract the payment hash from sections
       const hashSection = decoded.sections?.find(s => s.name === 'payment_hash')
-      const paymentHash = hashSection?.value
+      paymentHash = hashSection?.value
       
       if (!paymentHash || paymentHash.length !== 64) {
         throw new Error(`Invalid payment hash extracted: ${paymentHash}`)
