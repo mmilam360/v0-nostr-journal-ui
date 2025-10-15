@@ -60,18 +60,17 @@ export async function onRequestPost(context: any) {
     console.log('[Invoice] 🔌 Using NWC connection (preview):', nwcUrl.substring(0, 40) + '...')
     console.log('[Invoice] 🔌 Connecting to YOUR wallet via NWC...')
     
-    // Connect to YOUR wallet via NWC (same connection used for verification)
-    const sdk = await import('@getalby/sdk')
-    const nwc = new sdk.NostrWebLNProvider({
-      nostrWalletConnectUrl: nwcUrl
-    })
+    // Use the new LN client from @getalby/sdk/lnclient as per official docs
+    const { LN } = await import('@getalby/sdk/lnclient')
     
-    await nwc.enable()
-    console.log('[Invoice] ✅ NWC connected')
+    console.log('[Invoice] 🔌 Creating LN client with NWC credentials...')
+    const ln = new LN(nwcUrl)
+    
+    console.log('[Invoice] ✅ LN client created successfully')
     
     // Check wallet info to confirm we're connected to the right wallet
     try {
-      const info = await nwc.getInfo()
+      const info = await ln.getInfo()
       console.log('[Invoice] 📱 Connected to wallet:', info.alias || 'Unknown')
       console.log('[Invoice] 📱 Lightning address:', info.lightning_address || 'Unknown')
       console.log('[Invoice] 📱 Available methods:', info.methods?.join(', ') || 'Unknown')
@@ -93,21 +92,21 @@ export async function onRequestPost(context: any) {
     let paymentHash = null
     
     try {
-      // Create invoice via NWC (same connection that will verify payments)
-      const invoice = await nwc.makeInvoice({
+      // Create invoice using LN client requestPayment method
+      const invoice = await ln.requestPayment({
         amount: amountSats,
-        memo: uniqueMemo
+        description: uniqueMemo
       })
       
       console.log('[Invoice] ✅ Invoice created successfully!')
       console.log('[Invoice] 📋 Invoice response:', JSON.stringify(invoice, null, 2))
       
-      // Extract invoice string and payment hash
-      invoiceString = invoice.paymentRequest || invoice.payment_request || invoice.invoice
+      // Extract invoice string from LN client response
+      invoiceString = invoice.invoice
       console.log('[Invoice] 📄 Invoice string:', invoiceString?.substring(0, 80) + '...')
       
       if (!invoiceString) {
-        throw new Error('No invoice string received from NWC')
+        throw new Error('No invoice string received from LN client')
       }
       
       // Extract payment hash from BOLT11 invoice using light-bolt11-decoder
