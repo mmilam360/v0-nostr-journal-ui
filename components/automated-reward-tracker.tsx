@@ -32,6 +32,7 @@ export function AutomatedRewardTracker({ userPubkey, authData, currentWordCount,
   const [cancelling, setCancelling] = useState(false)
   const [userTimezone, setUserTimezone] = useState<string>('')
   const [showStreakAnimation, setShowStreakAnimation] = useState(false)
+  const [isNewStake, setIsNewStake] = useState(false)
 
   useEffect(() => {
     // Detect user timezone
@@ -55,14 +56,18 @@ export function AutomatedRewardTracker({ userPubkey, authData, currentWordCount,
     // Reset progress when settings change (new stake created)
     if (settings) {
       console.log('[Tracker] 🔄 Settings changed, resetting daily progress...')
+      
+      // Clear all progress-related state
       setTodayProgress(0)
       setHasMetGoalToday(false)
       setRewardSent(false)
       setGoalMet(false)
       setPaymentResult(null)
+      setShowZapAnimation(false)
+      setIsNewStake(true)
       
-      // Reload progress for today
-      loadTodayProgress()
+      // Don't reload progress immediately - let it start fresh
+      console.log('[Tracker] 🔄 Progress reset complete, starting fresh')
     }
   }, [settings?.dailyWordGoal, settings?.dailyRewardSats, settings?.stakeAmount])
 
@@ -107,6 +112,13 @@ export function AutomatedRewardTracker({ userPubkey, authData, currentWordCount,
 
   const loadTodayProgress = async () => {
     try {
+      // Skip loading progress if this is a new stake
+      if (isNewStake) {
+        console.log('[Tracker] Skipping progress load - new stake detected')
+        setIsNewStake(false) // Reset the flag
+        return
+      }
+      
       const { fetchTodayProgress } = await import('@/lib/incentive-nostr')
       // Use timezone-aware date
       const today = new Date().toLocaleDateString('en-CA', { timeZone: userTimezone || 'UTC' })
@@ -426,6 +438,18 @@ export function AutomatedRewardTracker({ userPubkey, authData, currentWordCount,
   
   return (
     <>
+    {/* Payment Success Highlight Box */}
+    {invoicePaid && (
+      <Card className="border-green-200 bg-green-50 dark:bg-green-900/20">
+        <CardContent className="p-4">
+          <div className="flex items-center gap-2 text-green-700 dark:text-green-300">
+            <CheckCircle className="w-5 h-5" />
+            <span className="font-semibold">Payment Successful. Your new goal is active!</span>
+          </div>
+        </CardContent>
+      </Card>
+    )}
+    
     {/* Daily Progress Box */}
     <Card>
       <CardHeader>
