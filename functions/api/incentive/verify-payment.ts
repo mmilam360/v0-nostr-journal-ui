@@ -439,48 +439,48 @@ export async function onRequestPost(context: any) {
                 }
               })
             } else if (now > expiryTime) {
-                console.log('[Payment Verify] ❌ Invoice has expired')
-                return new Response(JSON.stringify({
-                  success: false,
-                  paid: false,
-                  paymentHash: paymentHash,
-                  error: 'Invoice has expired - payment verification failed',
-                  details: {
-                    note: 'Invoice expired at ' + new Date(expiryTime),
-                    recommendation: 'Create a new invoice'
-                  }
-                }), { 
-                  status: 400,
-                  headers: { 
-                    'Content-Type': 'application/json',
-                    'Access-Control-Allow-Origin': '*'
-                  }
-                })
-              } else {
-                console.log('[Payment Verify] ⏳ Invoice is very recent - payment may still be processing')
-                return new Response(JSON.stringify({
-                  success: false,
-                  paid: false,
-                  paymentHash: paymentHash,
-                  error: 'Invoice is very recent - payment may still be processing',
-                  details: {
-                    note: 'Invoice created ' + Math.round(timeSinceInvoice / 1000) + ' seconds ago',
-                    recommendation: 'Wait a few more seconds and try again'
-                  }
-                }), { 
-                  status: 500,
-                  headers: { 
-                    'Content-Type': 'application/json',
-                    'Access-Control-Allow-Origin': '*'
-                  }
-                })
-              }
+              console.log('[Payment Verify] ❌ Invoice has expired')
+              return new Response(JSON.stringify({
+                success: false,
+                paid: false,
+                paymentHash: paymentHash,
+                error: 'Invoice has expired - payment verification failed',
+                details: {
+                  note: 'Invoice expired at ' + new Date(expiryTime),
+                  recommendation: 'Create a new invoice'
+                }
+              }), { 
+                status: 400,
+                headers: { 
+                  'Content-Type': 'application/json',
+                  'Access-Control-Allow-Origin': '*'
+                }
+              })
             } else {
-              throw new Error('Could not extract timestamp/expiry from invoice')
+              console.log('[Payment Verify] ⏳ Invoice is very recent - payment may still be processing')
+              return new Response(JSON.stringify({
+                success: false,
+                paid: false,
+                paymentHash: paymentHash,
+                error: 'Invoice is very recent - payment may still be processing',
+                details: {
+                  note: 'Invoice created ' + Math.round(timeSinceInvoice / 1000) + ' seconds ago',
+                  recommendation: 'Wait a few more seconds and try again'
+                }
+              }), { 
+                status: 500,
+                headers: { 
+                  'Content-Type': 'application/json',
+                  'Access-Control-Allow-Origin': '*'
+                }
+              })
             }
           } else {
-            throw new Error('No invoice string for time-based verification')
+            throw new Error('Could not extract timestamp/expiry from invoice')
           }
+        } else {
+          throw new Error('No invoice string for time-based verification')
+        }
           
         } catch (pollingError) {
           console.error('[Payment Verify] ❌ All verification methods failed:', pollingError.message)
