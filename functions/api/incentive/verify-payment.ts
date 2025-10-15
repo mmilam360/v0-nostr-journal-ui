@@ -2,20 +2,24 @@ import { NostrWebLNProvider } from '@getalby/sdk'
 import { decode } from 'light-bolt11-decoder'
 
 export async function onRequestPost(context: any) {
+  console.log('[Payment Verify] ========================================')
   console.log('[Payment Verify] Function called')
   
   try {
     const body = await context.request.json()
     const { paymentHash, invoiceString } = body
     
-    console.log('[Payment Verify] Request:', { paymentHash, hasInvoiceString: !!invoiceString })
+    console.log('[Payment Verify] Request received:', { 
+      paymentHash: paymentHash?.substring(0, 20) + '...', 
+      hasInvoiceString: !!invoiceString 
+    })
     console.log('[Payment Verify] Hash format check:', {
       length: paymentHash?.length,
       isNip47Format: paymentHash?.startsWith('nip47-'),
       isHexFormat: /^[a-f0-9]{64}$/.test(paymentHash),
       preview: paymentHash?.substring(0, 20) + '...'
     })
-    console.log('[Payment Verify] Invoice string:', invoiceString?.substring(0, 50) + '...')
+    console.log('[Payment Verify] Invoice string preview:', invoiceString?.substring(0, 50) + '...')
     
     if (!paymentHash) {
       return new Response(
@@ -111,8 +115,12 @@ export async function onRequestPost(context: any) {
       )
     }
     
-    // Get Alby Hub connection from environment
+    // CRITICAL: Use YOUR app's NWC connection, not user's!
+    console.log('[Payment Verify] 🔌 Connecting to APP wallet (not user wallet)...')
+    
     const albyUrl = context.env.APP_LIGHTNING_NODE_URL
+    console.log('[Payment Verify] NWC URL exists:', !!albyUrl)
+    console.log('[Payment Verify] NWC URL preview:', albyUrl?.substring(0, 30) + '...')
     
     if (!albyUrl) {
       console.error('[Payment Verify] Missing APP_LIGHTNING_NODE_URL environment variable')
@@ -131,52 +139,117 @@ export async function onRequestPost(context: any) {
       )
     }
     
-    console.log('[Payment Verify] Connecting to Alby Hub...')
+    console.log('[Payment Verify] Connecting to YOUR app's Alby Hub...')
     
-    // Connect to Alby Hub
+    // Connect to YOUR app's Alby Hub (where payments are received)
     const nwc = new NostrWebLNProvider({
-      nostrWalletConnectUrl: albyUrl
+      nostrWalletConnectUrl: albyUrl // YOUR app's NWC connection
     })
     
+    console.log('[Payment Verify] 🔌 NWC object created')
     await nwc.enable()
+    console.log('[Payment Verify] ✅ Connected to APP wallet')
+    
+    // Test: Try to get wallet info to verify connection
+    try {
+      const info = await nwc.getInfo()
+      console.log('[Payment Verify] 📱 Wallet info:', info)
+    } catch (e) {
+      console.log('[Payment Verify] ⚠️ Could not get wallet info:', e.message)
+    }
     
     console.log('[Payment Verify] Checking payment status for hash:', paymentHash)
     console.log('[Payment Verify] Using verification method:', verificationMethod)
-    
-    let invoiceStatus = null
     
     // Use the real payment hash for verification
     console.log('[Payment Verify] 🔄 Verifying with real payment hash...')
     console.log('[Payment Verify] Real payment hash:', actualPaymentHash)
     
+    let invoiceStatus = null
+    let lookupMethod = ''
+    
     try {
-      // Try to look up invoice by payment hash
-      let lookupRequest
-      
-      if (verificationMethod === 'BOLT11-decoded Payment Hash' || verificationMethod === 'Real Payment Hash') {
-        // Use payment_hash for lookup
-        lookupRequest = { payment_hash: actualPaymentHash }
-        console.log('[Payment Verify] Using payment_hash for lookup:', actualPaymentHash)
-      } else {
-        // Fallback to invoice string
-        lookupRequest = { invoice: actualPaymentHash }
-        console.log('[Payment Verify] Using invoice string for lookup:', actualPaymentHash.substring(0, 50) + '...')
+      // Method 1: Try by payment_hash
+      console.log('[Payment Verify] 🔍 Trying lookupInvoice with payment_hash...')
+      try {
+        invoiceStatus = await nwc.lookupInvoice({
+          payment_hash: actualPaymentHash
+        })
+        lookupMethod = 'payment_hash'
+        console.log('[Payment Verify] ✅ Found via payment_hash')
+      } catch (error) {
+        console.log('[Payment Verify] ⚠️ payment_hash lookup failed:', error.message)
+        
+        // Method 2: Try by invoice string
+        if (invoiceString) {
+          try {
+            console.log('[Payment Verify] 🔍 Trying lookupInvoice with invoice string...')
+            invoiceStatus = await nwc.lookupInvoice({
+              invoice: invoiceString
+            })
+            lookupMethod = 'invoice_string'
+            console.log('[Payment Verify] ✅ Found via invoice string')
+          } catch (error2) {
+            console.log('[Payment Verify] ⚠️ invoice string lookup failed:', error2.message)
+            throw new Error('Could not find invoice using payment_hash or invoice string')
+          }
+        } else {
+          throw error
+        }
       }
       
-      invoiceStatus = await nwc.lookupInvoice(lookupRequest)
-      console.log('[Payment Verify] ✅ Lookup successful!')
-      console.log('[Payment Verify] Response:', JSON.stringify(invoiceStatus, null, 2))
+      console.log('[Payment Verify] 📋 Invoice status:', JSON.stringify(invoiceStatus, null, 2))
+      console.log('[Payment Verify] Lookup method:', lookupMethod)
+      
+      // Check if paid
+      const isPaid = invoiceStatus.settled === true || 
+                     invoiceStatus.state === 'settled' ||
+                     invoiceStatus.status === 'SETTLED' ||
+                     invoiceStatus.paid === true
+      
+      const amount = invoiceStatus.amount || 
+                     invoiceStatus.value || 
+                     invoiceStatus.amountSats ||
+                     (invoiceStatus.amt_msat && invoiceStatus.amt_msat / 1000)
+      
+      console.log('[Payment Verify] 💰 Amount:', amount)
+      console.log('[Payment Verify] ✅ Is Paid:', isPaid)
+      console.log('[Payment Verify] 📅 Settled at:', invoiceStatus.settled_at || invoiceStatus.settledAt)
+      
+      if (isPaid) {
+        console.log('[Payment Verify] 🎉 PAYMENT CONFIRMED!')
+      } else {
+        console.log('[Payment Verify] ⏳ Payment still pending')
+      }
+      
+      return new Response(JSON.stringify({
+        success: true,
+        paid: isPaid,
+        amount: amount,
+        settledAt: invoiceStatus.settled_at || invoiceStatus.settledAt,
+        state: invoiceStatus.state || invoiceStatus.status,
+        lookupMethod: lookupMethod
+      }), {
+        headers: { 
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache',
+          'Access-Control-Allow-Origin': '*'
+        }
+      })
       
     } catch (lookupError) {
-      console.error('[Payment Verify] Lookup error:', lookupError)
+      console.error('[Payment Verify] ❌ Lookup error:', lookupError)
+      console.error('[Payment Verify] Error type:', lookupError.constructor.name)
+      console.error('[Payment Verify] Error message:', lookupError.message)
       
       return new Response(
         JSON.stringify({
           success: false,
           paid: false,
           paymentHash: paymentHash,
-          error: 'Payment verification failed',
-          details: lookupError instanceof Error ? lookupError.message : 'Unknown error'
+          error: 'Payment verification failed - invoice not found',
+          details: lookupError instanceof Error ? lookupError.message : 'Unknown error',
+          errorType: lookupError.constructor.name
         }),
         { 
           status: 500,
