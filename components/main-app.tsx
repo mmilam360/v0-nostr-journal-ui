@@ -348,15 +348,30 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       
       // Fetch current incentive settings
       const { fetchIncentiveSettings } = await import('@/lib/incentive-nostr')
-      const settings = await fetchIncentiveSettings(authData.pubkey)
+      const incentiveSettings = await fetchIncentiveSettings(authData.pubkey)
       
-      if (!settings) {
+      if (!incentiveSettings) {
         console.log('[MainApp] 🎯 No incentive settings found')
         return
       }
       
-      const goalReached = wordCount >= settings.dailyWordGoal
-      console.log('[MainApp] 🎯 Goal check:', wordCount, '>=', settings.dailyWordGoal, '=', goalReached)
+      // Parse the settings from Nostr event tags
+      const dailyWordGoal = parseInt(
+        incentiveSettings.tags.find((t: string[]) => t[0] === 'daily_word_goal')?.[1] || '0'
+      )
+      
+      console.log('[MainApp] 🎯 Parsed settings:', {
+        dailyWordGoal,
+        tags: incentiveSettings.tags
+      })
+      
+      if (dailyWordGoal === 0) {
+        console.log('[MainApp] 🎯 Daily word goal is 0, skipping reward check')
+        return
+      }
+      
+      const goalReached = wordCount >= dailyWordGoal
+      console.log('[MainApp] 🎯 Goal check:', wordCount, '>=', dailyWordGoal, '=', goalReached)
       
       if (goalReached) {
         console.log('[MainApp] 🎯 Goal reached! Triggering automatic reward claim...')
