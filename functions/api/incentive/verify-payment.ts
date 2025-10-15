@@ -113,48 +113,21 @@ export async function onRequestPost(context: any) {
     await nwc.enable()
     
     console.log('[Payment Verify] Checking payment status for hash:', paymentHash)
+    console.log('[Payment Verify] Using verification method:', verificationMethod)
     
-    // Try direct Alby API first for more reliable verification
     let invoiceStatus = null
     
-    try {
-      console.log('[Payment Verify] Attempting direct Alby API verification...')
-      
-      const albyResponse = await fetch(`https://api.getalby.com/invoices/${paymentHash}`, {
-        headers: {
-          'Authorization': `Bearer ${context.env.ALBY_ACCESS_TOKEN}`,
-          'Content-Type': 'application/json'
-        }
-      })
-      
-      if (albyResponse.ok) {
-        invoiceStatus = await albyResponse.json()
-        verificationMethod = 'Direct Alby API'
-        console.log('[Payment Verify] ✅ Direct Alby API successful!')
-        console.log('[Payment Verify] Alby response:', JSON.stringify(invoiceStatus, null, 2))
-      } else {
-        console.log('[Payment Verify] Direct Alby API failed, falling back to NIP-47...')
-        throw new Error('Direct Alby API failed')
-      }
-    } catch (albyError) {
-      console.log('[Payment Verify] Direct Alby API error:', albyError.message)
-      console.log('[Payment Verify] Falling back to NIP-47 lookupInvoice...')
+    if (verificationMethod === 'NIP-47 Invoice String') {
+      // Use NIP-47 lookupInvoice with the invoice string
+      console.log('[Payment Verify] 🔄 Using NIP-47 lookupInvoice with invoice string...')
       
       try {
-        // Fallback to NIP-47
-        let lookupRequest
-        if (paymentHash.length === 64 && /^[a-fA-F0-9]{64}$/.test(paymentHash)) {
-          // We have a proper payment hash
-          lookupRequest = { payment_hash: paymentHash }
-          console.log('[Payment Verify] Using payment hash for lookup:', paymentHash)
-        } else {
-          // We have an invoice string
-          lookupRequest = { invoice: paymentHash }
-          console.log('[Payment Verify] Using invoice string for lookup:', paymentHash.substring(0, 50) + '...')
-        }
+        const lookupRequest = { invoice: actualPaymentHash }
+        console.log('[Payment Verify] NIP-47 lookup request:', { invoice: actualPaymentHash.substring(0, 50) + '...' })
         
         invoiceStatus = await nwc.lookupInvoice(lookupRequest)
-        verificationMethod = 'NIP-47'
+        console.log('[Payment Verify] ✅ NIP-47 lookupInvoice successful!')
+        console.log('[Payment Verify] NIP-47 response:', JSON.stringify(invoiceStatus, null, 2))
       } catch (nip47Error) {
         console.error('[Payment Verify] NIP-47 lookup error:', nip47Error)
         
@@ -163,8 +136,50 @@ export async function onRequestPost(context: any) {
             success: false,
             paid: false,
             paymentHash: paymentHash,
-            error: 'Payment verification failed',
+            error: 'NIP-47 payment verification failed',
             details: nip47Error instanceof Error ? nip47Error.message : 'Unknown error'
+          }),
+          { 
+            status: 500,
+            headers: { 
+              'Content-Type': 'application/json',
+              'Access-Control-Allow-Origin': '*'
+            }
+          }
+        )
+      }
+    } else {
+      // Use Direct Alby API for standard payment hash
+      console.log('[Payment Verify] 🔄 Using Direct Alby API with payment hash...')
+      
+      try {
+        const albyResponse = await fetch(`https://api.getalby.com/invoices/${actualPaymentHash}`, {
+          headers: {
+            'Authorization': `Bearer ${context.env.ALBY_ACCESS_TOKEN}`,
+            'Content-Type': 'application/json'
+          }
+        })
+        
+        if (albyResponse.ok) {
+          invoiceStatus = await albyResponse.json()
+          console.log('[Payment Verify] ✅ Direct Alby API successful!')
+          console.log('[Payment Verify] Alby response:', JSON.stringify(invoiceStatus, null, 2))
+        } else {
+          console.log('[Payment Verify] ❌ Direct Alby API failed with status:', albyResponse.status)
+          const errorText = await albyResponse.text()
+          console.log('[Payment Verify] Alby error response:', errorText)
+          throw new Error(`Direct Alby API failed: ${albyResponse.status}`)
+        }
+      } catch (albyError) {
+        console.error('[Payment Verify] Direct Alby API error:', albyError)
+        
+        return new Response(
+          JSON.stringify({
+            success: false,
+            paid: false,
+            paymentHash: paymentHash,
+            error: 'Direct Alby API verification failed',
+            details: albyError instanceof Error ? albyError.message : 'Unknown error'
           }),
           { 
             status: 500,
