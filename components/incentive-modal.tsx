@@ -30,6 +30,7 @@ export function IncentiveModal({
   onSetupStatusChange
 }: IncentiveModalProps) {
   const [hasSetup, setHasSetup] = useState(false)
+  const [paymentInProgress, setPaymentInProgress] = useState(false)
 
   // Check if user has Lightning Goals setup
   const checkSetup = async () => {
@@ -40,6 +41,9 @@ export function IncentiveModal({
       const hasSetupValue = !!settings
       console.log('[IncentiveModal] 🔄 Setup status:', hasSetupValue)
       setHasSetup(hasSetupValue)
+      
+      // Reset payment in progress state
+      setPaymentInProgress(false)
       
       // Notify parent component of setup status change
       if (onSetupStatusChange) {
@@ -85,8 +89,8 @@ export function IncentiveModal({
         </CardHeader>
         
         <CardContent className="space-y-6">
-          {/* Setup Section - Only show if user doesn't have setup */}
-          {!hasSetup && (
+          {/* Setup Section - Only show if user doesn't have setup and payment not in progress */}
+          {!hasSetup && !paymentInProgress && (
             <div>
               <div className="flex items-center gap-2 mb-4">
                 <Target className="w-5 h-5 text-blue-500" />
@@ -96,6 +100,8 @@ export function IncentiveModal({
                 userPubkey={userPubkey}
                 authData={authData}
                 onPaymentSuccess={() => {
+                  // Immediately set payment in progress to prevent flashing
+                  setPaymentInProgress(true)
                   // Refresh setup status when payment is successful
                   checkSetup()
                 }}
@@ -103,8 +109,8 @@ export function IncentiveModal({
             </div>
           )}
 
-          {/* Reward Section - Only show if user has setup */}
-          {hasSetup && (
+          {/* Reward Section - Show if user has setup OR payment in progress */}
+          {(hasSetup || paymentInProgress) && (
             <div>
               <AutomatedRewardTracker
                 userPubkey={userPubkey}
@@ -115,6 +121,7 @@ export function IncentiveModal({
                   // Refresh the modal state after stake cancellation
                   checkSetup()
                 }}
+                isNewStake={paymentInProgress}
               />
             </div>
           )}

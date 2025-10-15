@@ -12,9 +12,10 @@ interface AutomatedRewardTrackerProps {
   onStreakUpdate?: (newStreak: number) => void // Callback to update streak in parent
   onCancelStake?: () => void // Callback to handle stake cancellation
   onWordCountProcessed?: () => void // Callback to clear word count after processing
+  isNewStake?: boolean // Indicates if this is a newly created stake
 }
 
-export function AutomatedRewardTracker({ userPubkey, authData, currentWordCount, onStreakUpdate, onCancelStake, onWordCountProcessed }: AutomatedRewardTrackerProps) {
+export function AutomatedRewardTracker({ userPubkey, authData, currentWordCount, onStreakUpdate, onCancelStake, onWordCountProcessed, isNewStake }: AutomatedRewardTrackerProps) {
   const [settings, setSettings] = useState<any>(null)
   const [todayProgress, setTodayProgress] = useState(0)
   const [balance, setBalance] = useState(0)
@@ -32,8 +33,7 @@ export function AutomatedRewardTracker({ userPubkey, authData, currentWordCount,
   const [cancelling, setCancelling] = useState(false)
   const [userTimezone, setUserTimezone] = useState<string>('')
   const [showStreakAnimation, setShowStreakAnimation] = useState(false)
-  const [isNewStake, setIsNewStake] = useState(false)
-  const [invoicePaid, setInvoicePaid] = useState(false)
+  const [showPaymentSuccess, setShowPaymentSuccess] = useState(false)
 
   useEffect(() => {
     // Detect user timezone
@@ -45,6 +45,21 @@ export function AutomatedRewardTracker({ userPubkey, authData, currentWordCount,
     loadTodayProgress()
     checkDailyStatus()
   }, [])
+
+  // Handle new stake success message
+  useEffect(() => {
+    if (isNewStake) {
+      console.log('[Tracker] 🎉 New stake detected, showing success message')
+      setShowPaymentSuccess(true)
+      
+      // Hide the success message after 5 seconds
+      const timer = setTimeout(() => {
+        setShowPaymentSuccess(false)
+      }, 5000)
+      
+      return () => clearTimeout(timer)
+    }
+  }, [isNewStake])
 
   // Reload progress when timezone changes
   useEffect(() => {
@@ -65,13 +80,6 @@ export function AutomatedRewardTracker({ userPubkey, authData, currentWordCount,
       setGoalMet(false)
       setPaymentResult(null)
       setShowZapAnimation(false)
-      setIsNewStake(true)
-      setInvoicePaid(true) // Show payment success for new stake
-      
-      // Hide the success message after 5 seconds
-      setTimeout(() => {
-        setInvoicePaid(false)
-      }, 5000)
       
       // Don't reload progress immediately - let it start fresh
       console.log('[Tracker] 🔄 Progress reset complete, starting fresh')
@@ -122,7 +130,6 @@ export function AutomatedRewardTracker({ userPubkey, authData, currentWordCount,
       // Skip loading progress if this is a new stake
       if (isNewStake) {
         console.log('[Tracker] Skipping progress load - new stake detected')
-        setIsNewStake(false) // Reset the flag
         return
       }
       
@@ -370,6 +377,11 @@ export function AutomatedRewardTracker({ userPubkey, authData, currentWordCount,
       setShowZapAnimation(false)
       setPaymentResult(null)
       
+      // Clear today's progress from localStorage to ensure fresh start
+      const today = new Date().toLocaleDateString()
+      localStorage.removeItem(`lightning-goals-progress-${userPubkey}-${today}`)
+      console.log('[Tracker] 🗑️ Cleared today\'s progress from localStorage')
+      
       // Notify parent component
       if (onCancelStake) {
         onCancelStake()
@@ -446,7 +458,7 @@ export function AutomatedRewardTracker({ userPubkey, authData, currentWordCount,
   return (
     <>
     {/* Payment Success Highlight Box */}
-    {invoicePaid && (
+    {showPaymentSuccess && (
       <Card className="border-green-200 bg-green-50 dark:bg-green-900/20">
         <CardContent className="p-4">
           <div className="flex items-center gap-2 text-green-700 dark:text-green-300">
