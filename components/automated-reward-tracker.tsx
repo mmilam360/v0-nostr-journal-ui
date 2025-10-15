@@ -439,16 +439,7 @@ export function AutomatedRewardTracker({ userPubkey, authData, currentWordCount,
   // Direct API calls are now handled in main-app.tsx
 
   if (!settings) {
-    return (
-      <Card>
-        <CardContent className="p-4">
-          <div className="text-center text-muted-foreground">
-            <Target className="w-8 h-8 mx-auto mb-2" />
-            <p>Set up your Lightning Goals first!</p>
-          </div>
-        </CardContent>
-      </Card>
-    )
+    return null
   }
 
   const currentProgress = currentWordCount || todayProgress
