@@ -1,4 +1,5 @@
 import { NostrWebLNProvider } from '@getalby/sdk'
+import * as bolt11 from 'bolt11'
 
 export async function onRequestPost(context: any) {
   console.log('[API] ========================================')
@@ -317,18 +318,46 @@ export async function onRequestPost(context: any) {
           }
         }
         
-        // CRITICAL FIX: The issue is that we're falling back to NIP-47 instead of using Direct Alby API
-        // Let's try Direct Alby API again with proper error handling
-        console.log('[API] 🚨 DIRECT ALBY API FAILED - This is the root cause!')
+        // CRITICAL FIX: Extract REAL payment hash from BOLT11 invoice
+        console.log('[API] 🔍 Extracting REAL payment hash from BOLT11 invoice...')
         console.log('[API] 🔍 Invoice string from NIP-47:', invoiceString.substring(0, 100) + '...')
         
-        // For now, let's use a unique identifier based on the invoice content
-        // This ensures each invoice gets a unique hash for verification
-        const invoiceHash = btoa(invoiceString).substring(0, 32) // Use first 32 chars of base64 encoded invoice
-        decodedPaymentHash = `nip47-${invoiceHash}-${Date.now()}`
-        paymentHash = decodedPaymentHash
-        console.log('[API] ✅ Using unique NIP-47 based identifier:', paymentHash)
-        console.log('[API] 🔍 This ensures each invoice has a unique hash for verification')
+        try {
+          // Decode the BOLT11 invoice to get the real payment hash
+          console.log('[API] 🔍 Decoding BOLT11 invoice...')
+          const decoded = bolt11.decode(invoiceString)
+          
+          console.log('[API] 🔍 Decoded invoice sections:', {
+            paymentHash: decoded.tagsObject?.payment_hash,
+            amount: decoded.satoshis,
+            timestamp: decoded.timestamp,
+            expiry: decoded.timeExpireDate,
+            memo: decoded.tagsObject?.description
+          })
+          
+          // Extract the payment hash (it's in hex format)
+          const realPaymentHash = decoded.tagsObject?.payment_hash
+          
+          if (!realPaymentHash || realPaymentHash.length !== 64) {
+            throw new Error(`Invalid payment hash extracted: ${realPaymentHash}`)
+          }
+          
+          // Validate it's a proper hex string
+          if (!/^[a-f0-9]{64}$/i.test(realPaymentHash)) {
+            throw new Error(`Payment hash contains invalid characters: ${realPaymentHash}`)
+          }
+          
+          paymentHash = realPaymentHash
+          decodedPaymentHash = realPaymentHash
+          
+          console.log('[API] ✅ REAL PAYMENT HASH EXTRACTED:', paymentHash)
+          console.log('[API] ✅ Hash length:', paymentHash.length)
+          console.log('[API] ✅ Hash format valid:', /^[a-f0-9]{64}$/i.test(paymentHash))
+          
+        } catch (decodeError) {
+          console.error('[API] ❌ Failed to decode BOLT11 invoice:', decodeError)
+          throw new Error(`Failed to extract payment hash from invoice: ${decodeError.message}`)
+        }
         
         if (false) { // Disabled broken bech32 decoder
           console.log('[Deposit] Could not decode payment hash from bech32, trying Alby SDK...')
@@ -405,7 +434,7 @@ export async function onRequestPost(context: any) {
       timestamp: new Date().toISOString(),
       requestId: requestId,
       clientTimestamp: timestamp,
-      source: directPaymentHash ? 'Direct Alby API' : 'NIP-47/Bech32'
+      source: directPaymentHash ? 'Direct Alby API' : 'NIP-47/BOLT11-decoded'
     }
     
     console.log('[API] 🎯 FINAL RESPONSE:', JSON.stringify(responseData, null, 2))

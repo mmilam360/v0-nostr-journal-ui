@@ -1,4 +1,5 @@
 import { NostrWebLNProvider } from '@getalby/sdk'
+import * as bolt11 from 'bolt11'
 
 export async function onRequestPost(context: any) {
   console.log('[Payment Verify] Function called')
@@ -32,20 +33,20 @@ export async function onRequestPost(context: any) {
       )
     }
     
-    // Handle different payment hash formats
+    // Validate and determine verification method
     let verificationMethod = ''
     let actualPaymentHash = paymentHash
     
     if (paymentHash.startsWith('nip47-')) {
-      // This is our custom NIP-47 format - we need to use the invoice string for verification
-      console.log('[Payment Verify] 🔍 Detected NIP-47 format hash')
-      console.log('[Payment Verify] 🔍 NIP-47 hash:', paymentHash)
+      // Legacy fake hash format - extract real hash from invoice
+      console.log('[Payment Verify] 🔍 Detected legacy NIP-47 format hash')
+      console.log('[Payment Verify] 🔍 Legacy hash:', paymentHash)
       
       if (!invoiceString) {
         return new Response(
           JSON.stringify({
             success: false,
-            error: 'NIP-47 format requires invoice string for verification',
+            error: 'Legacy format requires invoice string for verification',
             details: 'Missing invoiceString in request body'
           }),
           { 
@@ -58,20 +59,46 @@ export async function onRequestPost(context: any) {
         )
       }
       
-      console.log('[Payment Verify] ✅ Using invoice string for NIP-47 verification')
-      verificationMethod = 'NIP-47 Invoice String'
-      actualPaymentHash = invoiceString // Use invoice string for lookup
+      // Extract real payment hash from invoice
+      try {
+        const decoded = bolt11.decode(invoiceString)
+        const realHash = decoded.tagsObject?.payment_hash
+        
+        if (!realHash || realHash.length !== 64 || !/^[a-f0-9]{64}$/i.test(realHash)) {
+          throw new Error(`Invalid payment hash in invoice: ${realHash}`)
+        }
+        
+        console.log('[Payment Verify] ✅ Extracted real hash from invoice:', realHash)
+        verificationMethod = 'BOLT11-decoded Payment Hash'
+        actualPaymentHash = realHash
+      } catch (decodeError) {
+        console.error('[Payment Verify] ❌ Failed to decode invoice:', decodeError)
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: 'Failed to extract payment hash from invoice',
+            details: decodeError.message
+          }),
+          { 
+            status: 400,
+            headers: { 
+              'Content-Type': 'application/json',
+              'Access-Control-Allow-Origin': '*'
+            }
+          }
+        )
+      }
     } else if (/^[a-f0-9]{64}$/.test(paymentHash)) {
-      // This is a standard 64-char hex payment hash
-      console.log('[Payment Verify] ✅ Standard 64-char hex payment hash detected')
-      verificationMethod = 'Standard Payment Hash'
+      // This is a real 64-char hex payment hash
+      console.log('[Payment Verify] ✅ Real 64-char hex payment hash detected')
+      verificationMethod = 'Real Payment Hash'
       actualPaymentHash = paymentHash
     } else {
       return new Response(
         JSON.stringify({
           success: false,
           error: 'Invalid payment hash format',
-          details: 'Expected either 64-character hex hash or nip47- format'
+          details: 'Expected 64-character hex hash (like: 927c15a8dbe64ca9d86d4dfd1c3fd3c0acd9c9a90b2b3df25e1a08f45d6c1e7a)'
         }),
         { 
           status: 400,
@@ -117,38 +144,50 @@ export async function onRequestPost(context: any) {
     
     let invoiceStatus = null
     
-    if (verificationMethod === 'NIP-47 Invoice String') {
-      // Use NIP-47 lookupInvoice with the invoice string
-      console.log('[Payment Verify] 🔄 Using NIP-47 lookupInvoice with invoice string...')
+    // Use the real payment hash for verification
+    console.log('[Payment Verify] 🔄 Verifying with real payment hash...')
+    console.log('[Payment Verify] Real payment hash:', actualPaymentHash)
+    
+    try {
+      // Try to look up invoice by payment hash
+      let lookupRequest
       
-      try {
-        const lookupRequest = { invoice: actualPaymentHash }
-        console.log('[Payment Verify] NIP-47 lookup request:', { invoice: actualPaymentHash.substring(0, 50) + '...' })
-        
-        invoiceStatus = await nwc.lookupInvoice(lookupRequest)
-        console.log('[Payment Verify] ✅ NIP-47 lookupInvoice successful!')
-        console.log('[Payment Verify] NIP-47 response:', JSON.stringify(invoiceStatus, null, 2))
-      } catch (nip47Error) {
-        console.error('[Payment Verify] NIP-47 lookup error:', nip47Error)
-        
-        return new Response(
-          JSON.stringify({
-            success: false,
-            paid: false,
-            paymentHash: paymentHash,
-            error: 'NIP-47 payment verification failed',
-            details: nip47Error instanceof Error ? nip47Error.message : 'Unknown error'
-          }),
-          { 
-            status: 500,
-            headers: { 
-              'Content-Type': 'application/json',
-              'Access-Control-Allow-Origin': '*'
-            }
-          }
-        )
+      if (verificationMethod === 'BOLT11-decoded Payment Hash' || verificationMethod === 'Real Payment Hash') {
+        // Use payment_hash for lookup
+        lookupRequest = { payment_hash: actualPaymentHash }
+        console.log('[Payment Verify] Using payment_hash for lookup:', actualPaymentHash)
+      } else {
+        // Fallback to invoice string
+        lookupRequest = { invoice: actualPaymentHash }
+        console.log('[Payment Verify] Using invoice string for lookup:', actualPaymentHash.substring(0, 50) + '...')
       }
-    } else {
+      
+      invoiceStatus = await nwc.lookupInvoice(lookupRequest)
+      console.log('[Payment Verify] ✅ Lookup successful!')
+      console.log('[Payment Verify] Response:', JSON.stringify(invoiceStatus, null, 2))
+      
+    } catch (lookupError) {
+      console.error('[Payment Verify] Lookup error:', lookupError)
+      
+      return new Response(
+        JSON.stringify({
+          success: false,
+          paid: false,
+          paymentHash: paymentHash,
+          error: 'Payment verification failed',
+          details: lookupError instanceof Error ? lookupError.message : 'Unknown error'
+        }),
+        { 
+          status: 500,
+          headers: { 
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*'
+          }
+        }
+      )
+    }
+    
+    if (false) { // Disabled old logic
       // Use Direct Alby API for standard payment hash
       console.log('[Payment Verify] 🔄 Using Direct Alby API with payment hash...')
       
