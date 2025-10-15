@@ -11,9 +11,10 @@ import QRCode from 'qrcode'
 interface AutomatedIncentiveSetupProps {
   userPubkey: string
   authData: any
+  onPaymentSuccess?: () => void
 }
 
-export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncentiveSetupProps) {
+export function AutomatedIncentiveSetup({ userPubkey, authData, onPaymentSuccess }: AutomatedIncentiveSetupProps) {
   const [settings, setSettings] = useState({
     dailyWordGoal: 500,
     dailyRewardSats: 500,
@@ -336,6 +337,11 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
         setBalance(settings.stakeAmount)
         setHasSetup(true)
         setDepositedAmount(settings.stakeAmount)
+        
+        // Notify parent component that payment was successful
+        if (onPaymentSuccess) {
+          onPaymentSuccess()
+        }
         
         // CRITICAL: Save the actual balance to Nostr
         console.log('[Setup] 💰 Payment confirmed! Saving balance to Nostr...')

@@ -95,6 +95,10 @@ export function IncentiveModal({
               <AutomatedIncentiveSetup 
                 userPubkey={userPubkey}
                 authData={authData}
+                onPaymentSuccess={() => {
+                  // Refresh setup status when payment is successful
+                  checkSetup()
+                }}
               />
             </div>
           )}
