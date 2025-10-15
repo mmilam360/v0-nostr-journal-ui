@@ -54,26 +54,43 @@ export const onRequestPost: onRequestPost = async (context) => {
         await nwc.enable()
         console.log('[Verify] ✅ NWC connection established')
         
-        // Try lookup by payment_hash first
+        // Try lookup methods in order of success (based on test results)
         let invoiceStatus
+        let lookupMethod = ''
+        
+        // Method 1: camelCase paymentHash (WORKING METHOD from test)
         try {
-          console.log('[Verify] Trying NWC lookup by payment_hash...')
+          console.log('[Verify] Method 1: Trying NWC lookup by paymentHash (camelCase)...')
           invoiceStatus = await nwc.lookupInvoice({
-            payment_hash: paymentHash
+            paymentHash: paymentHash
           })
-          console.log('[Verify] ✅ Found via payment_hash')
-        } catch (hashError) {
-          console.log('[Verify] ⚠️ payment_hash lookup failed:', hashError.message)
+          console.log('[Verify] ✅ Found via paymentHash (camelCase)')
+          lookupMethod = 'paymentHash (camelCase)'
+        } catch (camelCaseError) {
+          console.log('[Verify] ⚠️ paymentHash (camelCase) lookup failed:', camelCaseError.message)
           
-          // Try lookup by invoice string
-          if (invoiceString) {
-            console.log('[Verify] Trying NWC lookup by invoice string...')
+          // Method 2: snake_case payment_hash (fallback)
+          try {
+            console.log('[Verify] Method 2: Trying NWC lookup by payment_hash (snake_case)...')
             invoiceStatus = await nwc.lookupInvoice({
-              invoice: invoiceString
+              payment_hash: paymentHash
             })
-            console.log('[Verify] ✅ Found via invoice string')
-          } else {
-            throw hashError
+            console.log('[Verify] ✅ Found via payment_hash (snake_case)')
+            lookupMethod = 'payment_hash (snake_case)'
+          } catch (hashError) {
+            console.log('[Verify] ⚠️ payment_hash (snake_case) lookup failed:', hashError.message)
+            
+            // Method 3: invoice string (last resort)
+            if (invoiceString) {
+              console.log('[Verify] Method 3: Trying NWC lookup by invoice string...')
+              invoiceStatus = await nwc.lookupInvoice({
+                invoice: invoiceString
+              })
+              console.log('[Verify] ✅ Found via invoice string')
+              lookupMethod = 'invoice string'
+            } else {
+              throw new Error(`All lookup methods failed: camelCase(${camelCaseError.message}), snake_case(${hashError.message})`)
+            }
           }
         }
         
@@ -90,7 +107,7 @@ export const onRequestPost: onRequestPost = async (context) => {
           paymentHash: paymentHash
         }
         
-        usedMethod = 'NWC lookupInvoice (Alby Recommended)'
+        usedMethod = `NWC lookupInvoice (${lookupMethod})`
         
       } catch (nwcError) {
         console.log('[Verify] ⚠️ NWC method failed:', nwcError.message)
