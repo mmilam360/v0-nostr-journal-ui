@@ -339,74 +339,13 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     }
   }
 
-  // Direct reward check function for automatic triggering on note save
+  // Simple reward check - LightningGoalsManager handles the actual logic
   const checkRewardEligibility = async (wordCount: number) => {
     if (!isIncentiveEnabled || !authData) return
     
-    try {
-      console.log('[MainApp] 🎯 Checking reward eligibility for word count:', wordCount)
-      
-      // Fetch current stake using new system
-      const { getCurrentStake } = await import('@/lib/incentive-nostr')
-      const stake = await getCurrentStake(authData.pubkey)
-      
-      if (!stake || !stake.isActive) {
-        console.log('[MainApp] 🎯 No active stake found')
-        return
-      }
-      
-      const dailyWordGoal = stake.dailyWordGoal
-      
-      console.log('[MainApp] 🎯 Parsed settings:', {
-        dailyWordGoal,
-        stakeId: stake.stakeId,
-        currentBalance: stake.currentBalance
-      })
-      
-      if (dailyWordGoal === 0) {
-        console.log('[MainApp] 🎯 Daily word goal is 0, skipping reward check')
-        return
-      }
-      
-      const goalReached = wordCount >= dailyWordGoal
-      console.log('[MainApp] 🎯 Goal check:', wordCount, '>=', dailyWordGoal, '=', goalReached)
-      
-      if (goalReached) {
-        console.log('[MainApp] 🎯 Goal reached! Triggering automatic reward claim...')
-        
-        // Call the send-reward API directly
-        const response = await fetch('/api/incentive/send-reward', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            userPubkey: authData.pubkey,
-            authData: authData
-          })
-        })
-        
-        if (response.ok) {
-          const result = await response.json()
-          console.log('[MainApp] 🎯 Reward sent successfully:', result)
-          
-          // Force refresh Lightning Goals data with cache busting
-          await checkLightningGoals()
-          
-          // Trigger a small delay then refresh again to ensure data is updated
-          setTimeout(async () => {
-            await checkLightningGoals()
-          }, 1000)
-          
-          // Show success notification (optional)
-          console.log('[MainApp] 🎯 Daily goal completed! Reward sent.')
-        } else {
-          console.error('[MainApp] 🎯 Failed to send reward:', await response.text())
-        }
-      }
-    } catch (error) {
-      console.error('[MainApp] 🎯 Error checking reward eligibility:', error)
-    }
+    console.log('[MainApp] 🎯 Word count updated:', wordCount)
+    // The LightningGoalsManager will automatically check for goal completion
+    // when it receives the currentWordCount prop
   }
 
   useEffect(() => {
