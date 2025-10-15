@@ -481,8 +481,8 @@ export async function onRequestPost(context: any) {
         } else {
           throw new Error('No invoice string for time-based verification')
         }
-          
-        } catch (pollingError) {
+        
+      } catch (pollingError) {
           console.error('[Payment Verify] ❌ All verification methods failed:', pollingError.message)
           
           return new Response(
