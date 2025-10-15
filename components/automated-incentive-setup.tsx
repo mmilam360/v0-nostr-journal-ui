@@ -150,35 +150,57 @@ export function AutomatedIncentiveSetup({ userPubkey, authData }: AutomatedIncen
   }
 
   const handleCreateStakeInvoice = async () => {
+    console.log('[Frontend] 🚀 CREATING NEW INVOICE - Start')
+    console.log('[Frontend] Timestamp:', new Date().toISOString())
+    console.log('[Frontend] Random ID:', Math.random())
+    
     setLoading(true)
     
     // CRITICAL: Clear any existing payment hash before creating new invoice
     const oldHash = localStorage.getItem(`payment-hash-${userPubkey}`)
-    console.log('[Lightning] 🧹 OLD HASH BEFORE CLEARING:', oldHash)
+    console.log('[Frontend] 🧹 OLD HASH BEFORE CLEARING:', oldHash)
     localStorage.removeItem(`payment-hash-${userPubkey}`)
-    console.log('[Lightning] 🧹 Cleared old payment hash before creating new invoice')
-    console.log('[Lightning] 🧹 Hash after clearing:', localStorage.getItem(`payment-hash-${userPubkey}`))
+    console.log('[Frontend] 🧹 Cleared old payment hash before creating new invoice')
+    console.log('[Frontend] 🧹 Hash after clearing:', localStorage.getItem(`payment-hash-${userPubkey}`))
+    
+    // Clear old state completely
+    console.log('[Frontend] 🗑️ Clearing old invoice state')
+    setDepositInvoice(null)
+    setInvoicePaid(false)
+    
+    // Small delay to ensure state is cleared
+    await new Promise(resolve => setTimeout(resolve, 100))
     
     try {
-      // Add timestamp to prevent caching
+      // Generate truly unique identifiers
+      const uniqueTimestamp = Date.now()
+      const uniqueRequestId = Math.random().toString(36).substring(7)
+      
       const requestBody = {
         userPubkey: userPubkey,
         amountSats: settings.stakeAmount,
-        timestamp: new Date().getTime(),
-        requestId: Math.random().toString(36).substring(7)
+        timestamp: uniqueTimestamp,
+        requestId: uniqueRequestId
       }
       
-      console.log('[Lightning] 📤 SENDING REQUEST:', JSON.stringify(requestBody, null, 2))
+      console.log('[Frontend] 📤 SENDING REQUEST:', JSON.stringify(requestBody, null, 2))
       
-      const response = await fetch('/api/incentive/create-deposit-invoice', {
+      // Nuclear option: Force fresh request with query params and cache busting
+      const cacheBuster = `?t=${uniqueTimestamp}&r=${uniqueRequestId}`
+      
+      const response = await fetch('/api/incentive/create-deposit-invoice' + cacheBuster, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache'
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
         },
+        cache: 'no-store',
         body: JSON.stringify(requestBody)
       })
+      
+      console.log('[Frontend] 📥 Got response, status:', response.status)
 
       if (response.ok) {
         const data = await response.json()

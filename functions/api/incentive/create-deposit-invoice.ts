@@ -1,13 +1,23 @@
 import { NostrWebLNProvider } from '@getalby/sdk'
 
 export async function onRequestPost(context: any) {
-  console.log('[Deposit] Function called')
+  console.log('[API] ========================================')
+  console.log('[API] 🆕 NEW INVOICE REQUEST RECEIVED')
+  console.log('[API] Timestamp:', new Date().toISOString())
+  console.log('[API] Request ID:', Math.random())
+  console.log('[API] ========================================')
   
   try {
     const body = await context.request.json()
-    const { userPubkey, amountSats } = body
+    console.log('[API] Request body:', JSON.stringify(body, null, 2))
     
-    console.log('[Deposit] Request:', { userPubkey, amountSats })
+    const { userPubkey, amountSats, timestamp, requestId } = body
+    
+    console.log('[API] === NEW INVOICE CREATION REQUEST ===')
+    console.log('[API] Creating invoice with amount:', amountSats)
+    console.log('[API] User pubkey:', userPubkey)
+    console.log('[API] Client timestamp:', timestamp)
+    console.log('[API] Client request ID:', requestId)
     
     if (!userPubkey || !amountSats) {
       return new Response(
@@ -85,7 +95,7 @@ export async function onRequestPost(context: any) {
           },
           body: JSON.stringify({
             amount: amountSats,
-            memo: `Journal incentive stake - ${userPubkey.substring(0, 8)}`,
+            memo: `Journal stake deposit - User: ${userPubkey.substring(0, 8)} - ID: ${timestamp || Date.now()}-${requestId || Math.random()}`,
             webhook_url: `${process.env.NEXT_PUBLIC_APP_URL || 'https://nostr-journal-incentive-demo.pages.dev'}/api/incentive/webhook`
           })
         })
@@ -110,7 +120,7 @@ export async function onRequestPost(context: any) {
         console.log('[Deposit] 🔄 Attempting NIP-47 makeInvoice...')
         invoice = await nwc.makeInvoice({
           amount: amountSats,
-          memo: `Journal incentive stake - ${userPubkey.substring(0, 8)}`
+          memo: `Journal stake deposit - User: ${userPubkey.substring(0, 8)} - ID: ${timestamp || Date.now()}-${requestId || Math.random()}`
         })
         console.log('[Deposit] ✅ NIP-47 makeInvoice successful!')
         console.log('[Deposit] 🔍 NIP-47 response:', JSON.stringify(invoice, null, 2))
@@ -369,11 +379,12 @@ export async function onRequestPost(context: any) {
       paymentHash: paymentHash,
       amountSats: amountSats,
       timestamp: new Date().toISOString(),
-      requestId: Math.random().toString(36).substring(7),
+      requestId: requestId,
+      clientTimestamp: timestamp,
       source: directPaymentHash ? 'Direct Alby API' : 'NIP-47/Bech32'
     }
     
-    console.log('[Deposit] 🎯 FINAL RESPONSE:', JSON.stringify(responseData, null, 2))
+    console.log('[API] 🎯 FINAL RESPONSE:', JSON.stringify(responseData, null, 2))
     
     return new Response(
       JSON.stringify(responseData),
@@ -381,7 +392,10 @@ export async function onRequestPost(context: any) {
         status: 200,
         headers: { 
           'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*'
+          'Access-Control-Allow-Origin': '*',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
         }
       }
     )
@@ -393,13 +407,17 @@ export async function onRequestPost(context: any) {
       JSON.stringify({ 
         success: false,
         error: error instanceof Error ? error.message : 'Failed to create invoice',
-        details: error instanceof Error ? error.stack : undefined
+        details: error instanceof Error ? error.stack : undefined,
+        timestamp: new Date().toISOString()
       }),
       { 
         status: 500,
         headers: { 
           'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*'
+          'Access-Control-Allow-Origin': '*',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
         }
       }
     )
