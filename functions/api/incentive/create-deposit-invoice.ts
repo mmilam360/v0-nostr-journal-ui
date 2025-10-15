@@ -1,4 +1,5 @@
-// Import will be done dynamically to avoid bundling issues
+// Static imports for Cloudflare Workers compatibility
+import { webln } from '@getalby/sdk'
 import { decode } from 'light-bolt11-decoder'
 
 export async function onRequestPost(context: any) {
@@ -60,22 +61,17 @@ export async function onRequestPost(context: any) {
     console.log('[Invoice] 🔌 Using NWC connection (preview):', nwcUrl.substring(0, 40) + '...')
     console.log('[Invoice] 🔌 Connecting to YOUR wallet via NWC...')
     
-    // Use the new LN client from @getalby/sdk/lnclient as per official docs
-    const { LN } = await import('@getalby/sdk/lnclient')
+    // Use webln.NostrWebLNProvider (simplified approach)
+    const nwc = new webln.NostrWebLNProvider({
+      nostrWalletConnectUrl: nwcUrl
+    })
     
-    console.log('[Invoice] 🔌 Creating LN client with NWC credentials...')
-    const ln = new LN(nwcUrl)
+    console.log('[Invoice] 🔌 Enabling NWC connection...')
+    await nwc.enable()
+    console.log('[Invoice] ✅ NWC connection enabled successfully')
     
-    console.log('[Invoice] ✅ LN client created successfully')
-    
-    // Check wallet info using NostrWebLNProvider (LN client doesn't have getInfo)
+    // Get wallet info
     try {
-      const { NostrWebLNProvider } = await import('@getalby/sdk')
-      const nwc = new NostrWebLNProvider({
-        nostrWalletConnectUrl: nwcUrl
-      })
-      await nwc.enable()
-      
       const info = await nwc.getInfo()
       console.log('[Invoice] 📱 Connected to wallet:', info.alias || 'Unknown')
       console.log('[Invoice] 📱 Lightning address:', info.lightning_address || 'Unknown')
@@ -98,21 +94,21 @@ export async function onRequestPost(context: any) {
     let paymentHash = null
     
     try {
-      // Create invoice using LN client requestPayment method
-      const invoice = await ln.requestPayment({
+      // Create invoice using webln makeInvoice method
+      const invoice = await nwc.makeInvoice({
         amount: amountSats,
-        description: uniqueMemo
+        memo: uniqueMemo
       })
       
       console.log('[Invoice] ✅ Invoice created successfully!')
       console.log('[Invoice] 📋 Invoice response:', JSON.stringify(invoice, null, 2))
       
-      // Extract invoice string from LN client response
-      invoiceString = invoice.invoice
+      // Extract invoice string from webln response
+      invoiceString = invoice.paymentRequest
       console.log('[Invoice] 📄 Invoice string:', invoiceString?.substring(0, 80) + '...')
       
       if (!invoiceString) {
-        throw new Error('No invoice string received from LN client')
+        throw new Error('No invoice string received from webln')
       }
       
       // Extract payment hash from BOLT11 invoice using light-bolt11-decoder

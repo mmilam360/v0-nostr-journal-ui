@@ -1,4 +1,6 @@
 import { onRequestPost } from 'wrangler'
+import { webln } from '@getalby/sdk'
+import { decode } from 'light-bolt11-decoder'
 
 export const onRequestPost: onRequestPost = async (context) => {
   const startTime = Date.now()
@@ -44,9 +46,8 @@ export const onRequestPost: onRequestPost = async (context) => {
       try {
         console.log('[Verify] 🔌 Attempting Method 1: NWC lookupInvoice (Alby Recommended)...')
         
-        // Use the underlying NostrWebLNProvider for lookup operations
-        const { NostrWebLNProvider } = await import('@getalby/sdk')
-        const nwc = new NostrWebLNProvider({
+        // Use the imported webln.NostrWebLNProvider for lookup operations
+        const nwc = new webln.NostrWebLNProvider({
           nostrWalletConnectUrl: context.env.NWC_CONNECTION_URL
         })
         
@@ -160,7 +161,6 @@ export const onRequestPost: onRequestPost = async (context) => {
       try {
         console.log('[Verify] 📝 Attempting Method 3: Decode invoice string...')
         
-        const { decode } = await import('light-bolt11-decoder')
         const decoded = decode(invoiceString)
         
         console.log('[Verify] ⚠️ Can only decode invoice, cannot verify payment status')

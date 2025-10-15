@@ -1,3 +1,6 @@
+// Import at the top of the file (static import for Cloudflare Workers)
+import { webln } from '@getalby/sdk'
+
 export async function onRequestGet(context: any) {
   const test = {
     nwc_configured: !!context.env.NWC_CONNECTION_URL,
@@ -19,10 +22,7 @@ export async function onRequestGet(context: any) {
   }
   
   try {
-    // Import Alby SDK
-    const { webln } = await import('@getalby/sdk')
-    
-    // Create NWC connection
+    // Create NWC connection using static import
     console.log('[Test] Creating NWC connection...')
     const nwc = new webln.NostrWebLNProvider({
       nostrWalletConnectUrl: context.env.NWC_CONNECTION_URL
@@ -75,9 +75,10 @@ export async function onRequestGet(context: any) {
       
       // Decode invoice to get payment hash
       try {
-        const bolt11 = await import('bolt11')
-        const decoded = bolt11.decode(invoice.paymentRequest)
-        const paymentHash = decoded.tagsObject.payment_hash
+        // Use light-bolt11-decoder for Cloudflare compatibility
+        const { decode } = await import('light-bolt11-decoder')
+        const decoded = decode(invoice.paymentRequest)
+        const paymentHash = decoded.sections?.find(s => s.name === 'payment_hash')?.value
         
         console.log('[Test] Decoded payment hash:', paymentHash)
         test.tests.create_invoice.payment_hash = paymentHash

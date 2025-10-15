@@ -1,4 +1,5 @@
 import { onRequestGet } from 'wrangler'
+import { webln } from '@getalby/sdk'
 
 export const onRequestGet: onRequestGet = async (context) => {
   const results = {
@@ -11,8 +12,7 @@ export const onRequestGet: onRequestGet = async (context) => {
     results.nwc.available = true
     
     try {
-      const { NostrWebLNProvider } = await import('@getalby/sdk')
-      const nwc = new NostrWebLNProvider({
+      const nwc = new webln.NostrWebLNProvider({
         nostrWalletConnectUrl: context.env.NWC_CONNECTION_URL
       })
       
