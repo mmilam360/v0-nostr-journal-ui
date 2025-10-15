@@ -238,27 +238,131 @@ export async function onRequestPost(context: any) {
       })
       
     } catch (lookupError) {
-      console.error('[Payment Verify] ❌ Lookup error:', lookupError)
+      console.error('[Payment Verify] ❌ NWC lookup failed:', lookupError)
       console.error('[Payment Verify] Error type:', lookupError.constructor.name)
       console.error('[Payment Verify] Error message:', lookupError.message)
       
-      return new Response(
-        JSON.stringify({
-          success: false,
-          paid: false,
-          paymentHash: paymentHash,
-          error: 'Payment verification failed - invoice not found',
-          details: lookupError instanceof Error ? lookupError.message : 'Unknown error',
-          errorType: lookupError.constructor.name
-        }),
-        { 
-          status: 500,
+      // Fallback: Try Direct Alby API
+      console.log('[Payment Verify] 🔄 Trying Direct Alby API as fallback...')
+      
+      try {
+        const albyToken = context.env.ALBY_ACCESS_TOKEN
+        console.log('[Payment Verify] Alby token available:', !!albyToken)
+        
+        if (!albyToken) {
+          throw new Error('ALBY_ACCESS_TOKEN not available for fallback')
+        }
+        
+        // Try different Alby API endpoints
+        let albyResponse = null
+        let albyMethod = ''
+        
+        // Method 1: Try incoming invoices endpoint
+        try {
+          console.log('[Payment Verify] 🔍 Trying Alby incoming invoices endpoint...')
+          albyResponse = await fetch(
+            `https://api.getalby.com/invoices/incoming/${actualPaymentHash}`,
+            {
+              headers: {
+                'Authorization': `Bearer ${albyToken}`,
+                'Content-Type': 'application/json'
+              }
+            }
+          )
+          albyMethod = 'incoming'
+        } catch (e) {
+          console.log('[Payment Verify] ⚠️ Incoming endpoint failed, trying general invoices...')
+          
+          // Method 2: Try general invoices endpoint
+          albyResponse = await fetch(
+            `https://api.getalby.com/invoices/${actualPaymentHash}`,
+            {
+              headers: {
+                'Authorization': `Bearer ${albyToken}`,
+                'Content-Type': 'application/json'
+              }
+            }
+          )
+          albyMethod = 'general'
+        }
+        
+        console.log('[Payment Verify] Alby API status:', albyResponse.status)
+        console.log('[Payment Verify] Alby method used:', albyMethod)
+        
+        if (!albyResponse.ok) {
+          const errorText = await albyResponse.text()
+          console.error('[Payment Verify] Alby API error:', errorText)
+          throw new Error(`Alby API returned ${albyResponse.status}: ${errorText}`)
+        }
+        
+        invoiceStatus = await albyResponse.json()
+        console.log('[Payment Verify] ✅ Alby API successful!')
+        console.log('[Payment Verify] 📋 Alby response:', JSON.stringify(invoiceStatus, null, 2))
+        
+        // Check if paid using Alby response format
+        const isPaid = invoiceStatus.settled === true || 
+                       invoiceStatus.state === 'SETTLED' ||
+                       invoiceStatus.status === 'SETTLED' ||
+                       invoiceStatus.paid === true
+        
+        const amount = invoiceStatus.amount || 
+                       invoiceStatus.value || 
+                       invoiceStatus.amountSats ||
+                       (invoiceStatus.amt_msat && invoiceStatus.amt_msat / 1000)
+        
+        console.log('[Payment Verify] 💰 Amount (Alby):', amount)
+        console.log('[Payment Verify] ✅ Is Paid (Alby):', isPaid)
+        console.log('[Payment Verify] 📅 Settled at (Alby):', invoiceStatus.settled_at || invoiceStatus.settledAt)
+        
+        if (isPaid) {
+          console.log('[Payment Verify] 🎉 PAYMENT CONFIRMED via Alby API!')
+        } else {
+          console.log('[Payment Verify] ⏳ Payment still pending (Alby)')
+        }
+        
+        return new Response(JSON.stringify({
+          success: true,
+          paid: isPaid,
+          amount: amount,
+          settledAt: invoiceStatus.settled_at || invoiceStatus.settledAt,
+          state: invoiceStatus.state || invoiceStatus.status,
+          verificationMethod: `Alby API (${albyMethod})`,
+          fallbackUsed: true
+        }), {
           headers: { 
             'Content-Type': 'application/json',
+            'Cache-Control': 'no-cache',
             'Access-Control-Allow-Origin': '*'
           }
-        }
-      )
+        })
+        
+      } catch (albyError) {
+        console.error('[Payment Verify] ❌ Alby API fallback also failed:', albyError)
+        console.error('[Payment Verify] Alby error type:', albyError.constructor.name)
+        console.error('[Payment Verify] Alby error message:', albyError.message)
+        
+        return new Response(
+          JSON.stringify({
+            success: false,
+            paid: false,
+            paymentHash: paymentHash,
+            error: 'Payment verification failed - both NWC and Alby API failed',
+            details: {
+              nwcError: lookupError.message,
+              albyError: albyError.message,
+              nwcErrorType: lookupError.constructor.name,
+              albyErrorType: albyError.constructor.name
+            }
+          }),
+          { 
+            status: 500,
+            headers: { 
+              'Content-Type': 'application/json',
+              'Access-Control-Allow-Origin': '*'
+            }
+          }
+        )
+      }
     }
     
     if (false) { // Disabled old logic
