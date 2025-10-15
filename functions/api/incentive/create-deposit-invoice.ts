@@ -36,15 +36,15 @@ export async function onRequestPost(context: any) {
       )
     }
     
-    // Get Alby Hub connection from environment
-    const albyUrl = context.env.APP_LIGHTNING_NODE_URL
+    // ⚠️ CRITICAL: Use the single NWC connection (same as verification)
+    const nwcUrl = context.env.NWC_CONNECTION_URL
     
-    if (!albyUrl) {
-      console.error('[Deposit] Missing APP_LIGHTNING_NODE_URL environment variable')
+    if (!nwcUrl) {
+      console.error('[Invoice] Missing NWC_CONNECTION_URL environment variable')
       return new Response(
         JSON.stringify({ 
           success: false,
-          error: 'Server configuration error: Missing Lightning node connection' 
+          error: 'Server configuration error: Missing NWC connection' 
         }),
         { 
           status: 500,
@@ -56,360 +56,84 @@ export async function onRequestPost(context: any) {
       )
     }
     
-    console.log('[Deposit] Connecting to Alby Hub...')
+    console.log('[Invoice] ========================================')
+    console.log('[Invoice] 🔌 Using NWC connection (preview):', nwcUrl.substring(0, 40) + '...')
+    console.log('[Invoice] 🔌 Connecting to YOUR wallet via NWC...')
     
-    // Connect to Alby Hub
+    // Connect to YOUR wallet via NWC (same connection used for verification)
     const nwc = new NostrWebLNProvider({
-      nostrWalletConnectUrl: albyUrl
+      nostrWalletConnectUrl: nwcUrl
     })
     
     await nwc.enable()
+    console.log('[Invoice] ✅ NWC connected')
     
-    console.log('[Deposit] === NEW INVOICE CREATION REQUEST ===')
-    console.log('[Deposit] Creating invoice with amount:', amountSats)
-    console.log('[Deposit] User pubkey:', userPubkey)
-    console.log('[Deposit] Timestamp:', new Date().toISOString())
-    console.log('[Deposit] Request ID:', Math.random().toString(36).substring(7))
+    // Check wallet info to confirm we're connected to the right wallet
+    try {
+      const info = await nwc.getInfo()
+      console.log('[Invoice] 📱 Connected to wallet:', info.alias || 'Unknown')
+      console.log('[Invoice] 📱 Lightning address:', info.lightning_address || 'Unknown')
+      console.log('[Invoice] 📱 Available methods:', info.methods?.join(', ') || 'Unknown')
+    } catch (e) {
+      console.warn('[Invoice] ⚠️ Could not get wallet info:', e.message)
+    }
     
-    // Debug environment variables
-    console.log('[DEBUG] Context env keys:', Object.keys(context.env))
-    console.log('[DEBUG] Has ALBY_ACCESS_TOKEN:', !!context.env.ALBY_ACCESS_TOKEN)
-    console.log('[DEBUG] Has NWC_CONNECTION_URL:', !!context.env.NWC_CONNECTION_URL)
+    console.log('[Invoice] ========================================')
+    console.log('[Invoice] 📝 Creating unique memo...')
     
-    let invoiceString = null
-    let paymentHash = null
-    let directPaymentHash = null
-    let decodedPaymentHash = null
+    // Create unique memo to ensure unique invoices
+    const uniqueMemo = `Journal stake - ${userPubkey.substring(0, 8)} - ${timestamp || Date.now()}`
+    console.log('[Invoice] 📝 Unique memo:', uniqueMemo)
+    
+    console.log('[Invoice] 💰 Creating invoice for', amountSats, 'sats...')
     
     try {
-      // Try direct Alby API first for complete invoice data
-      let invoice = null
-      
-      try {
-        console.log('[API] 🚀 ATTEMPTING DIRECT ALBY API CALL...')
-        console.log('[API] 🔑 ALBY_ACCESS_TOKEN available:', !!ALBY_ACCESS_TOKEN)
-        console.log('[API] 🔑 ALBY_ACCESS_TOKEN length:', ALBY_ACCESS_TOKEN?.length || 0)
-        
-        const uniqueMemo = `Journal stake deposit - User: ${userPubkey.substring(0, 8)} - ID: ${timestamp || Date.now()}-${requestId || Math.random()}`
-        console.log('[API] 📝 Unique memo for Alby:', uniqueMemo)
-        
-        const albyRequest = {
-          amount: amountSats,
-          memo: uniqueMemo,
-          webhook_url: `${process.env.NEXT_PUBLIC_APP_URL || 'https://nostr-journal-incentive-demo.pages.dev'}/api/incentive/webhook`
-        }
-        console.log('[API] 📤 Alby request body:', JSON.stringify(albyRequest, null, 2))
-        
-        const albyResponse = await fetch('https://api.getalby.com/invoices', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${ALBY_ACCESS_TOKEN}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(albyRequest)
-        })
-        
-        console.log('[API] 📡 Alby response status:', albyResponse.status)
-        console.log('[API] 📡 Alby response headers:', Object.fromEntries(albyResponse.headers.entries()))
-        
-        if (albyResponse.ok) {
-          invoice = await albyResponse.json()
-          console.log('[API] ✅ Direct Alby API successful!')
-          console.log('[API] 📋 Direct Alby response:', JSON.stringify(invoice, null, 2))
-          console.log('[API] 🔍 Direct Alby payment_hash field:', invoice.payment_hash)
-          console.log('[API] 🔍 Direct Alby payment_request field:', invoice.payment_request?.substring(0, 100) + '...')
-        } else {
-          console.log('[API] ❌ Direct Alby API failed with status:', albyResponse.status)
-          const errorText = await albyResponse.text()
-          console.log('[API] ❌ Direct Alby API error response:', errorText)
-          throw new Error(`Direct Alby API failed: ${albyResponse.status} - ${errorText}`)
-        }
-      } catch (albyError) {
-        console.log('[API] ❌ Direct Alby API error:', albyError.message)
-        console.log('[API] 🔄 FALLING BACK TO NIP-47 makeInvoice...')
-        
-        // Fallback to NIP-47
-        console.log('[API] 🔄 Attempting NIP-47 makeInvoice...')
-        const nip47Memo = `Journal stake deposit - User: ${userPubkey.substring(0, 8)} - ID: ${timestamp || Date.now()}-${requestId || Math.random()}`
-        console.log('[API] 📝 NIP-47 memo:', nip47Memo)
-        
-        invoice = await nwc.makeInvoice({
-          amount: amountSats,
-          memo: nip47Memo
-        })
-        console.log('[API] ✅ NIP-47 makeInvoice successful!')
-        console.log('[API] 📋 NIP-47 response:', JSON.stringify(invoice, null, 2))
-        console.log('[API] 🔍 NIP-47 paymentRequest:', invoice.paymentRequest?.substring(0, 100) + '...')
-        console.log('[API] 🔍 NIP-47 paymentHash (if exists):', invoice.paymentHash)
-      }
-      
-      console.log('[Deposit] ✅ Invoice created successfully!')
-      console.log('[Deposit] Full response type:', typeof invoice)
-      console.log('[Deposit] Full response:', JSON.stringify(invoice, null, 2))
-      console.log('[Deposit] Available fields:', Object.keys(invoice))
-      
-      // Log ALL possible payment hash fields
-      const possibleHashFields = [
-        'payment_hash', 'paymentHash', 'hash', 'r_hash', 'rHash',
-        'checking_id', 'checkingId', 'id', 'invoice_id', 'invoiceId'
-      ]
-      
-      console.log('[Deposit] === PAYMENT HASH FIELD ANALYSIS ===')
-      possibleHashFields.forEach(field => {
-        const value = invoice[field]
-        if (value !== undefined) {
-          console.log(`[Deposit] invoice.${field}:`, value, `(type: ${typeof value}, length: ${value?.length || 'N/A'})`)
-        }
+      // Create invoice via NWC (same connection that will verify payments)
+      const invoice = await nwc.makeInvoice({
+        amount: amountSats,
+        memo: uniqueMemo
       })
       
-      // Log the invoice string fields
-      const possibleInvoiceFields = ['invoice', 'paymentRequest', 'payment_request', 'bolt11', 'payment_request_string']
-      console.log('[Deposit] === INVOICE STRING FIELD ANALYSIS ===')
-      possibleInvoiceFields.forEach(field => {
-        const value = invoice[field]
-        if (value !== undefined) {
-          console.log(`[Deposit] invoice.${field}:`, value?.substring(0, 100) + '...', `(type: ${typeof value}, length: ${value?.length || 'N/A'})`)
-        }
+      console.log('[Invoice] ✅ Invoice created successfully!')
+      console.log('[Invoice] 📋 Invoice response:', JSON.stringify(invoice, null, 2))
+      // Extract invoice string and payment hash
+      const invoiceString = invoice.paymentRequest || invoice.payment_request || invoice.invoice
+      console.log('[Invoice] 📄 Invoice string:', invoiceString?.substring(0, 80) + '...')
+      
+      if (!invoiceString) {
+        throw new Error('No invoice string received from NWC')
+      }
+      
+      // Extract payment hash from BOLT11 invoice using light-bolt11-decoder
+      console.log('[Invoice] 🔍 Extracting payment hash from BOLT11 invoice...')
+      const decoded = decode(invoiceString)
+      
+      console.log('[Invoice] 🔍 Decoded invoice info:', {
+        amount: decoded.sections?.find(s => s.name === 'amount')?.value,
+        timestamp: decoded.sections?.find(s => s.name === 'timestamp')?.value,
+        expiry: decoded.sections?.find(s => s.name === 'expiry')?.value,
+        memo: decoded.sections?.find(s => s.name === 'description')?.value
       })
       
-      // Extract the invoice string - handle both direct Alby API and NIP-47 responses
-      invoiceString = invoice.payment_request || invoice.paymentRequest || invoice.invoice
+      // Extract the payment hash from sections
+      const hashSection = decoded.sections?.find(s => s.name === 'payment_hash')
+      const paymentHash = hashSection?.value
       
-      console.log('[Deposit] Extracted invoice string:', invoiceString)
-      
-      if (!invoiceString) {
-        console.error('[Deposit] ❌ No invoice string found in response!')
-        return new Response(
-          JSON.stringify({ 
-            success: false,
-            error: 'Invoice creation failed: No invoice string in response',
-            debug: { availableFields: Object.keys(invoice) }
-          }),
-          { 
-            status: 500,
-            headers: { 
-              'Content-Type': 'application/json',
-              'Access-Control-Allow-Origin': '*'
-            }
-          }
-        )
+      if (!paymentHash || paymentHash.length !== 64) {
+        throw new Error(`Invalid payment hash extracted: ${paymentHash}`)
       }
       
-      // First, try to get payment hash directly from Alby response
-      const directHashFields = ['payment_hash', 'paymentHash', 'hash', 'r_hash', 'rHash', 'checking_id', 'checkingId']
-      
-      console.log('[Deposit] 🔍 Searching for direct payment hash in fields:', directHashFields)
-      for (const field of directHashFields) {
-        const value = invoice[field]
-        console.log(`[Deposit] Checking field '${field}':`, value ? `${value.substring(0, 20)}...` : 'undefined')
-        if (value) {
-          directPaymentHash = value
-          console.log(`[Deposit] ✅ Found direct payment hash in ${field}:`, directPaymentHash)
-          break
-        }
+      // Validate it's a proper hex string
+      if (!/^[a-f0-9]{64}$/i.test(paymentHash)) {
+        throw new Error(`Payment hash contains invalid characters: ${paymentHash}`)
       }
       
-      // Select final payment hash with clear priority
-      if (directPaymentHash) {
-        paymentHash = directPaymentHash
-        console.log('[Deposit] ✅ Using direct payment hash from Alby response:', paymentHash)
-      } else {
-        console.log('[Deposit] No direct payment hash found, attempting bech32 decoding...')
-        
-        // Fallback: Try to extract payment hash from Lightning invoice using bech32 decoding
-        try {
-          console.log('[Deposit] Attempting to extract payment hash from Lightning invoice...')
-          
-          // Lightning invoices are bech32 encoded, so we need to decode them
-          // The payment hash is in the data part of the bech32 encoded string
-        
-        // Simple bech32 decoder for Lightning invoices
-        function simpleBech32Decode(bech32String: string) {
-          try {
-            // Find the separator '1' which separates the human readable part from the data
-            const separatorIndex = bech32String.lastIndexOf('1')
-            if (separatorIndex === -1) return null
-            
-            const hrp = bech32String.substring(0, separatorIndex)
-            const dataPart = bech32String.substring(separatorIndex + 1)
-            
-            console.log('[Deposit] Bech32 HRP:', hrp)
-            console.log('[Deposit] Bech32 data part length:', dataPart.length)
-            
-            // Convert bech32 characters to 5-bit values
-            const chars = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l'
-            const data = []
-            
-            for (let i = 0; i < dataPart.length; i++) {
-              const char = dataPart[i].toLowerCase()
-              const index = chars.indexOf(char)
-              if (index === -1) return null
-              data.push(index)
-            }
-            
-            console.log('[Deposit] Decoded data length:', data.length)
-            
-            // Convert 5-bit values to bytes
-            const bytes = []
-            let accumulator = 0
-            let bits = 0
-            
-            for (const value of data) {
-              accumulator = (accumulator << 5) | value
-              bits += 5
-              
-              while (bits >= 8) {
-                bytes.push((accumulator >> (bits - 8)) & 0xFF)
-                bits -= 8
-              }
-            }
-            
-            console.log('[Deposit] Decoded bytes length:', bytes.length)
-            
-            // Look for the payment hash (32 bytes = 64 hex chars)
-            // In Lightning invoices, the payment hash has a specific structure
-            // It's typically found in the routing information section
-            
-            if (bytes.length >= 32) {
-              const potentialHashes = []
-              
-              // Search through the decoded bytes for potential payment hashes
-              for (let i = 0; i <= bytes.length - 32; i++) {
-                const hashBytes = bytes.slice(i, i + 32)
-                const hashHex = hashBytes.map(b => b.toString(16).padStart(2, '0')).join('')
-                
-                // Check if this looks like a valid payment hash
-                if (/^[a-f0-9]{64}$/.test(hashHex)) {
-                  potentialHashes.push({
-                    position: i,
-                    hash: hashHex,
-                    // Payment hash is usually not at the very beginning or very end
-                    score: (i > 10 && i < bytes.length - 42) ? 1 : 0
-                  })
-                  console.log('[Deposit] Found potential payment hash at position', i, ':', hashHex)
-                }
-              }
-              
-              console.log('[Deposit] Total potential hashes found:', potentialHashes.length)
-              
-              if (potentialHashes.length > 0) {
-                // Try to find the most likely payment hash
-                // Payment hash is usually not the first or last hash in the invoice
-                const sortedHashes = potentialHashes.sort((a, b) => {
-                  // Prefer hashes that are not at the extremes
-                  if (a.score !== b.score) return b.score - a.score
-                  // Among equally scored hashes, prefer those in the middle range
-                  const aMiddle = Math.abs(a.position - bytes.length / 2)
-                  const bMiddle = Math.abs(b.position - bytes.length / 2)
-                  return aMiddle - bMiddle
-                })
-                
-                const selectedHash = sortedHashes[0]
-                console.log('[Deposit] ✅ Selected payment hash at position', selectedHash.position, ':', selectedHash.hash)
-                console.log('[Deposit] All potential hashes:', potentialHashes.map(h => `${h.hash} (pos: ${h.position})`))
-                return selectedHash.hash
-              }
-            }
-            
-            return null
-          } catch (error) {
-            console.error('[Deposit] Bech32 decode error:', error)
-            return null
-          }
-        }
-        
-        // CRITICAL FIX: Extract REAL payment hash from BOLT11 invoice
-        console.log('[API] 🔍 Extracting REAL payment hash from BOLT11 invoice...')
-        console.log('[API] 🔍 Invoice string from NIP-47:', invoiceString.substring(0, 100) + '...')
-        
-        try {
-          // Decode the BOLT11 invoice to get the real payment hash
-          console.log('[API] 🔍 Decoding BOLT11 invoice with light-bolt11-decoder...')
-          const decoded = decode(invoiceString)
-          
-          console.log('[API] 🔍 Decoded invoice sections:', {
-            paymentHash: decoded.sections?.find(s => s.name === 'payment_hash')?.value,
-            amount: decoded.sections?.find(s => s.name === 'amount')?.value,
-            timestamp: decoded.sections?.find(s => s.name === 'timestamp')?.value,
-            expiry: decoded.sections?.find(s => s.name === 'expiry')?.value,
-            memo: decoded.sections?.find(s => s.name === 'description')?.value
-          })
-          
-          // Extract the payment hash from sections
-          const hashSection = decoded.sections?.find(s => s.name === 'payment_hash')
-          const realPaymentHash = hashSection?.value
-          
-          if (!realPaymentHash || realPaymentHash.length !== 64) {
-            throw new Error(`Invalid payment hash extracted: ${realPaymentHash}`)
-          }
-          
-          // Validate it's a proper hex string
-          if (!/^[a-f0-9]{64}$/i.test(realPaymentHash)) {
-            throw new Error(`Payment hash contains invalid characters: ${realPaymentHash}`)
-          }
-          
-          paymentHash = realPaymentHash
-          decodedPaymentHash = realPaymentHash
-          
-          console.log('[API] ✅ REAL PAYMENT HASH EXTRACTED:', paymentHash)
-          console.log('[API] ✅ Hash length:', paymentHash.length)
-          console.log('[API] ✅ Hash format valid:', /^[a-f0-9]{64}$/i.test(paymentHash))
-          
-        } catch (decodeError) {
-          console.error('[API] ❌ Failed to decode BOLT11 invoice:', decodeError)
-          throw new Error(`Failed to extract payment hash from invoice: ${decodeError.message}`)
-        }
-        
-        if (false) { // Disabled broken bech32 decoder
-          console.log('[Deposit] Could not decode payment hash from bech32, trying Alby SDK...')
-          
-          // Fallback: try using the Alby SDK's decodeInvoice method if available
-          try {
-            if (typeof nwc.decodeInvoice === 'function') {
-              console.log('[Deposit] Trying Alby SDK decodeInvoice method...')
-              const decodedInvoice = await nwc.decodeInvoice(invoiceString)
-              console.log('[Deposit] Alby SDK decoded invoice:', decodedInvoice)
-              
-              if (decodedInvoice && (decodedInvoice.payment_hash || decodedInvoice.paymentHash)) {
-                paymentHash = decodedInvoice.payment_hash || decodedInvoice.paymentHash
-                console.log('[Deposit] ✅ Alby SDK extracted payment hash:', paymentHash)
-              } else {
-                console.log('[Deposit] Alby SDK decodeInvoice did not return payment hash')
-                paymentHash = invoiceString
-              }
-            } else {
-              console.log('[Deposit] Alby SDK decodeInvoice method not available')
-              paymentHash = invoiceString
-            }
-          } catch (albyError) {
-            console.error('[Deposit] Alby SDK decodeInvoice error:', albyError)
-            paymentHash = invoiceString
-          }
-        }
-        
-        } catch (decodeError) {
-          console.error('[Deposit] Error extracting payment hash:', decodeError)
-          console.log('[Deposit] Using invoice string as fallback')
-          paymentHash = invoiceString
-        }
-      }
-      
-      // Validate that we have both invoice and payment hash
-      if (!invoiceString) {
-        throw new Error('No invoice string received from Alby or NWC')
-      }
-      
-      if (!paymentHash) {
-        throw new Error('Could not extract payment hash from invoice')
-      }
-      
-      console.log('[Deposit] 🎯 FINAL VALIDATION:')
-      console.log('[Deposit] 🎯 Invoice string:', invoiceString?.substring(0, 80) + '...')
-      console.log('[Deposit] 🎯 Payment hash:', paymentHash)
-      console.log('[Deposit] 🎯 Hash source:', directPaymentHash ? 'Direct API' : decodedPaymentHash ? 'Bech32 Decoded' : 'Fallback')
+      console.log('[Invoice] ✅ Payment hash extracted:', paymentHash)
+      console.log('[Invoice] ✅ Hash length:', paymentHash.length)
+      console.log('[Invoice] ✅ Hash format valid:', /^[a-f0-9]{64}$/i.test(paymentHash))
       
     } catch (invoiceError) {
-      console.error('[Deposit] ❌ Error creating invoice:', invoiceError)
+      console.error('[Invoice] ❌ Error creating invoice:', invoiceError)
       return new Response(
         JSON.stringify({ 
           success: false,
@@ -426,6 +150,13 @@ export async function onRequestPost(context: any) {
       )
     }
     
+    console.log('[Invoice] ========================================')
+    console.log('[Invoice] ✅ INVOICE CREATION COMPLETE')
+    console.log('[Invoice] 💰 Amount:', amountSats, 'sats')
+    console.log('[Invoice] 🔑 Payment hash:', paymentHash)
+    console.log('[Invoice] 📄 Invoice preview:', invoiceString.substring(0, 50) + '...')
+    console.log('[Invoice] ========================================')
+    
     const responseData = {
       success: true,
       invoice: invoiceString,
@@ -435,7 +166,7 @@ export async function onRequestPost(context: any) {
       timestamp: new Date().toISOString(),
       requestId: requestId,
       clientTimestamp: timestamp,
-      source: directPaymentHash ? 'Direct Alby API' : 'NIP-47/BOLT11-decoded'
+      source: 'NWC (Same as verification)'
     }
     
     console.log('[API] 🎯 FINAL RESPONSE:', JSON.stringify(responseData, null, 2))
