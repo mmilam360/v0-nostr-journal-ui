@@ -11,6 +11,34 @@ const RELAYS = [
 // Create a simple pool for this module
 const pool = new SimplePool()
 
+// Event structure for stake management using Nostr events
+// All stake data is stored on Nostr, not locally
+
+export interface StakeCreationEvent {
+  kind: 30078
+  d: "stake-creation"
+  tags: string[][]
+}
+
+export interface BalanceUpdateEvent {
+  kind: 30078
+  d: "balance-update"
+  tags: string[][]
+}
+
+export interface StakeCancellationEvent {
+  kind: 30078
+  d: "stake-cancellation"
+  tags: string[][]
+}
+
+export interface DailyProgressEvent {
+  kind: 30078
+  d: "daily-progress"
+  tags: string[][]
+}
+
+// Legacy interface for backward compatibility
 export interface IncentiveSettings {
   dailyWordGoal: number
   dailyRewardSats: number
@@ -21,7 +49,316 @@ export interface IncentiveSettings {
 }
 
 /**
- * Create or update user's incentive settings
+ * Create a new stake with proper event tracking
+ */
+export async function createStake(
+  userPubkey: string,
+  stakeData: {
+    dailyWordGoal: number
+    dailyRewardSats: number
+    initialStakeSats: number
+    lightningAddress: string
+    paymentHash: string
+  },
+  authData: any
+): Promise<string> {
+  const stakeId = `stake-${userPubkey}-${Date.now()}`
+  
+  const event = {
+    kind: 30078,
+    created_at: Math.floor(Date.now() / 1000),
+    tags: [
+      ["d", "stake-creation"],
+      ["stake_id", stakeId],
+      ["daily_word_goal", stakeData.dailyWordGoal.toString()],
+      ["daily_reward_sats", stakeData.dailyRewardSats.toString()],
+      ["initial_stake_sats", stakeData.initialStakeSats.toString()],
+      ["lightning_address", stakeData.lightningAddress],
+      ["created_at", new Date().toISOString()],
+      ["payment_hash", stakeData.paymentHash]
+    ],
+    content: "",
+    pubkey: userPubkey
+  }
+  
+  const signedEvent = await signEventWithRemote(event, authData)
+  await pool.publish(RELAYS, signedEvent)
+  
+  console.log('[IncentiveNostr] ✅ Stake created with ID:', stakeId)
+  return stakeId
+}
+
+/**
+ * Update stake balance with proper event tracking
+ */
+export async function updateStakeBalance(
+  userPubkey: string,
+  stakeId: string,
+  previousBalance: number,
+  newBalance: number,
+  reason: "reward_sent" | "missed_day" | "refund",
+  date: string,
+  paymentHash?: string,
+  authData?: any
+): Promise<void> {
+  const amountChanged = newBalance - previousBalance
+  
+  const event = {
+    kind: 30078,
+    created_at: Math.floor(Date.now() / 1000),
+    tags: [
+      ["d", "balance-update"],
+      ["stake_id", stakeId],
+      ["previous_balance", previousBalance.toString()],
+      ["new_balance", newBalance.toString()],
+      ["amount_changed", amountChanged.toString()],
+      ["reason", reason],
+      ["date", date],
+      ...(paymentHash ? [["payment_hash", paymentHash]] : [])
+    ],
+    content: "",
+    pubkey: userPubkey
+  }
+  
+  if (authData) {
+    const signedEvent = await signEventWithRemote(event, authData)
+    await pool.publish(RELAYS, signedEvent)
+  } else {
+    // For server-side balance updates (like missed days)
+    await pool.publish(RELAYS, event)
+  }
+  
+  console.log(`[IncentiveNostr] ✅ Balance updated: ${previousBalance} → ${newBalance} (${reason})`)
+}
+
+/**
+ * Record daily progress with proper event tracking
+ */
+export async function recordDailyProgress(
+  userPubkey: string,
+  stakeId: string,
+  date: string,
+  wordCount: number,
+  goalMet: boolean,
+  rewardClaimed: boolean,
+  paymentHash?: string,
+  authData?: any
+): Promise<void> {
+  const event = {
+    kind: 30078,
+    created_at: Math.floor(Date.now() / 1000),
+    tags: [
+      ["d", "daily-progress"],
+      ["stake_id", stakeId],
+      ["date", date],
+      ["word_count", wordCount.toString()],
+      ["goal_met", goalMet ? "true" : "false"],
+      ["reward_claimed", rewardClaimed ? "true" : "false"],
+      ...(paymentHash ? [["payment_hash", paymentHash]] : [])
+    ],
+    content: "",
+    pubkey: userPubkey
+  }
+  
+  if (authData) {
+    const signedEvent = await signEventWithRemote(event, authData)
+    await pool.publish(RELAYS, signedEvent)
+  } else {
+    // For server-side progress updates
+    await pool.publish(RELAYS, event)
+  }
+  
+  console.log(`[IncentiveNostr] ✅ Daily progress recorded: ${wordCount} words, goal met: ${goalMet}`)
+}
+
+/**
+ * Cancel stake with proper event tracking and refund
+ */
+export async function cancelStake(
+  userPubkey: string,
+  stakeId: string,
+  refundAmount: number,
+  refundPaymentHash: string,
+  reason: "user_cancelled" | "stake_exhausted",
+  authData: any
+): Promise<void> {
+  const event = {
+    kind: 30078,
+    created_at: Math.floor(Date.now() / 1000),
+    tags: [
+      ["d", "stake-cancellation"],
+      ["stake_id", stakeId],
+      ["refund_amount", refundAmount.toString()],
+      ["refund_payment_hash", refundPaymentHash],
+      ["cancelled_at", new Date().toISOString()],
+      ["reason", reason]
+    ],
+    content: "",
+    pubkey: userPubkey
+  }
+  
+  const signedEvent = await signEventWithRemote(event, authData)
+  await pool.publish(RELAYS, signedEvent)
+  
+  console.log(`[IncentiveNostr] ✅ Stake cancelled: ${stakeId}, refund: ${refundAmount} sats`)
+}
+
+/**
+ * Get current stake data by reconstructing from events
+ */
+export async function getCurrentStake(userPubkey: string): Promise<{
+  stakeId: string
+  dailyWordGoal: number
+  dailyRewardSats: number
+  currentBalance: number
+  lightningAddress: string
+  createdAt: string
+  isActive: boolean
+} | null> {
+  // Get all stake creation events
+  const creationEvents = await pool.querySync(RELAYS, {
+    kinds: [30078],
+    authors: [userPubkey],
+    "#d": ["stake-creation"]
+  })
+  
+  if (creationEvents.length === 0) {
+    return null
+  }
+  
+  // Get all cancellation events
+  const cancellationEvents = await pool.querySync(RELAYS, {
+    kinds: [30078],
+    authors: [userPubkey],
+    "#d": ["stake-cancellation"]
+  })
+  
+  // Find the most recent active stake
+  const activeStakes = creationEvents.filter(creation => {
+    const stakeId = creation.tags.find(t => t[0] === 'stake_id')?.[1]
+    return !cancellationEvents.some(cancel => 
+      cancel.tags.find(t => t[0] === 'stake_id')?.[1] === stakeId
+    )
+  })
+  
+  if (activeStakes.length === 0) {
+    return null
+  }
+  
+  const latestStake = activeStakes[0]
+  const stakeId = latestStake.tags.find(t => t[0] === 'stake_id')?.[1] || ''
+  
+  // Calculate current balance from balance update events
+  const balanceEvents = await pool.querySync(RELAYS, {
+    kinds: [30078],
+    authors: [userPubkey],
+    "#d": ["balance-update"],
+    "#stake_id": [stakeId]
+  })
+  
+  const initialBalance = parseInt(latestStake.tags.find(t => t[0] === 'initial_stake_sats')?.[1] || '0')
+  const latestBalanceEvent = balanceEvents[0]
+  const currentBalance = latestBalanceEvent 
+    ? parseInt(latestBalanceEvent.tags.find(t => t[0] === 'new_balance')?.[1] || '0')
+    : initialBalance
+  
+  return {
+    stakeId,
+    dailyWordGoal: parseInt(latestStake.tags.find(t => t[0] === 'daily_word_goal')?.[1] || '0'),
+    dailyRewardSats: parseInt(latestStake.tags.find(t => t[0] === 'daily_reward_sats')?.[1] || '0'),
+    currentBalance,
+    lightningAddress: latestStake.tags.find(t => t[0] === 'lightning_address')?.[1] || '',
+    createdAt: latestStake.tags.find(t => t[0] === 'created_at')?.[1] || '',
+    isActive: true
+  }
+}
+
+/**
+ * Check for missed days and deduct from balance
+ * This should be called daily by a server process
+ */
+export async function processMissedDays(userPubkey: string): Promise<{
+  missedDays: number
+  totalDeducted: number
+  newBalance: number
+  stakeCancelled: boolean
+}> {
+  const stake = await getCurrentStake(userPubkey)
+  if (!stake) {
+    return { missedDays: 0, totalDeducted: 0, newBalance: 0, stakeCancelled: false }
+  }
+  
+  // Get all progress events for this stake
+  const progressEvents = await pool.querySync(RELAYS, {
+    kinds: [30078],
+    authors: [userPubkey],
+    "#d": ["daily-progress"],
+    "#stake_id": [stake.stakeId]
+  })
+  
+  // Calculate missed days since stake creation
+  const stakeDate = new Date(stake.createdAt)
+  const today = new Date()
+  const daysSinceStake = Math.floor((today.getTime() - stakeDate.getTime()) / (1000 * 60 * 60 * 24))
+  
+  // Get dates where progress was recorded
+  const recordedDates = progressEvents.map(event => {
+    const dateTag = event.tags.find(t => t[0] === 'date')
+    return dateTag ? dateTag[1] : null
+  }).filter(Boolean)
+  
+  // Calculate missed days (days without progress)
+  let missedDays = 0
+  for (let i = 1; i <= daysSinceStake; i++) {
+    const checkDate = new Date(stakeDate)
+    checkDate.setDate(checkDate.getDate() + i)
+    const dateString = checkDate.toISOString().split('T')[0]
+    
+    if (!recordedDates.includes(dateString)) {
+      missedDays++
+    }
+  }
+  
+  // Deduct missed day amounts from balance
+  const totalDeducted = missedDays * stake.dailyRewardSats
+  const newBalance = Math.max(0, stake.currentBalance - totalDeducted)
+  
+  // Update balance if there were missed days
+  if (missedDays > 0) {
+    await updateStakeBalance(
+      userPubkey,
+      stake.stakeId,
+      stake.currentBalance,
+      newBalance,
+      "missed_day",
+      today.toISOString().split('T')[0]
+    )
+    
+    // If balance is exhausted, cancel the stake
+    if (newBalance <= 0) {
+      // Note: In a real implementation, you'd send a refund here
+      // For now, we just cancel the stake
+      await cancelStake(
+        userPubkey,
+        stake.stakeId,
+        0, // No refund since balance was exhausted
+        "", // No payment hash since no refund
+        "stake_exhausted",
+        {} as any // This would need proper auth data in real implementation
+      )
+    }
+  }
+  
+  return {
+    missedDays,
+    totalDeducted,
+    newBalance,
+    stakeCancelled: newBalance <= 0
+  }
+}
+
+/**
+ * Legacy function - Create or update user's incentive settings
  */
 export async function saveIncentiveSettings(
   userPubkey: string,
@@ -91,68 +428,7 @@ export async function fetchIncentiveSettings(
   return latestSettings
 }
 
-/**
- * Update just the stake balance
- */
-export async function updateStakeBalance(
-  userPubkey: string,
-  newBalance: number,
-  authData: any
-): Promise<void> {
-  const currentSettings = await fetchIncentiveSettings(userPubkey)
-  
-  if (!currentSettings) {
-    throw new Error('No incentive settings found')
-  }
-  
-  const event = {
-    kind: 30078,
-    created_at: Math.floor(Date.now() / 1000),
-    tags: currentSettings.tags.map((tag: string[]) => {
-      if (tag[0] === 'stake_balance_sats') {
-        return ['stake_balance_sats', newBalance.toString()]
-      }
-      if (tag[0] === 'last_updated') {
-        return ['last_updated', new Date().toISOString().split('T')[0]]
-      }
-      return tag
-    }),
-    content: "",
-    pubkey: userPubkey
-  }
-  
-  const signedEvent = await signEventWithRemote(event, authData)
-  await pool.publish(RELAYS, signedEvent)
-}
 
-/**
- * Record daily progress
- */
-export async function recordDailyProgress(
-  userPubkey: string,
-  date: string,
-  wordCount: number,
-  goalMet: boolean,
-  authData: any
-): Promise<void> {
-  const event = {
-    kind: 30078,
-    created_at: Math.floor(Date.now() / 1000),
-    tags: [
-      ["d", `journal-progress-${date}`],
-      ["app", "nostr-journal"],
-      ["date", date],
-      ["word_count", wordCount.toString()],
-      ["goal_met", goalMet.toString()],
-      ["reward_claimed", "false"]
-    ],
-    content: "",
-    pubkey: userPubkey
-  }
-  
-  const signedEvent = await signEventWithRemote(event, authData)
-  await pool.publish(RELAYS, signedEvent)
-}
 
 /**
  * Fetch today's progress
