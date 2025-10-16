@@ -337,53 +337,6 @@ export async function confirmPayment(
   console.log('[LightningGoals] ✅ Payment confirmed, stake activated')
 }
 
-/**
- * Update word count and check for reward
- */
-export async function updateWordCount(
-  userPubkey: string,
-  wordCount: number,
-  authData: any
-): Promise<{ shouldSendReward: boolean, rewardAmount: number }> {
-  console.log('[LightningGoals] Updating word count:', wordCount)
-  
-  const goals = await getLightningGoals(userPubkey)
-  
-  if (!goals || goals.status !== 'active') {
-    console.log('[LightningGoals] No active goals')
-    return { shouldSendReward: false, rewardAmount: 0 }
-  }
-  
-  // Check if it's a new day
-  const today = new Date().toISOString().split('T')[0]
-  const isNewDay = goals.todayDate !== today
-  
-  // Update word count
-  await updateLightningGoals(userPubkey, {
-    todayWords: wordCount,
-    todayGoalMet: wordCount >= goals.dailyWordGoal
-  }, authData)
-  
-  // Check if should send reward
-  const shouldSendReward = 
-    wordCount >= goals.dailyWordGoal &&
-    !goals.todayRewardSent &&
-    goals.currentBalance >= goals.dailyReward
-  
-  console.log('[LightningGoals]', {
-    words: wordCount,
-    goal: goals.dailyWordGoal,
-    met: wordCount >= goals.dailyWordGoal,
-    alreadySent: goals.todayRewardSent,
-    hasBalance: goals.currentBalance >= goals.dailyReward,
-    shouldSend: shouldSendReward
-  })
-  
-  return {
-    shouldSendReward,
-    rewardAmount: shouldSendReward ? goals.dailyReward : 0
-  }
-}
 
 /**
  * Record reward sent
