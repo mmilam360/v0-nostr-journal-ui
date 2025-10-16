@@ -456,6 +456,79 @@ export function LightningGoalsManager({
     )
   }
 
+  // Cancel confirmation modal - CHECK FIRST before any other returns
+  console.log('[LightningGoals] 🔍 Modal check - showCancelModal:', showCancelModal, 'stake:', !!stake)
+  if (showCancelModal && stake) {
+    console.log('[LightningGoals] ✅ Rendering cancel modal')
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50">
+        <Card className="w-full max-w-md">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-red-600">
+              <AlertTriangle className="w-5 h-5" />
+              Cancel Stake Confirmation
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <p className="text-sm text-gray-600">
+                Are you sure you want to cancel your commitment and forfeit your stake?
+              </p>
+              
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0" />
+                  <div className="text-sm text-red-700">
+                    <p className="font-medium">This action cannot be undone.</p>
+                    <p className="mt-1">
+                      Your remaining balance of <strong>{stake.currentBalance} sats</strong> will be 
+                      <strong className="text-red-800"> forfeited permanently</strong>.
+                    </p>
+                    <p className="mt-1 text-xs text-red-600">
+                      This is the commitment you made to your writing goal.
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
+              {cancelError && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                  <p className="text-sm text-red-700">{cancelError}</p>
+                </div>
+              )}
+            </div>
+            
+            <div className="flex gap-2 pt-2">
+              <Button
+                onClick={() => setShowCancelModal(false)}
+                variant="outline"
+                className="flex-1"
+                disabled={isCancelling}
+              >
+                Keep Stake
+              </Button>
+              <Button
+                onClick={handleCancelStake}
+                variant="destructive"
+                className="flex-1"
+                disabled={isCancelling}
+              >
+                {isCancelling ? (
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Forfeiting...
+                  </div>
+                ) : (
+                  'Yes, Forfeit Stake'
+                )}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
   // Tracking Screen
   if (paymentStep === 'tracking' && stake) {
     const progress = todayProgress ? Math.min((todayProgress.wordCount / stake.dailyWordGoal) * 100, 100) : 0
@@ -552,78 +625,6 @@ export function LightningGoalsManager({
     )
   }
 
-  // Cancel confirmation modal
-  console.log('[LightningGoals] 🔍 Modal check - showCancelModal:', showCancelModal, 'stake:', !!stake)
-  if (showCancelModal && stake) {
-    console.log('[LightningGoals] ✅ Rendering cancel modal')
-    return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50">
-        <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-red-600">
-              <AlertTriangle className="w-5 h-5" />
-              Cancel Stake Confirmation
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <p className="text-sm text-gray-600">
-                Are you sure you want to cancel your commitment and forfeit your stake?
-              </p>
-              
-              <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-                <div className="flex items-start gap-2">
-                  <AlertTriangle className="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0" />
-                  <div className="text-sm text-red-700">
-                    <p className="font-medium">This action cannot be undone.</p>
-                    <p className="mt-1">
-                      Your remaining balance of <strong>{stake.currentBalance} sats</strong> will be 
-                      <strong className="text-red-800"> forfeited permanently</strong>.
-                    </p>
-                    <p className="mt-1 text-xs text-red-600">
-                      This is the commitment you made to your writing goal.
-                    </p>
-                  </div>
-                </div>
-              </div>
-              
-              {cancelError && (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-                  <p className="text-sm text-red-700">{cancelError}</p>
-                </div>
-              )}
-            </div>
-            
-            <div className="flex gap-2 pt-2">
-              <Button
-                onClick={() => setShowCancelModal(false)}
-                variant="outline"
-                className="flex-1"
-                disabled={isCancelling}
-              >
-                Keep Stake
-              </Button>
-              <Button
-                onClick={handleCancelStake}
-                variant="destructive"
-                className="flex-1"
-                disabled={isCancelling}
-              >
-                {isCancelling ? (
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    Forfeiting...
-                  </div>
-                ) : (
-                  'Yes, Forfeit Stake'
-                )}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
 
   return null
 }
