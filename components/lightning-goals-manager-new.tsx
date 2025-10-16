@@ -534,7 +534,12 @@ export function LightningGoalsManager({
             )}
             
             <Button
-              onClick={() => setShowCancelModal(true)}
+              onClick={() => {
+                console.log('[LightningGoals] 🔴 Cancel button clicked!')
+                console.log('[LightningGoals] Current showCancelModal:', showCancelModal)
+                setShowCancelModal(true)
+                console.log('[LightningGoals] Set showCancelModal to true')
+              }}
               variant="destructive"
               disabled={loading}
               className="w-full"
@@ -548,7 +553,9 @@ export function LightningGoalsManager({
   }
 
   // Cancel confirmation modal
+  console.log('[LightningGoals] 🔍 Modal check - showCancelModal:', showCancelModal, 'stake:', !!stake)
   if (showCancelModal && stake) {
+    console.log('[LightningGoals] ✅ Rendering cancel modal')
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50">
         <Card className="w-full max-w-md">
