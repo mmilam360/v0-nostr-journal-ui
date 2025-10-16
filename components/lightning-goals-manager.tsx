@@ -25,6 +25,7 @@ export function LightningGoalsManager({ userPubkey, authData, userLightningAddre
   const [paymentStatus, setPaymentStatus] = useState<'pending' | 'checking' | 'confirmed'>('pending')
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>('')
   const [paymentCheckInterval, setPaymentCheckInterval] = useState<NodeJS.Timeout | null>(null)
+  const [isUpdatingBalance, setIsUpdatingBalance] = useState(false)
   
   // Input validation
   const [validationErrors, setValidationErrors] = useState<{[key: string]: string}>({})
@@ -287,6 +288,9 @@ export function LightningGoalsManager({ userPubkey, authData, userLightningAddre
         // Payment confirmed, activate stake using working system
         console.log('[Manager] ✅ Payment confirmed! Amount:', checkResult.amountSats, 'sats')
         
+        // Set loading state for balance update
+        setIsUpdatingBalance(true)
+        
         // Confirm payment and activate existing stake
         await confirmPayment(userPubkey, paymentHash, authData)
         
@@ -307,15 +311,20 @@ export function LightningGoalsManager({ userPubkey, authData, userLightningAddre
           setPaymentCheckInterval(null)
         }
         
-        // Reload goals and switch to tracking screen
-        const g = await getLightningGoals(userPubkey)
-        setGoals(g)
+        // Switch to tracking screen immediately
         setScreen('tracking')
         
         // Notify parent component that stake is now active
         if (onStakeActivated) {
           onStakeActivated()
         }
+        
+        // Reload goals in background and clear loading state
+        setTimeout(async () => {
+          const g = await getLightningGoals(userPubkey)
+          setGoals(g)
+          setIsUpdatingBalance(false)
+        }, 1000) // Give a moment for the event to propagate
         
         // No popup - user will see the tracking screen directly
       } else {
@@ -465,7 +474,16 @@ export function LightningGoalsManager({ userPubkey, authData, userLightningAddre
               {/* Balance */}
               <div className="mb-4">
                 <div className="text-sm text-gray-600">Current Balance</div>
-                <div className="text-2xl font-bold">{goals.currentBalance} sats</div>
+                <div className="text-2xl font-bold">
+                  {isUpdatingBalance ? (
+                    <div className="flex items-center gap-2">
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+                      <span className="text-gray-500">Updating...</span>
+                    </div>
+                  ) : (
+                    `${goals.currentBalance} sats`
+                  )}
+                </div>
               </div>
               
               {/* Stats */}

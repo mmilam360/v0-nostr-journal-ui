@@ -489,13 +489,13 @@ export async function updateWordCount(
   
   const today = new Date().toISOString().split('T')[0]
   
-  // Check if we already met the goal today
-  if (goals.todayGoalMet) {
-    console.log('[LightningGoals] ✅ Goal already met today')
-    return { shouldSendReward: false, rewardAmount: 0 }
-  }
+  // Always update word count first
+  await updateLightningGoals(userPubkey, {
+    todayWords: wordCount,
+    todayGoalMet: wordCount >= goals.dailyWordGoal
+  }, authData)
   
-  // Check if we already sent reward today
+  // Check if we already sent reward today (after updating word count)
   if (goals.todayRewardSent) {
     console.log('[LightningGoals] ✅ Reward already sent today')
     return { shouldSendReward: false, rewardAmount: 0 }
@@ -517,11 +517,7 @@ export async function updateWordCount(
     return { shouldSendReward: false, rewardAmount: 0 }
   }
   
-  // Update the goals with new word count and goal met status
-  await updateLightningGoals(userPubkey, {
-    todayWords: wordCount,
-    todayGoalMet: true
-  }, authData)
+  // Word count already updated above
   
   console.log('[LightningGoals] ✅ Goal met! Should send reward:', goals.dailyReward, 'sats')
   
