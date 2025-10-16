@@ -11,7 +11,8 @@ interface IncentiveModalProps {
   onClose: () => void
   userPubkey: string
   authData: any
-  currentWordCount?: number
+  selectedNote?: any
+  lastSavedWordCount?: number
   onWordCountProcessed?: () => void
   onSetupStatusChange?: (hasSetup: boolean) => void
 }
@@ -21,7 +22,8 @@ export function IncentiveModal({
   onClose,
   userPubkey,
   authData,
-  currentWordCount,
+  selectedNote,
+  lastSavedWordCount,
   onWordCountProcessed,
   onSetupStatusChange
 }: IncentiveModalProps) {
@@ -67,7 +69,7 @@ export function IncentiveModal({
           <LightningGoalsManager
             userPubkey={userPubkey}
             authData={authData}
-            currentWordCount={currentWordCount}
+            currentWordCount={lastSavedWordCount}
             onWordCountProcessed={onWordCountProcessed}
             onSetupStatusChange={handleSetupStatusChange}
           />

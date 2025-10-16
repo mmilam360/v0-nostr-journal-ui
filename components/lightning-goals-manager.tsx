@@ -63,7 +63,9 @@ export function LightningGoalsManager({
 
   // Check for goal completion when word count changes
   useEffect(() => {
+    console.log('[LightningGoals] 🔍 useEffect triggered - stake:', !!stake, 'currentWordCount:', currentWordCount)
     if (stake && currentWordCount && currentWordCount > 0) {
+      console.log('[LightningGoals] 🎯 Calling checkGoalCompletion with:', currentWordCount)
       checkGoalCompletion(currentWordCount)
     }
   }, [stake, currentWordCount])
@@ -223,10 +225,24 @@ export function LightningGoalsManager({
   }
 
   const checkGoalCompletion = async (wordCount: number) => {
-    if (!stake || wordCount < stake.dailyWordGoal) return
+    console.log('[LightningGoals] 🎯 checkGoalCompletion called with:', {
+      wordCount,
+      stake: !!stake,
+      dailyWordGoal: stake?.dailyWordGoal,
+      hasMetGoalToday,
+      goalReached: wordCount >= (stake?.dailyWordGoal || 0)
+    })
+    
+    if (!stake || wordCount < stake.dailyWordGoal) {
+      console.log('[LightningGoals] 🎯 Goal not reached or no stake')
+      return
+    }
     
     // Check if goal was already met today
-    if (hasMetGoalToday) return
+    if (hasMetGoalToday) {
+      console.log('[LightningGoals] 🎯 Goal already met today, skipping')
+      return
+    }
     
     try {
       console.log('[LightningGoals] 🎯 Goal reached! Sending reward...')
@@ -304,7 +320,12 @@ export function LightningGoalsManager({
   }
 
   const cancelStake = async () => {
-    if (!stake) return
+    if (!stake) {
+      console.log('[LightningGoals] ❌ No stake to cancel')
+      return
+    }
+    
+    console.log('[LightningGoals] 🔄 Starting stake cancellation...')
     
     try {
       setLoading(true)
