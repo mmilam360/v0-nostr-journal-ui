@@ -85,78 +85,39 @@ export function LightningGoalsMonitor({
       
       console.log('[Monitor] 🎯 SENDING REWARD:', rewardAmount, 'sats to', userLightningAddress)
       
-      // Generate invoice using LNURL-pay (same as donation modal)
-      const [username, domain] = userLightningAddress.split('@')
+      // ⚠️ CRITICAL: Call SERVER API (don't try to use NWC directly)
+      console.log('[Monitor] 📡 Calling server API...')
       
-      console.log('[Monitor] 📡 Fetching LNURL endpoint for:', domain, username)
-      
-      // Fetch LNURL endpoint
-      const lnurlResponse = await fetch(
-        `https://${domain}/.well-known/lnurlp/${username}`
-      )
-      
-      if (!lnurlResponse.ok) {
-        throw new Error('Failed to fetch Lightning Address info')
-      }
-      
-      const lnurlData = await lnurlResponse.json()
-      console.log('[Monitor] 📡 LNURL data:', lnurlData)
-      
-      // Check if amount is within limits
-      const minSats = lnurlData.minSendable / 1000
-      const maxSats = lnurlData.maxSendable / 1000
-      
-      if (rewardAmount < minSats || rewardAmount > maxSats) {
-        throw new Error(`Reward amount ${rewardAmount} sats is outside limits (${minSats}-${maxSats})`)
-      }
-      
-      console.log('[Monitor] 📡 Requesting invoice for', rewardAmount, 'sats')
-      
-      // Request invoice
-      const invoiceResponse = await fetch(
-        `${lnurlData.callback}?amount=${rewardAmount * 1000}` // Convert to millisats
-      )
-      
-      if (!invoiceResponse.ok) {
-        throw new Error('Failed to generate invoice')
-      }
-      
-      const invoiceData = await invoiceResponse.json()
-      
-      if (invoiceData.status === 'ERROR') {
-        throw new Error(invoiceData.reason || 'Invoice generation failed')
-      }
-      
-      const invoice = invoiceData.pr
-      
-      if (!invoice || !invoice.toLowerCase().startsWith('ln')) {
-        throw new Error('Invalid invoice format')
-      }
-      
-      console.log('[Monitor] 📡 Generated invoice:', invoice.substring(0, 50) + '...')
-      
-      // Send payment using NWC (Nostr Wallet Connect)
-      console.log('[Monitor] ⚡ Sending payment via NWC...')
-      
-      // Import NWC provider
-      const { NostrWebLNProvider } = await import('@getalby/sdk')
-      
-      // Get NWC connection from localStorage (same as other parts of the app)
-      const nwcUrl = localStorage.getItem('nwc_connection_url')
-      
-      if (!nwcUrl) {
-        throw new Error('No NWC connection found. Please reconnect your wallet.')
-      }
-      
-      const nwc = new NostrWebLNProvider({
-        nostrWalletConnectUrl: nwcUrl
+      const response = await fetch('/api/incentive/send-reward', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          userPubkey: userPubkey,
+          amount: rewardAmount,
+          lightningAddress: userLightningAddress
+        })
       })
       
-      await nwc.enable()
+      console.log('[Monitor] 📡 API response status:', response.status)
       
-      const result = await nwc.sendPayment(invoice)
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.log('[Monitor] ❌ API error:', errorText)
+        throw new Error(`API returned ${response.status}: ${errorText}`)
+      }
       
-      console.log('[Monitor] ✅ Payment successful! Hash:', result.paymentHash)
+      const apiResult = await response.json()
+      
+      console.log('[Monitor] 📡 API result:', apiResult)
+      
+      if (!apiResult.success) {
+        throw new Error(apiResult.error || 'Payment failed')
+      }
+      
+      console.log('[Monitor] ✅ REWARD SENT!')
+      console.log('[Monitor] 💰 Payment hash:', apiResult.paymentHash)
       
       // Record it
       await recordRewardSent(userPubkey, rewardAmount, authData)

@@ -31,6 +31,10 @@ export interface LightningGoals {
   createdAt: number
   lastUpdated: number
   
+  // NEW: Track when stake was created and what word count was at that time
+  stakeCreatedAt: number           // Unix timestamp
+  baselineWordCount: number        // Words at stake creation (don't count these)
+  
   // Payment
   lightningAddress: string
   
@@ -111,6 +115,10 @@ export async function getLightningGoals(userPubkey: string): Promise<LightningGo
     status: (getTag('status') || 'active') as any,
     createdAt: parseInt(getTag('created_at') || '0'),
     lastUpdated: parseInt(getTag('last_updated') || '0'),
+    
+    // NEW: Parse baseline fields
+    stakeCreatedAt: parseInt(getTag('stake_created_at') || '0'),
+    baselineWordCount: parseInt(getTag('baseline_word_count') || '0'),
     
     lightningAddress: getTag('lightning_address'),
     
@@ -230,6 +238,10 @@ export async function updateLightningGoals(
     ["status", updated.status],
     ["created_at", updated.createdAt.toString()],
     ["last_updated", updated.lastUpdated.toString()],
+    
+    // NEW: Baseline fields
+    ["stake_created_at", updated.stakeCreatedAt.toString()],
+    ["baseline_word_count", updated.baselineWordCount.toString()],
     ["lightning_address", updated.lightningAddress],
     ["today_date", updated.todayDate],
     ["today_words", updated.todayWords.toString()],
@@ -280,13 +292,17 @@ export async function createStake(
     dailyReward: number
     depositAmount: number
     lightningAddress: string
+    currentWordCount: number  // NEW: Pass current word count
     paymentHash?: string
   },
   authData: any
 ): Promise<void> {
   console.log('[LightningGoals] Creating new stake...')
+  console.log('[LightningGoals] Current word count:', config.currentWordCount)
+  console.log('[LightningGoals] This will be the baseline (words before stake)')
   
   const today = new Date().toISOString().split('T')[0]
+  const now = Date.now()
   
   await updateLightningGoals(userPubkey, {
     dailyWordGoal: config.dailyWordGoal,
@@ -296,10 +312,12 @@ export async function createStake(
     totalDeposited: config.paymentHash ? config.depositAmount : 0, // Only count if payment confirmed
     totalWithdrawn: 0,
     status: config.paymentHash ? 'active' : 'pending_payment', // Pending until payment confirmed
-    createdAt: Date.now(),
+    createdAt: now,
+    stakeCreatedAt: now,  // When stake was created
+    baselineWordCount: config.currentWordCount,  // NEW: Baseline to subtract
     lightningAddress: config.lightningAddress,
     todayDate: today,
-    todayWords: 0,
+    todayWords: config.currentWordCount,  // Start with current count
     todayGoalMet: false,
     todayRewardSent: false,
     todayRewardAmount: 0,
@@ -312,7 +330,7 @@ export async function createStake(
     lastMissedDate: ''
   }, authData)
   
-  console.log('[LightningGoals] ✅ Stake created', config.paymentHash ? 'with payment confirmed' : 'pending payment')
+  console.log('[LightningGoals] ✅ Stake created with baseline:', config.currentWordCount, config.paymentHash ? 'with payment confirmed' : 'pending payment')
 }
 
 /**
@@ -479,10 +497,11 @@ export async function updateLightningAddress(
  */
 export async function updateWordCount(
   userPubkey: string,
-  wordCount: number,
+  totalWordCount: number,  // Total words across all notes
   authData: any
 ): Promise<{ shouldSendReward: boolean; rewardAmount: number }> {
-  console.log('[LightningGoals] 📝 Updating word count:', wordCount, 'for user:', userPubkey.substring(0, 8))
+  console.log('[LightningGoals] 📝 Updating word count')
+  console.log('[LightningGoals] Total word count:', totalWordCount)
   
   const goals = await getLightningGoals(userPubkey)
   
@@ -491,7 +510,8 @@ export async function updateWordCount(
     todayWords: goals.todayWords,
     dailyWordGoal: goals.dailyWordGoal,
     todayGoalMet: goals.todayGoalMet,
-    todayRewardSent: goals.todayRewardSent
+    todayRewardSent: goals.todayRewardSent,
+    baselineWordCount: goals.baselineWordCount
   } : 'null')
   
   if (!goals) {
@@ -504,12 +524,24 @@ export async function updateWordCount(
     return { shouldSendReward: false, rewardAmount: 0 }
   }
   
+  // ⚠️ CRITICAL: Subtract baseline to get words written SINCE stake creation
+  const wordsWrittenSinceStake = totalWordCount - goals.baselineWordCount
+  
+  console.log('[LightningGoals] Baseline (words before stake):', goals.baselineWordCount)
+  console.log('[LightningGoals] Words written since stake:', wordsWrittenSinceStake)
+  console.log('[LightningGoals] Daily goal:', goals.dailyWordGoal)
+  
+  // Check if goal met based on words SINCE stake
+  const goalMet = wordsWrittenSinceStake >= goals.dailyWordGoal
+  
+  console.log('[LightningGoals] Goal met:', goalMet)
+  
   const today = new Date().toISOString().split('T')[0]
   
-  // Always update word count first
+  // Update with total words (for tracking) but check goal using adjusted count
   await updateLightningGoals(userPubkey, {
-    todayWords: wordCount,
-    todayGoalMet: wordCount >= goals.dailyWordGoal
+    todayWords: totalWordCount,  // Store total
+    todayGoalMet: goalMet
   }, authData)
   
   // Check if we already sent reward today (after updating word count)
@@ -518,11 +550,7 @@ export async function updateWordCount(
     return { shouldSendReward: false, rewardAmount: 0 }
   }
   
-  // Check if word count meets goal
-  const goalMet = wordCount >= goals.dailyWordGoal
-  
-  console.log('[LightningGoals] 🎯 Goal check:', wordCount, '>=', goals.dailyWordGoal, '=', goalMet)
-  
+  // Check if goal met (already calculated above)
   if (!goalMet) {
     console.log('[LightningGoals] 📊 Goal not met yet')
     return { shouldSendReward: false, rewardAmount: 0 }

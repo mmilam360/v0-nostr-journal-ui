@@ -5,10 +5,28 @@ import { getLightningGoals, createStake, addToStake, cancelStake, updateLightnin
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { AlertTriangle, QrCode, Clock } from 'lucide-react'
+import { AlertTriangle, QrCode, Clock, CheckCircle } from 'lucide-react'
 import QRCode from 'qrcode'
 
-export function LightningGoalsManager({ userPubkey, authData, userLightningAddress, onStakeActivated }: any) {
+interface Props {
+  userPubkey: string
+  authData: any
+  userLightningAddress: string
+  currentWordCount?: number  // NEW: Add this prop (optional)
+  onWordCountProcessed?: () => void
+  onSetupStatusChange?: (hasSetup: boolean) => void
+  onStakeActivated?: () => void
+}
+
+export function LightningGoalsManager({ 
+  userPubkey, 
+  authData, 
+  userLightningAddress,
+  currentWordCount,  // NEW
+  onWordCountProcessed,
+  onSetupStatusChange,
+  onStakeActivated 
+}: Props) {
   const [goals, setGoals] = useState<any>(null)
   const [screen, setScreen] = useState<'setup' | 'invoice' | 'tracking'>('setup')
   const [loading, setLoading] = useState(true)
@@ -198,7 +216,8 @@ export function LightningGoalsManager({ userPubkey, authData, userLightningAddre
         dailyWordGoal: parseInt(dailyWordGoal),
         dailyReward: parseInt(dailyReward),
         depositAmount: parseInt(depositAmount),
-        lightningAddress: lightningAddress.trim()
+        lightningAddress: lightningAddress.trim(),
+        currentWordCount: currentWordCount || 0  // NEW: Pass current count as baseline (default to 0)
       }, authData)
       
       // Generate Lightning invoice
@@ -448,27 +467,37 @@ export function LightningGoalsManager({ userPubkey, authData, userLightningAddre
             <CardContent>
               {/* Progress */}
               <div className="mb-4">
-                <div className="flex justify-between text-sm mb-2">
-                  <span>Today's Progress</span>
-                  <span>{goals.todayWords} / {goals.dailyWordGoal} words</span>
-                </div>
-                
-                <div className="w-full bg-gray-200 rounded-full h-4">
-                  <div
-                    className={`h-4 rounded-full transition-all duration-500 ${
-                      goals.todayGoalMet ? 'bg-green-500' : 'bg-blue-500'
-                    }`}
-                    style={{
-                      width: `${Math.min(100, (goals.todayWords / goals.dailyWordGoal) * 100)}%`
-                    }}
-                  />
-                </div>
-                
-                {goals.todayRewardSent && (
-                  <div className="text-green-600 text-sm mt-2">
-                    ✅ {goals.todayRewardAmount} sats earned today!
-                  </div>
-                )}
+                {(() => {
+                  // Calculate words since stake
+                  const wordsSinceStake = goals.todayWords - (goals.baselineWordCount || 0)
+                  const progressPercent = Math.min(100, (wordsSinceStake / goals.dailyWordGoal) * 100)
+                  
+                  return (
+                    <>
+                      <div className="flex justify-between text-sm mb-2">
+                        <span>Progress (since stake)</span>
+                        <span>{wordsSinceStake} / {goals.dailyWordGoal} words</span>
+                      </div>
+                      
+                      <div className="w-full bg-gray-200 rounded-full h-4">
+                        <div
+                          className={`h-4 rounded-full transition-all duration-500 ${
+                            goals.todayGoalMet ? 'bg-green-500' : 'bg-blue-500'
+                          }`}
+                          style={{
+                            width: `${progressPercent}%`
+                          }}
+                        />
+                      </div>
+                      
+                      {goals.todayRewardSent && (
+                        <div className="mt-2 text-green-600 text-sm">
+                          ✅ {goals.todayRewardAmount} sats earned today!
+                        </div>
+                      )}
+                    </>
+                  )
+                })()}
                 
                 {goals.todayGoalMet && !goals.todayRewardSent && (
                   <div className="text-orange-600 text-sm mt-2">
