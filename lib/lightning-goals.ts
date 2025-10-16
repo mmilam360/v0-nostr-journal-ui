@@ -516,7 +516,7 @@ export async function updateWordCount(
   
   if (!goals) {
     console.log('[LightningGoals] ❌ No goals found for user:', userPubkey.substring(0, 8))
-    throw new Error('No progress recorded for today')
+    return { shouldSendReward: false, rewardAmount: 0 }
   }
   
   if (goals.status !== 'active') {
