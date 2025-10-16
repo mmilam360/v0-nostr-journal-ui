@@ -149,6 +149,15 @@ export default function ProfilePage({ authData, onClose, onLightningAddressUpdat
       
       console.log("✅ Lightning address saved:", lightningAddress)
       
+      // Update Lightning address in active stake if one exists
+      try {
+        const { updateStakeLightningAddress } = await import("@/lib/incentive-nostr-new")
+        await updateStakeLightningAddress(authData.pubkey, lightningAddress, authData)
+        console.log('[Profile] ✅ Lightning address updated in active stake')
+      } catch (error) {
+        console.log('[Profile] ℹ️ No active stake to update Lightning address:', error.message)
+      }
+      
       // Notify parent component of the update
       if (onLightningAddressUpdate) {
         onLightningAddressUpdate(lightningAddress)

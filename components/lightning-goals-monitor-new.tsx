@@ -179,13 +179,16 @@ export function LightningGoalsMonitor({
       
       // Step 5: Check Lightning address
       console.log('[Monitor] Step 5: Checking Lightning address...')
+      
+      // Priority order: stake lightning address > localStorage > prop
+      const stakeLightningAddress = stake.lightningAddress
       const savedAddress = localStorage.getItem(`lightning-address-${userPubkey}`)
-      const currentLightningAddress = savedAddress || userLightningAddress
+      const currentLightningAddress = stakeLightningAddress || savedAddress || userLightningAddress
       
       console.log('[Monitor] 🔍 Lightning address lookup:')
       console.log('  - User pubkey:', userPubkey.substring(0, 8))
-      console.log('  - localStorage key:', `lightning-address-${userPubkey}`)
-      console.log('  - Saved in localStorage:', savedAddress)
+      console.log('  - From stake:', stakeLightningAddress)
+      console.log('  - From localStorage:', savedAddress)
       console.log('  - From prop:', userLightningAddress)
       console.log('  - Using:', currentLightningAddress)
       console.log('  - Has address?', !!currentLightningAddress)

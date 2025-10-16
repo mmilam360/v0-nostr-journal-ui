@@ -211,7 +211,8 @@ export function LightningGoalsManager({
         rewardPerCompletion: setupSettings.rewardPerCompletion,
         currentBalance: setupSettings.stakeAmount,
         stakeCreatedAt: Date.now(),
-        status: 'active'
+        status: 'active',
+        lightningAddress: setupSettings.lightningAddress
       }, authData)
 
       // Record deposit transaction
@@ -265,7 +266,8 @@ export function LightningGoalsManager({
         rewardPerCompletion: stake.rewardPerCompletion,
         currentBalance: 0,
         stakeCreatedAt: stake.stakeCreatedAt,
-        status: 'cancelled'
+        status: 'cancelled',
+        lightningAddress: stake.lightningAddress
       }, authData)
       
       console.log('[LightningGoals] ✅ Stake forfeited successfully')

@@ -71,7 +71,9 @@ export function IncentiveModal({
           <LightningGoalsManager
             userPubkey={userPubkey}
             authData={authData}
+            currentWordCount={lastSavedWordCount}
             userLightningAddress={userLightningAddress || ''}
+            onWordCountProcessed={onWordCountProcessed}
             onSetupStatusChange={handleSetupStatusChange}
           />
         </CardContent>

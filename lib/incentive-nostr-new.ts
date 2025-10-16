@@ -19,6 +19,7 @@ export interface StakeSettings {
   stakeCreatedAt: number
   status: 'active' | 'cancelled'
   lastUpdated: number
+  lightningAddress?: string
 }
 
 export interface DailyProgress {
@@ -73,7 +74,8 @@ export async function getCurrentStake(userPubkey: string): Promise<StakeSettings
     currentBalance: parseInt(getTags('current_balance') || '0'),
     stakeCreatedAt: parseInt(getTags('stake_created_at') || '0'),
     status: getTags('status') as 'active' | 'cancelled' || 'active',
-    lastUpdated: parseInt(getTags('last_updated') || '0')
+    lastUpdated: parseInt(getTags('last_updated') || '0'),
+    lightningAddress: getTags('lightning_address')
   }
   
   console.log('[Nostr] ✅ Current stake:', stake)
@@ -93,6 +95,7 @@ export async function saveStakeSettings(
     currentBalance: number
     stakeCreatedAt?: number
     status?: 'active' | 'cancelled'
+    lightningAddress?: string
   },
   authData: any
 ): Promise<void> {
@@ -108,7 +111,8 @@ export async function saveStakeSettings(
       ["current_balance", settings.currentBalance.toString()],
       ["stake_created_at", (settings.stakeCreatedAt || Date.now()).toString()],
       ["status", settings.status || "active"],
-      ["last_updated", Date.now().toString()]
+      ["last_updated", Date.now().toString()],
+      ...(settings.lightningAddress ? [["lightning_address", settings.lightningAddress]] : [])
     ],
     content: "",
     pubkey: userPubkey
@@ -120,6 +124,31 @@ export async function saveStakeSettings(
   await pool.publish(RELAYS, signedEvent)
   
   console.log('[Nostr] ✅ Stake settings saved')
+}
+
+/**
+ * Update Lightning address for existing stake
+ */
+export async function updateStakeLightningAddress(
+  userPubkey: string,
+  lightningAddress: string,
+  authData: any
+): Promise<void> {
+  console.log('[Nostr] Updating Lightning address for stake:', lightningAddress)
+  
+  // Get current stake
+  const currentStake = await getCurrentStake(userPubkey)
+  if (!currentStake) {
+    throw new Error('No active stake found to update')
+  }
+  
+  // Update stake with new Lightning address
+  await saveStakeSettings(userPubkey, {
+    ...currentStake,
+    lightningAddress: lightningAddress
+  }, authData)
+  
+  console.log('[Nostr] ✅ Lightning address updated for stake')
 }
 
 /**
