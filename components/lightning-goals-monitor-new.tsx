@@ -25,74 +25,160 @@ export function LightningGoalsMonitor({
   onWordCountProcessed
 }: LightningGoalsMonitorProps) {
   const [isProcessing, setIsProcessing] = useState(false)
+  const [lastCheckedCount, setLastCheckedCount] = useState(0)
+  const processingRef = useRef(false)
   const lastProcessedCount = useRef(0)
+  
+  // ⚠️ CRITICAL: Log when component mounts
+  useEffect(() => {
+    console.log('[Monitor] ========================================')
+    console.log('[Monitor] 🔄 Component mounted')
+    console.log('[Monitor] Initial word count:', currentWordCount)
+    console.log('[Monitor] User pubkey:', userPubkey.substring(0, 8))
+    console.log('[Monitor] Has auth data:', !!authData)
+    console.log('[Monitor] Lightning address:', userLightningAddress)
+    console.log('[Monitor] ========================================')
+    
+    return () => {
+      console.log('[Monitor] Component unmounting')
+    }
+  }, [])
   
   // Monitor word count changes
   useEffect(() => {
-    console.log('[Monitor] 🔍 useEffect triggered - currentWordCount:', currentWordCount, 'lastProcessed:', lastProcessedCount.current, 'isProcessing:', isProcessing)
+    console.log('[Monitor] ========================================')
+    console.log('[Monitor] 🔍 Word count changed!')
+    console.log('[Monitor] New count:', currentWordCount)
+    console.log('[Monitor] Last checked count:', lastCheckedCount)
+    console.log('[Monitor] Is processing:', processingRef.current)
+    console.log('[Monitor] ========================================')
     
-    // Skip if no change or already processing
-    if (currentWordCount === lastProcessedCount.current || isProcessing) {
-      console.log('[Monitor] ⏭️ Skipping - no change or already processing')
+    // Skip if no real change
+    if (currentWordCount === lastCheckedCount) {
+      console.log('[Monitor] ⏭️ No change, skipping')
       return
     }
     
     if (currentWordCount === 0 || currentWordCount === null) {
-      console.log('[Monitor] ⏭️ Skipping - no words written yet')
-      return // Skip if no words written yet
+      console.log('[Monitor] ⏭️ Zero words, skipping')
+      return
     }
     
-    console.log('[Monitor] 🔍 Word count updated:', currentWordCount)
-    lastProcessedCount.current = currentWordCount
+    if (processingRef.current) {
+      console.log('[Monitor] ⏭️ Already processing, skipping')
+      return
+    }
     
-    // Check if goal is met
+    // Update last checked
+    setLastCheckedCount(currentWordCount)
+    
+    // Check goal
+    console.log('[Monitor] ▶️ Triggering goal check...')
     checkAndSendReward()
     
-  }, [currentWordCount])
+  }, [currentWordCount]) // Only depend on currentWordCount
   
   async function checkAndSendReward() {
-    if (isProcessing) return
+    if (processingRef.current) {
+      console.log('[Monitor] Already processing, exiting')
+      return
+    }
     
+    processingRef.current = true
     setIsProcessing(true)
     
     try {
-      console.log('[Monitor] Checking goal completion...')
+      console.log('[Monitor] ========================================')
+      console.log('[Monitor] 🎯 CHECKING GOAL COMPLETION')
+      console.log('[Monitor] ========================================')
       
-      // Get current stake
+      // Step 1: Get current stake
+      console.log('[Monitor] Step 1: Fetching current stake...')
+      
       const stake = await getCurrentStake(userPubkey)
-      if (!stake || stake.status !== 'active') {
-        console.log('[Monitor] No active stake')
+      
+      if (!stake) {
+        console.log('[Monitor] ❌ No stake found')
         return
       }
       
-      console.log('[Monitor] 📊 Current stake:', {
-        dailyGoal: stake.dailyWordGoal,
-        currentBalance: stake.currentBalance,
-        rewardAmount: stake.rewardPerCompletion
+      console.log('[Monitor] ✅ Stake found:', {
+        balance: stake.currentBalance,
+        goal: stake.dailyWordGoal,
+        reward: stake.rewardPerCompletion,
+        status: stake.status
       })
       
-      // Check if goal is met
-      if (currentWordCount < stake.dailyWordGoal) {
-        console.log('[Monitor] Goal not met:', currentWordCount, '/', stake.dailyWordGoal)
+      if (stake.status !== 'active') {
+        console.log('[Monitor] ❌ Stake not active, status:', stake.status)
         return
       }
       
-      // Check if reward already sent today
+      // Step 2: Check if goal is met
+      console.log('[Monitor] Step 2: Checking if goal met...')
+      console.log('[Monitor] Current words:', currentWordCount)
+      console.log('[Monitor] Goal:', stake.dailyWordGoal)
+      console.log('[Monitor] Met?', currentWordCount >= stake.dailyWordGoal)
+      
+      if (currentWordCount < stake.dailyWordGoal) {
+        console.log('[Monitor] ⏳ Goal not met yet')
+        
+        // ⚠️ IMPORTANT: Still record progress for progress bar
+        const today = new Date().toISOString().split('T')[0]
+        await recordDailyProgress(
+          userPubkey,
+          currentWordCount,
+          false, // goalMet = false
+          false, // rewardSent = false
+          0,
+          authData
+        )
+        console.log('[Monitor] 📊 Progress recorded (goal not met)')
+        
+        return
+      }
+      
+      console.log('[Monitor] 🎉 GOAL MET!')
+      
+      // Step 3: Check if reward already sent today
+      console.log('[Monitor] Step 3: Checking if reward already sent...')
       const today = new Date().toISOString().split('T')[0]
       const todayProgress = await getDailyProgress(userPubkey, today)
       
       if (todayProgress?.rewardSent) {
-        console.log('[Monitor] Reward already sent today')
+        console.log('[Monitor] ⚠️ Reward already sent today')
         return
       }
       
-      // Check balance
+      console.log('[Monitor] ✅ No reward sent yet today')
+      
+      // Step 4: Check balance
+      console.log('[Monitor] Step 4: Checking balance...')
+      console.log('[Monitor] Current balance:', stake.currentBalance)
+      console.log('[Monitor] Reward amount:', stake.rewardPerCompletion)
+      
       if (stake.currentBalance < stake.rewardPerCompletion) {
-        console.log('[Monitor] ⚠️ Insufficient balance:', stake.currentBalance, 'sats')
+        console.log('[Monitor] ❌ Insufficient balance!')
+        
+        // Still record progress
+        await recordDailyProgress(
+          userPubkey,
+          currentWordCount,
+          true, // goalMet = true
+          false, // rewardSent = false (insufficient balance)
+          0,
+          authData
+        )
+        
+        // TODO: Show notification to user about insufficient balance
+        
         return
       }
       
-      // Get current Lightning address (from localStorage or prop)
+      console.log('[Monitor] ✅ Sufficient balance')
+      
+      // Step 5: Check Lightning address
+      console.log('[Monitor] Step 5: Checking Lightning address...')
       const savedAddress = localStorage.getItem(`lightning-address-${userPubkey}`)
       const currentLightningAddress = savedAddress || userLightningAddress
       
@@ -102,12 +188,28 @@ export function LightningGoalsMonitor({
       console.log('  - Using:', currentLightningAddress)
       
       if (!currentLightningAddress) {
-        console.error('[Monitor] ❌ No Lightning address found for user')
+        console.log('[Monitor] ❌ No Lightning address configured!')
+        
+        // Record progress but can't send reward
+        await recordDailyProgress(
+          userPubkey,
+          currentWordCount,
+          true,
+          false,
+          0,
+          authData
+        )
+        
+        // TODO: Show notification asking user to add Lightning address
+        
         return
       }
       
-      // Send reward
-      console.log('[Monitor] 🎯 Sending reward of', stake.rewardPerCompletion, 'sats to', currentLightningAddress)
+      console.log('[Monitor] ✅ Lightning address:', currentLightningAddress)
+      
+      // Step 6: Send reward
+      console.log('[Monitor] Step 6: Sending reward...')
+      console.log('[Monitor] 💸 Sending', stake.rewardPerCompletion, 'sats to', currentLightningAddress)
       
       const rewardResult = await fetch('/api/incentive/send-reward', {
         method: 'POST',
@@ -120,20 +222,29 @@ export function LightningGoalsMonitor({
       }).then(r => r.json())
       
       if (!rewardResult.success) {
-        throw new Error('Reward failed: ' + (rewardResult.error || 'Unknown error'))
+        console.error('[Monitor] ❌ Reward failed:', rewardResult.error)
+        throw new Error('Reward failed: ' + rewardResult.error)
       }
       
-      console.log('[Monitor] ✅ Reward sent! Payment hash:', rewardResult.paymentHash)
+      console.log('[Monitor] ✅ Reward sent successfully!')
+      console.log('[Monitor] Payment hash:', rewardResult.paymentHash)
       
-      // Update balance
+      // Step 7: Update balance
+      console.log('[Monitor] Step 7: Updating balance...')
       const newBalance = stake.currentBalance - stake.rewardPerCompletion
       
       await saveStakeSettings(userPubkey, {
-        ...stake,
-        currentBalance: newBalance
+        dailyWordGoal: stake.dailyWordGoal,
+        rewardPerCompletion: stake.rewardPerCompletion,
+        currentBalance: newBalance,
+        stakeCreatedAt: stake.stakeCreatedAt,
+        status: 'active'
       }, authData)
       
-      // Record transaction
+      console.log('[Monitor] ✅ Balance updated:', stake.currentBalance, '→', newBalance)
+      
+      // Step 8: Record transaction
+      console.log('[Monitor] Step 8: Recording transaction...')
       await recordTransaction(userPubkey, {
         type: 'reward',
         amount: -stake.rewardPerCompletion,
@@ -143,18 +254,24 @@ export function LightningGoalsMonitor({
         description: `Daily goal reward for ${today}`
       }, authData)
       
-      // Record progress
+      console.log('[Monitor] ✅ Transaction recorded')
+      
+      // Step 9: Record daily progress
+      console.log('[Monitor] Step 9: Recording daily progress...')
       await recordDailyProgress(
         userPubkey,
         currentWordCount,
-        true,  // goalMet
-        true,  // rewardSent
+        true,
+        true,
         stake.rewardPerCompletion,
         authData
       )
       
-      console.log('[Monitor] 🎉 Goal completed and reward sent!')
-      console.log('[Monitor] 📈 New balance:', newBalance, 'sats')
+      console.log('[Monitor] ✅ Daily progress recorded')
+      
+      console.log('[Monitor] ========================================')
+      console.log('[Monitor] 🎉 GOAL COMPLETED AND REWARD SENT!')
+      console.log('[Monitor] ========================================')
       
       // Notify parent that word count was processed
       if (onWordCountProcessed) {
@@ -162,8 +279,12 @@ export function LightningGoalsMonitor({
       }
       
     } catch (error) {
-      console.error('[Monitor] ❌ Error processing reward:', error)
+      console.error('[Monitor] ========================================')
+      console.error('[Monitor] ❌ ERROR PROCESSING REWARD')
+      console.error('[Monitor]', error)
+      console.error('[Monitor] ========================================')
     } finally {
+      processingRef.current = false
       setIsProcessing(false)
     }
   }
