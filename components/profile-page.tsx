@@ -23,6 +23,7 @@ export default function ProfilePage({ authData, onClose, onLightningAddressUpdat
   const [isSaving, setIsSaving] = useState(false)
 
   useEffect(() => {
+    console.log('[Profile] 🔄 Profile page loading for user:', authData.pubkey)
     const loadProfile = async () => {
       try {
         const { npubEncode } = await import("nostr-tools/nip19")
@@ -44,6 +45,8 @@ export default function ProfilePage({ authData, onClose, onLightningAddressUpdat
 
           if (events.length > 0) {
             const metadata = JSON.parse(events[0].content)
+            console.log('[Profile] 📋 Profile metadata:', metadata)
+            
             if (metadata.picture) {
               setProfilePicture(metadata.picture)
             }
@@ -51,13 +54,17 @@ export default function ProfilePage({ authData, onClose, onLightningAddressUpdat
               setDisplayName(metadata.display_name || metadata.name)
             }
             if (metadata.lud16 || metadata.lightning_address) {
-              setLightningAddress(metadata.lud16 || metadata.lightning_address)
+              const lnAddress = metadata.lud16 || metadata.lightning_address
+              console.log('[Profile] ⚡ Found Lightning address in profile:', lnAddress)
+              setLightningAddress(lnAddress)
             }
           }
 
           // Load Lightning address from localStorage as fallback
           const savedLightningAddress = localStorage.getItem(`lightning-address-${authData.pubkey}`)
+          console.log('[Profile] 🔍 Checking localStorage for Lightning address:', savedLightningAddress)
           if (savedLightningAddress) {
+            console.log('[Profile] ✅ Using Lightning address from localStorage:', savedLightningAddress)
             setLightningAddress(savedLightningAddress)
           }
 
@@ -256,7 +263,10 @@ export default function ProfilePage({ authData, onClose, onLightningAddressUpdat
                     <Input
                       type="text"
                       value={lightningAddress}
-                      onChange={(e) => setLightningAddress(e.target.value)}
+                      onChange={(e) => {
+                        console.log('[Profile] 📝 Lightning address input changed:', e.target.value)
+                        setLightningAddress(e.target.value)
+                      }}
                       placeholder="your@lightning.address"
                       className="flex-1 bg-slate-900 border-slate-600 text-slate-300"
                     />
@@ -276,6 +286,9 @@ export default function ProfilePage({ authData, onClose, onLightningAddressUpdat
                   </div>
                   <p className="text-xs text-slate-500 mt-1">
                     Where Lightning rewards will be sent. This updates your Nostr profile.
+                  </p>
+                  <p className="text-xs text-blue-400 mt-1">
+                    Current value: {lightningAddress || 'empty'}
                   </p>
                 </div>
 

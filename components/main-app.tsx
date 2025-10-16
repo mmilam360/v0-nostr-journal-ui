@@ -1775,6 +1775,13 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       />
     )}
     
+    {/* Debug Lightning address */}
+    {authData && (
+      <div style={{ display: 'none' }}>
+        Debug: Lightning address = {userLightningAddress || 'null'}
+      </div>
+    )}
+    
     {/* Lightning Incentive Modal */}
     {isIncentiveEnabled() && (
       <IncentiveModal
