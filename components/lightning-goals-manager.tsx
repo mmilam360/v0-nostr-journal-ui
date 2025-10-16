@@ -535,56 +535,117 @@ export function LightningGoalsManager({ userPubkey, authData, userLightningAddre
         </Card>
       )}
       
-      {screen === 'invoice' && invoiceData && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Complete Your Payment</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="text-center">
-              <div className="text-2xl font-bold mb-2">{invoiceData.amount} sats</div>
-              <div className="text-sm text-gray-600 mb-4">
-                Pay this amount to activate your Lightning Goals stake
-              </div>
-            </div>
-            
-            <div className="bg-gray-50 p-4 rounded-lg">
-              <div className="text-xs font-mono break-all">
-                {invoiceData.invoice}
-              </div>
-            </div>
-            
-            <div className="flex gap-2">
-              <Button
-                onClick={() => navigator.clipboard.writeText(invoiceData.invoice)}
-                variant="outline"
-                className="flex-1"
-              >
-                Copy Invoice
-              </Button>
-              <Button
-                onClick={handlePaymentVerification}
-                disabled={paymentStatus === 'checking'}
-                className="flex-1"
-              >
-                {paymentStatus === 'checking' ? (
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    Checking...
+      {screen === 'invoice' && (
+        <div className="space-y-4">
+          {invoiceData ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>Complete Your Payment</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="text-center">
+                  <div className="text-2xl font-bold mb-2">{invoiceData.amount} sats</div>
+                  <div className="text-sm text-gray-600 mb-4">
+                    Pay this amount to activate your Lightning Goals stake
                   </div>
-                ) : (
-                  'Check Payment'
-                )}
-              </Button>
-            </div>
-            
-            <div className="text-xs text-gray-500 text-center">
-              <p>1. Copy the invoice above</p>
-              <p>2. Pay it with your Lightning wallet</p>
-              <p>3. Click "Check Payment" to verify</p>
-            </div>
-          </CardContent>
-        </Card>
+                </div>
+                
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <div className="text-xs font-mono break-all">
+                    {invoiceData.invoice}
+                  </div>
+                </div>
+                
+                <div className="flex gap-2">
+                  <Button
+                    onClick={() => navigator.clipboard.writeText(invoiceData.invoice)}
+                    variant="outline"
+                    className="flex-1"
+                  >
+                    Copy Invoice
+                  </Button>
+                  <Button
+                    onClick={handlePaymentVerification}
+                    disabled={paymentStatus === 'checking'}
+                    className="flex-1"
+                  >
+                    {paymentStatus === 'checking' ? (
+                      <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        Checking...
+                      </div>
+                    ) : (
+                      'Check Payment'
+                    )}
+                  </Button>
+                </div>
+                
+                <div className="text-xs text-gray-500 text-center">
+                  <p>1. Copy the invoice above</p>
+                  <p>2. Pay it with your Lightning wallet</p>
+                  <p>3. Click "Check Payment" to verify</p>
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card>
+              <CardHeader>
+                <CardTitle>Payment Required</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="text-center">
+                  <div className="text-lg font-semibold mb-2">Pending Payment</div>
+                  <div className="text-sm text-gray-600 mb-4">
+                    You have a pending Lightning Goals stake that requires payment to activate.
+                  </div>
+                </div>
+                
+                <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                  <div className="text-sm text-orange-700">
+                    <p className="font-medium">⚠️ Incomplete Setup</p>
+                    <p className="mt-1">
+                      Your stake was created but payment was not completed. 
+                      The invoice data is missing.
+                    </p>
+                  </div>
+                </div>
+                
+                <div className="flex gap-2">
+                  <Button
+                    onClick={async () => {
+                      try {
+                        // Cancel the pending stake and start over
+                        if (goals) {
+                          await cancelStake(userPubkey, authData)
+                          setGoals(null)
+                          setScreen('setup')
+                        }
+                      } catch (error) {
+                        console.error('Error cancelling pending stake:', error)
+                        alert('Error cancelling pending stake: ' + error.message)
+                      }
+                    }}
+                    variant="outline"
+                    className="flex-1"
+                  >
+                    Cancel & Start Over
+                  </Button>
+                  <Button
+                    onClick={() => setScreen('setup')}
+                    className="flex-1"
+                  >
+                    Try Again
+                  </Button>
+                </div>
+                
+                <div className="text-xs text-gray-500 text-center">
+                  <p>• Cancel to start fresh with new settings</p>
+                  <p>• Try Again to return to setup</p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
       )}
       
       {/* Fallback - should never reach here */}
