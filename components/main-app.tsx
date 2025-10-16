@@ -30,6 +30,7 @@ import PublishModal from "@/components/publish-modal"
 import DeleteConfirmationModal from "@/components/delete-confirmation-modal"
 import ProfilePage from "@/components/profile-page"
 import { isIncentiveEnabled } from "@/lib/feature-flags"
+import { LightningGoalsMonitor } from "@/components/lightning-goals-monitor"
 import dynamic from "next/dynamic"
 
 // Dynamically import IncentiveModal to avoid SSR issues with QRCode
@@ -1743,6 +1744,16 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       open={showDonationModal}
       onOpenChange={setShowDonationModal}
     />
+    
+    {/* Lightning Goals Monitor - Always Active */}
+    {isIncentiveEnabled() && authData && (
+      <LightningGoalsMonitor
+        userPubkey={authData.pubkey}
+        authData={authData}
+        currentWordCount={lastSavedWordCount}
+        onWordCountProcessed={() => setLastSavedWordCount(null)}
+      />
+    )}
     
     {/* Lightning Incentive Modal */}
     {isIncentiveEnabled() && (
