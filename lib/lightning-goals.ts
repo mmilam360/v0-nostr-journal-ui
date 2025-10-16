@@ -474,11 +474,20 @@ export async function updateWordCount(
   wordCount: number,
   authData: any
 ): Promise<{ shouldSendReward: boolean; rewardAmount: number }> {
-  console.log('[LightningGoals] 📝 Updating word count:', wordCount)
+  console.log('[LightningGoals] 📝 Updating word count:', wordCount, 'for user:', userPubkey.substring(0, 8))
   
   const goals = await getLightningGoals(userPubkey)
   
+  console.log('[LightningGoals] 📊 Goals loaded for updateWordCount:', goals ? {
+    status: goals.status,
+    todayWords: goals.todayWords,
+    dailyWordGoal: goals.dailyWordGoal,
+    todayGoalMet: goals.todayGoalMet,
+    todayRewardSent: goals.todayRewardSent
+  } : 'null')
+  
   if (!goals) {
+    console.log('[LightningGoals] ❌ No goals found for user:', userPubkey.substring(0, 8))
     throw new Error('No progress recorded for today')
   }
   

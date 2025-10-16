@@ -47,6 +47,7 @@ export function LightningGoalsMonitor({
     try {
       console.log('[Monitor] ⚡ Checking goal...', {
         userPubkey: userPubkey.substring(0, 8),
+        fullUserPubkey: userPubkey,
         currentWordCount,
         hasLightningAddress: !!userLightningAddress,
         lightningAddress: userLightningAddress || 'NONE'
