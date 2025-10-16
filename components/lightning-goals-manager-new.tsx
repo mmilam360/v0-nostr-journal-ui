@@ -61,6 +61,11 @@ export function LightningGoalsManager({
   } | null>(null)
   
   const [showSuccessMessage, setShowSuccessMessage] = useState(false)
+  
+  // Cancel stake state
+  const [showCancelModal, setShowCancelModal] = useState(false)
+  const [isCancelling, setIsCancelling] = useState(false)
+  const [cancelError, setCancelError] = useState('')
 
   // Load current stake on mount
   useEffect(() => {
@@ -239,32 +244,46 @@ export function LightningGoalsManager({
     }
   }
 
-  const cancelStake = async () => {
+  const handleCancelStake = async () => {
     if (!stake) {
       console.log('[LightningGoals] ❌ No stake to cancel')
       return
     }
     
     console.log('[LightningGoals] 🔄 Starting stake cancellation...')
+    console.log('[LightningGoals] Current balance:', stake.currentBalance)
+    console.log('[LightningGoals] Lightning address:', userLightningAddress)
+    
+    setIsCancelling(true)
+    setCancelError('')
     
     try {
-      setLoading(true)
-      
-      // Send refund (remaining balance)
-      const refundResponse = await fetch('/api/incentive/send-reward', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userPubkey,
-          authData,
-          amount: stake.currentBalance,
-          lightningAddress: userLightningAddress,
-          isRefund: true
-        })
-      })
-      
-      if (refundResponse.ok) {
-        const refundResult = await refundResponse.json()
+      // If there's a balance, need to refund
+      if (stake.currentBalance > 0) {
+        // Check if user has Lightning address
+        if (!userLightningAddress) {
+          throw new Error('Please add a Lightning address to your profile before cancelling. Your refund will be sent there.')
+        }
+        
+        console.log('[LightningGoals] 💸 Sending refund...')
+        
+        // Send refund
+        const refundResult = await fetch('/api/incentive/send-reward', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userPubkey: userPubkey,
+            amount: stake.currentBalance,
+            lightningAddress: userLightningAddress,
+            isRefund: true
+          })
+        }).then(r => r.json())
+        
+        if (!refundResult.success) {
+          throw new Error('Refund failed: ' + refundResult.error)
+        }
+        
+        console.log('[LightningGoals] ✅ Refund sent:', refundResult.paymentHash)
         
         // Record refund transaction
         await recordTransaction(userPubkey, {
@@ -276,26 +295,40 @@ export function LightningGoalsManager({
           description: 'Stake cancellation refund'
         }, authData)
         
-        // Update stake status to cancelled
-        await saveStakeSettings(userPubkey, {
-          ...stake,
-          currentBalance: 0,
-          status: 'cancelled'
-        }, authData)
-        
-        // Reset state
-        setStake(null)
-        setPaymentStep('setup')
-        setTodayProgress(null)
-        
-        if (onSetupStatusChange) onSetupStatusChange(false)
-        
-        console.log('[LightningGoals] ✅ Stake cancelled and refunded')
+        console.log('[LightningGoals] ✅ Refund transaction recorded')
       }
+      
+      // Update stake status to cancelled
+      console.log('[LightningGoals] 📝 Updating stake status to cancelled...')
+      
+      await saveStakeSettings(userPubkey, {
+        dailyWordGoal: stake.dailyWordGoal,
+        rewardPerCompletion: stake.rewardPerCompletion,
+        currentBalance: 0,
+        stakeCreatedAt: stake.stakeCreatedAt,
+        status: 'cancelled'
+      }, authData)
+      
+      console.log('[LightningGoals] ✅ Stake cancelled successfully')
+      
+      // Close modal and reset state
+      setShowCancelModal(false)
+      setStake(null)
+      setPaymentStep('setup')
+      setTodayProgress(null)
+      
+      if (onSetupStatusChange) onSetupStatusChange(false)
+      
+      // Show success message
+      alert(stake.currentBalance > 0 
+        ? `Stake cancelled! ${stake.currentBalance} sats refunded to ${userLightningAddress}`
+        : 'Stake cancelled successfully')
+      
     } catch (error) {
-      console.error('[LightningGoals] Error cancelling stake:', error)
+      console.error('[LightningGoals] ❌ Error:', error)
+      setCancelError(error instanceof Error ? error.message : 'Failed to cancel stake')
     } finally {
-      setLoading(false)
+      setIsCancelling(false)
     }
   }
 
@@ -530,13 +563,81 @@ export function LightningGoalsManager({
             )}
             
             <Button
-              onClick={cancelStake}
+              onClick={() => setShowCancelModal(true)}
               variant="destructive"
               disabled={loading}
               className="w-full"
             >
               Cancel Stake & Reset
             </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  // Cancel confirmation modal
+  if (showCancelModal && stake) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50">
+        <Card className="w-full max-w-md">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-red-600">
+              <AlertTriangle className="w-5 h-5" />
+              Cancel Stake Confirmation
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <p className="text-sm text-gray-600">
+                Are you sure you want to cancel your commitment and forfeit your stake?
+              </p>
+              
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0" />
+                  <div className="text-sm text-red-700">
+                    <p className="font-medium">This action cannot be undone.</p>
+                    <p className="mt-1">
+                      Your remaining balance of <strong>{stake.currentBalance} sats</strong> will be 
+                      {stake.currentBalance > 0 ? ' refunded to your Lightning address.' : ' forfeited.'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
+              {cancelError && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                  <p className="text-sm text-red-700">{cancelError}</p>
+                </div>
+              )}
+            </div>
+            
+            <div className="flex gap-2 pt-2">
+              <Button
+                onClick={() => setShowCancelModal(false)}
+                variant="outline"
+                className="flex-1"
+                disabled={isCancelling}
+              >
+                Keep Stake
+              </Button>
+              <Button
+                onClick={handleCancelStake}
+                variant="destructive"
+                className="flex-1"
+                disabled={isCancelling}
+              >
+                {isCancelling ? (
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Cancelling...
+                  </div>
+                ) : (
+                  'Yes, Cancel Stake'
+                )}
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </div>
