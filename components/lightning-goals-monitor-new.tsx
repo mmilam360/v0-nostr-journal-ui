@@ -28,6 +28,22 @@ export function LightningGoalsMonitor({
   const [lastCheckedCount, setLastCheckedCount] = useState(0)
   const processingRef = useRef(false)
   const lastProcessedCount = useRef(0)
+
+  // CRITICAL: Log on mount to verify component is rendering
+  useEffect(() => {
+    console.log('========================================')
+    console.log('[Monitor] 🚀 COMPONENT MOUNTED')
+    console.log('[Monitor] User:', userPubkey?.substring(0, 8) || 'NO_PUBKEY')
+    console.log('[Monitor] Initial word count:', currentWordCount)
+    console.log('[Monitor] Lightning address:', userLightningAddress || 'NONE')
+    console.log('[Monitor] Has auth:', !!authData)
+    console.log('[Monitor] Auth pubkey:', authData?.pubkey?.substring(0, 8) || 'NO_AUTH_PUBKEY')
+    console.log('========================================')
+    
+    return () => {
+      console.log('[Monitor] 🔴 Component unmounting')
+    }
+  }, [])
   
   // ⚠️ CRITICAL: Log when component mounts
   useEffect(() => {
@@ -49,6 +65,7 @@ export function LightningGoalsMonitor({
     console.log('[Monitor] ========================================')
     console.log('[Monitor] 🔍 Word count changed!')
     console.log('[Monitor] New count:', currentWordCount)
+    console.log('[Monitor] Count type:', typeof currentWordCount)
     console.log('[Monitor] Last checked count:', lastCheckedCount)
     console.log('[Monitor] Is processing:', processingRef.current)
     console.log('[Monitor] ========================================')

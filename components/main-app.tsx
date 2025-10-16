@@ -759,13 +759,23 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
             console.log("[NostrJournal] ⚡ Checking Lightning Goals reward eligibility...")
             const wordCount = finalNote.content.split(/\s+/).filter(word => word.trim().length > 0).length
             
+            console.log("[NostrJournal] 📊 Word count calculation:")
+            console.log("  - Content length:", finalNote.content.length)
+            console.log("  - Split words:", finalNote.content.split(/\s+/).length)
+            console.log("  - Filtered words:", wordCount)
+            
+            // Always set word count (even if 0) so monitor knows about the update
+            console.log("[NostrJournal] ⚡ Setting word count:", wordCount)
+            setLastSavedWordCount(wordCount)
+            
             // Trigger reward check if word count is provided
             if (wordCount > 0) {
-              console.log("[NostrJournal] ⚡ Word count:", wordCount, "- triggering automatic reward check")
-              setLastSavedWordCount(wordCount)
+              console.log("[NostrJournal] ⚡ Word count > 0, triggering automatic reward check")
               
               // Call the direct reward eligibility check
               await checkRewardEligibility(wordCount)
+            } else {
+              console.log("[NostrJournal] ⚡ Word count = 0, skipping reward check")
             }
           } catch (rewardError) {
             console.error("[NostrJournal] ⚠️ Error checking reward eligibility:", rewardError)
@@ -1765,15 +1775,33 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     />
     
     {/* Lightning Goals Monitor - Always Active */}
-    {isIncentiveEnabled() && authData && (
-      <LightningGoalsMonitor
-        userPubkey={authData.pubkey}
-        authData={authData}
-        currentWordCount={lastSavedWordCount}
-        userLightningAddress={userLightningAddress}
-        onWordCountProcessed={() => setLastSavedWordCount(null)}
-      />
-    )}
+    {(() => {
+      const shouldRender = isIncentiveEnabled() && authData
+      console.log('[MainApp] 🔍 Monitor render check:', {
+        incentiveEnabled: isIncentiveEnabled(),
+        hasAuthData: !!authData,
+        authPubkey: authData?.pubkey?.substring(0, 8) || 'NO_PUBKEY',
+        wordCount: lastSavedWordCount,
+        lightningAddress: userLightningAddress || 'NONE',
+        shouldRender
+      })
+      
+      if (shouldRender) {
+        console.log('[MainApp] ✅ RENDERING MONITOR')
+        return (
+          <LightningGoalsMonitor
+            userPubkey={authData.pubkey}
+            authData={authData}
+            currentWordCount={lastSavedWordCount || 0}
+            userLightningAddress={userLightningAddress}
+            onWordCountProcessed={() => setLastSavedWordCount(null)}
+          />
+        )
+      } else {
+        console.log('[MainApp] ❌ NOT RENDERING MONITOR')
+        return null
+      }
+    })()}
     
     {/* Debug Lightning address */}
     {authData && (
