@@ -78,28 +78,78 @@ export function LightningGoalsMonitor({
       
       console.log('[Monitor] 🎯 SENDING REWARD:', rewardAmount, 'sats to', userLightningAddress)
       
-      // Send reward using Next.js API (simpler, no progress checking)
-      const response = await fetch('/api/incentive/send-reward', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userPubkey,
-          amount: rewardAmount,
-          lightningAddress: userLightningAddress
-        })
-      })
+      // Generate invoice using LNURL-pay (same as donation modal)
+      const [username, domain] = userLightningAddress.split('@')
       
-      console.log('[Monitor] 📡 API response status:', response.status)
+      console.log('[Monitor] 📡 Fetching LNURL endpoint for:', domain, username)
       
-      const result = await response.json()
+      // Fetch LNURL endpoint
+      const lnurlResponse = await fetch(
+        `https://${domain}/.well-known/lnurlp/${username}`
+      )
       
-      console.log('[Monitor] 📡 API response:', result)
-      
-      if (!result.success) {
-        throw new Error(result.error || 'Unknown API error')
+      if (!lnurlResponse.ok) {
+        throw new Error('Failed to fetch Lightning Address info')
       }
       
-      console.log('[Monitor] ✅ Reward sent! Payment hash:', result.paymentHash)
+      const lnurlData = await lnurlResponse.json()
+      console.log('[Monitor] 📡 LNURL data:', lnurlData)
+      
+      // Check if amount is within limits
+      const minSats = lnurlData.minSendable / 1000
+      const maxSats = lnurlData.maxSendable / 1000
+      
+      if (rewardAmount < minSats || rewardAmount > maxSats) {
+        throw new Error(`Reward amount ${rewardAmount} sats is outside limits (${minSats}-${maxSats})`)
+      }
+      
+      console.log('[Monitor] 📡 Requesting invoice for', rewardAmount, 'sats')
+      
+      // Request invoice
+      const invoiceResponse = await fetch(
+        `${lnurlData.callback}?amount=${rewardAmount * 1000}` // Convert to millisats
+      )
+      
+      if (!invoiceResponse.ok) {
+        throw new Error('Failed to generate invoice')
+      }
+      
+      const invoiceData = await invoiceResponse.json()
+      
+      if (invoiceData.status === 'ERROR') {
+        throw new Error(invoiceData.reason || 'Invoice generation failed')
+      }
+      
+      const invoice = invoiceData.pr
+      
+      if (!invoice || !invoice.toLowerCase().startsWith('ln')) {
+        throw new Error('Invalid invoice format')
+      }
+      
+      console.log('[Monitor] 📡 Generated invoice:', invoice.substring(0, 50) + '...')
+      
+      // Send payment using NWC (Nostr Wallet Connect)
+      console.log('[Monitor] ⚡ Sending payment via NWC...')
+      
+      // Import NWC provider
+      const { NostrWebLNProvider } = await import('@getalby/sdk')
+      
+      // Get NWC connection from localStorage (same as other parts of the app)
+      const nwcUrl = localStorage.getItem('nwc_connection_url')
+      
+      if (!nwcUrl) {
+        throw new Error('No NWC connection found. Please reconnect your wallet.')
+      }
+      
+      const nwc = new NostrWebLNProvider({
+        nostrWalletConnectUrl: nwcUrl
+      })
+      
+      await nwc.enable()
+      
+      const result = await nwc.sendPayment(invoice)
+      
+      console.log('[Monitor] ✅ Payment successful! Hash:', result.paymentHash)
       
       // Record it
       await recordRewardSent(userPubkey, rewardAmount, authData)
@@ -107,11 +157,14 @@ export function LightningGoalsMonitor({
       console.log('[Monitor] 🎉 Complete! Reward recorded in goals')
       
     } catch (error) {
-      console.error('[Monitor] ❌ Error:', error)
-      console.error('[Monitor] ❌ Error details:', {
-        message: error.message,
-        stack: error.stack
-      })
+      console.error('[Monitor] ❌ Error sending reward:', error)
+      
+      if (error instanceof Error) {
+        console.error('[Monitor] ❌ Error details:', {
+          message: error.message,
+          stack: error.stack
+        })
+      }
     } finally {
       isProcessingRef.current = false
     }
