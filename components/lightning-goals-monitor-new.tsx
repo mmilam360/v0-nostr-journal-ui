@@ -230,6 +230,7 @@ export function LightningGoalsMonitor({
       
       if (!currentLightningAddress) {
         console.log('[Monitor] ❌ No Lightning address configured!')
+        console.log('[Monitor] 🔍 ENTERING NO ADDRESS BLOCK')
         
         // Check if we have a saved Lightning address in localStorage that we can use
         const savedAddress = localStorage.getItem(`lightning-address-${userPubkey}`)
@@ -330,6 +331,7 @@ export function LightningGoalsMonitor({
         }
       }
       
+      console.log('[Monitor] 🔍 CONTINUING AFTER LIGHTNING ADDRESS CHECK')
       console.log('[Monitor] ✅ Lightning address:', currentLightningAddress)
       
       // Step 6: Send reward

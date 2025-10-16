@@ -1474,6 +1474,96 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                       </div>
                     </div>
                     
+                    {/* Lightning Address Section */}
+                    <div className="px-4 py-3 border-t border-border">
+                      <div className="space-y-2">
+                        <label className="text-xs font-medium text-muted-foreground">Lightning Address</label>
+                        <div className="flex items-center gap-2">
+                          <Input
+                            type="text"
+                            value={userLightningAddress || ''}
+                            onChange={(e) => setUserLightningAddress(e.target.value)}
+                            placeholder="your@lightning.address"
+                            className="flex-1 text-sm"
+                          />
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={async () => {
+                              try {
+                                // Save to localStorage
+                                localStorage.setItem(`lightning-address-${authData.pubkey}`, userLightningAddress)
+                                
+                                // Update profile metadata
+                                const { SimplePool } = await import('nostr-tools')
+                                const pool = new SimplePool()
+                                const RELAYS = ['wss://relay.damus.io', 'wss://relay.snort.social', 'wss://nos.lol', 'wss://relay.nostr.band']
+                                
+                                // Get current profile
+                                const profileEvents = await pool.querySync(RELAYS, {
+                                  kinds: [0],
+                                  authors: [authData.pubkey],
+                                  limit: 1
+                                })
+                                
+                                let profile = {}
+                                if (profileEvents.length > 0) {
+                                  try {
+                                    profile = JSON.parse(profileEvents[0].content)
+                                  } catch (e) {
+                                    console.log('Error parsing profile:', e)
+                                  }
+                                }
+                                
+                                // Update profile with Lightning address
+                                const updatedProfile = {
+                                  ...profile,
+                                  lud16: userLightningAddress,
+                                  lightning_address: userLightningAddress
+                                }
+                                
+                                // Create new profile event
+                                const profileEvent = {
+                                  kind: 0,
+                                  created_at: Math.floor(Date.now() / 1000),
+                                  tags: [],
+                                  content: JSON.stringify(updatedProfile),
+                                  pubkey: authData.pubkey
+                                }
+                                
+                                // Sign and publish
+                                const signedEvent = await window.nostr.signEvent(profileEvent)
+                                await pool.publish(RELAYS, signedEvent)
+                                
+                                console.log('✅ Lightning address saved to profile:', userLightningAddress)
+                                
+                                // Update stake if exists
+                                try {
+                                  const { updateStakeLightningAddress } = await import('@/lib/incentive-nostr-new')
+                                  await updateStakeLightningAddress(authData.pubkey, userLightningAddress, authData)
+                                  console.log('✅ Lightning address updated in active stake')
+                                } catch (error) {
+                                  console.log('ℹ️ No active stake to update Lightning address:', error.message)
+                                }
+                                
+                                alert('Lightning address saved successfully!')
+                                
+                              } catch (error) {
+                                console.error('Error saving Lightning address:', error)
+                                alert('Error saving Lightning address: ' + error.message)
+                              }
+                            }}
+                            disabled={!userLightningAddress}
+                          >
+                            Save
+                          </Button>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Where daily rewards will be sent
+                        </p>
+                      </div>
+                    </div>
+                    
                     <DropdownMenuGroup>
                       <DropdownMenuItem 
                         onClick={(e) => {
