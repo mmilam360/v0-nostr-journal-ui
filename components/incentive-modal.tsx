@@ -16,6 +16,7 @@ interface IncentiveModalProps {
   userLightningAddress?: string
   onWordCountProcessed?: () => void
   onSetupStatusChange?: (hasSetup: boolean) => void
+  onStakeActivated?: () => void
 }
 
 export function IncentiveModal({
@@ -27,7 +28,8 @@ export function IncentiveModal({
   lastSavedWordCount,
   userLightningAddress,
   onWordCountProcessed,
-  onSetupStatusChange
+  onSetupStatusChange,
+  onStakeActivated
 }: IncentiveModalProps) {
   const [hasSetup, setHasSetup] = useState(false)
 
@@ -75,6 +77,7 @@ export function IncentiveModal({
             userLightningAddress={userLightningAddress || ''}
             onWordCountProcessed={onWordCountProcessed}
             onSetupStatusChange={handleSetupStatusChange}
+            onStakeActivated={onStakeActivated}
           />
         </CardContent>
       </Card>

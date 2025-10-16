@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { AlertTriangle, QrCode, Clock } from 'lucide-react'
 import QRCode from 'qrcode'
 
-export function LightningGoalsManager({ userPubkey, authData, userLightningAddress }: any) {
+export function LightningGoalsManager({ userPubkey, authData, userLightningAddress, onStakeActivated }: any) {
   const [goals, setGoals] = useState<any>(null)
   const [screen, setScreen] = useState<'setup' | 'invoice' | 'tracking'>('setup')
   const [loading, setLoading] = useState(true)
@@ -109,7 +109,7 @@ export function LightningGoalsManager({ userPubkey, authData, userLightningAddre
     if (screen === 'invoice' && invoiceData && paymentStatus === 'pending') {
       console.log('[Manager] Starting automatic payment checking...')
       const interval = setInterval(() => {
-        handlePaymentVerification()
+        handlePaymentVerification(true) // Pass true for automatic checks
       }, 1000) // Check every 1 second
       
       setPaymentCheckInterval(interval)
@@ -258,7 +258,7 @@ export function LightningGoalsManager({ userPubkey, authData, userLightningAddre
     }
   }
   
-  async function handlePaymentVerification() {
+  async function handlePaymentVerification(isAutoCheck: boolean = false) {
     if (!invoiceData) return
     
     try {
@@ -320,16 +320,27 @@ export function LightningGoalsManager({ userPubkey, authData, userLightningAddre
         setGoals(g)
         setScreen('tracking')
         
+        // Notify parent component that stake is now active
+        if (onStakeActivated) {
+          onStakeActivated()
+        }
+        
         alert('Payment confirmed! Your stake is now active.')
       } else {
         setPaymentStatus('pending')
-        alert('Payment not yet received. Please try again.')
+        // Don't show alert for automatic checks - just log silently
+        if (!isAutoCheck) {
+          alert('Payment not yet received. Please try again.')
+        }
       }
       
     } catch (error) {
       console.error('[Manager] Error verifying payment:', error)
       setPaymentStatus('pending')
-      alert('Error verifying payment: ' + error.message)
+      // Don't show alert for automatic checks - just log silently
+      if (!isAutoCheck) {
+        alert('Error verifying payment: ' + error.message)
+      }
     }
   }
   

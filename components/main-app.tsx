@@ -1926,6 +1926,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
             await checkLightningGoals()
           }
         }}
+        onStakeActivated={checkLightningGoals}
       />
     )}
     
