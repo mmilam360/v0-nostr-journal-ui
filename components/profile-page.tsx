@@ -1,22 +1,26 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { X, Copy, Check, User } from "lucide-react"
+import { X, Copy, Check, User, Zap, Save } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import type { AuthData } from "./main-app"
 
 interface ProfilePageProps {
   authData: AuthData
   onClose: () => void
+  onLightningAddressUpdate?: (address: string) => void
 }
 
-export default function ProfilePage({ authData, onClose }: ProfilePageProps) {
+export default function ProfilePage({ authData, onClose, onLightningAddressUpdate }: ProfilePageProps) {
   const [npub, setNpub] = useState<string>("")
   const [profilePicture, setProfilePicture] = useState<string>("")
   const [displayName, setDisplayName] = useState<string>("")
+  const [lightningAddress, setLightningAddress] = useState<string>("")
   const [copiedNpub, setCopiedNpub] = useState(false)
   const [copiedNsec, setCopiedNsec] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
+  const [isSaving, setIsSaving] = useState(false)
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -46,6 +50,15 @@ export default function ProfilePage({ authData, onClose }: ProfilePageProps) {
             if (metadata.name || metadata.display_name) {
               setDisplayName(metadata.display_name || metadata.name)
             }
+            if (metadata.lud16 || metadata.lightning_address) {
+              setLightningAddress(metadata.lud16 || metadata.lightning_address)
+            }
+          }
+
+          // Load Lightning address from localStorage as fallback
+          const savedLightningAddress = localStorage.getItem(`lightning-address-${authData.pubkey}`)
+          if (savedLightningAddress) {
+            setLightningAddress(savedLightningAddress)
           }
 
           pool.close(RELAYS)
@@ -80,6 +93,63 @@ export default function ProfilePage({ authData, onClose }: ProfilePageProps) {
       setTimeout(() => setCopiedNsec(false), 2000)
     } catch (err) {
       console.error("Failed to copy:", err)
+    }
+  }
+
+  const handleSaveLightningAddress = async () => {
+    setIsSaving(true)
+    try {
+      // Save to localStorage for immediate use
+      localStorage.setItem(`lightning-address-${authData.pubkey}`, lightningAddress)
+      
+      // Update Nostr profile metadata
+      const { SimplePool } = await import("nostr-tools/pool")
+      const pool = new SimplePool()
+      
+      const RELAYS = ["wss://relay.damus.io", "wss://nos.lol", "wss://relay.nostr.band"]
+      
+      // Get existing metadata
+      const events = await pool.querySync(RELAYS, {
+        kinds: [0],
+        authors: [authData.pubkey],
+        limit: 1,
+      })
+      
+      let metadata = {}
+      if (events.length > 0) {
+        metadata = JSON.parse(events[0].content)
+      }
+      
+      // Update with new Lightning address
+      metadata.lud16 = lightningAddress
+      metadata.lightning_address = lightningAddress
+      
+      // Create new profile event
+      const profileEvent = {
+        kind: 0,
+        created_at: Math.floor(Date.now() / 1000),
+        tags: [],
+        content: JSON.stringify(metadata),
+        pubkey: authData.pubkey
+      }
+      
+      // Sign and publish
+      const { signEventWithRemote } = await import("@/lib/signer-manager")
+      const signedEvent = await signEventWithRemote(profileEvent, authData)
+      await pool.publish(RELAYS, signedEvent)
+      
+      console.log("✅ Lightning address saved:", lightningAddress)
+      
+      // Notify parent component of the update
+      if (onLightningAddressUpdate) {
+        onLightningAddressUpdate(lightningAddress)
+      }
+      
+    } catch (error) {
+      console.error("Failed to save Lightning address:", error)
+      alert("Failed to save Lightning address. Please try again.")
+    } finally {
+      setIsSaving(false)
     }
   }
 
@@ -174,6 +244,38 @@ export default function ProfilePage({ authData, onClose }: ProfilePageProps) {
                     </p>
                   </div>
                 )}
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-2">
+                    <Zap className="inline w-4 h-4 mr-1" />
+                    Lightning Address
+                  </label>
+                  <div className="flex gap-2">
+                    <Input
+                      type="text"
+                      value={lightningAddress}
+                      onChange={(e) => setLightningAddress(e.target.value)}
+                      placeholder="your@lightning.address"
+                      className="flex-1 bg-slate-900 border-slate-600 text-slate-300"
+                    />
+                    <Button
+                      onClick={handleSaveLightningAddress}
+                      disabled={isSaving}
+                      variant="outline"
+                      size="sm"
+                      className="border-slate-600 text-slate-300 hover:bg-slate-700"
+                    >
+                      {isSaving ? (
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-slate-300"></div>
+                      ) : (
+                        <Save className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Where Lightning rewards will be sent. This updates your Nostr profile.
+                  </p>
+                </div>
 
                 {!authData.nsec && authData.authMethod !== "extension" && (
                   <div className="bg-yellow-900/20 border border-yellow-500/50 rounded-lg p-3">

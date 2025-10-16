@@ -43,7 +43,8 @@ export function LightningGoalsManager({
   const [setupSettings, setSetupSettings] = useState({
     dailyWordGoal: 500,
     rewardPerCompletion: 100,
-    stakeAmount: 1000
+    stakeAmount: 1000,
+    lightningAddress: userLightningAddress
   })
   
   // Payment state
@@ -65,6 +66,14 @@ export function LightningGoalsManager({
   useEffect(() => {
     loadCurrentStake()
   }, [userPubkey])
+
+  // Update setup settings when userLightningAddress changes
+  useEffect(() => {
+    setSetupSettings(prev => ({
+      ...prev,
+      lightningAddress: userLightningAddress
+    }))
+  }, [userLightningAddress])
 
   const loadCurrentStake = async () => {
     try {
@@ -336,11 +345,19 @@ export function LightningGoalsManager({
               <label className="block text-sm font-medium mb-2">Lightning Address</label>
               <Input
                 type="text"
-                value={userLightningAddress}
-                disabled
-                placeholder="Set in profile settings"
+                value={setupSettings.lightningAddress}
+                onChange={(e) => setSetupSettings({
+                  ...setupSettings,
+                  lightningAddress: e.target.value
+                })}
+                placeholder="your@lightning.address"
               />
-              <p className="text-xs text-gray-500 mt-1">Where daily rewards will be sent</p>
+              <p className="text-xs text-gray-500 mt-1">
+                Where daily rewards will be sent. 
+                {userLightningAddress && (
+                  <span className="text-blue-500"> Using saved address from profile.</span>
+                )}
+              </p>
             </div>
             
             <div>
@@ -358,7 +375,7 @@ export function LightningGoalsManager({
             
             <Button 
               onClick={createInvoice}
-              disabled={loading || !userLightningAddress}
+              disabled={loading || !setupSettings.lightningAddress}
               className="w-full"
             >
               <Zap className="w-4 h-4 mr-2" />

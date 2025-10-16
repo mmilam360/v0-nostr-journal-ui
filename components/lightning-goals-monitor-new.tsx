@@ -88,8 +88,16 @@ export function LightningGoalsMonitor({
         return
       }
       
+      // Get current Lightning address (from localStorage or prop)
+      const currentLightningAddress = localStorage.getItem(`lightning-address-${userPubkey}`) || userLightningAddress
+      
+      if (!currentLightningAddress) {
+        console.error('[Monitor] ❌ No Lightning address found for user')
+        return
+      }
+      
       // Send reward
-      console.log('[Monitor] 🎯 Sending reward of', stake.rewardPerCompletion, 'sats')
+      console.log('[Monitor] 🎯 Sending reward of', stake.rewardPerCompletion, 'sats to', currentLightningAddress)
       
       const rewardResult = await fetch('/api/incentive/send-reward', {
         method: 'POST',
@@ -97,7 +105,7 @@ export function LightningGoalsMonitor({
         body: JSON.stringify({
           userPubkey: userPubkey,
           amount: stake.rewardPerCompletion,
-          lightningAddress: userLightningAddress
+          lightningAddress: currentLightningAddress
         })
       }).then(r => r.json())
       

@@ -156,6 +156,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   const [lastSavedWordCount, setLastSavedWordCount] = useState<number | null>(null)
   const [userStreak, setUserStreak] = useState(0)
   const [hasLightningGoals, setHasLightningGoals] = useState(false)
+  const [userLightningAddress, setUserLightningAddress] = useState<string>('')
   const [showStreakAnimation, setShowStreakAnimation] = useState(false)
   const [showRelayManager, setShowRelayManager] = useState(false)
   const [showRelaysInDropdown, setShowRelaysInDropdown] = useState(false)
@@ -348,6 +349,16 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     // The LightningGoalsManager will automatically check for goal completion
     // when it receives the currentWordCount prop
   }
+
+  // Load Lightning address from localStorage
+  useEffect(() => {
+    if (authData?.pubkey) {
+      const savedAddress = localStorage.getItem(`lightning-address-${authData.pubkey}`)
+      if (savedAddress) {
+        setUserLightningAddress(savedAddress)
+      }
+    }
+  }, [authData?.pubkey])
 
   useEffect(() => {
     const loadUserNotes = async () => {
@@ -1711,7 +1722,13 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
           <DeleteConfirmationModal note={noteToDelete} onConfirm={handleConfirmDelete} onCancel={handleCancelDelete} />
         )}
 
-        {showProfile && <ProfilePage authData={authData} onClose={() => setShowProfile(false)} />}
+        {showProfile && (
+          <ProfilePage 
+            authData={authData} 
+            onClose={() => setShowProfile(false)}
+            onLightningAddressUpdate={(address) => setUserLightningAddress(address)}
+          />
+        )}
 
         {showRelayManager && (
           <RelayManager
@@ -1751,7 +1768,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
         userPubkey={authData.pubkey}
         authData={authData}
         currentWordCount={lastSavedWordCount}
-        userLightningAddress={authData.lightningAddress || ''}
+        userLightningAddress={userLightningAddress}
         onWordCountProcessed={() => setLastSavedWordCount(null)}
       />
     )}
@@ -1765,7 +1782,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
         authData={authData}
         selectedNote={selectedNote}
         lastSavedWordCount={lastSavedWordCount}
-        userLightningAddress={authData.lightningAddress || ''}
+        userLightningAddress={userLightningAddress}
         onWordCountProcessed={() => setLastSavedWordCount(null)}
         onSetupStatusChange={async (hasSetup) => {
           // Update header when setup status changes
