@@ -287,18 +287,10 @@ export function LightningGoalsManager({ userPubkey, authData, userLightningAddre
         // Payment confirmed, activate stake using working system
         console.log('[Manager] ✅ Payment confirmed! Amount:', checkResult.amountSats, 'sats')
         
-        // Create stake using the old working system
-        const { createStake } = await import('@/lib/incentive-nostr')
+        // Confirm payment and activate existing stake
+        await confirmPayment(userPubkey, paymentHash, authData)
         
-        const stakeId = await createStake(userPubkey, {
-          dailyWordGoal: parseInt(dailyWordGoal),
-          dailyRewardSats: parseInt(dailyReward),
-          initialStakeSats: parseInt(depositAmount),
-          lightningAddress: lightningAddress.trim(),
-          paymentHash: paymentHash
-        }, authData)
-        
-        console.log('[Manager] ✅ Stake created with ID:', stakeId)
+        console.log('[Manager] ✅ Payment confirmed and stake activated')
         
         // Clear payment hash since payment is confirmed
         localStorage.removeItem(`payment-hash-${userPubkey}`)
@@ -325,7 +317,7 @@ export function LightningGoalsManager({ userPubkey, authData, userLightningAddre
           onStakeActivated()
         }
         
-        alert('Payment confirmed! Your stake is now active.')
+        // No popup - user will see the tracking screen directly
       } else {
         setPaymentStatus('pending')
         // Don't show alert for automatic checks - just log silently
@@ -659,6 +651,16 @@ export function LightningGoalsManager({ userPubkey, authData, userLightningAddre
                 {qrCodeDataUrl && (
                   <div className="bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 p-6 rounded-xl border border-amber-200 dark:border-amber-800 mb-4">
                     <div className="flex flex-col items-center space-y-4">
+                      {/* Amount Display */}
+                      <div className="text-center">
+                        <div className="text-3xl font-bold text-amber-800 dark:text-amber-200 mb-1">
+                          {invoiceData.amount} sats
+                        </div>
+                        <p className="text-sm text-amber-600 dark:text-amber-400">
+                          Pay this amount to activate your stake
+                        </p>
+                      </div>
+                      
                       {/* QR Code Container */}
                       <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-lg border border-amber-200 dark:border-amber-700">
                         <img 
