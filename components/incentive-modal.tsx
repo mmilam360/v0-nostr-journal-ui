@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { X } from 'lucide-react'
-import { LightningGoalsManager } from './lightning-goals-manager-new'
+import { LightningGoalsManager } from './lightning-goals-manager'
 
 interface IncentiveModalProps {
   isOpen: boolean

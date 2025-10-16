@@ -30,7 +30,7 @@ import PublishModal from "@/components/publish-modal"
 import DeleteConfirmationModal from "@/components/delete-confirmation-modal"
 import ProfilePage from "@/components/profile-page"
 import { isIncentiveEnabled } from "@/lib/feature-flags"
-import { LightningGoalsMonitor } from "@/components/lightning-goals-monitor-new"
+import { LightningGoalsMonitor } from "@/components/lightning-goals-monitor"
 import dynamic from "next/dynamic"
 
 // Dynamically import IncentiveModal to avoid SSR issues with QRCode
@@ -322,14 +322,13 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
 
   const checkLightningGoals = async () => {
     try {
-      const { getCurrentStake } = await import('@/lib/incentive-nostr-new')
-      const stake = await getCurrentStake(authData.pubkey)
+      const { getLightningGoals } = await import('@/lib/lightning-goals')
+      const goals = await getLightningGoals(authData.pubkey)
       
-      if (stake && stake.status === 'active') {
+      if (goals && goals.status === 'active') {
         setHasLightningGoals(true)
-        // For now, set streak to 0 - we'll implement proper streak calculation later
-        setUserStreak(0)
-        console.log('[MainApp] ✅ Active stake found, Balance:', stake.currentBalance)
+        setUserStreak(goals.currentStreak)
+        console.log('[MainApp] ✅ Active goals found, Balance:', goals.currentBalance)
       } else {
         setHasLightningGoals(false)
         setUserStreak(0)
@@ -1537,13 +1536,13 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                                 
                                 console.log('✅ Lightning address saved to profile:', userLightningAddress)
                                 
-                                // Update stake if exists
+                                // Update goals if exists
                                 try {
-                                  const { updateStakeLightningAddress } = await import('@/lib/incentive-nostr-new')
-                                  await updateStakeLightningAddress(authData.pubkey, userLightningAddress, authData)
-                                  console.log('✅ Lightning address updated in active stake')
+                                  const { updateLightningAddress } = await import('@/lib/lightning-goals')
+                                  await updateLightningAddress(authData.pubkey, userLightningAddress, authData)
+                                  console.log('✅ Lightning address updated in active goals')
                                 } catch (error) {
-                                  console.log('ℹ️ No active stake to update Lightning address:', error.message)
+                                  console.log('ℹ️ No active goals to update Lightning address:', error.message)
                                 }
                                 
                                 alert('Lightning address saved successfully!')

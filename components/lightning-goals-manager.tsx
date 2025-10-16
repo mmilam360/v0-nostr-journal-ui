@@ -1,618 +1,379 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { getLightningGoals, createStake, addToStake, cancelStake, updateLightningAddress } from '@/lib/lightning-goals'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Target, Zap, Wallet, CheckCircle, AlertTriangle, TrendingUp, Copy, QrCode } from 'lucide-react'
-import QRCode from 'qrcode'
+import { AlertTriangle } from 'lucide-react'
 
-interface LightningGoalsManagerProps {
-  userPubkey: string
-  authData: any
-  currentWordCount?: number
-  onWordCountProcessed?: () => void
-  onSetupStatusChange?: (hasSetup: boolean) => void
-}
-
-interface StakeData {
-  stakeId: string
-  dailyWordGoal: number
-  dailyRewardSats: number
-  currentBalance: number
-  lightningAddress: string
-  createdAt: string
-  isActive: boolean
-}
-
-export function LightningGoalsManager({ 
-  userPubkey, 
-  authData, 
-  currentWordCount,
-  onWordCountProcessed,
-  onSetupStatusChange 
-}: LightningGoalsManagerProps) {
-  // Core state
-  const [stake, setStake] = useState<StakeData | null>(null)
-  const [loading, setLoading] = useState(false)
+export function LightningGoalsManager({ userPubkey, authData, userLightningAddress }: any) {
+  const [goals, setGoals] = useState<any>(null)
+  const [screen, setScreen] = useState<'setup' | 'tracking'>('setup')
+  const [loading, setLoading] = useState(true)
+  const [isCancelling, setIsCancelling] = useState(false)
   
-  // Setup state
-  const [setupSettings, setSetupSettings] = useState({
-    dailyWordGoal: 500,
-    dailyRewardSats: 500,
-    lightningAddress: '',
-    stakeAmount: 1000
-  })
+  // Setup form state
+  const [dailyWordGoal, setDailyWordGoal] = useState(500)
+  const [dailyReward, setDailyReward] = useState(100)
+  const [depositAmount, setDepositAmount] = useState(1000)
+  const [lightningAddress, setLightningAddress] = useState('')
   
-  // Payment state
-  const [paymentStep, setPaymentStep] = useState<'setup' | 'invoice' | 'tracking'>('setup')
-  const [invoice, setInvoice] = useState('')
-  const [qrCode, setQrCode] = useState('')
-  const [paymentStatus, setPaymentStatus] = useState<'pending' | 'paid' | 'error'>('pending')
-  
-  // Progress state
-  const [todayProgress, setTodayProgress] = useState(0)
-  const [hasMetGoalToday, setHasMetGoalToday] = useState(false)
-  const [rewardSent, setRewardSent] = useState(false)
-  const [showSuccessMessage, setShowSuccessMessage] = useState(false)
-
-  // Load current stake on mount
+  // Load goals
   useEffect(() => {
-    loadCurrentStake()
-  }, [userPubkey])
-
-  // Check for goal completion when word count changes
-  useEffect(() => {
-    console.log('[LightningGoals] 🔍 useEffect triggered - stake:', !!stake, 'currentWordCount:', currentWordCount)
-    if (stake && currentWordCount && currentWordCount > 0) {
-      console.log('[LightningGoals] 🎯 Calling checkGoalCompletion with:', currentWordCount)
-      checkGoalCompletion(currentWordCount)
-    }
-  }, [stake, currentWordCount])
-
-  const loadCurrentStake = async () => {
-    try {
+    async function load() {
       setLoading(true)
-      const { getCurrentStake } = await import('@/lib/incentive-nostr')
-      const currentStake = await getCurrentStake(userPubkey)
-      
-      if (currentStake && currentStake.isActive) {
-        setStake(currentStake)
-        setPaymentStep('tracking')
-        loadTodayProgress(currentStake.stakeId)
-        if (onSetupStatusChange) onSetupStatusChange(true)
-      } else {
-        setStake(null)
-        setPaymentStep('setup')
-        if (onSetupStatusChange) onSetupStatusChange(false)
-      }
-    } catch (error) {
-      console.error('[LightningGoals] Error loading stake:', error)
-      setStake(null)
-      setPaymentStep('setup')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const loadTodayProgress = async (stakeId: string) => {
-    try {
-      const { getCurrentStake } = await import('@/lib/incentive-nostr')
-      const currentStake = await getCurrentStake(userPubkey)
-      if (currentStake) {
-        setTodayProgress(0) // Will be updated when word count is processed
-        setHasMetGoalToday(false)
-        setRewardSent(false)
-      }
-    } catch (error) {
-      console.error('[LightningGoals] Error loading progress:', error)
-    }
-  }
-
-  const createInvoice = async () => {
-    try {
-      setLoading(true)
-      
-      const response = await fetch('/api/incentive/create-deposit-invoice', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userPubkey,
-          amountSats: setupSettings.stakeAmount,
-          memo: `Lightning Goals Stake - ${setupSettings.dailyWordGoal} words/day`
-        })
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to create invoice')
-      }
-
-      const data = await response.json()
-      setInvoice(data.invoice)
-      
-      // Generate QR code
-      const qrDataUrl = await QRCode.toDataURL(data.invoice)
-      setQrCode(qrDataUrl)
-      
-      setPaymentStep('invoice')
-      setPaymentStatus('pending')
-      
-      // Store payment hash for verification
-      localStorage.setItem(`payment-hash-${userPubkey}`, data.paymentHash)
-      localStorage.setItem(`invoice-string-${userPubkey}`, data.invoice)
-      
-      // Start payment checking
-      checkPaymentStatus()
-    } catch (error) {
-      console.error('[LightningGoals] Error creating invoice:', error)
-      setPaymentStatus('error')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const checkPaymentStatus = async () => {
-    try {
-      const paymentHash = localStorage.getItem(`payment-hash-${userPubkey}`)
-      if (!paymentHash) {
-        console.error('[LightningGoals] No payment hash found')
-        return
-      }
-
-      const response = await fetch('/api/incentive/verify-payment', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userPubkey,
-          paymentHash
-        })
-      })
-
-      if (response.ok) {
-        const result = await response.json()
-        if (result.success && result.paid) {
-          await handlePaymentSuccess()
+      try {
+        const g = await getLightningGoals(userPubkey)
+        
+        if (g && g.status === 'active') {
+          setGoals(g)
+          setScreen('tracking')
         } else {
-          // Continue checking
-          setTimeout(checkPaymentStatus, 2000)
+          setScreen('setup')
         }
-      } else {
-        // Continue checking
-        setTimeout(checkPaymentStatus, 2000)
+        
+        // Pre-fill Lightning address
+        setLightningAddress(userLightningAddress || '')
+      } catch (error) {
+        console.error('[Manager] Error loading goals:', error)
+        setScreen('setup')
+      } finally {
+        setLoading(false)
       }
-    } catch (error) {
-      console.error('[LightningGoals] Error checking payment:', error)
-      setTimeout(checkPaymentStatus, 2000)
     }
-  }
-
-  const handlePaymentSuccess = async () => {
-    try {
-      const paymentHash = localStorage.getItem(`payment-hash-${userPubkey}`)
-      if (!paymentHash) {
-        console.error('[LightningGoals] No payment hash found for stake creation')
-        return
+    
+    load()
+  }, [userPubkey, userLightningAddress])
+  
+  // Auto-refresh every 10 seconds when on tracking screen
+  useEffect(() => {
+    if (screen !== 'tracking') return
+    
+    const interval = setInterval(async () => {
+      try {
+        const g = await getLightningGoals(userPubkey)
+        setGoals(g)
+      } catch (error) {
+        console.error('[Manager] Error refreshing goals:', error)
       }
-
-      // Create stake using new event system
-      const { createStake } = await import('@/lib/incentive-nostr')
-      const stakeId = await createStake(userPubkey, {
-        dailyWordGoal: setupSettings.dailyWordGoal,
-        dailyRewardSats: setupSettings.dailyRewardSats,
-        initialStakeSats: setupSettings.stakeAmount,
-        lightningAddress: setupSettings.lightningAddress,
-        paymentHash: paymentHash
+    }, 10000)
+    
+    return () => clearInterval(interval)
+  }, [screen, userPubkey])
+  
+  async function handleCreateStake() {
+    if (!lightningAddress) {
+      alert('Please enter your Lightning address')
+      return
+    }
+    
+    if (depositAmount < dailyReward) {
+      alert('Deposit must be at least as much as the daily reward')
+      return
+    }
+    
+    try {
+      setLoading(true)
+      
+      await createStake(userPubkey, {
+        dailyWordGoal,
+        dailyReward,
+        depositAmount,
+        lightningAddress
       }, authData)
-
-      console.log('[LightningGoals] ✅ Stake created:', stakeId)
       
-      // Update state
-      setPaymentStatus('paid')
-      setShowSuccessMessage(true)
+      // Reload goals
+      const g = await getLightningGoals(userPubkey)
+      setGoals(g)
+      setScreen('tracking')
       
-      // Reload stake data
-      await loadCurrentStake()
-      
-      // Hide success message after 5 seconds
-      setTimeout(() => {
-        setShowSuccessMessage(false)
-      }, 5000)
+      alert('Stake created successfully!')
       
     } catch (error) {
-      console.error('[LightningGoals] Error creating stake:', error)
-      setPaymentStatus('error')
+      console.error('[Manager] Error creating stake:', error)
+      alert('Error creating stake: ' + error.message)
+    } finally {
+      setLoading(false)
     }
   }
-
-  const checkGoalCompletion = async (wordCount: number) => {
-    console.log('[LightningGoals] 🎯 checkGoalCompletion called with:', {
-      wordCount,
-      stake: !!stake,
-      dailyWordGoal: stake?.dailyWordGoal,
-      hasMetGoalToday,
-      goalReached: wordCount >= (stake?.dailyWordGoal || 0)
-    })
+  
+  async function handleCancelStake() {
+    if (!goals) return
     
-    if (!stake || wordCount < stake.dailyWordGoal) {
-      console.log('[LightningGoals] 🎯 Goal not reached or no stake')
-      return
-    }
+    const confirmed = window.confirm(
+      `⚠️ WARNING: Cancel your stake?\n\n` +
+      `Your remaining balance of ${goals.currentBalance} sats will be FORFEITED (not refunded).\n\n` +
+      `This action cannot be undone.\n\n` +
+      `Are you sure?`
+    )
     
-    // Check if goal was already met today
-    if (hasMetGoalToday) {
-      console.log('[LightningGoals] 🎯 Goal already met today, skipping')
-      return
-    }
+    if (!confirmed) return
+    
+    // Double confirmation for safety
+    const doubleConfirm = window.confirm(
+      `Final confirmation:\n\n` +
+      `You will LOSE ${goals.currentBalance} sats.\n\n` +
+      `Click OK to forfeit your stake.`
+    )
+    
+    if (!doubleConfirm) return
+    
+    setIsCancelling(true)
     
     try {
-      console.log('[LightningGoals] 🎯 Goal reached! Sending reward...')
+      console.log('[Manager] Cancelling stake...')
       
-      // Record progress
-      const { recordDailyProgress } = await import('@/lib/incentive-nostr')
-      await recordDailyProgress(
-        userPubkey,
-        stake.stakeId,
-        new Date().toISOString().split('T')[0],
-        wordCount,
-        true, // goal met
-        false, // reward not claimed yet
-        undefined,
-        authData
+      const { forfeited } = await cancelStake(userPubkey, authData)
+      
+      console.log('[Manager] ✅ Stake cancelled')
+      console.log('[Manager] 💸 Forfeited:', forfeited, 'sats')
+      
+      // Reset UI
+      setGoals(null)
+      setScreen('setup')
+      
+      alert(
+        `Stake cancelled.\n\n` +
+        `${forfeited} sats forfeited.\n\n` +
+        `You can create a new stake anytime.`
       )
       
-      // Send reward
-      const response = await fetch('/api/incentive/send-reward', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          pubkey: userPubkey,
-          wordCount: wordCount,
-          goal: stake.dailyWordGoal
-        })
-      })
-      
-      if (response.ok) {
-        const result = await response.json()
-        
-        // Update balance
-        const { updateStakeBalance } = await import('@/lib/incentive-nostr')
-        await updateStakeBalance(
-          userPubkey,
-          stake.stakeId,
-          stake.currentBalance,
-          stake.currentBalance - stake.dailyRewardSats,
-          'reward_sent',
-          new Date().toISOString().split('T')[0],
-          result.paymentHash,
-          authData
-        )
-        
-        // Update progress record with payment hash
-        await recordDailyProgress(
-          userPubkey,
-          stake.stakeId,
-          new Date().toISOString().split('T')[0],
-          wordCount,
-          true,
-          true,
-          result.paymentHash,
-          authData
-        )
-        
-        setHasMetGoalToday(true)
-        setRewardSent(true)
-        setTodayProgress(wordCount)
-        
-        // Reload stake to get updated balance
-        await loadCurrentStake()
-        
-        // Notify parent that word count was processed
-        if (onWordCountProcessed) {
-          onWordCountProcessed()
-        }
-        
-        console.log('[LightningGoals] ✅ Goal completed and reward sent! Progress updated.')
-        
-        console.log('[LightningGoals] ✅ Reward sent successfully!')
-      } else {
-        console.error('[LightningGoals] Failed to send reward')
-      }
     } catch (error) {
-      console.error('[LightningGoals] Error processing goal completion:', error)
+      console.error('[Manager] ❌ Error:', error)
+      alert('Error cancelling stake: ' + error.message)
+    } finally {
+      setIsCancelling(false)
     }
   }
-
-  const cancelStake = async () => {
-    if (!stake) {
-      console.log('[LightningGoals] ❌ No stake to cancel')
+  
+  async function handleUpdateLightningAddress() {
+    if (!lightningAddress) {
+      alert('Please enter a Lightning address')
       return
     }
     
-    console.log('[LightningGoals] 🔄 Starting stake cancellation...')
-    
     try {
-      setLoading(true)
+      await updateLightningAddress(userPubkey, lightningAddress, authData)
       
-      // Send refund (remaining balance)
-      const refundResponse = await fetch('/api/incentive/send-reward', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userPubkey,
-          authData,
-          isRefund: true,
-          refundAmount: stake.currentBalance
-        })
-      })
+      // Update local state
+      setGoals({ ...goals, lightningAddress })
       
-      if (refundResponse.ok) {
-        const refundResult = await refundResponse.json()
-        
-        // Cancel stake
-        const { cancelStake: cancelStakeEvent } = await import('@/lib/incentive-nostr')
-        await cancelStakeEvent(
-          userPubkey,
-          stake.stakeId,
-          stake.currentBalance,
-          refundResult.paymentHash,
-          'user_cancelled',
-          authData
-        )
-        
-        // Reset state
-        setStake(null)
-        setPaymentStep('setup')
-        setTodayProgress(0)
-        setHasMetGoalToday(false)
-        setRewardSent(false)
-        
-        if (onSetupStatusChange) onSetupStatusChange(false)
-        
-        console.log('[LightningGoals] ✅ Stake cancelled and refunded')
-      }
+      alert('Lightning address updated successfully!')
+      
     } catch (error) {
-      console.error('[LightningGoals] Error cancelling stake:', error)
-    } finally {
-      setLoading(false)
+      console.error('[Manager] Error updating Lightning address:', error)
+      alert('Error updating Lightning address: ' + error.message)
     }
   }
-
-  if (loading && !stake) {
+  
+  if (loading) {
     return (
       <Card>
         <CardContent className="p-6">
-          <div className="text-center">Loading Lightning Goals...</div>
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-4"></div>
+            <p>Loading Lightning Goals...</p>
+          </div>
         </CardContent>
       </Card>
     )
   }
-
-  // Setup Screen
-  if (paymentStep === 'setup') {
-    return (
-      <div className="space-y-6">
+  
+  return (
+    <div className="space-y-4">
+      {screen === 'tracking' && goals && (
+        <div className="space-y-4">
+          {/* Progress Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Your Writing Goal</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {/* Progress */}
+              <div className="mb-4">
+                <div className="flex justify-between text-sm mb-2">
+                  <span>Today's Progress</span>
+                  <span>{goals.todayWords} / {goals.dailyWordGoal} words</span>
+                </div>
+                
+                <div className="w-full bg-gray-200 rounded-full h-4">
+                  <div
+                    className={`h-4 rounded-full transition-all duration-500 ${
+                      goals.todayGoalMet ? 'bg-green-500' : 'bg-blue-500'
+                    }`}
+                    style={{
+                      width: `${Math.min(100, (goals.todayWords / goals.dailyWordGoal) * 100)}%`
+                    }}
+                  />
+                </div>
+                
+                {goals.todayRewardSent && (
+                  <div className="text-green-600 text-sm mt-2">
+                    ✅ {goals.todayRewardAmount} sats earned today!
+                  </div>
+                )}
+                
+                {goals.todayGoalMet && !goals.todayRewardSent && (
+                  <div className="text-orange-600 text-sm mt-2">
+                    🎯 Goal met! Waiting for reward...
+                  </div>
+                )}
+              </div>
+              
+              {/* Balance */}
+              <div className="mb-4">
+                <div className="text-sm text-gray-600">Current Balance</div>
+                <div className="text-2xl font-bold">{goals.currentBalance} sats</div>
+              </div>
+              
+              {/* Stats */}
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <div className="text-gray-600">Streak</div>
+                  <div className="font-bold">{goals.currentStreak} days</div>
+                </div>
+                <div>
+                  <div className="text-gray-600">Total Earned</div>
+                  <div className="font-bold">{goals.totalRewardsEarned} sats</div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          
+          {/* Lightning Address */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Lightning Address</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex gap-2">
+                <Input
+                  type="text"
+                  value={lightningAddress}
+                  onChange={(e) => setLightningAddress(e.target.value)}
+                  placeholder="your@lightning.address"
+                  className="flex-1"
+                />
+                <Button
+                  onClick={handleUpdateLightningAddress}
+                  disabled={!lightningAddress || lightningAddress === goals.lightningAddress}
+                >
+                  Update
+                </Button>
+              </div>
+              <p className="text-xs text-gray-500 mt-2">
+                Where daily rewards will be sent
+              </p>
+            </CardContent>
+          </Card>
+          
+          {/* Actions */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Actions</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Button
+                onClick={handleCancelStake}
+                variant="destructive"
+                disabled={isCancelling}
+                className="w-full"
+              >
+                {isCancelling ? (
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Cancelling...
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4" />
+                    Cancel Stake & Forfeit
+                  </div>
+                )}
+              </Button>
+              
+              <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+                <div className="text-sm text-red-700">
+                  <p className="font-medium">⚠️ Warning</p>
+                  <p className="mt-1">
+                    Cancelling will forfeit your remaining balance of <strong>{goals.currentBalance} sats</strong>.
+                  </p>
+                  <p className="mt-1 text-xs">
+                    This is your commitment to your writing goal.
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+      
+      {screen === 'setup' && (
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Target className="w-5 h-5 text-blue-500" />
-              Set Up Your Daily Goal
-            </CardTitle>
+            <CardTitle>Set Up Lightning Goals</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <label className="block text-sm font-medium mb-2">Daily Word Goal</label>
+              <label className="text-sm font-medium mb-2 block">Daily Word Goal</label>
               <Input
                 type="number"
-                value={setupSettings.dailyWordGoal}
-                onChange={(e) => setSetupSettings({
-                  ...setupSettings,
-                  dailyWordGoal: parseInt(e.target.value) || 0
-                })}
+                value={dailyWordGoal}
+                onChange={(e) => setDailyWordGoal(parseInt(e.target.value) || 500)}
                 placeholder="500"
               />
             </div>
             
             <div>
-              <label className="block text-sm font-medium mb-2">Daily Reward (sats)</label>
+              <label className="text-sm font-medium mb-2 block">Daily Reward (sats)</label>
               <Input
                 type="number"
-                value={setupSettings.dailyRewardSats}
-                onChange={(e) => setSetupSettings({
-                  ...setupSettings,
-                  dailyRewardSats: parseInt(e.target.value) || 0
-                })}
-                placeholder="500"
+                value={dailyReward}
+                onChange={(e) => setDailyReward(parseInt(e.target.value) || 100)}
+                placeholder="100"
               />
             </div>
             
             <div>
-              <label className="block text-sm font-medium mb-2">Lightning Address</label>
-              <Input
-                type="text"
-                value={setupSettings.lightningAddress}
-                onChange={(e) => setSetupSettings({
-                  ...setupSettings,
-                  lightningAddress: e.target.value
-                })}
-                placeholder="your@lightning.address"
-              />
-              <p className="text-xs text-gray-500 mt-1">Where daily rewards will be sent</p>
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium mb-2">Stake Amount (sats)</label>
+              <label className="text-sm font-medium mb-2 block">Initial Deposit (sats)</label>
               <Input
                 type="number"
-                value={setupSettings.stakeAmount}
-                onChange={(e) => setSetupSettings({
-                  ...setupSettings,
-                  stakeAmount: parseInt(e.target.value) || 0
-                })}
+                value={depositAmount}
+                onChange={(e) => setDepositAmount(parseInt(e.target.value) || 1000)}
                 placeholder="1000"
               />
             </div>
             
-            <Button 
-              onClick={createInvoice}
-              disabled={loading || !setupSettings.lightningAddress}
-              className="w-full"
-            >
-              <Zap className="w-4 h-4 mr-2" />
-              Generate Lightning Invoice
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
-
-  // Invoice Screen
-  if (paymentStep === 'invoice') {
-    return (
-      <div className="space-y-6">
-        {showSuccessMessage && (
-          <Card className="border-green-200 bg-green-50">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2 text-green-700">
-                <CheckCircle className="w-5 h-5" />
-                <span className="font-semibold">Payment Successful! Your goal is now active!</span>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-        
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Zap className="w-5 h-5 text-orange-500" />
-              Pay Lightning Invoice
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="text-center">
-              <p className="text-sm text-gray-600 mb-4">
-                Scan QR code or copy invoice to pay
+            <div>
+              <label className="text-sm font-medium mb-2 block">Lightning Address</label>
+              <Input
+                type="text"
+                value={lightningAddress}
+                onChange={(e) => setLightningAddress(e.target.value)}
+                placeholder="your@lightning.address"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Where daily rewards will be sent
               </p>
-              {qrCode && (
-                <img src={qrCode} alt="Payment QR Code" className="mx-auto mb-4" />
-              )}
-              <div className="bg-gray-100 p-3 rounded-lg">
-                <p className="text-xs text-gray-500 break-all">{invoice}</p>
-              </div>
-              <Button
-                onClick={() => navigator.clipboard.writeText(invoice)}
-                variant="outline"
-                size="sm"
-                className="mt-2"
-              >
-                <Copy className="w-4 h-4 mr-2" />
-                Copy Invoice
-              </Button>
             </div>
-            
-            {paymentStatus === 'error' && (
-              <div className="text-center text-red-600 text-sm">
-                Error processing payment. Please try again.
-              </div>
-            )}
-            
-            <div className="text-center text-sm text-gray-500">
-              Payment will be verified automatically...
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
-
-  // Tracking Screen
-  if (paymentStep === 'tracking' && stake) {
-    const progress = Math.min((todayProgress / stake.dailyWordGoal) * 100, 100)
-    const daysUntilEmpty = Math.floor(stake.currentBalance / stake.dailyRewardSats)
-    
-    return (
-      <div className="space-y-6">
-        {/* Daily Progress */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Target className="w-5 h-5 text-blue-500" />
-              Daily Progress
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div>
-                <div className="flex justify-between text-sm mb-2">
-                  <span>Progress: {todayProgress} / {stake.dailyWordGoal} words</span>
-                  <span>{Math.round(progress)}%</span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div 
-                    className="bg-blue-500 h-2 rounded-full transition-all duration-300"
-                    style={{ width: `${progress}%` }}
-                  />
-                </div>
-              </div>
-              
-              {hasMetGoalToday && rewardSent && (
-                <div className="flex items-center gap-2 text-green-600">
-                  <Zap className="w-4 h-4" />
-                  <span className="text-sm font-medium">Goal Complete! Reward Sent</span>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Stake Summary */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Wallet className="w-5 h-5 text-orange-500" />
-              Lightning Goals Summary
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <span className="text-gray-500">Daily Goal:</span>
-                <p className="font-medium">{stake.dailyWordGoal} words</p>
-              </div>
-              <div>
-                <span className="text-gray-500">Reward:</span>
-                <p className="font-medium">{stake.dailyRewardSats} sats</p>
-              </div>
-              <div>
-                <span className="text-gray-500">Balance:</span>
-                <p className="font-medium">{stake.currentBalance} sats</p>
-              </div>
-              <div>
-                <span className="text-gray-500">Days Left:</span>
-                <p className="font-medium">{daysUntilEmpty}</p>
-              </div>
-            </div>
-            
-            {daysUntilEmpty <= 3 && (
-              <div className="flex items-center gap-2 text-yellow-600 bg-yellow-50 p-3 rounded-lg">
-                <AlertTriangle className="w-4 h-4" />
-                <span className="text-sm">Don't lose your streak! Only {daysUntilEmpty} days remaining.</span>
-              </div>
-            )}
             
             <Button
-              onClick={cancelStake}
-              variant="destructive"
-              disabled={loading}
+              onClick={handleCreateStake}
+              disabled={loading || !lightningAddress || depositAmount < dailyReward}
               className="w-full"
             >
-              Cancel Stake & Reset
+              {loading ? 'Creating...' : 'Create Stake'}
             </Button>
+            
+            <div className="text-xs text-gray-500">
+              <p>• You'll earn {dailyReward} sats each day you write {dailyWordGoal}+ words</p>
+              <p>• Your deposit of {depositAmount} sats will be used to pay rewards</p>
+              <p>• Cancelling forfeits your remaining balance</p>
+            </div>
           </CardContent>
         </Card>
-      </div>
-    )
-  }
-
-  return null
+      )}
+    </div>
+  )
 }
