@@ -1,7 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
 
+// Test GET handler to verify route is working
+export async function GET(request: NextRequest) {
+  console.log('[API] create-invoice GET request received')
+  return NextResponse.json({ 
+    success: true, 
+    message: 'API route is working' 
+  })
+}
+
 export async function POST(request: NextRequest) {
   console.log('[API] create-invoice POST request received')
+  console.log('[API] Request URL:', request.url)
+  console.log('[API] Request method:', request.method)
+  console.log('[API] Request headers:', Object.fromEntries(request.headers.entries()))
+  
   try {
     const body = await request.json()
     console.log('[API] Request body:', body)
@@ -23,14 +36,17 @@ export async function POST(request: NextRequest) {
     
     // Store the invoice data (in production, use a database)
     // For now, we'll use a simple in-memory store
-    global.invoices = global.invoices || {}
-    global.invoices[mockPaymentHash] = {
-      amount,
-      description,
-      invoice: mockInvoice,
-      paymentHash: mockPaymentHash,
-      paid: false,
-      createdAt: Date.now()
+    // Note: In serverless environments, this won't persist between requests
+    if (typeof global !== 'undefined') {
+      global.invoices = global.invoices || {}
+      global.invoices[mockPaymentHash] = {
+        amount,
+        description,
+        invoice: mockInvoice,
+        paymentHash: mockPaymentHash,
+        paid: false,
+        createdAt: Date.now()
+      }
     }
     
     console.log('[API] ✅ Invoice created:', mockPaymentHash)

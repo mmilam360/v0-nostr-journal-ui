@@ -154,6 +154,8 @@ export function LightningGoalsManager({ userPubkey, authData, userLightningAddre
       
       // Generate Lightning invoice
       console.log('[Manager] Generating Lightning invoice...')
+      console.log('[Manager] Current window location:', window.location.href)
+      console.log('[Manager] API URL will be:', window.location.origin + '/api/incentive/create-invoice')
       
       const invoiceResponse = await fetch('/api/incentive/create-invoice', {
         method: 'POST',
