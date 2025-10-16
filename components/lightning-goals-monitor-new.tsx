@@ -217,6 +217,16 @@ export function LightningGoalsMonitor({
       console.log('  - From prop:', userLightningAddress)
       console.log('  - Using:', currentLightningAddress)
       console.log('  - Has address?', !!currentLightningAddress)
+      console.log('  - Address type:', typeof currentLightningAddress)
+      console.log('  - Address length:', currentLightningAddress?.length)
+      console.log('  - Is falsy?', !currentLightningAddress)
+      
+      console.log('[Monitor] 🔍 About to check if address exists...')
+      console.log('[Monitor] 🔍 currentLightningAddress value:', JSON.stringify(currentLightningAddress))
+      console.log('[Monitor] 🔍 currentLightningAddress === null:', currentLightningAddress === null)
+      console.log('[Monitor] 🔍 currentLightningAddress === undefined:', currentLightningAddress === undefined)
+      console.log('[Monitor] 🔍 currentLightningAddress === "":', currentLightningAddress === "")
+      console.log('[Monitor] 🔍 !currentLightningAddress:', !currentLightningAddress)
       
       if (!currentLightningAddress) {
         console.log('[Monitor] ❌ No Lightning address configured!')
