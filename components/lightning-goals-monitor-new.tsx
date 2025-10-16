@@ -152,6 +152,14 @@ export function LightningGoalsMonitor({
       
       console.log('[Monitor] ✅ No reward sent yet today')
       
+      // Step 3.5: Check if this is a new day (progress should reset)
+      const lastProgressDate = todayProgress ? new Date(todayProgress.date) : null
+      const currentDate = new Date(today)
+      
+      if (lastProgressDate && lastProgressDate.getTime() < currentDate.getTime()) {
+        console.log('[Monitor] 🌅 New day detected - progress will reset')
+      }
+      
       // Step 4: Check balance
       console.log('[Monitor] Step 4: Checking balance...')
       console.log('[Monitor] Current balance:', stake.currentBalance)
@@ -196,18 +204,23 @@ export function LightningGoalsMonitor({
       if (!currentLightningAddress) {
         console.log('[Monitor] ❌ No Lightning address configured!')
         
-        // TEMPORARY: Set a test Lightning address for debugging
-        const testAddress = 'test@getalby.com'
-        console.log('[Monitor] 🔧 TEMPORARY: Setting test Lightning address:', testAddress)
-        localStorage.setItem(`lightning-address-${userPubkey}`, testAddress)
-        
-        // Use the test address
-        const finalAddress = testAddress
-        
-        console.log('[Monitor] ✅ Using test Lightning address:', finalAddress)
-        
-        // Continue with reward sending using test address
-        console.log('[Monitor] 💸 Sending', stake.rewardPerCompletion, 'sats to', finalAddress)
+        // Check if we have a saved Lightning address in localStorage that we can use
+        const savedAddress = localStorage.getItem(`lightning-address-${userPubkey}`)
+        if (savedAddress) {
+          console.log('[Monitor] 🔧 Found saved Lightning address:', savedAddress)
+          // Update the stake with the saved Lightning address
+          await saveStakeSettings(userPubkey, {
+            ...stake,
+            lightningAddress: savedAddress
+          }, authData)
+          console.log('[Monitor] ✅ Updated stake with Lightning address')
+          // Use the saved address
+          const finalAddress = savedAddress
+          
+          console.log('[Monitor] ✅ Using saved Lightning address:', finalAddress)
+          
+          // Continue with reward sending using saved address
+          console.log('[Monitor] 💸 Sending', stake.rewardPerCompletion, 'sats to', finalAddress)
         
         const rewardResult = await fetch('/api/incentive/send-reward', {
           method: 'POST',
@@ -270,6 +283,24 @@ export function LightningGoalsMonitor({
         }
         
         return
+        } else {
+          // No saved Lightning address found, show error
+          console.log('[Monitor] ❌ No Lightning address found in localStorage either!')
+          
+          // Record progress but can't send reward
+          await recordDailyProgress(
+            userPubkey,
+            currentWordCount,
+            true, // goalMet = true
+            false, // rewardSent = false (no Lightning address)
+            0,
+            authData
+          )
+          
+          // TODO: Show notification asking user to add Lightning address
+          
+          return
+        }
       }
       
       console.log('[Monitor] ✅ Lightning address:', currentLightningAddress)
