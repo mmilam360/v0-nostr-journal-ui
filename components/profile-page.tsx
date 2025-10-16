@@ -163,6 +163,12 @@ export default function ProfilePage({ authData, onClose, onLightningAddressUpdat
   }
 
   console.log('[Profile] 🎨 Rendering ProfilePage component')
+  console.log('[Profile] 🔍 Profile page state:', {
+    isLoading,
+    isSaving,
+    lightningAddress,
+    hasAuthData: !!authData
+  })
   
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50">

@@ -476,7 +476,9 @@ export function LightningGoalsManager({
                 </div>
                 <div className="w-full bg-gray-200 rounded-full h-2">
                   <div 
-                    className="bg-blue-500 h-2 rounded-full transition-all duration-300"
+                    className={`h-2 rounded-full transition-all duration-300 ${
+                      progress >= 100 ? 'bg-green-500' : 'bg-blue-500'
+                    }`}
                     style={{ width: `${progress}%` }}
                   />
                 </div>
