@@ -157,12 +157,14 @@ export function LightningGoalsManager({ userPubkey, authData, userLightningAddre
       console.log('[Manager] Current window location:', window.location.href)
       console.log('[Manager] API URL will be:', window.location.origin + '/api/incentive/create-invoice')
       
-      const invoiceResponse = await fetch('/api/incentive/create-invoice', {
+      const invoiceResponse = await fetch('/api/incentive/create-deposit-invoice', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          amount: parseInt(depositAmount),
-          description: `Lightning Goals stake - ${dailyWordGoal} words/day for ${dailyReward} sats`
+          userPubkey: userPubkey,
+          amountSats: parseInt(depositAmount),
+          timestamp: Date.now(),
+          requestId: Math.random().toString(36).substring(7)
         })
       })
       
@@ -191,6 +193,10 @@ export function LightningGoalsManager({ userPubkey, authData, userLightningAddre
         throw new Error(invoiceResult.error)
       }
       
+      // Store payment hash and invoice string for verification (like working system)
+      localStorage.setItem(`payment-hash-${userPubkey}`, invoiceResult.paymentHash)
+      localStorage.setItem(`invoice-string-${userPubkey}`, invoiceResult.invoice)
+      
       setInvoiceData(invoiceResult)
       setScreen('invoice')
       
@@ -208,22 +214,47 @@ export function LightningGoalsManager({ userPubkey, authData, userLightningAddre
     try {
       setPaymentStatus('checking')
       
-      // Check payment status
-      const checkResponse = await fetch('/api/incentive/check-payment', {
+      // Check payment status using working API
+      const paymentHash = localStorage.getItem(`payment-hash-${userPubkey}`)
+      const invoiceString = localStorage.getItem(`invoice-string-${userPubkey}`)
+      
+      if (!paymentHash) {
+        throw new Error('No payment hash found for verification')
+      }
+      
+      const checkResponse = await fetch('/api/incentive/verify-payment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          paymentHash: invoiceData.paymentHash
+          paymentHash,
+          ...(invoiceString && { invoiceString })
         })
       })
       
       const checkResult = await checkResponse.json()
       
       if (checkResult.success && checkResult.paid) {
-        // Payment confirmed, activate stake
-        await confirmPayment(userPubkey, invoiceData.paymentHash, authData)
+        // Payment confirmed, activate stake using working system
+        console.log('[Manager] ✅ Payment confirmed! Amount:', checkResult.amountSats, 'sats')
         
-        // Reload goals
+        // Create stake using the old working system
+        const { createStake } = await import('@/lib/incentive-nostr')
+        
+        const stakeId = await createStake(userPubkey, {
+          dailyWordGoal: parseInt(dailyWordGoal),
+          dailyRewardSats: parseInt(dailyReward),
+          initialStakeSats: parseInt(depositAmount),
+          lightningAddress: lightningAddress.trim(),
+          paymentHash: paymentHash
+        }, authData)
+        
+        console.log('[Manager] ✅ Stake created with ID:', stakeId)
+        
+        // Clear payment hash since payment is confirmed
+        localStorage.removeItem(`payment-hash-${userPubkey}`)
+        localStorage.removeItem(`invoice-string-${userPubkey}`)
+        
+        // Reload goals and switch to tracking screen
         const g = await getLightningGoals(userPubkey)
         setGoals(g)
         setScreen('tracking')
