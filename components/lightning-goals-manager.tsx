@@ -26,6 +26,7 @@ export function LightningGoalsManager({ userPubkey, authData, userLightningAddre
   // Input validation
   const [validationErrors, setValidationErrors] = useState<{[key: string]: string}>({})
   const [isFormValid, setIsFormValid] = useState(false)
+  const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false)
   
   // Load goals
   useEffect(() => {
@@ -76,47 +77,58 @@ export function LightningGoalsManager({ userPubkey, authData, userLightningAddre
   // Validate inputs whenever form values change
   useEffect(() => {
     validateInputs()
+    
+    // Reset attempted submit flag when user starts typing
+    if (hasAttemptedSubmit) {
+      setHasAttemptedSubmit(false)
+      setValidationErrors({})
+    }
   }, [dailyWordGoal, dailyReward, depositAmount, lightningAddress])
   
   // Input validation
-  function validateInputs() {
+  function validateInputs(showErrors: boolean = false) {
     const errors: {[key: string]: string} = {}
     
     if (!dailyWordGoal || dailyWordGoal.trim() === '') {
-      errors.dailyWordGoal = 'Daily word goal is required'
+      if (showErrors) errors.dailyWordGoal = 'Daily word goal is required'
     } else if (parseInt(dailyWordGoal) <= 0) {
-      errors.dailyWordGoal = 'Daily word goal must be greater than 0'
+      if (showErrors) errors.dailyWordGoal = 'Daily word goal must be greater than 0'
     }
     
     if (!dailyReward || dailyReward.trim() === '') {
-      errors.dailyReward = 'Daily reward is required'
+      if (showErrors) errors.dailyReward = 'Daily reward is required'
     } else if (parseInt(dailyReward) <= 0) {
-      errors.dailyReward = 'Daily reward must be greater than 0'
+      if (showErrors) errors.dailyReward = 'Daily reward must be greater than 0'
     }
     
     if (!depositAmount || depositAmount.trim() === '') {
-      errors.depositAmount = 'Deposit amount is required'
+      if (showErrors) errors.depositAmount = 'Deposit amount is required'
     } else if (parseInt(depositAmount) <= 0) {
-      errors.depositAmount = 'Deposit amount must be greater than 0'
+      if (showErrors) errors.depositAmount = 'Deposit amount must be greater than 0'
     }
     
     if (!lightningAddress || lightningAddress.trim() === '') {
-      errors.lightningAddress = 'Lightning address is required'
+      if (showErrors) errors.lightningAddress = 'Lightning address is required'
     }
     
     // Check if deposit is sufficient for daily reward
     if (dailyReward && depositAmount && parseInt(depositAmount) < parseInt(dailyReward)) {
-      errors.depositAmount = 'Deposit must be at least as much as the daily reward'
+      if (showErrors) errors.depositAmount = 'Deposit must be at least as much as the daily reward'
     }
     
-    setValidationErrors(errors)
+    if (showErrors) {
+      setValidationErrors(errors)
+    }
+    
     const isValid = Object.keys(errors).length === 0
     setIsFormValid(isValid)
     return isValid
   }
   
   async function handleCreateStake() {
-    if (!validateInputs()) {
+    setHasAttemptedSubmit(true)
+    
+    if (!validateInputs(true)) {
       return
     }
     
@@ -143,7 +155,26 @@ export function LightningGoalsManager({ userPubkey, authData, userLightningAddre
         })
       })
       
-      const invoiceResult = await invoiceResponse.json()
+      console.log('[Manager] Invoice response status:', invoiceResponse.status)
+      console.log('[Manager] Invoice response headers:', invoiceResponse.headers.get('content-type'))
+      
+      if (!invoiceResponse.ok) {
+        const errorText = await invoiceResponse.text()
+        console.error('[Manager] API error response:', errorText)
+        throw new Error(`API error: ${invoiceResponse.status} - ${errorText}`)
+      }
+      
+      const responseText = await invoiceResponse.text()
+      console.log('[Manager] Raw response:', responseText)
+      
+      let invoiceResult
+      try {
+        invoiceResult = JSON.parse(responseText)
+      } catch (parseError) {
+        console.error('[Manager] JSON parse error:', parseError)
+        console.error('[Manager] Raw response was:', responseText)
+        throw new Error('Invalid JSON response from API')
+      }
       
       if (!invoiceResult.success) {
         throw new Error(invoiceResult.error)
@@ -423,9 +454,9 @@ export function LightningGoalsManager({ userPubkey, authData, userLightningAddre
                 value={dailyWordGoal}
                 onChange={(e) => setDailyWordGoal(e.target.value)}
                 placeholder="500"
-                className={validationErrors.dailyWordGoal ? 'border-red-500' : ''}
+                className={hasAttemptedSubmit && validationErrors.dailyWordGoal ? 'border-red-500' : ''}
               />
-              {validationErrors.dailyWordGoal && (
+              {hasAttemptedSubmit && validationErrors.dailyWordGoal && (
                 <p className="text-xs text-red-500 mt-1">{validationErrors.dailyWordGoal}</p>
               )}
             </div>
@@ -437,9 +468,9 @@ export function LightningGoalsManager({ userPubkey, authData, userLightningAddre
                 value={dailyReward}
                 onChange={(e) => setDailyReward(e.target.value)}
                 placeholder="100"
-                className={validationErrors.dailyReward ? 'border-red-500' : ''}
+                className={hasAttemptedSubmit && validationErrors.dailyReward ? 'border-red-500' : ''}
               />
-              {validationErrors.dailyReward && (
+              {hasAttemptedSubmit && validationErrors.dailyReward && (
                 <p className="text-xs text-red-500 mt-1">{validationErrors.dailyReward}</p>
               )}
             </div>
@@ -451,9 +482,9 @@ export function LightningGoalsManager({ userPubkey, authData, userLightningAddre
                 value={depositAmount}
                 onChange={(e) => setDepositAmount(e.target.value)}
                 placeholder="1000"
-                className={validationErrors.depositAmount ? 'border-red-500' : ''}
+                className={hasAttemptedSubmit && validationErrors.depositAmount ? 'border-red-500' : ''}
               />
-              {validationErrors.depositAmount && (
+              {hasAttemptedSubmit && validationErrors.depositAmount && (
                 <p className="text-xs text-red-500 mt-1">{validationErrors.depositAmount}</p>
               )}
             </div>
@@ -465,9 +496,9 @@ export function LightningGoalsManager({ userPubkey, authData, userLightningAddre
                 value={lightningAddress}
                 onChange={(e) => setLightningAddress(e.target.value)}
                 placeholder="your@lightning.address"
-                className={validationErrors.lightningAddress ? 'border-red-500' : ''}
+                className={hasAttemptedSubmit && validationErrors.lightningAddress ? 'border-red-500' : ''}
               />
-              {validationErrors.lightningAddress && (
+              {hasAttemptedSubmit && validationErrors.lightningAddress && (
                 <p className="text-xs text-red-500 mt-1">{validationErrors.lightningAddress}</p>
               )}
               <p className="text-xs text-gray-500 mt-1">
