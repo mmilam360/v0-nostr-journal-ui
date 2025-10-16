@@ -265,8 +265,9 @@ export function LightningGoalsManager({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userPubkey,
-          authData
+          pubkey: userPubkey,
+          wordCount: wordCount,
+          goal: stake.dailyWordGoal
         })
       })
       
@@ -309,6 +310,8 @@ export function LightningGoalsManager({
         if (onWordCountProcessed) {
           onWordCountProcessed()
         }
+        
+        console.log('[LightningGoals] ✅ Goal completed and reward sent! Progress updated.')
         
         console.log('[LightningGoals] ✅ Reward sent successfully!')
       } else {

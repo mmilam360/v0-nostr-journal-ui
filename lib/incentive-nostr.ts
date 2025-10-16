@@ -215,12 +215,15 @@ export async function getCurrentStake(userPubkey: string): Promise<{
   createdAt: string
   isActive: boolean
 } | null> {
-  // Get all stake creation events
+  // Get all stake creation events, sorted by most recent first
   const creationEvents = await pool.querySync(RELAYS, {
     kinds: [30078],
     authors: [userPubkey],
     "#d": ["stake-creation"]
   })
+  
+  // Sort by creation time (most recent first)
+  creationEvents.sort((a, b) => b.created_at - a.created_at)
   
   if (creationEvents.length === 0) {
     // Fallback: Check for old settings events for migration
@@ -275,13 +278,16 @@ export async function getCurrentStake(userPubkey: string): Promise<{
   const latestStake = activeStakes[0]
   const stakeId = latestStake.tags.find(t => t[0] === 'stake_id')?.[1] || ''
   
-  // Calculate current balance from balance update events
+  // Calculate current balance from balance update events, sorted by most recent first
   const balanceEvents = await pool.querySync(RELAYS, {
     kinds: [30078],
     authors: [userPubkey],
     "#d": ["balance-update"],
     "#stake_id": [stakeId]
   })
+  
+  // Sort by creation time (most recent first)
+  balanceEvents.sort((a, b) => b.created_at - a.created_at)
   
   const initialBalance = parseInt(latestStake.tags.find(t => t[0] === 'initial_stake_sats')?.[1] || '0')
   const latestBalanceEvent = balanceEvents[0]
