@@ -1,23 +1,30 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { getLightningGoals, createStake, addToStake, cancelStake, updateLightningAddress } from '@/lib/lightning-goals'
+import { getLightningGoals, createStake, addToStake, cancelStake, updateLightningAddress, confirmPayment } from '@/lib/lightning-goals'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { AlertTriangle } from 'lucide-react'
+import { AlertTriangle, QrCode } from 'lucide-react'
 
 export function LightningGoalsManager({ userPubkey, authData, userLightningAddress }: any) {
   const [goals, setGoals] = useState<any>(null)
-  const [screen, setScreen] = useState<'setup' | 'tracking'>('setup')
+  const [screen, setScreen] = useState<'setup' | 'invoice' | 'tracking'>('setup')
   const [loading, setLoading] = useState(true)
   const [isCancelling, setIsCancelling] = useState(false)
   
   // Setup form state
-  const [dailyWordGoal, setDailyWordGoal] = useState(500)
-  const [dailyReward, setDailyReward] = useState(100)
-  const [depositAmount, setDepositAmount] = useState(1000)
+  const [dailyWordGoal, setDailyWordGoal] = useState('')
+  const [dailyReward, setDailyReward] = useState('')
+  const [depositAmount, setDepositAmount] = useState('')
   const [lightningAddress, setLightningAddress] = useState('')
+  
+  // Payment flow state
+  const [invoiceData, setInvoiceData] = useState<any>(null)
+  const [paymentStatus, setPaymentStatus] = useState<'pending' | 'checking' | 'confirmed'>('pending')
+  
+  // Input validation
+  const [validationErrors, setValidationErrors] = useState<{[key: string]: string}>({})
   
   // Load goals
   useEffect(() => {
@@ -29,6 +36,9 @@ export function LightningGoalsManager({ userPubkey, authData, userLightningAddre
         if (g && g.status === 'active') {
           setGoals(g)
           setScreen('tracking')
+        } else if (g && g.status === 'pending_payment') {
+          setGoals(g)
+          setScreen('invoice')
         } else {
           setScreen('setup')
         }
@@ -62,39 +72,122 @@ export function LightningGoalsManager({ userPubkey, authData, userLightningAddre
     return () => clearInterval(interval)
   }, [screen, userPubkey])
   
-  async function handleCreateStake() {
-    if (!lightningAddress) {
-      alert('Please enter your Lightning address')
-      return
+  // Input validation
+  function validateInputs() {
+    const errors: {[key: string]: string} = {}
+    
+    if (!dailyWordGoal || dailyWordGoal.trim() === '') {
+      errors.dailyWordGoal = 'Daily word goal is required'
+    } else if (parseInt(dailyWordGoal) <= 0) {
+      errors.dailyWordGoal = 'Daily word goal must be greater than 0'
     }
     
-    if (depositAmount < dailyReward) {
-      alert('Deposit must be at least as much as the daily reward')
+    if (!dailyReward || dailyReward.trim() === '') {
+      errors.dailyReward = 'Daily reward is required'
+    } else if (parseInt(dailyReward) <= 0) {
+      errors.dailyReward = 'Daily reward must be greater than 0'
+    }
+    
+    if (!depositAmount || depositAmount.trim() === '') {
+      errors.depositAmount = 'Deposit amount is required'
+    } else if (parseInt(depositAmount) <= 0) {
+      errors.depositAmount = 'Deposit amount must be greater than 0'
+    }
+    
+    if (!lightningAddress || lightningAddress.trim() === '') {
+      errors.lightningAddress = 'Lightning address is required'
+    }
+    
+    // Check if deposit is sufficient for daily reward
+    if (dailyReward && depositAmount && parseInt(depositAmount) < parseInt(dailyReward)) {
+      errors.depositAmount = 'Deposit must be at least as much as the daily reward'
+    }
+    
+    setValidationErrors(errors)
+    return Object.keys(errors).length === 0
+  }
+  
+  async function handleCreateStake() {
+    if (!validateInputs()) {
       return
     }
     
     try {
       setLoading(true)
       
+      // Create stake with pending payment status
       await createStake(userPubkey, {
-        dailyWordGoal,
-        dailyReward,
-        depositAmount,
-        lightningAddress
+        dailyWordGoal: parseInt(dailyWordGoal),
+        dailyReward: parseInt(dailyReward),
+        depositAmount: parseInt(depositAmount),
+        lightningAddress: lightningAddress.trim()
       }, authData)
       
-      // Reload goals
-      const g = await getLightningGoals(userPubkey)
-      setGoals(g)
-      setScreen('tracking')
+      // Generate Lightning invoice
+      console.log('[Manager] Generating Lightning invoice...')
       
-      alert('Stake created successfully!')
+      const invoiceResponse = await fetch('/api/incentive/create-invoice', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: parseInt(depositAmount),
+          description: `Lightning Goals stake - ${dailyWordGoal} words/day for ${dailyReward} sats`
+        })
+      })
+      
+      const invoiceResult = await invoiceResponse.json()
+      
+      if (!invoiceResult.success) {
+        throw new Error(invoiceResult.error)
+      }
+      
+      setInvoiceData(invoiceResult)
+      setScreen('invoice')
       
     } catch (error) {
       console.error('[Manager] Error creating stake:', error)
       alert('Error creating stake: ' + error.message)
     } finally {
       setLoading(false)
+    }
+  }
+  
+  async function handlePaymentVerification() {
+    if (!invoiceData) return
+    
+    try {
+      setPaymentStatus('checking')
+      
+      // Check payment status
+      const checkResponse = await fetch('/api/incentive/check-payment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          paymentHash: invoiceData.paymentHash
+        })
+      })
+      
+      const checkResult = await checkResponse.json()
+      
+      if (checkResult.success && checkResult.paid) {
+        // Payment confirmed, activate stake
+        await confirmPayment(userPubkey, invoiceData.paymentHash, authData)
+        
+        // Reload goals
+        const g = await getLightningGoals(userPubkey)
+        setGoals(g)
+        setScreen('tracking')
+        
+        alert('Payment confirmed! Your stake is now active.')
+      } else {
+        setPaymentStatus('pending')
+        alert('Payment not yet received. Please try again.')
+      }
+      
+    } catch (error) {
+      console.error('[Manager] Error verifying payment:', error)
+      setPaymentStatus('pending')
+      alert('Error verifying payment: ' + error.message)
     }
   }
   
@@ -320,9 +413,13 @@ export function LightningGoalsManager({ userPubkey, authData, userLightningAddre
               <Input
                 type="number"
                 value={dailyWordGoal}
-                onChange={(e) => setDailyWordGoal(parseInt(e.target.value) || 500)}
+                onChange={(e) => setDailyWordGoal(e.target.value)}
                 placeholder="500"
+                className={validationErrors.dailyWordGoal ? 'border-red-500' : ''}
               />
+              {validationErrors.dailyWordGoal && (
+                <p className="text-xs text-red-500 mt-1">{validationErrors.dailyWordGoal}</p>
+              )}
             </div>
             
             <div>
@@ -330,9 +427,13 @@ export function LightningGoalsManager({ userPubkey, authData, userLightningAddre
               <Input
                 type="number"
                 value={dailyReward}
-                onChange={(e) => setDailyReward(parseInt(e.target.value) || 100)}
+                onChange={(e) => setDailyReward(e.target.value)}
                 placeholder="100"
+                className={validationErrors.dailyReward ? 'border-red-500' : ''}
               />
+              {validationErrors.dailyReward && (
+                <p className="text-xs text-red-500 mt-1">{validationErrors.dailyReward}</p>
+              )}
             </div>
             
             <div>
@@ -340,9 +441,13 @@ export function LightningGoalsManager({ userPubkey, authData, userLightningAddre
               <Input
                 type="number"
                 value={depositAmount}
-                onChange={(e) => setDepositAmount(parseInt(e.target.value) || 1000)}
+                onChange={(e) => setDepositAmount(e.target.value)}
                 placeholder="1000"
+                className={validationErrors.depositAmount ? 'border-red-500' : ''}
               />
+              {validationErrors.depositAmount && (
+                <p className="text-xs text-red-500 mt-1">{validationErrors.depositAmount}</p>
+              )}
             </div>
             
             <div>
@@ -352,7 +457,11 @@ export function LightningGoalsManager({ userPubkey, authData, userLightningAddre
                 value={lightningAddress}
                 onChange={(e) => setLightningAddress(e.target.value)}
                 placeholder="your@lightning.address"
+                className={validationErrors.lightningAddress ? 'border-red-500' : ''}
               />
+              {validationErrors.lightningAddress && (
+                <p className="text-xs text-red-500 mt-1">{validationErrors.lightningAddress}</p>
+              )}
               <p className="text-xs text-gray-500 mt-1">
                 Where daily rewards will be sent
               </p>
@@ -360,16 +469,68 @@ export function LightningGoalsManager({ userPubkey, authData, userLightningAddre
             
             <Button
               onClick={handleCreateStake}
-              disabled={loading || !lightningAddress || depositAmount < dailyReward}
+              disabled={loading || !validateInputs()}
               className="w-full"
             >
-              {loading ? 'Creating...' : 'Create Stake'}
+              {loading ? 'Creating...' : 'Generate Lightning Invoice'}
             </Button>
             
             <div className="text-xs text-gray-500">
-              <p>• You'll earn {dailyReward} sats each day you write {dailyWordGoal}+ words</p>
-              <p>• Your deposit of {depositAmount} sats will be used to pay rewards</p>
+              <p>• You'll earn {dailyReward || 'X'} sats each day you write {dailyWordGoal || 'X'}+ words</p>
+              <p>• Your deposit of {depositAmount || 'X'} sats will be used to pay rewards</p>
               <p>• Cancelling forfeits your remaining balance</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+      
+      {screen === 'invoice' && invoiceData && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Complete Your Payment</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="text-center">
+              <div className="text-2xl font-bold mb-2">{invoiceData.amount} sats</div>
+              <div className="text-sm text-gray-600 mb-4">
+                Pay this amount to activate your Lightning Goals stake
+              </div>
+            </div>
+            
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <div className="text-xs font-mono break-all">
+                {invoiceData.invoice}
+              </div>
+            </div>
+            
+            <div className="flex gap-2">
+              <Button
+                onClick={() => navigator.clipboard.writeText(invoiceData.invoice)}
+                variant="outline"
+                className="flex-1"
+              >
+                Copy Invoice
+              </Button>
+              <Button
+                onClick={handlePaymentVerification}
+                disabled={paymentStatus === 'checking'}
+                className="flex-1"
+              >
+                {paymentStatus === 'checking' ? (
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Checking...
+                  </div>
+                ) : (
+                  'Check Payment'
+                )}
+              </Button>
+            </div>
+            
+            <div className="text-xs text-gray-500 text-center">
+              <p>1. Copy the invoice above</p>
+              <p>2. Pay it with your Lightning wallet</p>
+              <p>3. Click "Check Payment" to verify</p>
             </div>
           </CardContent>
         </Card>

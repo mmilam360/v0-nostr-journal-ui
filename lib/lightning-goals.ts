@@ -19,7 +19,7 @@ export interface LightningGoals {
   totalWithdrawn: number
   
   // Status
-  status: 'active' | 'paused' | 'cancelled'
+  status: 'active' | 'paused' | 'cancelled' | 'pending_payment'
   createdAt: number
   lastUpdated: number
   
@@ -263,7 +263,7 @@ export async function updateLightningGoals(
 }
 
 /**
- * Create initial stake
+ * Create initial stake (with 0 balance until payment confirmed)
  */
 export async function createStake(
   userPubkey: string,
@@ -272,6 +272,7 @@ export async function createStake(
     dailyReward: number
     depositAmount: number
     lightningAddress: string
+    paymentHash?: string
   },
   authData: any
 ): Promise<void> {
@@ -282,11 +283,11 @@ export async function createStake(
   await updateLightningGoals(userPubkey, {
     dailyWordGoal: config.dailyWordGoal,
     dailyReward: config.dailyReward,
-    currentBalance: config.depositAmount,
+    currentBalance: config.paymentHash ? config.depositAmount : 0, // Only credit if payment confirmed
     initialStake: config.depositAmount,
-    totalDeposited: config.depositAmount,
+    totalDeposited: config.paymentHash ? config.depositAmount : 0, // Only count if payment confirmed
     totalWithdrawn: 0,
-    status: 'active',
+    status: config.paymentHash ? 'active' : 'pending_payment', // Pending until payment confirmed
     createdAt: Date.now(),
     lightningAddress: config.lightningAddress,
     todayDate: today,
@@ -303,7 +304,37 @@ export async function createStake(
     lastMissedDate: ''
   }, authData)
   
-  console.log('[LightningGoals] ✅ Stake created')
+  console.log('[LightningGoals] ✅ Stake created', config.paymentHash ? 'with payment confirmed' : 'pending payment')
+}
+
+/**
+ * Confirm payment and activate stake
+ */
+export async function confirmPayment(
+  userPubkey: string,
+  paymentHash: string,
+  authData: any
+): Promise<void> {
+  console.log('[LightningGoals] Confirming payment:', paymentHash)
+  
+  const goals = await getLightningGoals(userPubkey)
+  
+  if (!goals) {
+    throw new Error('No pending stake found')
+  }
+  
+  if (goals.status !== 'pending_payment') {
+    throw new Error('Stake is not in pending payment state')
+  }
+  
+  // Update to active with confirmed balance
+  await updateLightningGoals(userPubkey, {
+    status: 'active',
+    currentBalance: goals.initialStake,
+    totalDeposited: goals.initialStake
+  }, authData)
+  
+  console.log('[LightningGoals] ✅ Payment confirmed, stake activated')
 }
 
 /**
