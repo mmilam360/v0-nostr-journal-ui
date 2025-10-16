@@ -29,12 +29,16 @@ export function LightningGoalsMonitor({
   
   // Monitor word count changes
   useEffect(() => {
+    console.log('[Monitor] 🔍 useEffect triggered - currentWordCount:', currentWordCount, 'lastProcessed:', lastProcessedCount.current, 'isProcessing:', isProcessing)
+    
     // Skip if no change or already processing
     if (currentWordCount === lastProcessedCount.current || isProcessing) {
+      console.log('[Monitor] ⏭️ Skipping - no change or already processing')
       return
     }
     
-    if (currentWordCount === 0) {
+    if (currentWordCount === 0 || currentWordCount === null) {
+      console.log('[Monitor] ⏭️ Skipping - no words written yet')
       return // Skip if no words written yet
     }
     
@@ -89,7 +93,13 @@ export function LightningGoalsMonitor({
       }
       
       // Get current Lightning address (from localStorage or prop)
-      const currentLightningAddress = localStorage.getItem(`lightning-address-${userPubkey}`) || userLightningAddress
+      const savedAddress = localStorage.getItem(`lightning-address-${userPubkey}`)
+      const currentLightningAddress = savedAddress || userLightningAddress
+      
+      console.log('[Monitor] 🔍 Lightning address lookup:')
+      console.log('  - Saved in localStorage:', savedAddress)
+      console.log('  - From prop:', userLightningAddress)
+      console.log('  - Using:', currentLightningAddress)
       
       if (!currentLightningAddress) {
         console.error('[Monitor] ❌ No Lightning address found for user')

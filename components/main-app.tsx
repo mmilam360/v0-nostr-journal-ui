@@ -354,8 +354,10 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   useEffect(() => {
     if (authData?.pubkey) {
       const savedAddress = localStorage.getItem(`lightning-address-${authData.pubkey}`)
+      console.log('[MainApp] 🔍 Loading Lightning address:', savedAddress)
       if (savedAddress) {
         setUserLightningAddress(savedAddress)
+        console.log('[MainApp] ✅ Lightning address loaded:', savedAddress)
       }
     }
   }, [authData?.pubkey])

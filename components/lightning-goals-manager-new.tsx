@@ -141,6 +141,12 @@ export function LightningGoalsManager({
       localStorage.setItem(`payment-hash-${userPubkey}`, data.paymentHash)
       localStorage.setItem(`invoice-string-${userPubkey}`, data.invoice)
       
+      // Store Lightning address for future rewards
+      if (setupSettings.lightningAddress) {
+        localStorage.setItem(`lightning-address-${userPubkey}`, setupSettings.lightningAddress)
+        console.log('[LightningGoals] 💾 Lightning address saved:', setupSettings.lightningAddress)
+      }
+      
       // Start payment checking
       checkPaymentStatus()
     } catch (error) {

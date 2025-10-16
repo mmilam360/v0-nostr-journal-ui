@@ -97,10 +97,12 @@ export default function ProfilePage({ authData, onClose, onLightningAddressUpdat
   }
 
   const handleSaveLightningAddress = async () => {
+    console.log('[Profile] 💾 Saving Lightning address:', lightningAddress)
     setIsSaving(true)
     try {
       // Save to localStorage for immediate use
       localStorage.setItem(`lightning-address-${authData.pubkey}`, lightningAddress)
+      console.log('[Profile] ✅ Lightning address saved to localStorage')
       
       // Update Nostr profile metadata
       const { SimplePool } = await import("nostr-tools/pool")
