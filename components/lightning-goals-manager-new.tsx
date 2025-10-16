@@ -258,31 +258,13 @@ export function LightningGoalsManager({
     setCancelError('')
     
     try {
-      // Update stake status to cancelled (forfeit - no refund)
-      console.log('[LightningGoals] 📝 Updating stake status to cancelled (forfeited)...')
+      // Delete ALL incentive events (stake, transactions, progress, streak data)
+      console.log('[LightningGoals] 🗑️ Deleting all incentive events...')
       
-      await saveStakeSettings(userPubkey, {
-        dailyWordGoal: stake.dailyWordGoal,
-        rewardPerCompletion: stake.rewardPerCompletion,
-        currentBalance: 0,
-        stakeCreatedAt: stake.stakeCreatedAt,
-        status: 'cancelled',
-        lightningAddress: stake.lightningAddress
-      }, authData)
+      const { deleteAllIncentiveEvents } = await import('@/lib/incentive-nostr-new')
+      await deleteAllIncentiveEvents(userPubkey, authData)
       
-      console.log('[LightningGoals] ✅ Stake forfeited successfully')
-      
-      // Record forfeiture transaction (for audit trail)
-      await recordTransaction(userPubkey, {
-        type: 'forfeit',
-        amount: -stake.currentBalance,
-        paymentHash: '',
-        balanceBefore: stake.currentBalance,
-        balanceAfter: 0,
-        description: 'Stake forfeited due to cancellation'
-      }, authData)
-      
-      console.log('[LightningGoals] ✅ Forfeiture transaction recorded')
+      console.log('[LightningGoals] ✅ All incentive events deleted successfully')
       
       // Close modal and reset state
       setShowCancelModal(false)
@@ -293,7 +275,7 @@ export function LightningGoalsManager({
       if (onSetupStatusChange) onSetupStatusChange(false)
       
       // Show forfeit confirmation
-      alert(`Stake cancelled! ${stake.currentBalance} sats forfeited.`)
+      alert(`Stake cancelled! ${stake.currentBalance} sats forfeited. All progress and transaction history has been deleted.`)
       
     } catch (error) {
       console.error('[LightningGoals] ❌ Error:', error)
@@ -475,21 +457,30 @@ export function LightningGoalsManager({
                 Are you sure you want to cancel your commitment and forfeit your stake?
               </p>
               
-              <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-                <div className="flex items-start gap-2">
-                  <AlertTriangle className="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0" />
-                  <div className="text-sm text-red-700">
-                    <p className="font-medium">This action cannot be undone.</p>
-                    <p className="mt-1">
-                      Your remaining balance of <strong>{stake.currentBalance} sats</strong> will be 
-                      <strong className="text-red-800"> forfeited permanently</strong>.
-                    </p>
-                    <p className="mt-1 text-xs text-red-600">
-                      This is the commitment you made to your writing goal.
-                    </p>
-                  </div>
-                </div>
-              </div>
+               <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                 <div className="flex items-start gap-2">
+                   <AlertTriangle className="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0" />
+                   <div className="text-sm text-red-700">
+                     <p className="font-medium">This action cannot be undone.</p>
+                     <p className="mt-1">
+                       Your remaining balance of <strong>{stake.currentBalance} sats</strong> will be 
+                       <strong className="text-red-800"> forfeited permanently</strong>.
+                     </p>
+                     <p className="mt-1">
+                       <strong className="text-red-800">ALL DATA WILL BE DELETED:</strong>
+                     </p>
+                     <ul className="mt-1 text-xs text-red-600 list-disc list-inside">
+                       <li>Stake settings and balance</li>
+                       <li>Daily progress and streak data</li>
+                       <li>Transaction history</li>
+                       <li>All Lightning Goals records</li>
+                     </ul>
+                     <p className="mt-1 text-xs text-red-600">
+                       This is the commitment you made to your writing goal.
+                     </p>
+                   </div>
+                 </div>
+               </div>
               
               {cancelError && (
                 <div className="bg-red-50 border border-red-200 rounded-lg p-3">

@@ -65,6 +65,19 @@ export async function getCurrentStake(userPubkey: string): Promise<StakeSettings
   
   const event = events[0]
   
+  // Check if this event has been deleted by looking for kind 5 deletion events
+  const deletionEvents = await pool.querySync(RELAYS, {
+    kinds: [5],
+    authors: [userPubkey],
+    "#e": [event.id],
+    limit: 1
+  })
+  
+  if (deletionEvents.length > 0) {
+    console.log('[Nostr] Stake event has been deleted')
+    return null
+  }
+  
   // Parse tags into object
   const getTags = (name: string) => event.tags.find(t => t[0] === name)?.[1]
   
@@ -152,6 +165,85 @@ export async function updateStakeLightningAddress(
 }
 
 /**
+ * Delete all incentive-related events for a user (stake, transactions, progress)
+ * Uses Nostr kind 5 (deletion events) to properly remove events
+ */
+export async function deleteAllIncentiveEvents(
+  userPubkey: string,
+  authData: any
+): Promise<void> {
+  console.log('[Nostr] 🗑️ Starting complete incentive event deletion for user:', userPubkey.substring(0, 8))
+  
+  // pool is already available at module level
+  
+  // Query for all incentive-related events
+  const allEvents = await pool.querySync(RELAYS, {
+    kinds: [30078],
+    authors: [userPubkey],
+    limit: 100 // Get a reasonable number of events
+  })
+  
+  console.log('[Nostr] Found', allEvents.length, 'incentive events to delete')
+  
+  // Filter events that are incentive-related
+  const incentiveEvents = allEvents.filter(event => {
+    const dTag = event.tags.find(tag => tag[0] === 'd')
+    if (!dTag) return false
+    
+    const dValue = dTag[1]
+    return dValue.includes('lightning-goals') || 
+           dValue.includes('incentive') ||
+           dValue.includes('transaction') ||
+           dValue.includes('progress')
+  })
+  
+  console.log('[Nostr] Found', incentiveEvents.length, 'incentive events to delete')
+  
+  if (incentiveEvents.length === 0) {
+    console.log('[Nostr] No incentive events found to delete')
+    return
+  }
+  
+  // Create deletion events for each incentive event
+  const deletionEvents = incentiveEvents.map(event => ({
+    kind: 5,
+    created_at: Math.floor(Date.now() / 1000),
+    tags: [
+      ['e', event.id, '', 'deletion'] // Reference the event to delete
+    ],
+    content: 'Deleted all Lightning Goals data due to stake cancellation',
+    pubkey: userPubkey
+  }))
+  
+  console.log('[Nostr] Created', deletionEvents.length, 'deletion events')
+  
+  // Sign and publish each deletion event
+  const signedDeletionEvents = []
+  for (const deletionEvent of deletionEvents) {
+    try {
+      const signedEvent = await signEventWithRemote(deletionEvent, authData)
+      signedDeletionEvents.push(signedEvent)
+      console.log('[Nostr] ✅ Signed deletion event for:', deletionEvent.tags[0][1].substring(0, 8))
+    } catch (error) {
+      console.error('[Nostr] ❌ Failed to sign deletion event:', error)
+    }
+  }
+  
+  // Publish all deletion events
+  if (signedDeletionEvents.length > 0) {
+    try {
+      await pool.publish(RELAYS, ...signedDeletionEvents)
+      console.log('[Nostr] ✅ Published', signedDeletionEvents.length, 'deletion events')
+    } catch (error) {
+      console.error('[Nostr] ❌ Failed to publish deletion events:', error)
+      throw error
+    }
+  }
+  
+  console.log('[Nostr] 🗑️ Complete incentive event deletion finished')
+}
+
+/**
  * Get progress for specific date
  */
 export async function getDailyProgress(
@@ -175,6 +267,20 @@ export async function getDailyProgress(
   }
   
   const event = events[0]
+  
+  // Check if this event has been deleted by looking for kind 5 deletion events
+  const deletionEvents = await pool.querySync(RELAYS, {
+    kinds: [5],
+    authors: [userPubkey],
+    "#e": [event.id],
+    limit: 1
+  })
+  
+  if (deletionEvents.length > 0) {
+    console.log('[Nostr] Progress event has been deleted')
+    return null
+  }
+  
   const getTags = (name: string) => event.tags.find(t => t[0] === name)?.[1]
   
   return {
