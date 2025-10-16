@@ -30,6 +30,7 @@ import PublishModal from "@/components/publish-modal"
 import DeleteConfirmationModal from "@/components/delete-confirmation-modal"
 import ProfilePage from "@/components/profile-page"
 import { isIncentiveEnabled } from "@/lib/feature-flags"
+import { getLightningGoals } from "@/lib/lightning-goals"
 // LightningGoalsMonitor will be dynamically imported below
 import dynamic from "next/dynamic"
 
@@ -172,6 +173,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   const [npub, setNpub] = useState<string>("")
   const [relays, setRelays] = useState<string[]>([])
   const [newRelay, setNewRelay] = useState("")
+
   const [profilePicture, setProfilePicture] = useState<string>("")
   const [displayName, setDisplayName] = useState<string>("")
   const [showDonationModal, setShowDonationModal] = useState(false)
@@ -328,12 +330,18 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
 
   const checkLightningGoals = async () => {
     try {
-      const { getLightningGoals } = await import('@/lib/lightning-goals')
       const goals = await getLightningGoals(authData.pubkey)
       
       if (goals && goals.status === 'active') {
         setHasLightningGoals(true)
         setUserStreak(goals.currentStreak)
+        
+        // Set Lightning address from master event
+        if (goals.lightningAddress) {
+          console.log('[MainApp] ⚡ Setting Lightning address from master event:', goals.lightningAddress)
+          setUserLightningAddress(goals.lightningAddress)
+        }
+        
         console.log('[MainApp] ✅ Active goals found, Balance:', goals.currentBalance)
       } else {
         setHasLightningGoals(false)
@@ -779,7 +787,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
               
               // Call the direct reward eligibility check
               await checkRewardEligibility(wordCount)
-            } else {
+      } else {
               console.log("[NostrJournal] ⚡ Word count = 0, skipping reward check")
             }
           } catch (rewardError) {
@@ -867,7 +875,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
 
     // Clean up the remote signer connection
     await cleanupSigner()
-    
+
     // IMPORTANT: Clear saved remote session
     if (authData.authMethod === 'remote') {
       localStorage.removeItem('nostr_remote_session')
@@ -1378,7 +1386,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                     )}
                   </Button>
                 )}
-
+                
                 {/* Theme toggle with system option */}
                 <DropdownMenu>
                   <DropdownMenuTrigger>
@@ -1721,20 +1729,20 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
               <div className="flex flex-col h-full">
                 {/* Tags Panel */}
                 <div className="flex-shrink-0">
-                  <TagsPanel
-                    tags={tags}
-                    selectedTag={selectedTag}
-                    onSelectTag={(tag) => {
-                      setSelectedTag(tag)
-                      setIsMobileSidebarOpen(false)
-                    }}
-                    pubkey={authData.pubkey}
-                    onLogout={handleLogout}
-                    onDonationClick={() => {
-                      setShowDonationModal(true)
-                      setIsMobileSidebarOpen(false)
-                    }}
-                  />
+              <TagsPanel
+                tags={tags}
+                selectedTag={selectedTag}
+                onSelectTag={(tag) => {
+                  setSelectedTag(tag)
+                  setIsMobileSidebarOpen(false)
+                }}
+                pubkey={authData.pubkey}
+                onLogout={handleLogout}
+                onDonationClick={() => {
+                  setShowDonationModal(true)
+                  setIsMobileSidebarOpen(false)
+                }}
+              />
                 </div>
                 
                 {/* Note List */}
@@ -1815,9 +1823,9 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
         </div>
 
         {showPublishConfirmation && noteToPublish && (
-          <PublishConfirmationModal 
-            note={noteToPublish} 
-            onConfirm={handleConfirmPublish} 
+          <PublishConfirmationModal
+            note={noteToPublish}
+            onConfirm={handleConfirmPublish}
             onCancel={handleCancelPublish}
             isLoading={isPublishing}
           />

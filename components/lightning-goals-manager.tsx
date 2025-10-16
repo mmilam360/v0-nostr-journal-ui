@@ -61,8 +61,15 @@ export function LightningGoalsManager({ userPubkey, authData, userLightningAddre
           setScreen('setup')
         }
         
-        // Pre-fill Lightning address
-        setLightningAddress(userLightningAddress || '')
+        // Pre-fill Lightning address from prop or master event
+        const addressFromEvent = goals?.lightningAddress
+        const addressToUse = userLightningAddress || addressFromEvent || ''
+        console.log('[Manager] ⚡ Lightning address sources:', {
+          fromProp: userLightningAddress,
+          fromEvent: addressFromEvent,
+          using: addressToUse
+        })
+        setLightningAddress(addressToUse)
       } catch (error) {
         console.error('[Manager] ❌ Error loading goals:', error)
         console.log('[Manager] 📝 Error occurred, showing setup screen')
