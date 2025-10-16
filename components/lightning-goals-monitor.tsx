@@ -22,6 +22,7 @@ export function LightningGoalsMonitor({
   useEffect(() => {
     console.log('[Monitor] 🚀 Mounted')
     console.log('[Monitor] Initial word count:', currentWordCount)
+    console.log('[Monitor] ⚡ Initial Lightning address:', userLightningAddress || 'NONE')
     
     return () => console.log('[Monitor] Unmounting')
   }, [])
@@ -32,12 +33,18 @@ export function LightningGoalsMonitor({
     if (isProcessingRef.current) return
     
     console.log('[Monitor] 🔍 Word count changed:', lastCountRef.current, '→', currentWordCount)
+    console.log('[Monitor] ⚡ Lightning address at trigger:', userLightningAddress || 'NONE')
     
     lastCountRef.current = currentWordCount
     
     checkAndReward()
     
   }, [currentWordCount])
+  
+  // Debug Lightning address changes
+  useEffect(() => {
+    console.log('[Monitor] ⚡ Lightning address changed to:', userLightningAddress || 'NONE')
+  }, [userLightningAddress])
   
   async function checkAndReward() {
     if (isProcessingRef.current) return

@@ -65,7 +65,7 @@ export function LightningGoalsManager({ userPubkey, authData, userLightningAddre
         }
         
         // Pre-fill Lightning address from prop or master event
-        const addressFromEvent = goals?.lightningAddress
+        const addressFromEvent = g?.lightningAddress
         const addressToUse = userLightningAddress || addressFromEvent || ''
         console.log('[Manager] ⚡ Lightning address sources:', {
           fromProp: userLightningAddress,
