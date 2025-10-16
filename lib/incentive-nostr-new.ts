@@ -191,10 +191,16 @@ export async function deleteAllIncentiveEvents(
     if (!dTag) return false
     
     const dValue = dTag[1]
-    return dValue.includes('lightning-goals') || 
+    const isIncentive = dValue.includes('lightning-goals') || 
            dValue.includes('incentive') ||
            dValue.includes('transaction') ||
            dValue.includes('progress')
+    
+    if (isIncentive) {
+      console.log('[Nostr] ✅ Found incentive event with d-tag:', dValue)
+    }
+    
+    return isIncentive
   })
   
   console.log('[Nostr] Found', incentiveEvents.length, 'incentive events to delete')

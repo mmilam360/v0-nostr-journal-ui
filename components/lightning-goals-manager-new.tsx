@@ -266,6 +266,16 @@ export function LightningGoalsManager({
       
       console.log('[LightningGoals] ✅ All incentive events deleted successfully')
       
+      // Clear localStorage progress data
+      console.log('[LightningGoals] 🧹 Clearing localStorage progress data...')
+      localStorage.removeItem(`daily-progress-${userPubkey}`)
+      localStorage.removeItem(`lightning-address-${userPubkey}`)
+      localStorage.removeItem(`incentive-settings-${userPubkey}`)
+      
+      // Wait a moment for deletion events to propagate
+      console.log('[LightningGoals] ⏳ Waiting for deletion events to propagate...')
+      await new Promise(resolve => setTimeout(resolve, 2000))
+      
       // Close modal and reset state
       setShowCancelModal(false)
       setStake(null)
