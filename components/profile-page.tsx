@@ -162,6 +162,8 @@ export default function ProfilePage({ authData, onClose, onLightningAddressUpdat
     }
   }
 
+  console.log('[Profile] 🎨 Rendering ProfilePage component')
+  
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50">
       <div className="bg-slate-800 rounded-lg shadow-xl w-full max-w-md border border-slate-700">
@@ -254,10 +256,10 @@ export default function ProfilePage({ authData, onClose, onLightningAddressUpdat
                   </div>
                 )}
 
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">
+                <div className="bg-yellow-100 p-4 rounded-lg border-2 border-yellow-500">
+                  <label className="block text-sm font-medium text-slate-800 mb-2">
                     <Zap className="inline w-4 h-4 mr-1" />
-                    Lightning Address
+                    Lightning Address (DEBUG: Field is rendered)
                   </label>
                   <div className="flex gap-2">
                     <Input
@@ -268,14 +270,14 @@ export default function ProfilePage({ authData, onClose, onLightningAddressUpdat
                         setLightningAddress(e.target.value)
                       }}
                       placeholder="your@lightning.address"
-                      className="flex-1 bg-slate-900 border-slate-600 text-slate-300"
+                      className="flex-1 bg-white border-gray-300 text-gray-900"
                     />
                     <Button
                       onClick={handleSaveLightningAddress}
                       disabled={isSaving}
                       variant="outline"
                       size="sm"
-                      className="border-slate-600 text-slate-300 hover:bg-slate-700"
+                      className="border-blue-500 text-blue-600 hover:bg-blue-50"
                     >
                       {isSaving ? (
                         <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-slate-300"></div>
@@ -284,10 +286,10 @@ export default function ProfilePage({ authData, onClose, onLightningAddressUpdat
                       )}
                     </Button>
                   </div>
-                  <p className="text-xs text-slate-500 mt-1">
+                  <p className="text-xs text-gray-700 mt-1">
                     Where Lightning rewards will be sent. This updates your Nostr profile.
                   </p>
-                  <p className="text-xs text-blue-400 mt-1">
+                  <p className="text-xs text-blue-600 mt-1 font-bold">
                     Current value: {lightningAddress || 'empty'}
                   </p>
                 </div>
