@@ -30,7 +30,7 @@ import PublishModal from "@/components/publish-modal"
 import DeleteConfirmationModal from "@/components/delete-confirmation-modal"
 import ProfilePage from "@/components/profile-page"
 import { isIncentiveEnabled } from "@/lib/feature-flags"
-import { LightningGoalsMonitor } from "@/components/lightning-goals-monitor"
+// LightningGoalsMonitor will be dynamically imported below
 import dynamic from "next/dynamic"
 
 // Dynamically import IncentiveModal to avoid SSR issues with QRCode
@@ -44,6 +44,12 @@ const IncentiveModal = dynamic(() => import("@/components/incentive-modal").then
       </div>
     </div>
   )
+})
+
+// Dynamically import LightningGoalsMonitor to avoid SSR issues
+const LightningGoalsMonitor = dynamic(() => import("@/components/lightning-goals-monitor").then(mod => ({ default: mod.LightningGoalsMonitor })), {
+  ssr: false,
+  loading: () => null
 })
 import { Button } from "@/components/ui/button"
 import {

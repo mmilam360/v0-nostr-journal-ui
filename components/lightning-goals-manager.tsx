@@ -25,6 +25,7 @@ export function LightningGoalsManager({ userPubkey, authData, userLightningAddre
   
   // Input validation
   const [validationErrors, setValidationErrors] = useState<{[key: string]: string}>({})
+  const [isFormValid, setIsFormValid] = useState(false)
   
   // Load goals
   useEffect(() => {
@@ -72,6 +73,11 @@ export function LightningGoalsManager({ userPubkey, authData, userLightningAddre
     return () => clearInterval(interval)
   }, [screen, userPubkey])
   
+  // Validate inputs whenever form values change
+  useEffect(() => {
+    validateInputs()
+  }, [dailyWordGoal, dailyReward, depositAmount, lightningAddress])
+  
   // Input validation
   function validateInputs() {
     const errors: {[key: string]: string} = {}
@@ -104,7 +110,9 @@ export function LightningGoalsManager({ userPubkey, authData, userLightningAddre
     }
     
     setValidationErrors(errors)
-    return Object.keys(errors).length === 0
+    const isValid = Object.keys(errors).length === 0
+    setIsFormValid(isValid)
+    return isValid
   }
   
   async function handleCreateStake() {
@@ -469,7 +477,7 @@ export function LightningGoalsManager({ userPubkey, authData, userLightningAddre
             
             <Button
               onClick={handleCreateStake}
-              disabled={loading || !validateInputs()}
+              disabled={loading || !isFormValid}
               className="w-full"
             >
               {loading ? 'Creating...' : 'Generate Lightning Invoice'}
