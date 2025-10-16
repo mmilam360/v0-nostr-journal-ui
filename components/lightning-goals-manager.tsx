@@ -26,6 +26,9 @@ export function LightningGoalsManager({ userPubkey, authData, userLightningAddre
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>('')
   const [paymentCheckInterval, setPaymentCheckInterval] = useState<NodeJS.Timeout | null>(null)
   const [isUpdatingBalance, setIsUpdatingBalance] = useState(false)
+  const [showCancelConfirmation, setShowCancelConfirmation] = useState(false)
+  const [showCancelSuccess, setShowCancelSuccess] = useState(false)
+  const [forfeitedAmount, setForfeitedAmount] = useState(0)
   
   // Input validation
   const [validationErrors, setValidationErrors] = useState<{[key: string]: string}>({})
@@ -260,7 +263,8 @@ export function LightningGoalsManager({ userPubkey, authData, userLightningAddre
       
     } catch (error) {
       console.error('[Manager] Error creating stake:', error)
-      alert('Error creating stake: ' + error.message)
+      // TODO: Show error in UI instead of alert
+      console.error('Error creating stake:', error.message)
     } finally {
       setLoading(false)
     }
@@ -347,7 +351,8 @@ export function LightningGoalsManager({ userPubkey, authData, userLightningAddre
       setPaymentStatus('pending')
       // Don't show alert for automatic checks - just log silently
       if (!isAutoCheck) {
-        alert('Error verifying payment: ' + error.message)
+        // TODO: Show error in UI instead of alert
+        console.error('Error verifying payment:', error.message)
       }
     }
   }
@@ -355,25 +360,14 @@ export function LightningGoalsManager({ userPubkey, authData, userLightningAddre
   async function handleCancelStake() {
     if (!goals) return
     
-    const confirmed = window.confirm(
-      `⚠️ WARNING: Cancel your stake?\n\n` +
-      `Your remaining balance of ${goals.currentBalance} sats will be FORFEITED (not refunded).\n\n` +
-      `This action cannot be undone.\n\n` +
-      `Are you sure?`
-    )
-    
-    if (!confirmed) return
-    
-    // Double confirmation for safety
-    const doubleConfirm = window.confirm(
-      `Final confirmation:\n\n` +
-      `You will LOSE ${goals.currentBalance} sats.\n\n` +
-      `Click OK to forfeit your stake.`
-    )
-    
-    if (!doubleConfirm) return
+    setShowCancelConfirmation(true)
+  }
+  
+  async function confirmCancelStake() {
+    if (!goals) return
     
     setIsCancelling(true)
+    setShowCancelConfirmation(false)
     
     try {
       console.log('[Manager] Cancelling stake...')
@@ -383,18 +377,22 @@ export function LightningGoalsManager({ userPubkey, authData, userLightningAddre
       console.log('[Manager] ✅ Stake cancelled')
       console.log('[Manager] 💸 Forfeited:', forfeited, 'sats')
       
-      // Reset UI
-      setGoals(null)
-      setScreen('setup')
+      // Show success message
+      setForfeitedAmount(forfeited)
+      setShowCancelSuccess(true)
       
-      alert(
-        `Stake cancelled.\n\n` +
-        `${forfeited} sats forfeited.\n\n` +
-        `You can create a new stake anytime.`
-      )
+      // Reset UI after a delay
+      setTimeout(() => {
+        setGoals(null)
+        setScreen('setup')
+        setShowCancelSuccess(false)
+        setForfeitedAmount(0)
+      }, 3000)
       
     } catch (error) {
       console.error('[Manager] ❌ Error:', error)
+      setShowCancelConfirmation(false)
+      // TODO: Show error in UI instead of alert
       alert('Error cancelling stake: ' + error.message)
     } finally {
       setIsCancelling(false)
@@ -403,7 +401,8 @@ export function LightningGoalsManager({ userPubkey, authData, userLightningAddre
   
   async function handleUpdateLightningAddress() {
     if (!lightningAddress) {
-      alert('Please enter a Lightning address')
+      // TODO: Show error in UI instead of alert
+      console.error('Please enter a Lightning address')
       return
     }
     
@@ -759,7 +758,8 @@ export function LightningGoalsManager({ userPubkey, authData, userLightningAddre
                         }
                       } catch (error) {
                         console.error('Error cancelling pending stake:', error)
-                        alert('Error cancelling pending stake: ' + error.message)
+                        // TODO: Show error in UI instead of alert
+                        console.error('Error cancelling pending stake:', error.message)
                       }
                     }}
                     variant="outline"
@@ -797,6 +797,93 @@ export function LightningGoalsManager({ userPubkey, authData, userLightningAddre
             </div>
           </CardContent>
         </Card>
+      )}
+      
+      {/* Cancel Confirmation Modal */}
+      {showCancelConfirmation && goals && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-md">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-red-600">
+                <AlertTriangle className="w-5 h-5" />
+                Cancel Stake?
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                <p className="text-red-800 font-medium mb-2">⚠️ WARNING</p>
+                <p className="text-red-700 text-sm">
+                  Your remaining balance of <strong>{goals.currentBalance} sats</strong> will be <strong>FORFEITED</strong> (not refunded).
+                </p>
+                <p className="text-red-600 text-xs mt-2">
+                  This action cannot be undone.
+                </p>
+              </div>
+              
+              <div className="flex gap-3">
+                <Button
+                  onClick={() => setShowCancelConfirmation(false)}
+                  variant="outline"
+                  className="flex-1"
+                  disabled={isCancelling}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={confirmCancelStake}
+                  variant="destructive"
+                  className="flex-1"
+                  disabled={isCancelling}
+                >
+                  {isCancelling ? (
+                    <div className="flex items-center gap-2">
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      Forfeiting...
+                    </div>
+                  ) : (
+                    'Forfeit Stake'
+                  )}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+      
+      {/* Cancel Success Modal */}
+      {showCancelSuccess && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-md">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-green-600">
+                <CheckCircle className="w-5 h-5" />
+                Stake Cancelled
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                <p className="text-green-800 font-medium mb-2">✅ Complete</p>
+                <p className="text-green-700 text-sm">
+                  <strong>{forfeitedAmount} sats</strong> forfeited.
+                </p>
+                <p className="text-green-600 text-xs mt-2">
+                  You can create a new stake anytime.
+                </p>
+              </div>
+              
+              <Button
+                onClick={() => {
+                  setShowCancelSuccess(false)
+                  setGoals(null)
+                  setScreen('setup')
+                }}
+                className="w-full"
+              >
+                Create New Stake
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
       )}
     </div>
   )
