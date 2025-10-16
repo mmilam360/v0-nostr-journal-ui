@@ -7,6 +7,14 @@ const RELAYS = ['wss://relay.damus.io', 'wss://relay.snort.social', 'wss://nos.l
 // Import signer
 import { signEventWithRemote } from './signer-manager'
 
+// Add debug mode
+const DEBUG = true
+const log = (msg: string, data?: any) => {
+  if (DEBUG) {
+    console.log(`[LightningGoals] ${msg}`, data || '')
+  }
+}
+
 export interface LightningGoals {
   // Goal settings
   dailyWordGoal: number

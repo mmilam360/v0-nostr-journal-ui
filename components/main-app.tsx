@@ -167,6 +167,30 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   const [showStreakAnimation, setShowStreakAnimation] = useState(false)
   const [showRelayManager, setShowRelayManager] = useState(false)
   const [showRelaysInDropdown, setShowRelaysInDropdown] = useState(false)
+
+  // AUDIT POINT 3: Calculate total word count from ALL notes
+  const calculateTotalWordCount = (notes: Note[]): number => {
+    if (!notes || notes.length === 0) {
+      console.log('[MainApp] 📊 No notes, word count = 0')
+      return 0
+    }
+    
+    const total = notes.reduce((sum, note) => {
+      if (!note.content) return sum
+      
+      const words = note.content
+        .trim()
+        .split(/\s+/)
+        .filter(word => word.length > 0)
+        .length
+      
+      console.log(`[MainApp] 📝 Note "${note.title}": ${words} words`)
+      return sum + words
+    }, 0)
+    
+    console.log(`[MainApp] 📊 TOTAL WORD COUNT: ${total} (from ${notes.length} notes)`)
+    return total
+  }
   const [showDiagnostics, setShowDiagnostics] = useState(false)
   const [connectionError, setConnectionError] = useState<string | null>(null)
   const [copiedNpub, setCopiedNpub] = useState(false)
@@ -374,6 +398,15 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       }
     }
   }, [authData?.pubkey])
+
+  // AUDIT POINT 4: Update word count when notes change
+  useEffect(() => {
+    const total = calculateTotalWordCount(notes)
+    if (total !== lastSavedWordCount) {
+      console.log('[MainApp] 🔄 Word count changed:', lastSavedWordCount, '→', total)
+      setLastSavedWordCount(total)
+    }
+  }, [notes])
 
   useEffect(() => {
     const loadUserNotes = async () => {
@@ -770,25 +803,24 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
         if (isIncentiveEnabled) {
           try {
             console.log("[NostrJournal] ⚡ Checking Lightning Goals reward eligibility...")
-            const wordCount = finalNote.content.split(/\s+/).filter(word => word.trim().length > 0).length
+            // AUDIT POINT 5: Calculate total word count from ALL notes after save
+            const updatedNotes = notes.map(n => n.id === updatedNote.id ? finalNote : n)
+            const totalWordCount = calculateTotalWordCount(updatedNotes)
             
-            console.log("[NostrJournal] 📊 Word count calculation:")
-            console.log("  - Content length:", finalNote.content.length)
-            console.log("  - Split words:", finalNote.content.split(/\s+/).length)
-            console.log("  - Filtered words:", wordCount)
+            console.log("[NostrJournal] 📊 Total word count after save:", totalWordCount)
             
             // Always set word count (even if 0) so monitor knows about the update
-            console.log("[NostrJournal] ⚡ Setting word count:", wordCount)
-            setLastSavedWordCount(wordCount)
+            console.log("[NostrJournal] ⚡ Setting total word count:", totalWordCount)
+            setLastSavedWordCount(totalWordCount)
             
             // Trigger reward check if word count is provided
-            if (wordCount > 0) {
-              console.log("[NostrJournal] ⚡ Word count > 0, triggering automatic reward check")
+            if (totalWordCount > 0) {
+              console.log("[NostrJournal] ⚡ Total word count > 0, triggering automatic reward check")
               
               // Call the direct reward eligibility check
-              await checkRewardEligibility(wordCount)
-      } else {
-              console.log("[NostrJournal] ⚡ Word count = 0, skipping reward check")
+              await checkRewardEligibility(totalWordCount)
+            } else {
+              console.log("[NostrJournal] ⚡ Total word count = 0, skipping reward check")
             }
           } catch (rewardError) {
             console.error("[NostrJournal] ⚠️ Error checking reward eligibility:", rewardError)
