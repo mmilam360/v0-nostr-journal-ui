@@ -31,31 +31,40 @@ export function LightningGoalsManager({ userPubkey, authData, userLightningAddre
   // Load goals
   useEffect(() => {
     async function load() {
+      console.log('[Manager] 🔍 Loading goals for user:', userPubkey?.substring(0, 8))
       setLoading(true)
       try {
         const g = await getLightningGoals(userPubkey)
+        console.log('[Manager] 📊 Loaded goals:', g)
         
         if (g && g.status === 'active') {
+          console.log('[Manager] ✅ Active goals found, showing tracking screen')
           setGoals(g)
           setScreen('tracking')
         } else if (g && g.status === 'pending_payment') {
+          console.log('[Manager] ⏳ Pending payment found, showing invoice screen')
           setGoals(g)
           setScreen('invoice')
         } else {
+          console.log('[Manager] 📝 No goals found, showing setup screen')
           setScreen('setup')
         }
         
         // Pre-fill Lightning address
         setLightningAddress(userLightningAddress || '')
       } catch (error) {
-        console.error('[Manager] Error loading goals:', error)
+        console.error('[Manager] ❌ Error loading goals:', error)
+        console.log('[Manager] 📝 Error occurred, showing setup screen')
         setScreen('setup')
       } finally {
+        console.log('[Manager] ✅ Loading complete, screen set to:', screen)
         setLoading(false)
       }
     }
     
-    load()
+    if (userPubkey) {
+      load()
+    }
   }, [userPubkey, userLightningAddress])
   
   // Auto-refresh every 10 seconds when on tracking screen
@@ -299,7 +308,10 @@ export function LightningGoalsManager({ userPubkey, authData, userLightningAddre
     }
   }
   
+  console.log('[Manager] 🎨 Rendering with state:', { loading, screen, hasGoals: !!goals })
+  
   if (loading) {
+    console.log('[Manager] 🔄 Showing loading screen')
     return (
       <Card>
         <CardContent className="p-6">
@@ -570,6 +582,20 @@ export function LightningGoalsManager({ userPubkey, authData, userLightningAddre
               <p>1. Copy the invoice above</p>
               <p>2. Pay it with your Lightning wallet</p>
               <p>3. Click "Check Payment" to verify</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+      
+      {/* Fallback - should never reach here */}
+      {screen !== 'setup' && screen !== 'tracking' && screen !== 'invoice' && (
+        <Card>
+          <CardContent className="p-6">
+            <div className="text-center">
+              <p className="text-red-500">Unknown screen state: {screen}</p>
+              <Button onClick={() => setScreen('setup')} className="mt-2">
+                Go to Setup
+              </Button>
             </div>
           </CardContent>
         </Card>
