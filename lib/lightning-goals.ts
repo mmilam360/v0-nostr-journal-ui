@@ -512,3 +512,68 @@ export async function updateLightningAddress(
   
   console.log('[LightningGoals] ✅ Lightning address updated')
 }
+
+/**
+ * Update word count and check if reward should be sent
+ */
+export async function updateWordCount(
+  userPubkey: string,
+  wordCount: number,
+  authData: any
+): Promise<{ shouldSendReward: boolean; rewardAmount: number }> {
+  console.log('[LightningGoals] 📝 Updating word count:', wordCount)
+  
+  const goals = await getLightningGoals(userPubkey)
+  
+  if (!goals) {
+    throw new Error('No progress recorded for today')
+  }
+  
+  if (goals.status !== 'active') {
+    console.log('[LightningGoals] ❌ Goals not active, status:', goals.status)
+    return { shouldSendReward: false, rewardAmount: 0 }
+  }
+  
+  const today = new Date().toISOString().split('T')[0]
+  
+  // Check if we already met the goal today
+  if (goals.todayGoalMet) {
+    console.log('[LightningGoals] ✅ Goal already met today')
+    return { shouldSendReward: false, rewardAmount: 0 }
+  }
+  
+  // Check if we already sent reward today
+  if (goals.todayRewardSent) {
+    console.log('[LightningGoals] ✅ Reward already sent today')
+    return { shouldSendReward: false, rewardAmount: 0 }
+  }
+  
+  // Check if word count meets goal
+  const goalMet = wordCount >= goals.dailyWordGoal
+  
+  console.log('[LightningGoals] 🎯 Goal check:', wordCount, '>=', goals.dailyWordGoal, '=', goalMet)
+  
+  if (!goalMet) {
+    console.log('[LightningGoals] 📊 Goal not met yet')
+    return { shouldSendReward: false, rewardAmount: 0 }
+  }
+  
+  // Check if we have sufficient balance
+  if (goals.currentBalance < goals.dailyReward) {
+    console.log('[LightningGoals] ❌ Insufficient balance:', goals.currentBalance, '<', goals.dailyReward)
+    return { shouldSendReward: false, rewardAmount: 0 }
+  }
+  
+  // Update the goals with new word count and goal met status
+  await updateLightningGoals(userPubkey, {
+    todayWords: wordCount,
+    todayGoalMet: true
+  }, authData)
+  
+  console.log('[LightningGoals] ✅ Goal met! Should send reward:', goals.dailyReward, 'sats')
+  
+  return { 
+    shouldSendReward: true, 
+    rewardAmount: goals.dailyReward 
+  }
+}

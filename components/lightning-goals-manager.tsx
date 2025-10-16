@@ -640,27 +640,10 @@ export function LightningGoalsManager({ userPubkey, authData, userLightningAddre
                 <CardTitle>Complete Your Payment</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="text-center">
-                  <div className="text-2xl font-bold mb-2">{invoiceData.amount} sats</div>
-                  <div className="text-sm text-gray-600 mb-4">
-                    Pay this amount to activate your Lightning Goals stake
-                  </div>
-                </div>
-                
                 {/* QR Code Display */}
                 {qrCodeDataUrl && (
                   <div className="bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 p-6 rounded-xl border border-amber-200 dark:border-amber-800 mb-4">
                     <div className="flex flex-col items-center space-y-4">
-                      {/* Amount Display */}
-                      <div className="text-center">
-                        <div className="text-3xl font-bold text-amber-800 dark:text-amber-200 mb-1">
-                          {invoiceData.amount} sats
-                        </div>
-                        <p className="text-sm text-amber-600 dark:text-amber-400">
-                          Pay this amount to activate your stake
-                        </p>
-                      </div>
-                      
                       {/* QR Code Container */}
                       <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-lg border border-amber-200 dark:border-amber-700">
                         <img 
