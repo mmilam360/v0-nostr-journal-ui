@@ -183,9 +183,12 @@ export function LightningGoalsMonitor({
       const currentLightningAddress = savedAddress || userLightningAddress
       
       console.log('[Monitor] 🔍 Lightning address lookup:')
+      console.log('  - User pubkey:', userPubkey.substring(0, 8))
+      console.log('  - localStorage key:', `lightning-address-${userPubkey}`)
       console.log('  - Saved in localStorage:', savedAddress)
       console.log('  - From prop:', userLightningAddress)
       console.log('  - Using:', currentLightningAddress)
+      console.log('  - Has address?', !!currentLightningAddress)
       
       if (!currentLightningAddress) {
         console.log('[Monitor] ❌ No Lightning address configured!')

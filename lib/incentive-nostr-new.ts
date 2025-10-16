@@ -4,7 +4,7 @@ import { signEventWithRemote } from '@/lib/signer-manager'
 const RELAYS = [
   'wss://relay.damus.io',
   'wss://relay.snort.social',
-  'wss://nostr.wine',
+  'wss://nos.lol',
   'wss://relay.nostr.band'
 ]
 
