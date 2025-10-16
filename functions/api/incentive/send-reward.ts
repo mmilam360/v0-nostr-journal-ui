@@ -1,4 +1,4 @@
-import { webln } from '@getalby/sdk'
+import { NostrWebLNProvider } from '@getalby/sdk'
 
 // Logging helper
 const log = (msg: string, data?: any) => {
@@ -122,7 +122,7 @@ export async function onRequestPost({ request }: { request: Request }) {
     
     let nwc
     try {
-      nwc = new webln.NostrWebLNProvider({
+      nwc = new NostrWebLNProvider({
         nostrWalletConnectUrl: NWC_CONNECTION_URL
       })
     } catch (providerError) {

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { webln } from '@getalby/sdk'
+import { NostrWebLNProvider } from '@getalby/sdk'
 
 const log = (msg: string, data?: any) => console.log(`[SendReward API] ${msg}`, data || '')
 
@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
     // AUDIT POINT 24: Connect to NWC
     log('🔌 Creating NWC connection...')
     
-    const nwc = new webln.NostrWebLNProvider({
+    const nwc = new NostrWebLNProvider({
       nostrWalletConnectUrl: NWC_CONNECTION_URL
     })
     
