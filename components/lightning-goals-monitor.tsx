@@ -78,7 +78,7 @@ export function LightningGoalsMonitor({
       
       console.log('[Monitor] 🎯 SENDING REWARD:', rewardAmount, 'sats to', userLightningAddress)
       
-      // Send reward
+      // Send reward using Next.js API (simpler, no progress checking)
       const response = await fetch('/api/incentive/send-reward', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

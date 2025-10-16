@@ -2,9 +2,13 @@ import { NextRequest, NextResponse } from 'next/server'
 
 export async function POST(request: NextRequest) {
   try {
+    console.log('[API] Next.js send-reward endpoint called')
     const { userPubkey, amount, lightningAddress } = await request.json()
     
+    console.log('[API] Request body:', { userPubkey: userPubkey?.substring(0, 8), amount, lightningAddress })
+    
     if (!userPubkey || !amount || !lightningAddress) {
+      console.log('[API] Missing parameters')
       return NextResponse.json({ 
         success: false, 
         error: 'Missing required parameters' 
