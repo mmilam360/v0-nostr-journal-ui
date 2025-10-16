@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { AlertTriangle, QrCode } from 'lucide-react'
+import QRCode from 'qrcode'
 
 export function LightningGoalsManager({ userPubkey, authData, userLightningAddress }: any) {
   const [goals, setGoals] = useState<any>(null)
@@ -22,6 +23,8 @@ export function LightningGoalsManager({ userPubkey, authData, userLightningAddre
   // Payment flow state
   const [invoiceData, setInvoiceData] = useState<any>(null)
   const [paymentStatus, setPaymentStatus] = useState<'pending' | 'checking' | 'confirmed'>('pending')
+  const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>('')
+  const [paymentCheckInterval, setPaymentCheckInterval] = useState<NodeJS.Timeout | null>(null)
   
   // Input validation
   const [validationErrors, setValidationErrors] = useState<{[key: string]: string}>({})
@@ -42,9 +45,16 @@ export function LightningGoalsManager({ userPubkey, authData, userLightningAddre
           setGoals(g)
           setScreen('tracking')
         } else if (g && g.status === 'pending_payment') {
-          console.log('[Manager] ⏳ Pending payment found, showing invoice screen')
-          setGoals(g)
-          setScreen('invoice')
+          console.log('[Manager] ⏳ Pending payment found, but no invoice data - clearing and going to setup')
+          // Clear the pending payment goal so user can start fresh
+          try {
+            await cancelStake(userPubkey, authData)
+            console.log('[Manager] ✅ Cleared pending payment goal')
+          } catch (error) {
+            console.error('[Manager] Error clearing pending goal:', error)
+          }
+          setGoals(null)
+          setScreen('setup')
         } else {
           console.log('[Manager] 📝 No goals found, showing setup screen')
           setScreen('setup')
@@ -93,6 +103,34 @@ export function LightningGoalsManager({ userPubkey, authData, userLightningAddre
       setValidationErrors({})
     }
   }, [dailyWordGoal, dailyReward, depositAmount, lightningAddress])
+  
+  // Auto-check payment when on invoice screen
+  useEffect(() => {
+    if (screen === 'invoice' && invoiceData && paymentStatus === 'pending') {
+      console.log('[Manager] Starting automatic payment checking...')
+      const interval = setInterval(() => {
+        handlePaymentVerification()
+      }, 1000) // Check every 1 second
+      
+      setPaymentCheckInterval(interval)
+      
+      // Cleanup interval after 5 minutes
+      setTimeout(() => {
+        if (interval) {
+          clearInterval(interval)
+          setPaymentCheckInterval(null)
+          console.log('[Manager] Stopped automatic payment checking after 5 minutes')
+        }
+      }, 300000)
+      
+      return () => {
+        if (interval) {
+          clearInterval(interval)
+          setPaymentCheckInterval(null)
+        }
+      }
+    }
+  }, [screen, invoiceData, paymentStatus])
   
   // Input validation
   function validateInputs(showErrors: boolean = false) {
@@ -200,6 +238,18 @@ export function LightningGoalsManager({ userPubkey, authData, userLightningAddre
       setInvoiceData(invoiceResult)
       setScreen('invoice')
       
+      // Generate QR code for the invoice
+      if (invoiceResult.invoice) {
+        QRCode.toDataURL(invoiceResult.invoice, {
+          width: 200,
+          margin: 2,
+          color: {
+            dark: '#000000',
+            light: '#FFFFFF'
+          }
+        }).then(setQrCodeDataUrl).catch(console.error)
+      }
+      
     } catch (error) {
       console.error('[Manager] Error creating stake:', error)
       alert('Error creating stake: ' + error.message)
@@ -253,6 +303,17 @@ export function LightningGoalsManager({ userPubkey, authData, userLightningAddre
         // Clear payment hash since payment is confirmed
         localStorage.removeItem(`payment-hash-${userPubkey}`)
         localStorage.removeItem(`invoice-string-${userPubkey}`)
+        
+        // Clear invoice data and reset payment status
+        setInvoiceData(null)
+        setPaymentStatus('pending')
+        setQrCodeDataUrl('')
+        
+        // Stop payment checking interval
+        if (paymentCheckInterval) {
+          clearInterval(paymentCheckInterval)
+          setPaymentCheckInterval(null)
+        }
         
         // Reload goals and switch to tracking screen
         const g = await getLightningGoals(userPubkey)
@@ -583,40 +644,62 @@ export function LightningGoalsManager({ userPubkey, authData, userLightningAddre
                   </div>
                 </div>
                 
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <div className="text-xs font-mono break-all">
+                {/* QR Code Display */}
+                {qrCodeDataUrl && (
+                  <div className="bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 p-6 rounded-xl border border-amber-200 dark:border-amber-800 mb-4">
+                    <div className="flex flex-col items-center space-y-4">
+                      {/* QR Code Container */}
+                      <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-lg border border-amber-200 dark:border-amber-700">
+                        <img 
+                          src={qrCodeDataUrl} 
+                          alt="Lightning Invoice QR Code"
+                          className="w-48 h-48 rounded-lg"
+                        />
+                      </div>
+                      
+                      {/* QR Code Description */}
+                      <div className="text-center">
+                        <p className="text-sm font-medium text-amber-800 dark:text-amber-200 mb-1">
+                          Scan with Lightning Wallet
+                        </p>
+                        <p className="text-xs text-amber-600 dark:text-amber-400">
+                          Use any Lightning wallet to pay this invoice
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
+                {/* Invoice Text */}
+                <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-amber-200 dark:border-amber-700 mb-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-2 h-2 bg-amber-500 rounded-full"></div>
+                    <span className="text-sm font-medium text-amber-800 dark:text-amber-200">Lightning Invoice</span>
+                  </div>
+                  <div className="bg-gray-50 dark:bg-gray-900 p-3 rounded-lg border font-mono text-xs break-all text-gray-700 dark:text-gray-300">
                     {invoiceData.invoice}
                   </div>
                 </div>
                 
-                <div className="flex gap-2">
-                  <Button
-                    onClick={() => navigator.clipboard.writeText(invoiceData.invoice)}
-                    variant="outline"
-                    className="flex-1"
-                  >
-                    Copy Invoice
-                  </Button>
-                  <Button
-                    onClick={handlePaymentVerification}
-                    disabled={paymentStatus === 'checking'}
-                    className="flex-1"
-                  >
-                    {paymentStatus === 'checking' ? (
-                      <div className="flex items-center gap-2">
-                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        Checking...
-                      </div>
-                    ) : (
-                      'Check Payment'
-                    )}
-                  </Button>
-                </div>
+                {/* Copy Button */}
+                <Button
+                  onClick={() => navigator.clipboard.writeText(invoiceData.invoice)}
+                  className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-medium py-3 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 border-0"
+                >
+                  <QrCode className="w-4 h-4 mr-2" />
+                  Copy Invoice
+                </Button>
                 
-                <div className="text-xs text-gray-500 text-center">
-                  <p>1. Copy the invoice above</p>
-                  <p>2. Pay it with your Lightning wallet</p>
-                  <p>3. Click "Check Payment" to verify</p>
+                {/* Payment Status Indicator */}
+                <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <div className="animate-spin">
+                      <Clock className="w-4 h-4 text-blue-600" />
+                    </div>
+                    <span className="text-sm text-blue-700 dark:text-blue-300">
+                      Waiting for payment... (checking automatically every second)
+                    </span>
+                  </div>
                 </div>
               </CardContent>
             </Card>
