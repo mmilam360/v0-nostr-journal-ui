@@ -30,7 +30,7 @@ import PublishModal from "@/components/publish-modal"
 import DeleteConfirmationModal from "@/components/delete-confirmation-modal"
 import ProfilePage from "@/components/profile-page"
 import { isIncentiveEnabled } from "@/lib/feature-flags"
-import { LightningGoalsMonitor } from "@/components/lightning-goals-monitor"
+import { LightningGoalsMonitor } from "@/components/lightning-goals-monitor-new"
 import dynamic from "next/dynamic"
 
 // Dynamically import IncentiveModal to avoid SSR issues with QRCode
@@ -321,14 +321,14 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
 
   const checkLightningGoals = async () => {
     try {
-      const { getCurrentStake } = await import('@/lib/incentive-nostr')
+      const { getCurrentStake } = await import('@/lib/incentive-nostr-new')
       const stake = await getCurrentStake(authData.pubkey)
       
-      if (stake && stake.isActive) {
+      if (stake && stake.status === 'active') {
         setHasLightningGoals(true)
         // For now, set streak to 0 - we'll implement proper streak calculation later
         setUserStreak(0)
-        console.log('[MainApp] ✅ Active stake found:', stake.stakeId, 'Balance:', stake.currentBalance)
+        console.log('[MainApp] ✅ Active stake found, Balance:', stake.currentBalance)
       } else {
         setHasLightningGoals(false)
         setUserStreak(0)
@@ -1751,6 +1751,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
         userPubkey={authData.pubkey}
         authData={authData}
         currentWordCount={lastSavedWordCount}
+        userLightningAddress={authData.lightningAddress || ''}
         onWordCountProcessed={() => setLastSavedWordCount(null)}
       />
     )}
@@ -1764,6 +1765,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
         authData={authData}
         selectedNote={selectedNote}
         lastSavedWordCount={lastSavedWordCount}
+        userLightningAddress={authData.lightningAddress || ''}
         onWordCountProcessed={() => setLastSavedWordCount(null)}
         onSetupStatusChange={async (hasSetup) => {
           // Update header when setup status changes

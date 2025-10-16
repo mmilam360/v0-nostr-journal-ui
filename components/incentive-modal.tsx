@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { X } from 'lucide-react'
-import { LightningGoalsManager } from './lightning-goals-manager'
+import { LightningGoalsManager } from './lightning-goals-manager-new'
 
 interface IncentiveModalProps {
   isOpen: boolean
@@ -13,6 +13,7 @@ interface IncentiveModalProps {
   authData: any
   selectedNote?: any
   lastSavedWordCount?: number
+  userLightningAddress?: string
   onWordCountProcessed?: () => void
   onSetupStatusChange?: (hasSetup: boolean) => void
 }
@@ -24,6 +25,7 @@ export function IncentiveModal({
   authData,
   selectedNote,
   lastSavedWordCount,
+  userLightningAddress,
   onWordCountProcessed,
   onSetupStatusChange
 }: IncentiveModalProps) {
@@ -69,8 +71,7 @@ export function IncentiveModal({
           <LightningGoalsManager
             userPubkey={userPubkey}
             authData={authData}
-            currentWordCount={lastSavedWordCount}
-            onWordCountProcessed={onWordCountProcessed}
+            userLightningAddress={userLightningAddress || ''}
             onSetupStatusChange={handleSetupStatusChange}
           />
         </CardContent>

@@ -1,0 +1,522 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Target, Zap, Wallet, CheckCircle, AlertTriangle, TrendingUp, Copy, QrCode } from 'lucide-react'
+import QRCode from 'qrcode'
+import { 
+  getCurrentStake, 
+  saveStakeSettings, 
+  recordTransaction, 
+  getDailyProgress 
+} from '@/lib/incentive-nostr-new'
+
+interface LightningGoalsManagerProps {
+  userPubkey: string
+  authData: any
+  userLightningAddress: string
+  onSetupStatusChange?: (hasSetup: boolean) => void
+}
+
+interface StakeSettings {
+  dailyWordGoal: number
+  rewardPerCompletion: number
+  currentBalance: number
+  stakeCreatedAt: number
+  status: 'active' | 'cancelled'
+  lastUpdated: number
+}
+
+export function LightningGoalsManager({ 
+  userPubkey, 
+  authData, 
+  userLightningAddress,
+  onSetupStatusChange 
+}: LightningGoalsManagerProps) {
+  // Core state
+  const [stake, setStake] = useState<StakeSettings | null>(null)
+  const [loading, setLoading] = useState(false)
+  
+  // Setup state
+  const [setupSettings, setSetupSettings] = useState({
+    dailyWordGoal: 500,
+    rewardPerCompletion: 100,
+    stakeAmount: 1000
+  })
+  
+  // Payment state
+  const [paymentStep, setPaymentStep] = useState<'setup' | 'invoice' | 'tracking'>('setup')
+  const [invoice, setInvoice] = useState('')
+  const [qrCode, setQrCode] = useState('')
+  const [paymentStatus, setPaymentStatus] = useState<'pending' | 'paid' | 'error'>('pending')
+  
+  // Progress state
+  const [todayProgress, setTodayProgress] = useState<{
+    wordCount: number
+    goalMet: boolean
+    rewardSent: boolean
+  } | null>(null)
+  
+  const [showSuccessMessage, setShowSuccessMessage] = useState(false)
+
+  // Load current stake on mount
+  useEffect(() => {
+    loadCurrentStake()
+  }, [userPubkey])
+
+  const loadCurrentStake = async () => {
+    try {
+      setLoading(true)
+      const currentStake = await getCurrentStake(userPubkey)
+      
+      if (currentStake && currentStake.status === 'active') {
+        setStake(currentStake)
+        setPaymentStep('tracking')
+        loadTodayProgress()
+        if (onSetupStatusChange) onSetupStatusChange(true)
+      } else {
+        setStake(null)
+        setPaymentStep('setup')
+        if (onSetupStatusChange) onSetupStatusChange(false)
+      }
+    } catch (error) {
+      console.error('[LightningGoals] Error loading stake:', error)
+      setStake(null)
+      setPaymentStep('setup')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const loadTodayProgress = async () => {
+    try {
+      const today = new Date().toISOString().split('T')[0]
+      const progress = await getDailyProgress(userPubkey, today)
+      setTodayProgress(progress)
+    } catch (error) {
+      console.error('[LightningGoals] Error loading progress:', error)
+    }
+  }
+
+  const createInvoice = async () => {
+    try {
+      setLoading(true)
+      
+      const response = await fetch('/api/incentive/create-deposit-invoice', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userPubkey,
+          amountSats: setupSettings.stakeAmount,
+          memo: `Lightning Goals Stake - ${setupSettings.dailyWordGoal} words/day`
+        })
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to create invoice')
+      }
+
+      const data = await response.json()
+      setInvoice(data.invoice)
+      
+      // Generate QR code
+      const qrDataUrl = await QRCode.toDataURL(data.invoice)
+      setQrCode(qrDataUrl)
+      
+      setPaymentStep('invoice')
+      setPaymentStatus('pending')
+      
+      // Store payment hash for verification
+      localStorage.setItem(`payment-hash-${userPubkey}`, data.paymentHash)
+      localStorage.setItem(`invoice-string-${userPubkey}`, data.invoice)
+      
+      // Start payment checking
+      checkPaymentStatus()
+    } catch (error) {
+      console.error('[LightningGoals] Error creating invoice:', error)
+      setPaymentStatus('error')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const checkPaymentStatus = async () => {
+    try {
+      const paymentHash = localStorage.getItem(`payment-hash-${userPubkey}`)
+      if (!paymentHash) {
+        console.error('[LightningGoals] No payment hash found')
+        return
+      }
+
+      const response = await fetch('/api/incentive/verify-payment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userPubkey,
+          paymentHash
+        })
+      })
+
+      if (response.ok) {
+        const result = await response.json()
+        if (result.success && result.paid) {
+          await handlePaymentSuccess()
+        } else {
+          // Continue checking
+          setTimeout(checkPaymentStatus, 2000)
+        }
+      } else {
+        // Continue checking
+        setTimeout(checkPaymentStatus, 2000)
+      }
+    } catch (error) {
+      console.error('[LightningGoals] Error checking payment:', error)
+      setTimeout(checkPaymentStatus, 2000)
+    }
+  }
+
+  const handlePaymentSuccess = async () => {
+    try {
+      const paymentHash = localStorage.getItem(`payment-hash-${userPubkey}`)
+      if (!paymentHash) {
+        console.error('[LightningGoals] No payment hash found for stake creation')
+        return
+      }
+
+      // Create stake using new event system
+      await saveStakeSettings(userPubkey, {
+        dailyWordGoal: setupSettings.dailyWordGoal,
+        rewardPerCompletion: setupSettings.rewardPerCompletion,
+        currentBalance: setupSettings.stakeAmount,
+        stakeCreatedAt: Date.now(),
+        status: 'active'
+      }, authData)
+
+      // Record deposit transaction
+      await recordTransaction(userPubkey, {
+        type: 'deposit',
+        amount: setupSettings.stakeAmount,
+        paymentHash: paymentHash,
+        balanceBefore: 0,
+        balanceAfter: setupSettings.stakeAmount,
+        description: 'Initial stake deposit'
+      }, authData)
+
+      console.log('[LightningGoals] ✅ Stake created successfully!')
+      
+      // Update state
+      setPaymentStatus('paid')
+      setShowSuccessMessage(true)
+      
+      // Reload stake data
+      await loadCurrentStake()
+      
+      // Hide success message after 5 seconds
+      setTimeout(() => {
+        setShowSuccessMessage(false)
+      }, 5000)
+      
+    } catch (error) {
+      console.error('[LightningGoals] Error creating stake:', error)
+      setPaymentStatus('error')
+    }
+  }
+
+  const cancelStake = async () => {
+    if (!stake) {
+      console.log('[LightningGoals] ❌ No stake to cancel')
+      return
+    }
+    
+    console.log('[LightningGoals] 🔄 Starting stake cancellation...')
+    
+    try {
+      setLoading(true)
+      
+      // Send refund (remaining balance)
+      const refundResponse = await fetch('/api/incentive/send-reward', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userPubkey,
+          authData,
+          amount: stake.currentBalance,
+          lightningAddress: userLightningAddress,
+          isRefund: true
+        })
+      })
+      
+      if (refundResponse.ok) {
+        const refundResult = await refundResponse.json()
+        
+        // Record refund transaction
+        await recordTransaction(userPubkey, {
+          type: 'refund',
+          amount: -stake.currentBalance,
+          paymentHash: refundResult.paymentHash,
+          balanceBefore: stake.currentBalance,
+          balanceAfter: 0,
+          description: 'Stake cancellation refund'
+        }, authData)
+        
+        // Update stake status to cancelled
+        await saveStakeSettings(userPubkey, {
+          ...stake,
+          currentBalance: 0,
+          status: 'cancelled'
+        }, authData)
+        
+        // Reset state
+        setStake(null)
+        setPaymentStep('setup')
+        setTodayProgress(null)
+        
+        if (onSetupStatusChange) onSetupStatusChange(false)
+        
+        console.log('[LightningGoals] ✅ Stake cancelled and refunded')
+      }
+    } catch (error) {
+      console.error('[LightningGoals] Error cancelling stake:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (loading && !stake) {
+    return (
+      <Card>
+        <CardContent className="p-6">
+          <div className="text-center">Loading Lightning Goals...</div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  // Setup Screen
+  if (paymentStep === 'setup') {
+    return (
+      <div className="space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Target className="w-5 h-5 text-blue-500" />
+              Set Up Your Daily Goal
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium mb-2">Daily Word Goal</label>
+              <Input
+                type="number"
+                value={setupSettings.dailyWordGoal}
+                onChange={(e) => setSetupSettings({
+                  ...setupSettings,
+                  dailyWordGoal: parseInt(e.target.value) || 0
+                })}
+                placeholder="500"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium mb-2">Daily Reward (sats)</label>
+              <Input
+                type="number"
+                value={setupSettings.rewardPerCompletion}
+                onChange={(e) => setSetupSettings({
+                  ...setupSettings,
+                  rewardPerCompletion: parseInt(e.target.value) || 0
+                })}
+                placeholder="100"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium mb-2">Lightning Address</label>
+              <Input
+                type="text"
+                value={userLightningAddress}
+                disabled
+                placeholder="Set in profile settings"
+              />
+              <p className="text-xs text-gray-500 mt-1">Where daily rewards will be sent</p>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium mb-2">Stake Amount (sats)</label>
+              <Input
+                type="number"
+                value={setupSettings.stakeAmount}
+                onChange={(e) => setSetupSettings({
+                  ...setupSettings,
+                  stakeAmount: parseInt(e.target.value) || 0
+                })}
+                placeholder="1000"
+              />
+            </div>
+            
+            <Button 
+              onClick={createInvoice}
+              disabled={loading || !userLightningAddress}
+              className="w-full"
+            >
+              <Zap className="w-4 h-4 mr-2" />
+              Generate Lightning Invoice
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  // Invoice Screen
+  if (paymentStep === 'invoice') {
+    return (
+      <div className="space-y-6">
+        {showSuccessMessage && (
+          <Card className="border-green-200 bg-green-50">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2 text-green-700">
+                <CheckCircle className="w-5 h-5" />
+                <span className="font-semibold">Payment Successful! Your goal is now active!</span>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+        
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Zap className="w-5 h-5 text-orange-500" />
+              Pay Lightning Invoice
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="text-center">
+              <p className="text-sm text-gray-600 mb-4">
+                Scan QR code or copy invoice to pay
+              </p>
+              {qrCode && (
+                <img src={qrCode} alt="Payment QR Code" className="mx-auto mb-4" />
+              )}
+              <div className="bg-gray-100 p-3 rounded-lg">
+                <p className="text-xs text-gray-500 break-all">{invoice}</p>
+              </div>
+              <Button
+                onClick={() => navigator.clipboard.writeText(invoice)}
+                variant="outline"
+                size="sm"
+                className="mt-2"
+              >
+                <Copy className="w-4 h-4 mr-2" />
+                Copy Invoice
+              </Button>
+            </div>
+            
+            {paymentStatus === 'error' && (
+              <div className="text-center text-red-600 text-sm">
+                Error processing payment. Please try again.
+              </div>
+            )}
+            
+            <div className="text-center text-sm text-gray-500">
+              Payment will be verified automatically...
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  // Tracking Screen
+  if (paymentStep === 'tracking' && stake) {
+    const progress = todayProgress ? Math.min((todayProgress.wordCount / stake.dailyWordGoal) * 100, 100) : 0
+    const daysUntilEmpty = Math.floor(stake.currentBalance / stake.rewardPerCompletion)
+    
+    return (
+      <div className="space-y-6">
+        {/* Daily Progress */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Target className="w-5 h-5 text-blue-500" />
+              Daily Progress
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div>
+                <div className="flex justify-between text-sm mb-2">
+                  <span>Progress: {todayProgress?.wordCount || 0} / {stake.dailyWordGoal} words</span>
+                  <span>{Math.round(progress)}%</span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div 
+                    className="bg-blue-500 h-2 rounded-full transition-all duration-300"
+                    style={{ width: `${progress}%` }}
+                  />
+                </div>
+              </div>
+              
+              {todayProgress?.goalMet && todayProgress.rewardSent && (
+                <div className="flex items-center gap-2 text-green-600">
+                  <Zap className="w-4 h-4" />
+                  <span className="text-sm font-medium">Goal Complete! Reward Sent</span>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Stake Summary */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Wallet className="w-5 h-5 text-orange-500" />
+              Lightning Goals Summary
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <span className="text-gray-500">Daily Goal:</span>
+                <p className="font-medium">{stake.dailyWordGoal} words</p>
+              </div>
+              <div>
+                <span className="text-gray-500">Reward:</span>
+                <p className="font-medium">{stake.rewardPerCompletion} sats</p>
+              </div>
+              <div>
+                <span className="text-gray-500">Balance:</span>
+                <p className="font-medium">{stake.currentBalance} sats</p>
+              </div>
+              <div>
+                <span className="text-gray-500">Days Left:</span>
+                <p className="font-medium">{daysUntilEmpty}</p>
+              </div>
+            </div>
+            
+            {daysUntilEmpty <= 3 && (
+              <div className="flex items-center gap-2 text-yellow-600 bg-yellow-50 p-3 rounded-lg">
+                <AlertTriangle className="w-4 h-4" />
+                <span className="text-sm">Don't lose your streak! Only {daysUntilEmpty} days remaining.</span>
+              </div>
+            )}
+            
+            <Button
+              onClick={cancelStake}
+              variant="destructive"
+              disabled={loading}
+              className="w-full"
+            >
+              Cancel Stake & Reset
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  return null
+}
