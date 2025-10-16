@@ -5,7 +5,7 @@ import { getLightningGoals, createStake, addToStake, cancelStake, updateLightnin
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { AlertTriangle, QrCode } from 'lucide-react'
+import { AlertTriangle, QrCode, Clock } from 'lucide-react'
 import QRCode from 'qrcode'
 
 export function LightningGoalsManager({ userPubkey, authData, userLightningAddress }: any) {
