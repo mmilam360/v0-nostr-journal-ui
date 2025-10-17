@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import {
   Menu,
   X,
@@ -378,9 +378,21 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     }
   }
 
+  // Rate limiting for Lightning Goals updates
+  const lastLightningGoalsUpdate = useRef(0)
+  const LIGHTNING_GOALS_UPDATE_COOLDOWN = 5000 // 5 seconds
+
   // Update Lightning Goals with current word count and check for rewards
   const checkRewardEligibility = async (wordCount: number) => {
     if (!isIncentiveEnabled || !authData) return
+    
+    // Rate limiting to prevent too frequent updates
+    const now = Date.now()
+    if (now - lastLightningGoalsUpdate.current < LIGHTNING_GOALS_UPDATE_COOLDOWN) {
+      console.log('[MainApp] ⏳ Lightning Goals update rate limited, skipping...')
+      return
+    }
+    lastLightningGoalsUpdate.current = now
     
     console.log('[MainApp] 🎯 Word count updated:', wordCount)
     
