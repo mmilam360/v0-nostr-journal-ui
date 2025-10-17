@@ -814,9 +814,10 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   }
 
   const handleUpdateNote = async (updatedNote: Note) => {
-    console.log("[NostrJournal] Updating note:", updatedNote.id)
+    console.log("[NostrJournal] 🔥 handleUpdateNote CALLED for note:", updatedNote.id)
     console.log("[NostrJournal] 🔍 Auth method check - authData.authMethod:", authData.authMethod)
     console.log("[NostrJournal] 🔍 Auth method type:", typeof authData.authMethod)
+    console.log("[NostrJournal] 🔍 isIncentiveEnabled:", isIncentiveEnabled)
 
     // Update local state immediately
     const optimisticNote = {
@@ -883,6 +884,8 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
         console.log("[NostrJournal] ✅ Note update complete!")
         
         // Check for Lightning Goals reward eligibility after successful save
+        console.log("[NostrJournal] 🔥 REACHED Lightning Goals check section")
+        console.log("[NostrJournal] 🔍 isIncentiveEnabled:", isIncentiveEnabled)
         if (isIncentiveEnabled) {
           try {
             console.log("[NostrJournal] ⚡ Checking Lightning Goals reward eligibility...")
