@@ -845,7 +845,8 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   }
 
   const handleUpdateNote = async (updatedNote: Note) => {
-    console.log("[NostrJournal] 🔥 handleUpdateNote CALLED for note:", updatedNote.id)
+    console.log("🚨🚨🚨 handleUpdateNote ENTRY POINT - NOTE ID:", updatedNote.id)
+    console.log("[NostrJournal] 🔥🔥🔥 handleUpdateNote CALLED for note:", updatedNote.id)
     console.log("[NostrJournal] 🔍 Auth method check - authData.authMethod:", authData.authMethod)
     console.log("[NostrJournal] 🔍 Auth method type:", typeof authData.authMethod)
     console.log("[NostrJournal] 🔍 isIncentiveEnabled:", isIncentiveEnabled)
