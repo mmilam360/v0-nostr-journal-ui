@@ -388,7 +388,14 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     
     // Rate limiting to prevent too frequent updates
     const now = Date.now()
-    if (now - lastLightningGoalsUpdate.current < LIGHTNING_GOALS_UPDATE_COOLDOWN) {
+    const timeSinceLastUpdate = now - lastLightningGoalsUpdate.current
+    console.log('[MainApp] 🔍 Rate limiting check:', { 
+      timeSinceLastUpdate, 
+      cooldown: LIGHTNING_GOALS_UPDATE_COOLDOWN,
+      isRateLimited: timeSinceLastUpdate < LIGHTNING_GOALS_UPDATE_COOLDOWN 
+    })
+    
+    if (timeSinceLastUpdate < LIGHTNING_GOALS_UPDATE_COOLDOWN) {
       console.log('[MainApp] ⏳ Lightning Goals update rate limited, skipping...')
       return
     }

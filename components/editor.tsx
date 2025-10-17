@@ -45,21 +45,21 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
         // Save previous note if there were unsaved changes (only for new notes)
         if (isNewNote && previousNoteDataRef.current && hasUnsavedChanges) {
           console.log("[NostrJournal] Saving previous note before switching:", previousNoteDataRef.current.id)
-          const noteToSave = {
-            ...note,
-            id: previousNoteDataRef.current.id,
-            title: previousNoteDataRef.current.title,
-            content: previousNoteDataRef.current.content,
-          } as Note
-          onUpdateNote(noteToSave)
-        }
+        const noteToSave = {
+          ...note,
+          id: previousNoteDataRef.current.id,
+          title: previousNoteDataRef.current.title,
+          content: previousNoteDataRef.current.content,
+        } as Note
+        onUpdateNote(noteToSave)
+      }
 
         console.log("[NostrJournal] Updating note view:", note.id, isNewNote ? "(new note)" : "(content update)")
-        setTitle(note.title)
-        setContent(note.content)
-        setHasUnsavedChanges(false)
-        currentNoteIdRef.current = note.id
-        previousNoteDataRef.current = { id: note.id, title: note.title, content: note.content }
+      setTitle(note.title)
+      setContent(note.content)
+      setHasUnsavedChanges(false)
+      currentNoteIdRef.current = note.id
+      previousNoteDataRef.current = { id: note.id, title: note.title, content: note.content }
       }
     }
   }, [note])
@@ -75,7 +75,9 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
         if (titleChanged || contentChanged) {
           console.log("[NostrJournal] Auto-saving note after 1.5s delay...")
           const updatedNote = { ...note, title: debouncedTitle, content: debouncedContent }
+          console.log("[NostrJournal] 🔥 About to call onUpdateNote with note:", updatedNote.id)
           onUpdateNote(updatedNote)
+          console.log("[NostrJournal] 🔥 onUpdateNote called successfully")
           setHasUnsavedChanges(false)
           previousNoteDataRef.current = { id: note.id, title: debouncedTitle, content: debouncedContent }
           console.log("[NostrJournal] Auto-save completed")
@@ -164,9 +166,9 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
         return
       }
 
-      const textarea = textareaRef.current
-      const start = textarea.selectionStart
-      const end = textarea.selectionEnd
+    const textarea = textareaRef.current
+    const start = textarea.selectionStart
+    const end = textarea.selectionEnd
 
       console.log("[NostrJournal] 🔍 Text selection event - start:", start, "end:", end)
 
@@ -412,18 +414,18 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
             <div className="flex items-center gap-3">
               {/* Encryption indicator and word count */}
               <div className="flex items-center gap-3">
-                <div className="flex items-center gap-1 text-green-600 dark:text-green-400">
-                  <Lock className="w-3 h-3" />
-                  <span>Encrypted</span>
-                </div>
-                
+              <div className="flex items-center gap-1 text-green-600 dark:text-green-400">
+                <Lock className="w-3 h-3" />
+                <span>Encrypted</span>
+              </div>
+              
                 {/* Word/Character count */}
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                   <span>{content.split(/\s+/).filter(word => word.length > 0).length} words</span>
                   <span>•</span>
                   <span>{content.length} chars</span>
                 </div>
-              </div>
+                </div>
               
               {/* Sync status */}
               {/* Individual note sync status removed - using global sync */}
