@@ -388,6 +388,7 @@ function BitcoinConnectLightningGoalsManagerInner({
         lastUpdated: Date.now(),
         todayDate: new Date().toISOString().split('T')[0],
         todayWords: 0,
+        baselineWordCount: 0, // Reset baseline word count on new stake
         todayGoalMet: false,
         todayRewardSent: false,
         todayRewardAmount: 0,
@@ -397,7 +398,8 @@ function BitcoinConnectLightningGoalsManagerInner({
         totalRewardsEarned: 0,
         lastRewardDate: '',
         missedDays: 0,
-        lastMissedDate: ''
+        lastMissedDate: '',
+        stakeCreatedAt: Date.now() // Track when this stake was created
       }, authData)
       
       console.log('[Manager] ✅ Balance credited with settings:', {
