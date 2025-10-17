@@ -44,9 +44,6 @@ export async function onRequestPost(context: any) {
     // Look up invoice via NWC
     log('🔍 Looking up invoice via NWC...')
     
-    let invoiceStatus
-    let lookupMethod = ''
-    
     // Since we can't decode bolt11 in Cloudflare Functions, let's use a different approach
     // We'll try to verify payment using the invoice string directly via NWC
     
