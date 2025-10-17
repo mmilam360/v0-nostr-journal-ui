@@ -397,6 +397,7 @@ function BitcoinConnectLightningGoalsManagerInner({
         todayDate: new Date().toISOString().split('T')[0],
         todayWords: 0,
         baselineWordCount: currentWordCount, // Set baseline to current word count at stake creation
+        totalWordCountAtLastUpdate: currentWordCount, // Track current word count for incremental updates
         todayGoalMet: false,
         todayRewardSent: false,
         todayRewardAmount: 0,

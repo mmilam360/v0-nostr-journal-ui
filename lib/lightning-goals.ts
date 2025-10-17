@@ -34,6 +34,7 @@ export interface LightningGoals {
   // NEW: Track when stake was created and what word count was at that time
   stakeCreatedAt: number           // Unix timestamp
   baselineWordCount: number        // Words at stake creation (don't count these)
+  totalWordCountAtLastUpdate: number // Track total word count for incremental updates
   
   // Payment
   lightningAddress: string
@@ -119,6 +120,7 @@ export async function getLightningGoals(userPubkey: string): Promise<LightningGo
     // NEW: Parse baseline fields
     stakeCreatedAt: parseInt(getTag('stake_created_at') || '0'),
     baselineWordCount: parseInt(getTag('baseline_word_count') || '0'),
+    totalWordCountAtLastUpdate: parseInt(getTag('total_word_count_at_last_update') || '0'),
     
     lightningAddress: getTag('lightning_address'),
     
@@ -242,6 +244,7 @@ export async function updateLightningGoals(
     // NEW: Baseline fields
     ["stake_created_at", updated.stakeCreatedAt.toString()],
     ["baseline_word_count", updated.baselineWordCount.toString()],
+    ["total_word_count_at_last_update", updated.totalWordCountAtLastUpdate.toString()],
     ["lightning_address", updated.lightningAddress],
     ["today_date", updated.todayDate],
     ["today_words", updated.todayWords.toString()],
@@ -315,9 +318,10 @@ export async function createStake(
     createdAt: now,
     stakeCreatedAt: now,  // When stake was created
     baselineWordCount: config.currentWordCount,  // NEW: Baseline to subtract
+    totalWordCountAtLastUpdate: config.currentWordCount,  // Track current word count for incremental updates
     lightningAddress: config.lightningAddress,
     todayDate: today,
-    todayWords: config.currentWordCount,  // Start with current count
+    todayWords: 0,  // Start with 0 - we'll track incremental progress
     todayGoalMet: false,
     todayRewardSent: false,
     todayRewardAmount: 0,

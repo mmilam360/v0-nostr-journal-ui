@@ -409,25 +409,29 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
         return
       }
       
-      // Calculate words written since stake creation
-      const wordsSinceStake = Math.max(0, wordCount - (goals.baselineWordCount || 0))
+      // Calculate newly written words since last update
+      const previousWordCount = goals.totalWordCountAtLastUpdate || goals.baselineWordCount || 0
+      const newlyWrittenWords = Math.max(0, wordCount - previousWordCount)
+      
       console.log('[MainApp] 📊 Word calculation:', {
-        totalWordCount: wordCount,
-        baselineWordCount: goals.baselineWordCount,
-        wordsSinceStake: wordsSinceStake,
+        currentTotalWordCount: wordCount,
+        previousWordCount: previousWordCount,
+        newlyWrittenWords: newlyWrittenWords,
+        currentTodayWords: goals.todayWords || 0,
         dailyWordGoal: goals.dailyWordGoal
       })
       
-      // Update Lightning Goals with current progress
+      // Update Lightning Goals with incremental progress
       const updatedGoals = {
         ...goals,
-        todayWords: wordsSinceStake,
+        todayWords: (goals.todayWords || 0) + newlyWrittenWords,
+        totalWordCountAtLastUpdate: wordCount,
         lastUpdated: Date.now(),
         todayDate: new Date().toISOString().split('T')[0]
       }
       
       // Check if goal is met
-      if (wordsSinceStake >= goals.dailyWordGoal && !goals.todayRewardSent) {
+      if (updatedGoals.todayWords >= goals.dailyWordGoal && !goals.todayRewardSent) {
         console.log('[MainApp] 🎉 Goal reached! Sending reward...')
         
         // Send reward via API
@@ -466,11 +470,11 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
         } catch (rewardError) {
           console.error('[MainApp] ❌ Error sending reward:', rewardError)
         }
-      } else if (wordsSinceStake >= goals.dailyWordGoal) {
+      } else if (updatedGoals.todayWords >= goals.dailyWordGoal) {
         console.log('[MainApp] ✅ Goal already met and reward sent today')
         updatedGoals.todayGoalMet = true
       } else {
-        console.log('[MainApp] ⏳ Goal not yet reached:', { wordsSinceStake, goal: goals.dailyWordGoal })
+        console.log('[MainApp] ⏳ Goal not yet reached:', { todayWords: updatedGoals.todayWords, goal: goals.dailyWordGoal })
       }
       
       // Update the Lightning Goals event
