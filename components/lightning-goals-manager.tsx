@@ -303,6 +303,10 @@ export function LightningGoalsManager({
         throw new Error('No payment hash found for verification')
       }
       
+      console.log('[Manager] 🔍 Checking payment status...')
+      console.log('[Manager] Payment hash:', paymentHash)
+      console.log('[Manager] Invoice string:', invoiceString ? 'present' : 'missing')
+      
       const checkResponse = await fetch('/api/incentive/verify-payment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -312,7 +316,16 @@ export function LightningGoalsManager({
         })
       })
       
+      console.log('[Manager] 📡 Verify payment response status:', checkResponse.status)
+      
+      if (!checkResponse.ok) {
+        const errorText = await checkResponse.text()
+        console.log('[Manager] ❌ Verify payment API error:', errorText)
+        throw new Error(`API returned ${checkResponse.status}: ${errorText}`)
+      }
+      
       const checkResult = await checkResponse.json()
+      console.log('[Manager] 📋 Verify payment result:', checkResult)
       
       if (checkResult.success && checkResult.paid) {
         // Payment confirmed, activate stake using working system
@@ -366,12 +379,18 @@ export function LightningGoalsManager({
       }
       
     } catch (error) {
-      console.error('[Manager] Error verifying payment:', error)
+      console.error('[Manager] ❌ Error verifying payment:', error)
+      console.error('[Manager] ❌ Error message:', error.message)
       setPaymentStatus('pending')
-      // Don't show alert for automatic checks - just log silently
-      if (!isAutoCheck) {
-        // TODO: Show error in UI instead of alert
+      
+      // If this is an automatic check and we've had repeated errors, stop checking
+      if (isAutoCheck) {
+        console.log('[Manager] ⚠️ Automatic payment check failed, will retry next interval')
+        // Don't show alerts for automatic checks
+      } else {
+        // Manual check - show error to user
         console.error('Error verifying payment:', error.message)
+        alert(`Payment verification failed: ${error.message}`)
       }
     }
   }
