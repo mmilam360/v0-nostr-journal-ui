@@ -42,19 +42,45 @@ function BitcoinConnectLightningGoalsMonitorInner({
   
   // Check if goal met
   useEffect(() => {
+    console.log('[Monitor] 🔍 Goal check triggered:', { 
+      hasGoals: !!goals, 
+      hasCheckedToday, 
+      status: goals?.status,
+      currentWordCount,
+      baselineWordCount: goals?.baselineWordCount,
+      dailyWordGoal: goals?.dailyWordGoal
+    })
+    
     if (goals && !hasCheckedToday && goals.status === 'active') {
       const wordsSinceStake = Math.max(0, currentWordCount - (goals.baselineWordCount || 0))
+      console.log('[Monitor] 📊 Word calculation:', { 
+        currentWordCount, 
+        baselineWordCount: goals.baselineWordCount, 
+        wordsSinceStake, 
+        dailyWordGoal: goals.dailyWordGoal 
+      })
+      
       if (wordsSinceStake >= goals.dailyWordGoal) {
         console.log('[Monitor] 🎯 Goal reached!', { wordsSinceStake, goal: goals.dailyWordGoal })
         checkAndSendReward()
+      } else {
+        console.log('[Monitor] ⏳ Goal not yet reached:', { wordsSinceStake, goal: goals.dailyWordGoal })
       }
+    } else {
+      console.log('[Monitor] ⚠️ Not checking goal:', { 
+        hasGoals: !!goals, 
+        hasCheckedToday, 
+        status: goals?.status 
+      })
     }
   }, [currentWordCount, goals, hasCheckedToday])
   
   async function loadGoals() {
     try {
+      console.log('[Monitor] 🔍 Loading goals for user:', userPubkey.substring(0, 8))
       const { getLightningGoals } = await import('@/lib/lightning-goals')
       const data = await getLightningGoals(userPubkey)
+      console.log('[Monitor] 📊 Goals loaded:', data)
       setGoals(data)
     } catch (error) {
       console.error('[Monitor] Error loading goals:', error)
@@ -68,6 +94,14 @@ function BitcoinConnectLightningGoalsMonitorInner({
       console.log('[Monitor] ⚠️ No goals found')
       return
     }
+    
+    console.log('[Monitor] 📊 Goals data:', {
+      todayRewardSent: goals.todayRewardSent,
+      dailyWordGoal: goals.dailyWordGoal,
+      dailyReward: goals.dailyReward,
+      lightningAddress: goals.lightningAddress,
+      currentBalance: goals.currentBalance
+    })
     
     // Check if reward already sent today
     if (goals.todayRewardSent) {
@@ -98,6 +132,13 @@ function BitcoinConnectLightningGoalsMonitorInner({
     // Use the daily reward amount from goals
     const rewardAmount = goals.dailyReward
     
+    console.log('[Monitor] 📡 API call details:', {
+      userPubkey: userPubkey.substring(0, 8),
+      amount: rewardAmount,
+      lightningAddress: lightningAddress,
+      isRefund: false
+    })
+    
     try {
       const response = await fetch('/api/incentive/send-reward', {
         method: 'POST',
@@ -110,7 +151,9 @@ function BitcoinConnectLightningGoalsMonitorInner({
         })
       })
       
+      console.log('[Monitor] 📡 API response status:', response.status)
       const result = await response.json()
+      console.log('[Monitor] 📡 API response data:', result)
       
       if (result.success) {
         console.log('[Monitor] ✅ Reward sent!')
