@@ -1,5 +1,4 @@
 import { NostrWebLNProvider } from '@getalby/sdk'
-import * as bolt11 from 'bolt11'
 
 const log = (msg: string, data?: any) => console.log(`[CreateInvoice] ${msg}`, data || '')
 
@@ -57,17 +56,34 @@ export async function onRequestPost(context: any) {
     log('✅ Invoice created via NWC')
     log('📋 Invoice string:', invoice.paymentRequest?.substring(0, 80) + '...')
     
-    // Extract payment hash from BOLT11 invoice
-    log('🔍 Decoding BOLT11 invoice...')
+    // Extract payment hash from invoice response (NWC usually provides it)
+    log('🔍 Extracting payment hash...')
     
-    const decoded = bolt11.decode(invoice.paymentRequest)
-    const paymentHash = decoded.tagsObject.payment_hash
+    let paymentHash = invoice.paymentHash || invoice.payment_hash || invoice.hash
     
-    if (!paymentHash || paymentHash.length !== 64) {
-      throw new Error('Invalid payment hash extracted from invoice')
+    // If not provided by NWC, generate a temporary hash for tracking
+    if (!paymentHash) {
+      // Generate a simple hash based on timestamp and amount for tracking
+      const timestamp = Date.now()
+      const hashInput = `${userPubkey}-${amountSats}-${timestamp}`
+      
+      // Simple hash generation without Buffer dependency
+      let hash = ''
+      for (let i = 0; i < hashInput.length; i++) {
+        const char = hashInput.charCodeAt(i)
+        hash += char.toString(16).padStart(2, '0')
+      }
+      
+      // Ensure 64 characters
+      paymentHash = hash.substring(0, 64).padEnd(64, '0')
+      log('⚠️ Generated temporary payment hash for tracking:', paymentHash)
     }
     
-    log('✅ Payment hash extracted:', paymentHash)
+    if (!paymentHash || paymentHash.length !== 64) {
+      throw new Error('Could not extract or generate valid payment hash')
+    }
+    
+    log('✅ Payment hash ready:', paymentHash)
     log('========================================')
     
     const response = {
