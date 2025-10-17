@@ -348,8 +348,8 @@ function BitcoinConnectLightningGoalsManagerInner({
         <WalletConnect />
       </div>
       
-      {/* Show setup only if wallet is connected */}
-      {!isConnected ? (
+      {/* Show connect wallet screen if not connected */}
+      {!isConnected && (
         <div className="text-center py-8">
           <div className="text-4xl mb-4">⚡</div>
           <h2 className="text-xl font-bold mb-2">Connect Your Lightning Wallet</h2>
@@ -360,7 +360,10 @@ function BitcoinConnectLightningGoalsManagerInner({
             Your wallet will be used to pay the stake invoice
           </p>
         </div>
-      ) : screen === 'setup' ? (
+      )}
+      
+      {/* Show setup screen if connected and screen is setup */}
+      {isConnected && screen === 'setup' && (
         <div className="space-y-4">
           <div className="flex items-center gap-2 mb-4">
             <div className="w-2 h-2 bg-green-500 rounded-full"></div>
@@ -457,8 +460,8 @@ function BitcoinConnectLightningGoalsManagerInner({
         </div>
       )}
       
-      {/* Invoice Screen */}
-      {screen === 'invoice' && invoiceData && (
+      {/* Show invoice screen if connected and screen is invoice */}
+      {isConnected && screen === 'invoice' && invoiceData && (
         <div className="space-y-4">
           <h2 className="text-xl font-bold">Pay Stake Invoice</h2>
           
@@ -484,7 +487,10 @@ function BitcoinConnectLightningGoalsManagerInner({
             Or copy the invoice and pay from any Lightning wallet
           </p>
         </div>
-      ) : screen === 'active' ? (
+      )}
+      
+      {/* Show active screen if connected and screen is active */}
+      {isConnected && screen === 'active' && (
         <div className="text-center space-y-4">
           <div className="text-6xl">✅</div>
           <h2 className="text-xl font-bold">Stake Active!</h2>
@@ -492,7 +498,7 @@ function BitcoinConnectLightningGoalsManagerInner({
             Write {goalWords} words today to earn your reward
           </p>
         </div>
-      ) : null}
+      )}
     </div>
   )
 }
