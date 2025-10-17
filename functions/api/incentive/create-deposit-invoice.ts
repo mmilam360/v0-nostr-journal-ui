@@ -57,17 +57,51 @@ export async function onRequestPost(context: any) {
     log('✅ Invoice created via NWC')
     log('📋 Invoice string:', invoice.paymentRequest?.substring(0, 80) + '...')
     
-    // Since we can't reliably decode BOLT11 in Cloudflare Workers,
-    // we'll use the invoice string directly for verification
-    log('🔍 Using invoice string for payment verification...')
+    // Try to get the real payment hash from the NWC response
+    log('🔍 Extracting payment hash from NWC response...')
+    log('📋 NWC response keys:', Object.keys(invoice))
     
-    // Generate a simple tracking ID for this invoice
-    const invoiceTimestamp = Date.now()
-    const paymentHash = `${userPubkey.substring(0, 8)}-${amountSats}-${invoiceTimestamp}`
+    let paymentHash = ''
     
-    log('📋 Generated tracking ID:', paymentHash)
+    // Check if NWC response already includes payment hash
+    if (invoice.paymentHash) {
+      paymentHash = invoice.paymentHash
+      log('✅ Payment hash from NWC response:', paymentHash)
+    } else if (invoice.payment_hash) {
+      paymentHash = invoice.payment_hash
+      log('✅ Payment hash from NWC response (snake_case):', paymentHash)
+    } else if (invoice.hash) {
+      paymentHash = invoice.hash
+      log('✅ Payment hash from NWC response (hash):', paymentHash)
+    } else {
+      log('⚠️ No payment hash in NWC response, trying BOLT11 decode...')
+      
+      try {
+        // Try to decode the BOLT11 invoice to get the real payment hash
+        const decodedInvoice = decodeBolt11(invoice.paymentRequest)
+        
+        if (decodedInvoice.valid && decodedInvoice.paymentHash) {
+          paymentHash = decodedInvoice.paymentHash
+          log('✅ Real payment hash extracted from BOLT11:', paymentHash)
+          log('💰 Invoice amount:', decodedInvoice.amount, 'sats')
+        } else {
+          throw new Error('BOLT11 decode failed or no payment hash found')
+        }
+        
+      } catch (decodeError) {
+        log('⚠️ BOLT11 decode failed:', decodeError.message)
+        log('🔍 Falling back to tracking ID...')
+        
+        // Fallback: generate a tracking ID
+        const invoiceTimestamp = Date.now()
+        paymentHash = `${userPubkey.substring(0, 8)}-${amountSats}-${invoiceTimestamp}`
+        log('📋 Generated tracking ID (fallback):', paymentHash)
+      }
+    }
+    
+    log('📋 Final payment hash:', paymentHash)
     log('📋 Invoice string length:', invoice.paymentRequest.length)
-    log('✅ Invoice created - will verify using invoice string directly')
+    log('✅ Invoice created with payment hash')
     log('========================================')
     
     const response = {
