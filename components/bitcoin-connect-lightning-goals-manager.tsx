@@ -279,10 +279,25 @@ function BitcoinConnectLightningGoalsManagerInner({
         console.log('[Manager] 🔍 Decoding BOLT11 invoice to extract real payment hash...')
         const decoded = bolt11.decode(data.invoice)
         console.log('[Manager] 📋 Decoded invoice:', decoded)
+        console.log('[Manager] 📋 Available fields:', Object.keys(decoded))
         
+        // Try different possible field names for payment hash
         if (decoded.paymentHash) {
           realPaymentHash = decoded.paymentHash
-          console.log('[Manager] ✅ Real payment hash extracted:', realPaymentHash)
+          console.log('[Manager] ✅ Real payment hash extracted from paymentHash field:', realPaymentHash)
+        } else if (decoded.payment_hash) {
+          realPaymentHash = decoded.payment_hash
+          console.log('[Manager] ✅ Real payment hash extracted from payment_hash field:', realPaymentHash)
+        } else if (decoded.tags) {
+          // Look for payment hash in tags
+          const paymentHashTag = decoded.tags.find(tag => tag.tagName === 'payment_hash' || tag.tagName === 'h')
+          if (paymentHashTag && paymentHashTag.data) {
+            realPaymentHash = paymentHashTag.data
+            console.log('[Manager] ✅ Real payment hash extracted from tags:', realPaymentHash)
+          } else {
+            console.log('[Manager] ⚠️ No payment hash found in tags, using API response hash')
+            console.log('[Manager] 📋 Available tags:', decoded.tags.map(tag => ({ name: tag.tagName, data: tag.data?.toString().substring(0, 16) + '...' })))
+          }
         } else {
           console.log('[Manager] ⚠️ No payment hash found in decoded invoice, using API response hash')
         }
