@@ -36,10 +36,12 @@ function BitcoinConnectLightningGoalsManagerInner({
   const [screen, setScreen] = useState<'setup' | 'invoice' | 'active'>('setup')
   const [goalWords, setGoalWords] = useState(500)
   const [stakeAmount, setStakeAmount] = useState(100)
+  const [dailyReward, setDailyReward] = useState(100)
+  const [lightningAddress, setLightningAddress] = useState('')
   const [invoiceData, setInvoiceData] = useState<InvoiceData | null>(null)
   const [loading, setLoading] = useState(false)
   
-  // Check connection state
+  // Check connection state and load user data
   useEffect(() => {
     if (typeof window !== 'undefined' && window.webln) {
       const checkConnection = () => {
@@ -62,18 +64,63 @@ function BitcoinConnectLightningGoalsManagerInner({
     }
   }, [])
   
+  // Load user's lightning address from profile
+  useEffect(() => {
+    const loadUserProfile = async () => {
+      try {
+        // Try to get lightning address from window.webln first
+        if (window.webln?.getInfo) {
+          const info = await window.webln.getInfo()
+          if (info.lightningAddress) {
+            setLightningAddress(info.lightningAddress)
+            console.log('[Manager] ⚡ Lightning address from wallet:', info.lightningAddress)
+            return
+          }
+        }
+        
+        // Fallback: try to get from localStorage
+        const savedAddress = localStorage.getItem(`lightning-address-${userPubkey}`)
+        if (savedAddress) {
+          setLightningAddress(savedAddress)
+          console.log('[Manager] ⚡ Lightning address from localStorage:', savedAddress)
+        }
+      } catch (error) {
+        console.log('[Manager] ⚠️ Could not load lightning address:', error)
+      }
+    }
+    
+    loadUserProfile()
+  }, [userPubkey])
+  
   // ============================================
   // STEP 1: CREATE DEPOSIT INVOICE (Backend)
   // ============================================
   
   async function createDepositInvoice() {
-    if (!isConnected || !provider) {
+    if (!isConnected) {
       alert('Please connect your wallet first')
+      return
+    }
+    
+    // Validate required fields
+    if (!lightningAddress || !lightningAddress.includes('@')) {
+      alert('Please enter a valid Lightning address (format: user@domain.com)')
+      return
+    }
+    
+    if (dailyReward <= 0) {
+      alert('Daily reward must be greater than 0')
+      return
+    }
+    
+    if (stakeAmount <= 0) {
+      alert('Stake amount must be greater than 0')
       return
     }
     
     setLoading(true)
     console.log('[Manager] Creating deposit invoice...')
+    console.log('[Manager] Settings:', { goalWords, stakeAmount, dailyReward, lightningAddress })
     
     try {
       // Call backend to create invoice via YOUR NWC
@@ -83,6 +130,8 @@ function BitcoinConnectLightningGoalsManagerInner({
         body: JSON.stringify({
           userPubkey,
           amountSats: stakeAmount,
+          dailyReward: dailyReward,
+          lightningAddress: lightningAddress,
           timestamp: Date.now()
         })
       })
@@ -211,17 +260,40 @@ function BitcoinConnectLightningGoalsManagerInner({
     console.log('[Manager] 💰 Crediting balance:', amount, 'sats')
     
     try {
-      // Update Lightning Goals event with new balance
+      // Update Lightning Goals event with new balance and settings
       const { updateLightningGoals } = await import('@/lib/lightning-goals')
       
-      await updateLightningGoals(userPubkey, authData, {
-        balance: amount,
-        goal: goalWords,
+      await updateLightningGoals(userPubkey, {
+        dailyWordGoal: goalWords,
+        dailyReward: dailyReward,
+        currentBalance: amount,
+        initialStake: amount,
+        totalDeposited: amount,
         status: 'active',
-        stakePerWord: Math.floor(amount / goalWords)
+        lightningAddress: lightningAddress,
+        createdAt: Date.now(),
+        lastUpdated: Date.now(),
+        todayDate: new Date().toISOString().split('T')[0],
+        todayWords: 0,
+        todayGoalMet: false,
+        todayRewardSent: false,
+        todayRewardAmount: 0,
+        history: [],
+        currentStreak: 0,
+        totalGoalsMet: 0,
+        totalRewardsEarned: 0,
+        lastRewardDate: '',
+        missedDays: 0,
+        lastMissedDate: ''
+      }, authData)
+      
+      console.log('[Manager] ✅ Balance credited with settings:', {
+        goalWords,
+        dailyReward,
+        lightningAddress
       })
       
-      console.log('[Manager] ✅ Balance credited')
+      setScreen('active')
       
     } catch (error) {
       console.error('[Manager] ❌ Failed to credit balance:', error)
@@ -273,6 +345,39 @@ function BitcoinConnectLightningGoalsManagerInner({
             />
             <p className="text-xs text-gray-500 mt-1">
               ≈ {(stakeAmount / goalWords).toFixed(2)} sats per word
+            </p>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              Daily Reward (sats)
+            </label>
+            <input
+              type="number"
+              value={dailyReward}
+              onChange={(e) => setDailyReward(Number(e.target.value))}
+              className="w-full px-3 py-2 border rounded"
+              min="1"
+              step="1"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Reward you'll earn when you reach your daily goal
+            </p>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              Lightning Address
+            </label>
+            <input
+              type="text"
+              value={lightningAddress}
+              onChange={(e) => setLightningAddress(e.target.value)}
+              className="w-full px-3 py-2 border rounded"
+              placeholder="your@lightning.address"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Where rewards will be sent (auto-filled from your profile)
             </p>
           </div>
           

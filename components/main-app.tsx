@@ -819,7 +819,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
               
               // Call the direct reward eligibility check
               await checkRewardEligibility(totalWordCount)
-            } else {
+      } else {
               console.log("[NostrJournal] ⚡ Total word count = 0, skipping reward check")
             }
           } catch (rewardError) {
@@ -938,9 +938,11 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     // Remove from local state immediately
     const updatedNotes = notes.filter((note) => note.id !== noteToDelete.id)
     setNotes(updatedNotes)
+    console.log("[NostrJournal] ✅ Notes updated, new count:", updatedNotes.length)
 
     if (selectedNote?.id === noteToDelete.id) {
       setSelectedNote(null)
+      console.log("[NostrJournal] ✅ Selected note cleared")
     }
 
     // LOCAL STORAGE DISABLED - Notes are only stored on Nostr relays
