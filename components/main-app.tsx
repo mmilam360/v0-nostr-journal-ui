@@ -378,13 +378,96 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     }
   }
 
-  // Simple reward check - LightningGoalsManager handles the actual logic
+  // Update Lightning Goals with current word count and check for rewards
   const checkRewardEligibility = async (wordCount: number) => {
     if (!isIncentiveEnabled || !authData) return
     
     console.log('[MainApp] 🎯 Word count updated:', wordCount)
-    // The LightningGoalsManager will automatically check for goal completion
-    // when it receives the currentWordCount prop
+    
+    try {
+      // Import Lightning Goals functions
+      const { getLightningGoals, updateLightningGoals } = await import('@/lib/lightning-goals')
+      
+      // Get current Lightning Goals data
+      const goals = await getLightningGoals(authData.pubkey)
+      console.log('[MainApp] 📊 Current Lightning Goals:', goals)
+      
+      if (!goals || goals.status !== 'active') {
+        console.log('[MainApp] ⚠️ No active Lightning Goals found')
+        return
+      }
+      
+      // Calculate words written since stake creation
+      const wordsSinceStake = Math.max(0, wordCount - (goals.baselineWordCount || 0))
+      console.log('[MainApp] 📊 Word calculation:', {
+        totalWordCount: wordCount,
+        baselineWordCount: goals.baselineWordCount,
+        wordsSinceStake: wordsSinceStake,
+        dailyWordGoal: goals.dailyWordGoal
+      })
+      
+      // Update Lightning Goals with current progress
+      const updatedGoals = {
+        ...goals,
+        todayWords: wordsSinceStake,
+        lastUpdated: Date.now(),
+        todayDate: new Date().toISOString().split('T')[0]
+      }
+      
+      // Check if goal is met
+      if (wordsSinceStake >= goals.dailyWordGoal && !goals.todayRewardSent) {
+        console.log('[MainApp] 🎉 Goal reached! Sending reward...')
+        
+        // Send reward via API
+        try {
+          const response = await fetch('/api/incentive/send-reward', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              userPubkey: authData.pubkey,
+              amount: goals.dailyReward,
+              lightningAddress: goals.lightningAddress,
+              isRefund: false
+            })
+          })
+          
+          const result = await response.json()
+          console.log('[MainApp] 📡 Reward API response:', result)
+          
+          if (result.success) {
+            console.log('[MainApp] ✅ Reward sent successfully!')
+            
+            // Update goals with reward information
+            updatedGoals.todayGoalMet = true
+            updatedGoals.todayRewardSent = true
+            updatedGoals.todayRewardAmount = goals.dailyReward
+            updatedGoals.totalGoalsMet = (goals.totalGoalsMet || 0) + 1
+            updatedGoals.totalRewardsEarned = (goals.totalRewardsEarned || 0) + goals.dailyReward
+            updatedGoals.currentStreak = (goals.currentStreak || 0) + 1
+            updatedGoals.lastRewardDate = new Date().toISOString().split('T')[0]
+            updatedGoals.currentBalance = Math.max(0, goals.currentBalance - goals.dailyReward)
+            
+            console.log('[MainApp] 🎉 Goal completed and reward sent!')
+          } else {
+            console.error('[MainApp] ❌ Failed to send reward:', result.error)
+          }
+        } catch (rewardError) {
+          console.error('[MainApp] ❌ Error sending reward:', rewardError)
+        }
+      } else if (wordsSinceStake >= goals.dailyWordGoal) {
+        console.log('[MainApp] ✅ Goal already met and reward sent today')
+        updatedGoals.todayGoalMet = true
+      } else {
+        console.log('[MainApp] ⏳ Goal not yet reached:', { wordsSinceStake, goal: goals.dailyWordGoal })
+      }
+      
+      // Update the Lightning Goals event
+      await updateLightningGoals(authData.pubkey, updatedGoals, authData)
+      console.log('[MainApp] ✅ Lightning Goals updated successfully')
+      
+    } catch (error) {
+      console.error('[MainApp] ❌ Error updating Lightning Goals:', error)
+    }
   }
 
   // Load Lightning address from localStorage

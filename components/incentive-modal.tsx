@@ -252,12 +252,13 @@ export function IncentiveModal({
               authData={authData}
               onRefresh={loadGoals}
             />
-          ) : (
-            <BitcoinConnectLightningGoalsManager
-              userPubkey={userPubkey}
-              authData={authData}
-            />
-          )}
+                 ) : (
+                   <BitcoinConnectLightningGoalsManager
+                     userPubkey={userPubkey}
+                     authData={authData}
+                     currentWordCount={lastSavedWordCount || 0}
+                   />
+                 )}
         </CardContent>
       </Card>
     </div>

@@ -11,25 +11,33 @@ interface InvoiceData {
 }
 
 export function BitcoinConnectLightningGoalsManager({ 
-  userPubkey, 
-  authData 
+  userPubkey,
+  authData,
+  currentWordCount = 0
 }: { 
   userPubkey: string
-  authData: any 
+  authData: any
+  currentWordCount?: number
 }) {
   return (
     <ClientOnly fallback={<div className="p-8 text-center">Loading payment system...</div>}>
-      <BitcoinConnectLightningGoalsManagerInner userPubkey={userPubkey} authData={authData} />
+      <BitcoinConnectLightningGoalsManagerInner 
+        userPubkey={userPubkey} 
+        authData={authData} 
+        currentWordCount={currentWordCount}
+      />
     </ClientOnly>
   )
 }
 
 function BitcoinConnectLightningGoalsManagerInner({ 
   userPubkey, 
-  authData 
+  authData,
+  currentWordCount = 0
 }: { 
   userPubkey: string
-  authData: any 
+  authData: any
+  currentWordCount?: number
 }) {
   const [isConnected, setIsConnected] = useState(false)
   
@@ -388,7 +396,7 @@ function BitcoinConnectLightningGoalsManagerInner({
         lastUpdated: Date.now(),
         todayDate: new Date().toISOString().split('T')[0],
         todayWords: 0,
-        baselineWordCount: 0, // Reset baseline word count on new stake
+        baselineWordCount: currentWordCount, // Set baseline to current word count at stake creation
         todayGoalMet: false,
         todayRewardSent: false,
         todayRewardAmount: 0,
