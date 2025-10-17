@@ -431,6 +431,14 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       }
       
       // Check if goal is met
+      console.log('[MainApp] 🔍 Goal check:', {
+        todayWords: updatedGoals.todayWords,
+        dailyWordGoal: goals.dailyWordGoal,
+        todayRewardSent: goals.todayRewardSent,
+        goalMet: updatedGoals.todayWords >= goals.dailyWordGoal,
+        rewardNotSent: !goals.todayRewardSent
+      })
+      
       if (updatedGoals.todayWords >= goals.dailyWordGoal && !goals.todayRewardSent) {
         console.log('[MainApp] 🎉 Goal reached! Sending reward...')
         
@@ -481,7 +489,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       await updateLightningGoals(authData.pubkey, updatedGoals, authData)
       console.log('[MainApp] ✅ Lightning Goals updated successfully')
       
-    } catch (error) {
+      } catch (error) {
       console.error('[MainApp] ❌ Error updating Lightning Goals:', error)
     }
   }
@@ -551,8 +559,8 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                   const signer = await resumeNip46Session(authData.sessionData)
                   if (signer) {
                     console.log("[NostrJournal] ✅ Legacy signer connector also set up for compatibility")
-                  }
-                } catch (error) {
+        }
+      } catch (error) {
                   console.warn("[NostrJournal] ⚠️ Could not set up legacy signer connector:", error)
                 }
               } else {
@@ -581,7 +589,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
         
         // Use only relay notes since local storage is disabled
         const allNotes = relayNotes.map(note => ({
-          ...note,
+                ...note,
           source: 'relay',
           fetchedFromRelays: true,
           publishedToRelays: true, // If fetched from relays, it was previously published
@@ -606,13 +614,13 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
 
         setIsLoading(false)
         setSyncStatus("synced")
-          setLastSyncTime(new Date())
+              setLastSyncTime(new Date())
 
         console.log("[NostrJournal] ✅ Notes loaded successfully:", validatedNotes.length)
 
-      } catch (error) {
+          } catch (error) {
         console.error("[NostrJournal] Error loading notes:", error)
-        setSyncStatus("error")
+            setSyncStatus("error")
         setConnectionError(error instanceof Error ? error.message : "Failed to load notes")
         setIsLoading(false)
         // CRITICAL: Set empty array instead of leaving undefined
@@ -908,6 +916,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
             // AUDIT POINT 5: Calculate total word count from ALL notes after save
             const updatedNotes = notes.map(n => n.id === updatedNote.id ? finalNote : n)
             const totalWordCount = calculateTotalWordCount(updatedNotes)
+            console.log("[NostrJournal] 🔍 About to call checkRewardEligibility with wordCount:", totalWordCount)
             
             console.log("[NostrJournal] 📊 Total word count after save:", totalWordCount)
             
