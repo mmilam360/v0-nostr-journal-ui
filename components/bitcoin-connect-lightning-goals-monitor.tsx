@@ -43,7 +43,7 @@ function BitcoinConnectLightningGoalsMonitorInner({
   // Check if goal met
   useEffect(() => {
     if (goals && !hasCheckedToday && goals.status === 'active') {
-      const wordsSinceStake = currentWordCount - (goals.baselineWordCount || 0)
+      const wordsSinceStake = Math.max(0, currentWordCount - (goals.baselineWordCount || 0))
       if (wordsSinceStake >= goals.dailyWordGoal) {
         console.log('[Monitor] 🎯 Goal reached!', { wordsSinceStake, goal: goals.dailyWordGoal })
         checkAndSendReward()
@@ -76,7 +76,7 @@ function BitcoinConnectLightningGoalsMonitorInner({
     }
     
     // Check if goal is actually met
-    const wordsSinceStake = currentWordCount - (goals.baselineWordCount || 0)
+    const wordsSinceStake = Math.max(0, currentWordCount - (goals.baselineWordCount || 0))
     if (wordsSinceStake < goals.dailyWordGoal) {
       console.log('[Monitor] ⚠️ Goal not actually met:', { wordsSinceStake, goal: goals.dailyWordGoal })
       return
@@ -152,44 +152,7 @@ function BitcoinConnectLightningGoalsMonitorInner({
     }
   }
   
-  if (!goals || goals.status !== 'active') {
-    return null
-  }
-  
-  const wordsSinceStake = currentWordCount - (goals.baselineWordCount || 0)
-  const progressPercentage = Math.min(100, (wordsSinceStake / goals.dailyWordGoal) * 100)
-  
-  return (
-    <div className="fixed bottom-4 right-4 bg-white p-4 rounded-lg shadow-lg max-w-xs">
-      <div className="flex items-center justify-between mb-2">
-        <h3 className="font-bold">Lightning Goals</h3>
-        <span className="text-sm text-gray-500">
-          {wordsSinceStake} / {goals.dailyWordGoal}
-        </span>
-      </div>
-      
-      <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
-        <div 
-          className="bg-orange-500 h-2 rounded-full transition-all"
-          style={{ width: `${progressPercentage}%` }}
-        />
-      </div>
-      
-      <div className="text-xs text-gray-600 mb-2">
-        <div>Reward: {goals.dailyReward} sats</div>
-        <div>Balance: {goals.currentBalance} sats</div>
-        <div>Streak: {goals.currentStreak || 0} days</div>
-      </div>
-      
-      {wordsSinceStake >= goals.dailyWordGoal ? (
-        <p className="text-sm text-green-600 font-medium">
-          {goals.todayRewardSent ? '✅ Reward sent!' : '🎉 Goal complete! Processing reward...'}
-        </p>
-      ) : (
-        <p className="text-sm text-gray-600">
-          {goals.dailyWordGoal - wordsSinceStake} words to go
-        </p>
-      )}
-    </div>
-  )
+  // This component only handles the monitoring logic
+  // The UI is handled by the Lightning Goals modal
+  return null
 }
