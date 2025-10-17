@@ -47,22 +47,21 @@ export async function onRequestPost(context: any) {
     let invoiceStatus
     let lookupMethod = ''
     
-    // Method 1: Try by payment_hash
-    try {
-      log('🔍 Trying lookup by payment_hash...')
-      
-      invoiceStatus = await nwc.lookupInvoice({
-        payment_hash: paymentHash
-      })
-      
-      lookupMethod = 'payment_hash'
-      log('✅ Found via payment_hash')
-      
-    } catch (hashError) {
-      log('⚠️ payment_hash lookup failed:', hashError.message)
-      
-      // Method 2: Fallback to invoice string
-      if (invoiceString) {
+    // Since we're using a tracking ID instead of a real payment hash,
+    // we need a different approach to verify payments
+    
+    log('🔍 Payment hash is tracking ID, using alternative verification...')
+    
+    // For now, let's use a simple approach:
+    // 1. Check if enough time has passed (invoices usually settle quickly)
+    // 2. Try to lookup by invoice string if available
+    // 3. Return pending status to allow manual confirmation
+    
+    let invoiceStatus = null
+    let lookupMethod = 'tracking_id_verification'
+    
+    if (invoiceString) {
+      try {
         log('🔍 Trying lookup by invoice string...')
         
         invoiceStatus = await nwc.lookupInvoice({
@@ -71,9 +70,28 @@ export async function onRequestPost(context: any) {
         
         lookupMethod = 'invoice_string'
         log('✅ Found via invoice string')
-      } else {
-        throw hashError
+        
+      } catch (invoiceError) {
+        log('⚠️ invoice string lookup failed:', invoiceError.message)
+        
+        // Fallback: return pending status
+        invoiceStatus = {
+          settled: false,
+          paid: false,
+          amount: 0,
+          state: 'pending'
+        }
+        lookupMethod = 'invoice_lookup_failed'
       }
+    } else {
+      log('⚠️ No invoice string available for verification')
+      invoiceStatus = {
+        settled: false,
+        paid: false,
+        amount: 0,
+        state: 'pending'
+      }
+      lookupMethod = 'no_invoice_string'
     }
     
     log('📋 Invoice status:', invoiceStatus)

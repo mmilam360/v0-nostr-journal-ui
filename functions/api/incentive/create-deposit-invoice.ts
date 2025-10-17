@@ -56,40 +56,22 @@ export async function onRequestPost(context: any) {
     log('✅ Invoice created via NWC')
     log('📋 Invoice string:', invoice.paymentRequest?.substring(0, 80) + '...')
     
-    // Extract payment hash from invoice response (NWC usually provides it)
-    log('🔍 Extracting payment hash...')
+    // Since we can't decode BOLT11 in Cloudflare Functions, we'll use the invoice string directly
+    // The payment hash will be extracted by the Lightning node when we verify payment
+    log('🔍 Using invoice string for payment verification...')
     
-    let paymentHash = invoice.paymentHash || invoice.payment_hash || invoice.hash
+    // Generate a tracking ID for this invoice (not a real payment hash)
+    const timestamp = Date.now()
+    const trackingId = `${userPubkey.substring(0, 8)}-${amountSats}-${timestamp}`
     
-    // If not provided by NWC, generate a temporary hash for tracking
-    if (!paymentHash) {
-      // Generate a simple hash based on timestamp and amount for tracking
-      const timestamp = Date.now()
-      const hashInput = `${userPubkey}-${amountSats}-${timestamp}`
-      
-      // Simple hash generation without Buffer dependency
-      let hash = ''
-      for (let i = 0; i < hashInput.length; i++) {
-        const char = hashInput.charCodeAt(i)
-        hash += char.toString(16).padStart(2, '0')
-      }
-      
-      // Ensure 64 characters
-      paymentHash = hash.substring(0, 64).padEnd(64, '0')
-      log('⚠️ Generated temporary payment hash for tracking:', paymentHash)
-    }
-    
-    if (!paymentHash || paymentHash.length !== 64) {
-      throw new Error('Could not extract or generate valid payment hash')
-    }
-    
-    log('✅ Payment hash ready:', paymentHash)
+    log('✅ Invoice created, using invoice string for verification')
+    log('📋 Tracking ID:', trackingId)
     log('========================================')
     
     const response = {
       success: true,
       invoice: invoice.paymentRequest,      // BOLT11 invoice string
-      paymentHash: paymentHash,             // 64-char hex hash
+      paymentHash: trackingId,              // Tracking ID (not real payment hash)
       amount: amountSats,
       timestamp: new Date().toISOString()
     }
