@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { WalletConnect } from './wallet-connect'
 import { ClientOnly } from './client-only'
 import { LightningInvoiceQR } from './lightning-invoice-qr'
+import * as bolt11 from 'bolt11'
 
 interface InvoiceData {
   invoice: string
@@ -272,9 +273,27 @@ function BitcoinConnectLightningGoalsManagerInner({
         amount: data.amount
       })
       
+      // Extract real payment hash from BOLT11 invoice
+      let realPaymentHash = data.paymentHash
+      try {
+        console.log('[Manager] 🔍 Decoding BOLT11 invoice to extract real payment hash...')
+        const decoded = bolt11.decode(data.invoice)
+        console.log('[Manager] 📋 Decoded invoice:', decoded)
+        
+        if (decoded.paymentHash) {
+          realPaymentHash = decoded.paymentHash
+          console.log('[Manager] ✅ Real payment hash extracted:', realPaymentHash)
+        } else {
+          console.log('[Manager] ⚠️ No payment hash found in decoded invoice, using API response hash')
+        }
+      } catch (error) {
+        console.log('[Manager] ⚠️ Failed to decode BOLT11 invoice:', error.message)
+        console.log('[Manager] ⚠️ Using API response payment hash as fallback')
+      }
+      
       setInvoiceData({
         invoice: data.invoice,
-        paymentHash: data.paymentHash,
+        paymentHash: realPaymentHash,
         amount: data.amount
       })
       
@@ -333,7 +352,12 @@ function BitcoinConnectLightningGoalsManagerInner({
   // ============================================
   
   function startPaymentVerification(paymentHash: string, invoice: string) {
-    console.log('[Manager] Starting payment verification...')
+    console.log('[Manager] 🔍 Starting payment verification...')
+    console.log('[Manager] 📋 Verification details:', {
+      paymentHash: paymentHash.substring(0, 16) + '...',
+      invoicePreview: invoice.substring(0, 50) + '...',
+      paymentMethod: paymentMethod
+    })
     
     let attempts = 0
     const maxAttempts = 60 // 3 minutes (60 * 3 seconds)
@@ -342,7 +366,11 @@ function BitcoinConnectLightningGoalsManagerInner({
       attempts++
       
       try {
-        console.log(`[Manager] Checking payment (attempt ${attempts}/${maxAttempts})...`)
+        console.log(`[Manager] 🔍 Checking payment (attempt ${attempts}/${maxAttempts})...`)
+        console.log('[Manager] 📋 Sending to API:', {
+          paymentHash: paymentHash.substring(0, 16) + '...',
+          invoicePreview: invoice.substring(0, 50) + '...'
+        })
         
         const response = await fetch('/api/incentive/verify-payment', {
           method: 'POST',
@@ -354,6 +382,7 @@ function BitcoinConnectLightningGoalsManagerInner({
         })
         
         const result = await response.json()
+        console.log('[Manager] 📡 API response:', result)
         
         if (result.paid) {
           console.log('[Manager] 🎉 PAYMENT CONFIRMED!')
@@ -366,18 +395,27 @@ function BitcoinConnectLightningGoalsManagerInner({
           setScreen('active')
           
         } else if (attempts >= maxAttempts) {
-          console.log('[Manager] ⏰ Verification timeout')
+          console.log('[Manager] ⏰ Verification timeout after', maxAttempts, 'attempts')
           clearInterval(interval)
-          alert('Payment verification timed out. Please contact support if you paid.')
           setLoading(false)
+          alert('Payment verification timed out. Please check your wallet or try again.')
+          
+        } else {
+          console.log('[Manager] ⏳ Payment not confirmed yet, waiting... (attempt', attempts, 'of', maxAttempts, ')')
         }
         
       } catch (error) {
         console.error('[Manager] ❌ Verification error:', error)
+        console.error('[Manager] ❌ Error details:', {
+          message: error.message,
+          attempts: attempts,
+          maxAttempts: maxAttempts
+        })
         
         if (attempts >= maxAttempts) {
           clearInterval(interval)
           setLoading(false)
+          alert('Payment verification failed after maximum attempts. Please try again.')
         }
       }
     }, 3000) // Check every 3 seconds
