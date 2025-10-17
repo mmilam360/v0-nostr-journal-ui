@@ -90,6 +90,11 @@ function WalletConnectInner() {
         // Set webln on window for compatibility
         window.webln = provider
         
+        // Ensure enabled property is set
+        if (window.webln) {
+          window.webln.enabled = true
+        }
+        
         // Get wallet info
         try {
           const info = await provider.getInfo()

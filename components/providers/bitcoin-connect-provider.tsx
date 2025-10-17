@@ -14,6 +14,10 @@ export function BitcoinConnectProvider({ children }: { children: React.ReactNode
         onConnected((provider) => {
           console.log('[BitcoinConnectProvider] ✅ Provider connected:', provider)
           window.webln = provider
+          // Ensure enabled property is set
+          if (window.webln) {
+            window.webln.enabled = true
+          }
         })
         
         console.log('[BitcoinConnectProvider] ✅ Bitcoin Connect initialized')

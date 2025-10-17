@@ -43,10 +43,27 @@ function BitcoinConnectLightningGoalsManagerInner({
   
   // Check connection state and load user data
   useEffect(() => {
-    const checkConnection = () => {
-      const connected = !!(window.webln && window.webln.enabled)
-      console.log('[Manager] 🔍 Checking connection state:', { connected, webln: !!window.webln })
-      setIsConnected(connected)
+    const checkConnection = async () => {
+      if (!window.webln) {
+        console.log('[Manager] 🔍 No WebLN provider available')
+        setIsConnected(false)
+        return
+      }
+      
+      try {
+        // Try to get wallet info to test if it's actually connected
+        const info = await window.webln.getInfo()
+        console.log('[Manager] 🔍 WebLN provider is connected:', { 
+          hasInfo: !!info, 
+          webln: !!window.webln,
+          enabled: window.webln.enabled,
+          provider: window.webln
+        })
+        setIsConnected(true)
+      } catch (error) {
+        console.log('[Manager] 🔍 WebLN provider not connected:', error.message)
+        setIsConnected(false)
+      }
     }
     
     // Check initial state
@@ -68,7 +85,7 @@ function BitcoinConnectLightningGoalsManagerInner({
     document.addEventListener('bc:disconnected', handleDisconnected)
     
     // Also listen for window.webln changes
-    const interval = setInterval(checkConnection, 1000) // Check every second
+    const interval = setInterval(checkConnection, 2000) // Check every 2 seconds
     
     return () => {
       document.removeEventListener('bc:connected', handleConnected)
