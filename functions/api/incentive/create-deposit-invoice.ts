@@ -1,5 +1,5 @@
 import { NostrWebLNProvider } from '@getalby/sdk'
-import { decodeBolt11 } from './simple-bolt11-decoder'
+import * as bolt11 from 'bolt11'
 
 const log = (msg: string, data?: any) => console.log(`[CreateInvoice] ${msg}`, data || '')
 
@@ -57,39 +57,35 @@ export async function onRequestPost(context: any) {
     log('✅ Invoice created via NWC')
     log('📋 Invoice string:', invoice.paymentRequest?.substring(0, 80) + '...')
     
-    // Try to get the real payment hash from the NWC response
-    log('🔍 Extracting payment hash from NWC response...')
-    log('📋 NWC response keys:', Object.keys(invoice))
+    // Extract the REAL payment hash from the BOLT11 invoice
+    log('🔍 Extracting REAL payment hash from BOLT11 invoice...')
     
     let paymentHash = ''
     
-    // Check if NWC response already includes payment hash
-    if (invoice.paymentHash) {
-      paymentHash = invoice.paymentHash
-      log('✅ Payment hash from NWC response:', paymentHash)
-    } else if (invoice.payment_hash) {
-      paymentHash = invoice.payment_hash
-      log('✅ Payment hash from NWC response (snake_case):', paymentHash)
-    } else if (invoice.hash) {
-      paymentHash = invoice.hash
-      log('✅ Payment hash from NWC response (hash):', paymentHash)
-    } else {
-      log('⚠️ No payment hash in NWC response')
-      log('⚠️ BOLT11 decoding is complex in Cloudflare Workers')
-      log('⚠️ Using invoice string directly for verification')
+    try {
+      log('🔍 Decoding BOLT11 invoice...')
+      log('📋 Invoice string length:', invoice.paymentRequest.length)
+      log('📋 Invoice preview:', invoice.paymentRequest.substring(0, 50) + '...')
       
-      // Since we can't reliably extract the payment hash in Cloudflare Workers,
-      // we'll use the invoice string directly for verification
-      // The verify-payment function will use the invoice string for lookup
-      const invoiceTimestamp = Date.now()
-      paymentHash = `${userPubkey.substring(0, 8)}-${amountSats}-${invoiceTimestamp}`
-      log('📋 Generated tracking ID for invoice:', paymentHash)
-      log('📋 Will use invoice string for verification')
+      const decoded = bolt11.decode(invoice.paymentRequest)
+      paymentHash = decoded.tagsObject.payment_hash
+      
+      if (!paymentHash || !/^[a-f0-9]{64}$/i.test(paymentHash)) {
+        throw new Error(`Invalid payment hash: ${paymentHash}`)
+      }
+      
+      log('✅ REAL payment hash extracted:', paymentHash)
+      log('✅ Hash length:', paymentHash.length)
+      log('✅ Hash format valid:', /^[a-f0-9]{64}$/i.test(paymentHash))
+      
+    } catch (decodeError) {
+      log('❌ Failed to decode BOLT11 invoice:', decodeError.message)
+      log('❌ This is critical - payment verification will fail')
+      throw new Error(`Failed to extract payment hash: ${decodeError.message}`)
     }
     
     log('📋 Final payment hash:', paymentHash)
-    log('📋 Invoice string length:', invoice.paymentRequest.length)
-    log('✅ Invoice created with payment hash')
+    log('✅ Invoice created with REAL payment hash')
     log('========================================')
     
     const response = {

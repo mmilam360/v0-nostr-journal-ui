@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { X } from 'lucide-react'
-import { LightningGoalsManager } from './lightning-goals-manager'
+import { BitcoinConnectLightningGoalsManager } from './bitcoin-connect-lightning-goals-manager'
 
 interface IncentiveModalProps {
   isOpen: boolean
@@ -70,14 +70,9 @@ export function IncentiveModal({
         </CardHeader>
         
         <CardContent>
-          <LightningGoalsManager
+          <BitcoinConnectLightningGoalsManager
             userPubkey={userPubkey}
             authData={authData}
-            currentWordCount={lastSavedWordCount}
-            userLightningAddress={userLightningAddress || ''}
-            onWordCountProcessed={onWordCountProcessed}
-            onSetupStatusChange={handleSetupStatusChange}
-            onStakeActivated={onStakeActivated}
           />
         </CardContent>
       </Card>

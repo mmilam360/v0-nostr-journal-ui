@@ -34,7 +34,7 @@ import { getLightningGoals } from "@/lib/lightning-goals"
 // LightningGoalsMonitor will be dynamically imported below
 import dynamic from "next/dynamic"
 
-// Dynamically import IncentiveModal to avoid SSR issues with QRCode
+// Dynamically import Bitcoin Connect IncentiveModal to avoid SSR issues
 const IncentiveModal = dynamic(() => import("@/components/incentive-modal").then(mod => ({ default: mod.IncentiveModal })), {
   ssr: false,
   loading: () => (
@@ -47,8 +47,8 @@ const IncentiveModal = dynamic(() => import("@/components/incentive-modal").then
   )
 })
 
-// Dynamically import LightningGoalsMonitor to avoid SSR issues
-const LightningGoalsMonitor = dynamic(() => import("@/components/lightning-goals-monitor").then(mod => ({ default: mod.LightningGoalsMonitor })), {
+// Dynamically import Bitcoin Connect LightningGoalsMonitor to avoid SSR issues
+const LightningGoalsMonitor = dynamic(() => import("@/components/bitcoin-connect-lightning-goals-monitor").then(mod => ({ default: mod.BitcoinConnectLightningGoalsMonitor })), {
   ssr: false,
   loading: () => null
 })
