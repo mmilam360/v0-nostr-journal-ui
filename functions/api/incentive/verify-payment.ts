@@ -41,13 +41,36 @@ export async function onRequestPost(context: any) {
     
     log('✅ NWC connected successfully')
     
+    // Get wallet info for debugging
+    log('📱 Getting wallet info...')
+    let walletInfo = null
+    try {
+      walletInfo = await nwc.getInfo()
+      log('📱 Wallet info:', {
+        alias: walletInfo.alias || 'Unknown',
+        pubkey: walletInfo.pubkey?.substring(0, 16) || 'Unknown',
+        network: walletInfo.network || 'Unknown',
+        methods: walletInfo.methods || []
+      })
+      
+      // Check if lookupInvoice method is available
+      if (walletInfo.methods && Array.isArray(walletInfo.methods)) {
+        if (!walletInfo.methods.includes('lookupInvoice')) {
+          log('❌ lookupInvoice method NOT available!')
+          log('❌ Available methods:', walletInfo.methods)
+          throw new Error('NWC connection does not have lookupInvoice permission. Please reconfigure in Alby Hub with lookupInvoice enabled.')
+        }
+        log('✅ lookupInvoice method is available')
+      }
+    } catch (infoError) {
+      log('⚠️ Could not get wallet info:', infoError.message)
+    }
+    
     // Look up invoice via NWC
     log('🔍 Looking up invoice via NWC...')
-    
-    // Since we can't decode bolt11 in Cloudflare Functions, let's use a different approach
-    // We'll try to verify payment using the invoice string directly via NWC
-    
-    log('🔍 Using invoice string for payment verification...')
+    log('📋 Payment hash:', paymentHash)
+    log('📋 Invoice string length:', invoiceString?.length || 0)
+    log('📋 Invoice string preview:', invoiceString?.substring(0, 50) + '...' || 'None')
     
     let invoiceStatus = null
     let lookupMethod = 'invoice_verification'
@@ -55,58 +78,61 @@ export async function onRequestPost(context: any) {
     if (invoiceString) {
       try {
         log('🔍 Attempting invoice lookup via NWC...')
-        log('📋 Invoice string length:', invoiceString.length)
-        log('📋 Invoice string preview:', invoiceString.substring(0, 50) + '...')
         
-        // Use the working method: lookup by invoice string directly
-        // This is how it was working before - NWC can verify invoices by their string
+        // Method 1: Try with invoice string directly
         try {
-          log('🔍 Looking up invoice by invoice string...')
-          log('📋 Invoice string length:', invoiceString.length)
-          
-          // The working method: lookup by invoice string
+          log('🔍 Method 1: Looking up by invoice string...')
           invoiceStatus = await nwc.lookupInvoice(invoiceString)
-          
           lookupMethod = 'nwc_invoice_string'
           log('✅ Invoice lookup successful with invoice string')
           
         } catch (invoiceError) {
           log('⚠️ Invoice string lookup failed:', invoiceError.message)
+          log('⚠️ Error type:', invoiceError.constructor.name)
           
-          // Fallback: try with payment hash (in case the invoice string method doesn't work)
+          // Method 2: Try with payment hash
           try {
-            log('🔍 Trying fallback with payment hash...')
+            log('🔍 Method 2: Looking up by payment hash...')
             invoiceStatus = await nwc.lookupInvoice({
               payment_hash: paymentHash
             })
-            lookupMethod = 'nwc_payment_hash_fallback'
-            log('✅ Invoice lookup successful with payment hash fallback')
+            lookupMethod = 'nwc_payment_hash'
+            log('✅ Invoice lookup successful with payment hash')
             
           } catch (hashError) {
-            log('⚠️ Payment hash lookup also failed:', hashError.message)
+            log('⚠️ Payment hash lookup failed:', hashError.message)
+            log('⚠️ Error type:', hashError.constructor.name)
             
-            // All methods failed - return pending
-            invoiceStatus = {
-              settled: false,
-              paid: false,
-              amount: 0,
-              state: 'pending'
+            // Method 3: Try with different parameter format
+            try {
+              log('🔍 Method 3: Looking up with invoice parameter...')
+              invoiceStatus = await nwc.lookupInvoice({
+                invoice: invoiceString
+              })
+              lookupMethod = 'nwc_invoice_param'
+              log('✅ Invoice lookup successful with invoice parameter')
+              
+            } catch (paramError) {
+              log('⚠️ Invoice parameter lookup failed:', paramError.message)
+              log('⚠️ Error type:', paramError.constructor.name)
+              
+              // All methods failed
+              invoiceStatus = {
+                settled: false,
+                paid: false,
+                amount: 0,
+                state: 'pending'
+              }
+              lookupMethod = 'all_lookup_methods_failed'
+              log('❌ All lookup methods failed')
             }
-            lookupMethod = 'all_lookup_methods_failed'
           }
         }
         
-        // TODO: Implement proper payment verification
-        // Options:
-        // 1. Use a different Lightning node API
-        // 2. Implement webhook-based verification
-        // 3. Use a different NWC method
-        // 4. Manual confirmation by user
-        
       } catch (lookupError) {
         log('❌ Invoice lookup failed:', lookupError.message)
+        log('❌ Error type:', lookupError.constructor.name)
         
-        // Fallback: return pending status
         invoiceStatus = {
           settled: false,
           paid: false,
@@ -126,9 +152,15 @@ export async function onRequestPost(context: any) {
       lookupMethod = 'no_invoice_string'
     }
     
-    log('📋 Invoice status:', invoiceStatus)
+    log('📋 Invoice status received:', JSON.stringify(invoiceStatus, null, 2))
     
     // Check if paid (multiple possible field names)
+    log('🔍 Checking payment status...')
+    log('  settled:', invoiceStatus.settled)
+    log('  state:', invoiceStatus.state)
+    log('  status:', invoiceStatus.status)
+    log('  paid:', invoiceStatus.paid)
+    
     const isPaid = invoiceStatus.settled === true || 
                    invoiceStatus.state === 'settled' ||
                    invoiceStatus.status === 'SETTLED' ||
@@ -139,8 +171,19 @@ export async function onRequestPost(context: any) {
                    (invoiceStatus.amt_msat ? Math.floor(invoiceStatus.amt_msat / 1000) : null)
     
     log('========================================')
-    log(isPaid ? '✅ PAID' : '⏳ PENDING')
+    log('🔍 PAYMENT STATUS ANALYSIS')
+    log('========================================')
+    log('✅ Is paid:', isPaid)
     log('💰 Amount:', amount, 'sats')
+    log('🔍 Lookup method:', lookupMethod)
+    log('📋 Raw status fields:')
+    log('  - settled:', invoiceStatus.settled)
+    log('  - state:', invoiceStatus.state)
+    log('  - status:', invoiceStatus.status)
+    log('  - paid:', invoiceStatus.paid)
+    log('  - amount:', invoiceStatus.amount)
+    log('  - value:', invoiceStatus.value)
+    log('  - amt_msat:', invoiceStatus.amt_msat)
     log('========================================')
     
     const response = {
