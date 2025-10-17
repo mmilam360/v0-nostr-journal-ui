@@ -1,6 +1,18 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+/* Bitcoin Connect Styles */
+.bitcoin-connect-button {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.bitcoin-connect-balance {
+  display: flex;
+  align-items: center;
+}
+
 @custom-variant dark (&:is(.dark *));
 
 /* Improved mobile stability fixes - prevent bounce and zoom issues */

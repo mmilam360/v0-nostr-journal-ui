@@ -6,7 +6,6 @@ import { Suspense } from "react"
 import "./globals.css"
 import { ThemeProvider } from "@/lib/theme-provider"
 import { BitcoinConnectProvider } from '@getalby/bitcoin-connect-react'
-import '@getalby/bitcoin-connect-react/dist/styles.css'
 
 export const metadata: Metadata = {
   title: "Nostr Journal",

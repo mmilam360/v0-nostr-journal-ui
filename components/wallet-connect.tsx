@@ -19,13 +19,17 @@ export function WalletConnect() {
           <p className="mb-3 text-sm text-gray-600">
             Connect your Lightning wallet to deposit stake
           </p>
-          <bc-button />
+          <div className="bitcoin-connect-button">
+            <bc-button />
+          </div>
         </div>
       ) : (
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="text-green-600 font-medium">✓ Wallet Connected</span>
-            <bc-balance />
+            <div className="bitcoin-connect-balance">
+              <bc-balance />
+            </div>
           </div>
           <button 
             onClick={() => {
