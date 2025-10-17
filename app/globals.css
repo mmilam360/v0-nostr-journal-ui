@@ -1,6 +1,15 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+/* Bitcoin Connect CSS Variables */
+:root {
+  --bc-color-brand: #196ce7;
+  --bc-color-brand-dark: #3994ff;
+  --bc-brand-mix: 100%;
+  --bc-color-brand-button-text: #ffffff;
+  --bc-color-brand-button-text-dark: #ffffff;
+}
+
 /* Bitcoin Connect Styles */
 .bitcoin-connect-button {
   display: flex;
