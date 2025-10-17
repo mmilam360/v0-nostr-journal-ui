@@ -50,6 +50,16 @@ function BitcoinConnectLightningGoalsManagerInner({
   const [invoiceData, setInvoiceData] = useState<InvoiceData | null>(null)
   const [loading, setLoading] = useState(false)
   const [paymentMethod, setPaymentMethod] = useState<'connect' | 'invoice' | null>(null)
+  const [verificationStarted, setVerificationStarted] = useState(false)
+  
+  // Start payment verification for QR code payments
+  useEffect(() => {
+    if (screen === 'invoice' && paymentMethod === 'invoice' && invoiceData && !loading && !verificationStarted) {
+      console.log('[Manager] 🔍 Starting payment verification for QR code payment...')
+      setVerificationStarted(true)
+      startPaymentVerification(invoiceData.paymentHash, invoiceData.invoice)
+    }
+  }, [screen, paymentMethod, invoiceData, loading, verificationStarted])
   
   // Check connection state and load user data
   useEffect(() => {
@@ -214,6 +224,7 @@ function BitcoinConnectLightningGoalsManagerInner({
     
     console.log('[Manager] ✅ All validations passed, creating invoice...')
     setLoading(true)
+    setVerificationStarted(false) // Reset verification flag
     console.log('[Manager] Creating deposit invoice...')
     console.log('[Manager] Settings:', { goalWords, stakeAmount, dailyReward, lightningAddress })
     
@@ -441,28 +452,27 @@ function BitcoinConnectLightningGoalsManagerInner({
   
   return (
     <div className="max-w-md mx-auto p-6 bg-white rounded-lg shadow">
-      {/* Wallet Connection - Always show first */}
-      <div className="mb-6">
-        <WalletConnect />
-      </div>
-      
-      {/* Show instructions if not connected */}
-      {!isConnected && (
-        <div className="text-center py-4">
-          <p className="text-sm text-gray-600">
-            Connect your Lightning wallet above to set up your writing goals and stake sats
-          </p>
-        </div>
-      )}
-      
-      {/* Show setup screen if connected and screen is setup */}
-      {isConnected && screen === 'setup' && (
+      {/* Show setup screen directly */}
+      {screen === 'setup' && (
         <div className="space-y-4">
-          <div className="flex items-center gap-2 mb-4">
-            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-            <span className="text-sm text-green-600 font-medium">Wallet Connected</span>
-          </div>
+          {/* Optional wallet connection status */}
+          {isConnected && (
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+              <span className="text-sm text-green-600 font-medium">Wallet Connected</span>
+            </div>
+          )}
           <h2 className="text-xl font-bold">Create Your Writing Goal</h2>
+          
+          {/* Optional wallet connection */}
+          {!isConnected && (
+            <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+              <p className="text-sm text-blue-700 dark:text-blue-300 mb-2">
+                Optional: Connect a wallet for 1-click payments
+              </p>
+              <WalletConnect />
+            </div>
+          )}
           
           <div>
             <label className="block text-sm font-medium mb-1">
@@ -546,6 +556,10 @@ function BitcoinConnectLightningGoalsManagerInner({
               {/* Option 1: Connect Wallet (Bitcoin Connect) */}
               <button
                 onClick={async () => {
+                  if (!isConnected) {
+                    alert('Please connect your wallet using the button at the top of the page first')
+                    return
+                  }
                   setPaymentMethod('connect')
                   await createDepositInvoice()
                 }}
@@ -564,9 +578,11 @@ function BitcoinConnectLightningGoalsManagerInner({
                     Pay with 1-click using Bitcoin Connect
                   </p>
                 </div>
-                <div className="absolute top-2 right-2">
-                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                </div>
+                {isConnected && (
+                  <div className="absolute top-2 right-2">
+                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                  </div>
+                )}
               </button>
               
               {/* Option 2: Generate Invoice (QR Code) */}
@@ -608,8 +624,8 @@ function BitcoinConnectLightningGoalsManagerInner({
         </div>
       )}
       
-      {/* Show invoice screen if connected and screen is invoice */}
-      {isConnected && screen === 'invoice' && invoiceData && (
+      {/* Show invoice screen if screen is invoice */}
+      {screen === 'invoice' && invoiceData && (
         <div className="space-y-6">
           <h2 className="text-2xl font-bold text-center">Pay Your Stake</h2>
           
@@ -672,6 +688,21 @@ function BitcoinConnectLightningGoalsManagerInner({
                   invoice={invoiceData.invoice}
                   amount={invoiceData.amount}
                 />
+                
+                {/* Payment verification for QR code payments */}
+                {paymentMethod === 'invoice' && (
+                  <div className="mt-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
+                    <div className="text-center">
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-yellow-600 dark:border-yellow-400 mx-auto mb-2"></div>
+                      <p className="text-sm text-yellow-800 dark:text-yellow-300">
+                        ⏳ Waiting for payment confirmation...
+                      </p>
+                      <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-1">
+                        This usually takes 5-30 seconds
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
               
               {/* Secondary: Connect Wallet Alternative */}
@@ -716,6 +747,7 @@ function BitcoinConnectLightningGoalsManagerInner({
               setScreen('setup')
               setPaymentMethod(null)
               setInvoiceData(null)
+              setVerificationStarted(false)
             }}
             className="w-full py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
           >
