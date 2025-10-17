@@ -43,24 +43,37 @@ function BitcoinConnectLightningGoalsManagerInner({
   
   // Check connection state and load user data
   useEffect(() => {
-    if (typeof window !== 'undefined' && window.webln) {
-      const checkConnection = () => {
-        setIsConnected(window.webln?.enabled || false)
-      }
-      
-      checkConnection()
-      
-      // Listen for connection events
-      const handleConnected = () => setIsConnected(true)
-      const handleDisconnected = () => setIsConnected(false)
-      
-      document.addEventListener('bc:connected', handleConnected)
-      document.addEventListener('bc:disconnected', handleDisconnected)
-      
-      return () => {
-        document.removeEventListener('bc:connected', handleConnected)
-        document.removeEventListener('bc:disconnected', handleDisconnected)
-      }
+    const checkConnection = () => {
+      const connected = !!(window.webln && window.webln.enabled)
+      console.log('[Manager] 🔍 Checking connection state:', { connected, webln: !!window.webln })
+      setIsConnected(connected)
+    }
+    
+    // Check initial state
+    checkConnection()
+    
+    // Listen for connection events
+    const handleConnected = () => {
+      console.log('[Manager] ✅ Wallet connected event received')
+      setIsConnected(true)
+    }
+    
+    const handleDisconnected = () => {
+      console.log('[Manager] ❌ Wallet disconnected event received')
+      setIsConnected(false)
+    }
+    
+    // Listen for both Bitcoin Connect events and WebLN changes
+    document.addEventListener('bc:connected', handleConnected)
+    document.addEventListener('bc:disconnected', handleDisconnected)
+    
+    // Also listen for window.webln changes
+    const interval = setInterval(checkConnection, 1000) // Check every second
+    
+    return () => {
+      document.removeEventListener('bc:connected', handleConnected)
+      document.removeEventListener('bc:disconnected', handleDisconnected)
+      clearInterval(interval)
     }
   }, [])
   
@@ -341,6 +354,14 @@ function BitcoinConnectLightningGoalsManagerInner({
   // RENDER
   // ============================================
   
+  // Debug logging
+  console.log('[Manager] 🎨 Rendering with state:', { 
+    isConnected, 
+    screen, 
+    loading,
+    lightningAddress: lightningAddress ? 'set' : 'not set'
+  })
+  
   return (
     <div className="max-w-md mx-auto p-6 bg-white rounded-lg shadow">
       {/* Wallet Connection - Always show first */}
@@ -348,16 +369,11 @@ function BitcoinConnectLightningGoalsManagerInner({
         <WalletConnect />
       </div>
       
-      {/* Show connect wallet screen if not connected */}
+      {/* Show instructions if not connected */}
       {!isConnected && (
-        <div className="text-center py-8">
-          <div className="text-4xl mb-4">⚡</div>
-          <h2 className="text-xl font-bold mb-2">Connect Your Lightning Wallet</h2>
-          <p className="text-gray-600 mb-4">
-            Connect your Lightning wallet to create a writing goal, stake sats, and receive rewards for reaching goals
-          </p>
-          <p className="text-sm text-gray-500">
-            Your wallet will be used to pay the stake invoice
+        <div className="text-center py-4">
+          <p className="text-sm text-gray-600">
+            Connect your Lightning wallet above to set up your writing goals and stake sats
           </p>
         </div>
       )}
