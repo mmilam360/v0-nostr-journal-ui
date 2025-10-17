@@ -64,9 +64,11 @@ function BitcoinConnectLightningGoalsManagerInner({
     }
   }, [])
   
-  // Load user's lightning address from profile
+  // Load user's lightning address from profile when wallet connects
   useEffect(() => {
     const loadUserProfile = async () => {
+      if (!isConnected) return // Only load when wallet is connected
+      
       try {
         // Try to get lightning address from window.webln first
         if (window.webln?.getInfo) {
@@ -90,7 +92,7 @@ function BitcoinConnectLightningGoalsManagerInner({
     }
     
     loadUserProfile()
-  }, [userPubkey])
+  }, [isConnected, userPubkey])
   
   // ============================================
   // STEP 1: CREATE DEPOSIT INVOICE (Backend)
@@ -107,11 +109,7 @@ function BitcoinConnectLightningGoalsManagerInner({
       loading 
     })
     
-    if (!isConnected) {
-      console.log('[Manager] ❌ Wallet not connected')
-      alert('Please connect your wallet first')
-      return
-    }
+    // Wallet connection is already handled by UI - this function only runs when connected
     
     // Validate required fields
     if (!lightningAddress || !lightningAddress.includes('@')) {
@@ -342,14 +340,29 @@ function BitcoinConnectLightningGoalsManagerInner({
   
   return (
     <div className="max-w-md mx-auto p-6 bg-white rounded-lg shadow">
-      {/* Wallet Connection */}
+      {/* Wallet Connection - Always show first */}
       <div className="mb-6">
         <WalletConnect />
       </div>
       
-      {/* Setup Screen */}
-      {screen === 'setup' && (
+      {/* Show setup only if wallet is connected */}
+      {!isConnected ? (
+        <div className="text-center py-8">
+          <div className="text-4xl mb-4">⚡</div>
+          <h2 className="text-xl font-bold mb-2">Connect Your Lightning Wallet</h2>
+          <p className="text-gray-600 mb-4">
+            Connect your Lightning wallet to create a writing goal and stake sats
+          </p>
+          <p className="text-sm text-gray-500">
+            Your wallet will be used to pay the stake invoice
+          </p>
+        </div>
+      ) : screen === 'setup' ? (
         <div className="space-y-4">
+          <div className="flex items-center gap-2 mb-4">
+            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+            <span className="text-sm text-green-600 font-medium">Wallet Connected</span>
+          </div>
           <h2 className="text-xl font-bold">Create Your Writing Goal</h2>
           
           <div>
@@ -415,26 +428,25 @@ function BitcoinConnectLightningGoalsManagerInner({
               placeholder="your@lightning.address"
             />
             <p className="text-xs text-gray-500 mt-1">
-              Where rewards will be sent (auto-filled from your profile)
+              Where rewards will be sent (auto-filled from your wallet or profile)
             </p>
+            {!lightningAddress && (
+              <p className="text-xs text-amber-600 mt-1">
+                ⚠️ No Lightning address found in wallet. Please enter one manually.
+              </p>
+            )}
           </div>
           
           <button
             onClick={createDepositInvoice}
-            disabled={!isConnected || loading || !lightningAddress || dailyReward <= 0 || stakeAmount <= 0}
+            disabled={loading || !lightningAddress || dailyReward <= 0 || stakeAmount <= 0}
             className="w-full py-3 bg-orange-500 text-white rounded font-medium
                      hover:bg-orange-600 disabled:bg-gray-300 disabled:cursor-not-allowed"
           >
             {loading ? 'Creating Invoice...' : 'Create Stake Invoice'}
           </button>
           
-          {!isConnected && (
-            <p className="text-xs text-red-500 text-center">
-              Please connect your wallet first
-            </p>
-          )}
-          
-          {isConnected && (!lightningAddress || dailyReward <= 0 || stakeAmount <= 0) && (
+          {(!lightningAddress || dailyReward <= 0 || stakeAmount <= 0) && (
             <p className="text-xs text-red-500 text-center">
               Please fill in all fields with valid values
             </p>
