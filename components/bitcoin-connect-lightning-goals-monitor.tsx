@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useBitcoinConnect } from '@getalby/bitcoin-connect-react'
 
 export function BitcoinConnectLightningGoalsMonitor({ 
   userPubkey, 
@@ -12,7 +11,6 @@ export function BitcoinConnectLightningGoalsMonitor({
   wordCount: number
   authData: any
 }) {
-  const { provider } = useBitcoinConnect()
   const [goals, setGoals] = useState<any>(null)
   const [hasCheckedToday, setHasCheckedToday] = useState(false)
   
@@ -45,8 +43,8 @@ export function BitcoinConnectLightningGoalsMonitor({
     let lightningAddress: string | null = null
     
     try {
-      if (provider) {
-        const info = await provider.getInfo()
+      if (window.webln && window.webln.enabled) {
+        const info = await window.webln.getInfo()
         lightningAddress = info.lightningAddress || null
         console.log('[Monitor] Lightning address from wallet:', lightningAddress)
       }

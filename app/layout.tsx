@@ -5,7 +5,7 @@ import { GeistMono } from "geist/font/mono"
 import { Suspense } from "react"
 import "./globals.css"
 import { ThemeProvider } from "@/lib/theme-provider"
-import { BitcoinConnectProvider } from '@getalby/bitcoin-connect-react'
+import '@getalby/bitcoin-connect'
 
 export const metadata: Metadata = {
   title: "Nostr Journal",
@@ -28,13 +28,12 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="format-detection" content="telephone=no" />
+        <script src="https://cdn.jsdelivr.net/npm/@getalby/bitcoin-connect@latest/dist/bitcoin-connect.min.js"></script>
       </head>
       <body className={`font-sans ${GeistSans.variable} ${GeistMono.variable}`}>
-        <BitcoinConnectProvider>
-          <ThemeProvider>
-            <Suspense fallback={null}>{children}</Suspense>
-          </ThemeProvider>
-        </BitcoinConnectProvider>
+        <ThemeProvider>
+          <Suspense fallback={null}>{children}</Suspense>
+        </ThemeProvider>
       </body>
     </html>
   )

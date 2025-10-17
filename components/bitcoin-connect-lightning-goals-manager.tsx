@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useBitcoinConnect } from '@getalby/bitcoin-connect-react'
 import { WalletConnect } from './wallet-connect'
 import * as bolt11 from 'bolt11'
 
@@ -18,13 +17,36 @@ export function BitcoinConnectLightningGoalsManager({
   userPubkey: string
   authData: any 
 }) {
-  const { isConnected, provider } = useBitcoinConnect()
+  const [isConnected, setIsConnected] = useState(false)
   
   const [screen, setScreen] = useState<'setup' | 'invoice' | 'active'>('setup')
   const [goalWords, setGoalWords] = useState(500)
   const [stakeAmount, setStakeAmount] = useState(100)
   const [invoiceData, setInvoiceData] = useState<InvoiceData | null>(null)
   const [loading, setLoading] = useState(false)
+  
+  // Check connection state
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.webln) {
+      const checkConnection = () => {
+        setIsConnected(window.webln?.enabled || false)
+      }
+      
+      checkConnection()
+      
+      // Listen for connection events
+      const handleConnected = () => setIsConnected(true)
+      const handleDisconnected = () => setIsConnected(false)
+      
+      document.addEventListener('bc:connected', handleConnected)
+      document.addEventListener('bc:disconnected', handleDisconnected)
+      
+      return () => {
+        document.removeEventListener('bc:connected', handleConnected)
+        document.removeEventListener('bc:disconnected', handleDisconnected)
+      }
+    }
+  }, [])
   
   // ============================================
   // STEP 1: CREATE DEPOSIT INVOICE (Backend)
@@ -91,14 +113,14 @@ export function BitcoinConnectLightningGoalsManager({
   // ============================================
   
   async function payInvoice() {
-    if (!invoiceData || !provider) return
+    if (!invoiceData || !window.webln) return
     
     setLoading(true)
     console.log('[Manager] 💸 Paying invoice...')
     
     try {
       // Use Bitcoin Connect to send payment from user's wallet
-      const paymentResult = await provider.sendPayment(invoiceData.invoice)
+      const paymentResult = await window.webln.sendPayment(invoiceData.invoice)
       
       console.log('[Manager] ✅ Payment sent!', paymentResult)
       console.log('[Manager] Waiting for confirmation...')

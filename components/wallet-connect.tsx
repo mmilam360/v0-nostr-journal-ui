@@ -1,16 +1,39 @@
 'use client'
 
-import { useBitcoinConnect } from '@getalby/bitcoin-connect-react'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 
 export function WalletConnect() {
-  const { isConnected, provider } = useBitcoinConnect()
+  const [isConnected, setIsConnected] = useState(false)
   
   useEffect(() => {
-    if (isConnected) {
-      console.log('[WalletConnect] ✅ Wallet connected')
+    // Check if Bitcoin Connect is available
+    if (typeof window !== 'undefined' && window.customElements) {
+      // Listen for connection events
+      const handleConnected = () => {
+        console.log('[WalletConnect] ✅ Wallet connected')
+        setIsConnected(true)
+      }
+      
+      const handleDisconnected = () => {
+        console.log('[WalletConnect] ❌ Wallet disconnected')
+        setIsConnected(false)
+      }
+      
+      // Add event listeners
+      document.addEventListener('bc:connected', handleConnected)
+      document.addEventListener('bc:disconnected', handleDisconnected)
+      
+      // Check initial state
+      if (window.webln && window.webln.enabled) {
+        setIsConnected(true)
+      }
+      
+      return () => {
+        document.removeEventListener('bc:connected', handleConnected)
+        document.removeEventListener('bc:disconnected', handleDisconnected)
+      }
     }
-  }, [isConnected])
+  }, [])
   
   return (
     <div className="flex flex-col gap-2">
@@ -34,6 +57,9 @@ export function WalletConnect() {
           <button 
             onClick={() => {
               // Disconnect logic if needed
+              if (window.webln && window.webln.disconnect) {
+                window.webln.disconnect()
+              }
             }}
             className="text-xs text-gray-500 hover:text-gray-700"
           >
