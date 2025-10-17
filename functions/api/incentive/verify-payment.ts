@@ -58,44 +58,59 @@ export async function onRequestPost(context: any) {
         log('📋 Invoice string length:', invoiceString.length)
         log('📋 Invoice string preview:', invoiceString.substring(0, 50) + '...')
         
-        // Try different lookup methods that NWC might support
+        // Try to lookup the invoice using different parameter formats
         try {
-          // Method 1: Try with invoice parameter
-          invoiceStatus = await nwc.lookupInvoice({
-            invoice: invoiceString
-          })
-          lookupMethod = 'nwc_invoice_lookup'
-          log('✅ Invoice lookup successful via invoice parameter')
+          // Method 1: Try with just the invoice string
+          invoiceStatus = await nwc.lookupInvoice(invoiceString)
+          lookupMethod = 'nwc_invoice_string'
+          log('✅ Invoice lookup successful with invoice string')
           
-        } catch (invoiceError) {
-          log('⚠️ Invoice parameter lookup failed:', invoiceError.message)
+        } catch (stringError) {
+          log('⚠️ Invoice string lookup failed:', stringError.message)
           
           try {
-            // Method 2: Try with payment_request parameter
+            // Method 2: Try with payment_hash parameter
             invoiceStatus = await nwc.lookupInvoice({
-              payment_request: invoiceString
+              payment_hash: paymentHash
             })
-            lookupMethod = 'nwc_payment_request_lookup'
-            log('✅ Invoice lookup successful via payment_request parameter')
+            lookupMethod = 'nwc_payment_hash'
+            log('✅ Invoice lookup successful with payment hash')
             
-          } catch (paymentRequestError) {
-            log('⚠️ Payment request lookup failed:', paymentRequestError.message)
+          } catch (hashError) {
+            log('⚠️ Payment hash lookup failed:', hashError.message)
             
-            // Method 3: Try with just the string as payment hash
+            // Method 3: Try with invoice parameter
             try {
-              invoiceStatus = await nwc.lookupInvoice(paymentHash)
-              lookupMethod = 'nwc_payment_hash_lookup'
-              log('✅ Invoice lookup successful via payment hash')
+              invoiceStatus = await nwc.lookupInvoice({
+                invoice: invoiceString
+              })
+              lookupMethod = 'nwc_invoice_param'
+              log('✅ Invoice lookup successful with invoice parameter')
               
-            } catch (hashError) {
-              log('⚠️ Payment hash lookup failed:', hashError.message)
-              throw new Error(`All lookup methods failed: invoice=${invoiceError.message}, payment_request=${paymentRequestError.message}, hash=${hashError.message}`)
+            } catch (paramError) {
+              log('⚠️ Invoice parameter lookup failed:', paramError.message)
+              
+              // All methods failed - return pending
+              invoiceStatus = {
+                settled: false,
+                paid: false,
+                amount: 0,
+                state: 'pending'
+              }
+              lookupMethod = 'all_lookup_methods_failed'
             }
           }
         }
         
+        // TODO: Implement proper payment verification
+        // Options:
+        // 1. Use a different Lightning node API
+        // 2. Implement webhook-based verification
+        // 3. Use a different NWC method
+        // 4. Manual confirmation by user
+        
       } catch (lookupError) {
-        log('❌ All invoice lookup methods failed:', lookupError.message)
+        log('❌ Invoice lookup failed:', lookupError.message)
         
         // Fallback: return pending status
         invoiceStatus = {
@@ -104,7 +119,7 @@ export async function onRequestPost(context: any) {
           amount: 0,
           state: 'pending'
         }
-        lookupMethod = 'all_lookup_methods_failed'
+        lookupMethod = 'lookup_failed'
       }
     } else {
       log('⚠️ No invoice string available for verification')

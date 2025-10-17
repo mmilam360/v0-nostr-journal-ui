@@ -57,33 +57,17 @@ export async function onRequestPost(context: any) {
     log('✅ Invoice created via NWC')
     log('📋 Invoice string:', invoice.paymentRequest?.substring(0, 80) + '...')
     
-    // Try to decode the BOLT11 invoice to extract payment hash
-    log('🔍 Attempting to decode BOLT11 invoice...')
+    // Since we can't reliably decode BOLT11 in Cloudflare Workers,
+    // we'll use the invoice string directly for verification
+    log('🔍 Using invoice string for payment verification...')
     
-    let paymentHash = ''
-    let decodedInvoice = null
+    // Generate a simple tracking ID for this invoice
+    const timestamp = Date.now()
+    const paymentHash = `${userPubkey.substring(0, 8)}-${amountSats}-${timestamp}`
     
-    try {
-      decodedInvoice = decodeBolt11(invoice.paymentRequest)
-      if (decodedInvoice.valid) {
-        paymentHash = decodedInvoice.paymentHash
-        log('✅ BOLT11 decoded successfully')
-        log('🔑 Payment hash:', paymentHash)
-        log('💰 Amount:', decodedInvoice.amount, 'sats')
-      } else {
-        throw new Error('BOLT11 decode returned invalid result')
-      }
-    } catch (decodeError) {
-      log('⚠️ BOLT11 decode failed:', decodeError.message)
-      log('🔍 Falling back to tracking ID...')
-      
-      // Fallback: generate a tracking ID
-      const timestamp = Date.now()
-      paymentHash = `${userPubkey.substring(0, 8)}-${amountSats}-${timestamp}`
-      log('📋 Generated tracking ID:', paymentHash)
-    }
-    
-    log('✅ Invoice created with payment hash/tracking ID')
+    log('📋 Generated tracking ID:', paymentHash)
+    log('📋 Invoice string length:', invoice.paymentRequest.length)
+    log('✅ Invoice created - will verify using invoice string directly')
     log('========================================')
     
     const response = {
