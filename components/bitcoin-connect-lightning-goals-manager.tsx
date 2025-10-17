@@ -288,6 +288,9 @@ function BitcoinConnectLightningGoalsManagerInner({
   // ============================================
   // STEP 4: CREDIT BALANCE (Update Nostr Event)
   // ============================================
+  // NOTE: Rewards are sent via NWC (Nostr Wallet Connect) backend service
+  // This is separate from Bitcoin Connect which is used for user wallet connection
+  // Bitcoin Connect = User deposits | NWC = Automated reward payouts
   
   async function handlePaymentConfirmed(amount: number) {
     console.log('[Manager] 💰 Crediting balance:', amount, 'sats')
@@ -351,7 +354,7 @@ function BitcoinConnectLightningGoalsManagerInner({
           <div className="text-4xl mb-4">⚡</div>
           <h2 className="text-xl font-bold mb-2">Connect Your Lightning Wallet</h2>
           <p className="text-gray-600 mb-4">
-            Connect your Lightning wallet to create a writing goal and stake sats
+            Connect your Lightning wallet to create a writing goal, stake sats, and receive rewards for reaching goals
           </p>
           <p className="text-sm text-gray-500">
             Your wallet will be used to pay the stake invoice
@@ -481,10 +484,7 @@ function BitcoinConnectLightningGoalsManagerInner({
             Or copy the invoice and pay from any Lightning wallet
           </p>
         </div>
-      )}
-      
-      {/* Active Screen */}
-      {screen === 'active' && (
+      ) : screen === 'active' ? (
         <div className="text-center space-y-4">
           <div className="text-6xl">✅</div>
           <h2 className="text-xl font-bold">Stake Active!</h2>
@@ -492,7 +492,7 @@ function BitcoinConnectLightningGoalsManagerInner({
             Write {goalWords} words today to earn your reward
           </p>
         </div>
-      )}
+      ) : null}
     </div>
   )
 }
