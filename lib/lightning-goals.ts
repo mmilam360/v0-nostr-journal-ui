@@ -64,6 +64,78 @@ export interface DayHistory {
   goalMet: boolean
   rewardSent: boolean
   amount: number
+  // NEW: Transaction history for this day
+  transactions?: TransactionHistory[]
+}
+
+export interface TransactionHistory {
+  id: string
+  type: 'deposit' | 'payout' | 'refund'
+  amount: number
+  timestamp: number
+  description: string
+  txHash?: string
+}
+
+/**
+ * Add a transaction to the Lightning Goals history
+ */
+export async function addTransaction(
+  userPubkey: string, 
+  transaction: TransactionHistory, 
+  authData: any
+): Promise<void> {
+  log('Adding transaction:', transaction)
+  
+  // Get current goals
+  const goals = await getLightningGoals(userPubkey)
+  if (!goals) {
+    throw new Error('No Lightning Goals found')
+  }
+  
+  // Find today's history entry or create it
+  const today = new Date().toISOString().split('T')[0]
+  let todayHistory = goals.history.find(h => h.date === today)
+  
+  if (!todayHistory) {
+    todayHistory = {
+      date: today,
+      words: 0,
+      goalMet: false,
+      rewardSent: false,
+      amount: 0,
+      transactions: []
+    }
+    goals.history.unshift(todayHistory)
+  }
+  
+  // Initialize transactions array if it doesn't exist
+  if (!todayHistory.transactions) {
+    todayHistory.transactions = []
+  }
+  
+  // Add the transaction
+  todayHistory.transactions.push(transaction)
+  
+  // Update balance based on transaction type
+  if (transaction.type === 'deposit') {
+    goals.currentBalance += transaction.amount
+    goals.totalDeposited += transaction.amount
+  } else if (transaction.type === 'payout') {
+    goals.currentBalance -= transaction.amount
+    goals.totalWithdrawn += transaction.amount
+  } else if (transaction.type === 'refund') {
+    goals.currentBalance += transaction.amount
+    goals.totalWithdrawn -= transaction.amount
+  }
+  
+  // Update the event
+  await updateLightningGoals(userPubkey, {
+    ...goals,
+    lastUpdated: Date.now()
+  }, authData)
+  
+  log('Transaction added successfully')
 }
 
 /**
@@ -307,6 +379,23 @@ export async function createStake(
   const today = new Date().toISOString().split('T')[0]
   const now = Date.now()
   
+  // Create initial history entry with deposit transaction
+  const initialHistory: DayHistory[] = [{
+    date: today,
+    words: 0,
+    goalMet: false,
+    rewardSent: false,
+    amount: 0,
+    transactions: config.paymentHash ? [{
+      id: `deposit-${now}`,
+      type: 'deposit',
+      amount: config.depositAmount,
+      timestamp: now,
+      description: `Initial stake deposit for ${config.dailyWordGoal} words daily goal`,
+      txHash: config.paymentHash
+    }] : []
+  }]
+  
   await updateLightningGoals(userPubkey, {
     dailyWordGoal: config.dailyWordGoal,
     dailyReward: config.dailyReward,
@@ -325,7 +414,7 @@ export async function createStake(
     todayGoalMet: false,
     todayRewardSent: false,
     todayRewardAmount: 0,
-    history: [],
+    history: initialHistory,
     currentStreak: 0,
     totalGoalsMet: 0,
     totalRewardsEarned: 0,

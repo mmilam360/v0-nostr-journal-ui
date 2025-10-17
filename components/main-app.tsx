@@ -468,6 +468,40 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
           if (result.success) {
             console.log('[MainApp] ✅ Reward sent successfully!')
             
+            // Add payout transaction to history
+            const payoutTransaction = {
+              id: `payout-${Date.now()}`,
+              type: 'payout' as const,
+              amount: goals.dailyReward,
+              timestamp: Date.now(),
+              description: `Daily writing goal reward - ${goals.dailyWordGoal} words`,
+              txHash: result.paymentHash
+            }
+            
+            // Find today's history entry or create it
+            const today = new Date().toISOString().split('T')[0]
+            let todayHistory = updatedGoals.history.find(h => h.date === today)
+            
+            if (!todayHistory) {
+              todayHistory = {
+                date: today,
+                words: updatedGoals.todayWords,
+                goalMet: true,
+                rewardSent: true,
+                amount: goals.dailyReward,
+                transactions: []
+              }
+              updatedGoals.history.unshift(todayHistory)
+            }
+            
+            // Initialize transactions array if it doesn't exist
+            if (!todayHistory.transactions) {
+              todayHistory.transactions = []
+            }
+            
+            // Add the payout transaction
+            todayHistory.transactions.push(payoutTransaction)
+            
             // Update goals with reward information
             updatedGoals.todayGoalMet = true
             updatedGoals.todayRewardSent = true

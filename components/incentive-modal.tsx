@@ -12,7 +12,8 @@ function LightningGoalsSummary({
   userPubkey, 
   authData, 
   onRefresh,
-  onSetupStatusChange
+  onSetupStatusChange,
+  onClose
 }: { 
   goals: any
   currentWordCount: number
@@ -20,6 +21,7 @@ function LightningGoalsSummary({
   authData: any
   onRefresh: () => void
   onSetupStatusChange?: (hasSetup: boolean) => void
+  onClose?: () => void
 }) {
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
   
@@ -43,6 +45,11 @@ function LightningGoalsSummary({
       // Reset header status to show "Set Up Daily Goal"
       if (onSetupStatusChange) {
         onSetupStatusChange(false)
+      }
+      
+      // Close the modal after successful cancellation
+      if (onClose) {
+        onClose()
       }
       
       onRefresh()
@@ -143,6 +150,30 @@ function LightningGoalsSummary({
                       <span className="text-green-600 text-xs font-medium">
                         💰 {goals.dailyReward} sats paid out
                       </span>
+                    )}
+                    {/* Show transaction history */}
+                    {day.transactions && day.transactions.length > 0 && (
+                      <div className="flex flex-col items-end gap-1 mt-2">
+                        {day.transactions.map((tx: any, txIndex: number) => (
+                          <div key={txIndex} className="flex items-center gap-1">
+                            {tx.type === 'deposit' && (
+                              <span className="text-blue-600 text-xs">
+                                💳 +{tx.amount} sats deposit
+                              </span>
+                            )}
+                            {tx.type === 'payout' && (
+                              <span className="text-green-600 text-xs">
+                                💰 -{tx.amount} sats payout
+                              </span>
+                            )}
+                            {tx.type === 'refund' && (
+                              <span className="text-orange-600 text-xs">
+                                🔄 +{tx.amount} sats refund
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
                     )}
                   </div>
                 </div>
@@ -311,6 +342,7 @@ export function IncentiveModal({
               authData={authData}
               onRefresh={loadGoals}
               onSetupStatusChange={onSetupStatusChange}
+              onClose={onClose}
             />
                  ) : (
                    <BitcoinConnectLightningGoalsManager

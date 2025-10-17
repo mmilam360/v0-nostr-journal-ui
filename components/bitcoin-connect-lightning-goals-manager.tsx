@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { WalletConnect } from './wallet-connect'
 import { ClientOnly } from './client-only'
+import { LightningInvoiceQR } from './lightning-invoice-qr'
 
 interface InvoiceData {
   invoice: string
@@ -48,6 +49,7 @@ function BitcoinConnectLightningGoalsManagerInner({
   const [lightningAddress, setLightningAddress] = useState('')
   const [invoiceData, setInvoiceData] = useState<InvoiceData | null>(null)
   const [loading, setLoading] = useState(false)
+  const [paymentMethod, setPaymentMethod] = useState<'connect' | 'invoice' | null>(null)
   
   // Check connection state and load user data
   useEffect(() => {
@@ -534,49 +536,191 @@ function BitcoinConnectLightningGoalsManagerInner({
             )}
           </div>
           
-          <button
-            onClick={createDepositInvoice}
-            disabled={loading || !lightningAddress || dailyReward <= 0 || stakeAmount <= 0}
-            className="w-full py-3 bg-orange-500 text-white rounded font-medium
-                     hover:bg-orange-600 disabled:bg-gray-300 disabled:cursor-not-allowed"
-          >
-            {loading ? 'Creating Invoice...' : 'Create Stake Invoice'}
-          </button>
-          
-          {(!lightningAddress || dailyReward <= 0 || stakeAmount <= 0) && (
-            <p className="text-xs text-red-500 text-center">
-              Please fill in all fields with valid values
+          {/* Payment Method Choice Section */}
+          <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
+            <h3 className="text-sm font-medium mb-3 text-center">
+              How would you like to pay?
+            </h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {/* Option 1: Connect Wallet (Bitcoin Connect) */}
+              <button
+                onClick={async () => {
+                  setPaymentMethod('connect')
+                  await createDepositInvoice()
+                }}
+                disabled={loading || !lightningAddress || dailyReward <= 0 || stakeAmount <= 0}
+                className="relative flex flex-col items-center gap-3 p-6 border-2 rounded-lg transition-all
+                         border-green-200 dark:border-green-800 hover:border-green-400 dark:hover:border-green-600
+                         bg-green-50 dark:bg-green-900/20 hover:bg-green-100 dark:hover:bg-green-900/30
+                         disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-green-200"
+              >
+                <div className="text-4xl">⚡</div>
+                <div className="text-center">
+                  <p className="font-semibold text-green-700 dark:text-green-300">
+                    Connect Wallet
+                  </p>
+                  <p className="text-xs text-green-600 dark:text-green-400 mt-1">
+                    Pay with 1-click using Bitcoin Connect
+                  </p>
+                </div>
+                <div className="absolute top-2 right-2">
+                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                </div>
+              </button>
+              
+              {/* Option 2: Generate Invoice (QR Code) */}
+              <button
+                onClick={async () => {
+                  setPaymentMethod('invoice')
+                  await createDepositInvoice()
+                }}
+                disabled={loading || !lightningAddress || dailyReward <= 0 || stakeAmount <= 0}
+                className="flex flex-col items-center gap-3 p-6 border-2 rounded-lg transition-all
+                         border-blue-200 dark:border-blue-800 hover:border-blue-400 dark:hover:border-blue-600
+                         bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30
+                         disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-blue-200"
+              >
+                <div className="text-4xl">📱</div>
+                <div className="text-center">
+                  <p className="font-semibold text-blue-700 dark:text-blue-300">
+                    Generate Invoice
+                  </p>
+                  <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                    Get QR code to pay with any wallet
+                  </p>
+                </div>
+              </button>
+            </div>
+            
+            {/* Validation Message */}
+            {(!lightningAddress || dailyReward <= 0 || stakeAmount <= 0) && (
+              <p className="text-xs text-red-500 text-center mt-3">
+                Please fill in all fields with valid values
+              </p>
+            )}
+            
+            {/* Info Text */}
+            <p className="text-xs text-gray-500 dark:text-gray-400 text-center mt-4">
+              Both methods work the same way - choose whichever is most convenient for you
             </p>
-          )}
+          </div>
         </div>
       )}
       
       {/* Show invoice screen if connected and screen is invoice */}
       {isConnected && screen === 'invoice' && invoiceData && (
-        <div className="space-y-4">
-          <h2 className="text-xl font-bold">Pay Stake Invoice</h2>
+        <div className="space-y-6">
+          <h2 className="text-2xl font-bold text-center">Pay Your Stake</h2>
           
-          <div className="bg-gray-50 p-4 rounded">
-            <p className="text-sm text-gray-600 mb-2">Amount:</p>
-            <p className="text-2xl font-bold">{invoiceData.amount} sats</p>
-          </div>
+          {/* Show different UI based on payment method chosen */}
+          {paymentMethod === 'connect' ? (
+            // CONNECT WALLET FLOW: Show 1-click payment prominently
+            <>
+              {/* Primary: 1-Click Payment */}
+              <div className="border-2 border-green-200 dark:border-green-800 rounded-lg p-6 bg-green-50 dark:bg-green-900/20">
+                <div className="text-center mb-4">
+                  <div className="text-5xl mb-3">⚡</div>
+                  <h3 className="text-lg font-semibold text-green-700 dark:text-green-300 mb-2">
+                    Pay with Connected Wallet
+                  </h3>
+                  <p className="text-3xl font-bold text-green-600 dark:text-green-400 mb-3">
+                    {invoiceData.amount} sats
+                  </p>
+                </div>
+                
+                <button
+                  onClick={payInvoice}
+                  disabled={loading}
+                  className="w-full py-4 bg-green-500 text-white rounded-lg font-medium text-lg
+                           hover:bg-green-600 disabled:bg-gray-300 transition-colors"
+                >
+                  {loading ? 'Processing Payment...' : '⚡ Pay Now'}
+                </button>
+                
+                <p className="text-xs text-gray-600 dark:text-gray-400 mt-3 text-center">
+                  Instant 1-click payment from your connected wallet
+                </p>
+              </div>
+              
+              {/* Secondary: QR Code Alternative */}
+              <details className="border-2 border-blue-200 dark:border-blue-800 rounded-lg bg-blue-50 dark:bg-blue-900/20">
+                <summary className="p-4 cursor-pointer text-sm font-medium text-blue-700 dark:text-blue-300 hover:text-blue-800 dark:hover:text-blue-200">
+                  Or scan QR code with another wallet
+                </summary>
+                <div className="p-4 border-t border-blue-200 dark:border-blue-800">
+                  <LightningInvoiceQR 
+                    invoice={invoiceData.invoice}
+                    amount={invoiceData.amount}
+                  />
+                </div>
+              </details>
+            </>
+          ) : (
+            // GENERATE INVOICE FLOW: Show QR code prominently
+            <>
+              {/* Primary: QR Code */}
+              <div className="border-2 border-blue-200 dark:border-blue-800 rounded-lg p-6 bg-blue-50 dark:bg-blue-900/20">
+                <div className="text-center mb-4">
+                  <div className="text-5xl mb-3">📱</div>
+                  <h3 className="text-lg font-semibold text-blue-700 dark:text-blue-300 mb-2">
+                    Scan QR Code to Pay
+                  </h3>
+                </div>
+                
+                <LightningInvoiceQR 
+                  invoice={invoiceData.invoice}
+                  amount={invoiceData.amount}
+                />
+              </div>
+              
+              {/* Secondary: Connect Wallet Alternative */}
+              <details className="border-2 border-green-200 dark:border-green-800 rounded-lg bg-green-50 dark:bg-green-900/20">
+                <summary className="p-4 cursor-pointer text-sm font-medium text-green-700 dark:text-green-300 hover:text-green-800 dark:hover:text-green-200">
+                  Or connect a wallet for 1-click payment
+                </summary>
+                <div className="p-4 border-t border-green-200 dark:border-green-800 text-center">
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                    Connect a WebLN-compatible wallet to pay instantly
+                  </p>
+                  <WalletConnect />
+                  <button
+                    onClick={payInvoice}
+                    disabled={loading || !isConnected}
+                    className="w-full mt-3 py-3 bg-green-500 text-white rounded-lg font-medium
+                             hover:bg-green-600 disabled:bg-gray-300 transition-colors"
+                  >
+                    {loading ? 'Processing...' : 'Pay with Connected Wallet'}
+                  </button>
+                </div>
+              </details>
+            </>
+          )}
           
-          <div className="bg-gray-50 p-3 rounded break-all text-xs">
-            {invoiceData.invoice}
-          </div>
+          {/* Payment Status (shown for both methods) */}
+          {loading && (
+            <div className="text-center p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-yellow-600 dark:border-yellow-400 mx-auto mb-2"></div>
+              <p className="text-sm text-yellow-800 dark:text-yellow-300">
+                ⏳ Waiting for payment confirmation...
+              </p>
+              <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-1">
+                This usually takes 5-30 seconds
+              </p>
+            </div>
+          )}
           
+          {/* Back Button */}
           <button
-            onClick={payInvoice}
-            disabled={loading}
-            className="w-full py-3 bg-green-500 text-white rounded font-medium
-                     hover:bg-green-600 disabled:bg-gray-300"
+            onClick={() => {
+              setScreen('setup')
+              setPaymentMethod(null)
+              setInvoiceData(null)
+            }}
+            className="w-full py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
           >
-            {loading ? 'Processing Payment...' : 'Pay with Connected Wallet'}
+            ← Back to setup
           </button>
-          
-          <p className="text-xs text-center text-gray-500">
-            Or copy the invoice and pay from any Lightning wallet
-          </p>
         </div>
       )}
       
