@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react'
 import { WalletConnect } from './wallet-connect'
 import { ClientOnly } from './client-only'
-import * as bolt11 from 'bolt11'
 
 interface InvoiceData {
   invoice: string
