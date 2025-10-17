@@ -15,6 +15,16 @@ const nextConfig = {
   experimental: {
     outputFileTracingRoot: undefined,
   },
+  // ✅ Tell Next.js to transpile Bitcoin Connect for SSR compatibility
+  transpilePackages: ['@getalby/bitcoin-connect-react'],
+  
+  webpack: (config, { isServer }) => {
+    // ✅ Don't bundle Bitcoin Connect on server
+    if (isServer) {
+      config.externals = [...(config.externals || []), '@getalby/bitcoin-connect-react']
+    }
+    return config
+  }
 }
 
 export default nextConfig

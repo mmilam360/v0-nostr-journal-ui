@@ -1,8 +1,17 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { ClientOnly } from './client-only'
 
 export function WalletConnect() {
+  return (
+    <ClientOnly fallback={<div className="p-4 text-center">Loading wallet...</div>}>
+      <WalletConnectInner />
+    </ClientOnly>
+  )
+}
+
+function WalletConnectInner() {
   const [isConnected, setIsConnected] = useState(false)
   
   useEffect(() => {

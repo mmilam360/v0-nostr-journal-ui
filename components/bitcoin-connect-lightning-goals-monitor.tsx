@@ -1,8 +1,29 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { ClientOnly } from './client-only'
 
 export function BitcoinConnectLightningGoalsMonitor({ 
+  userPubkey, 
+  wordCount,
+  authData 
+}: { 
+  userPubkey: string
+  wordCount: number
+  authData: any
+}) {
+  return (
+    <ClientOnly fallback={null}>
+      <BitcoinConnectLightningGoalsMonitorInner 
+        userPubkey={userPubkey} 
+        wordCount={wordCount} 
+        authData={authData} 
+      />
+    </ClientOnly>
+  )
+}
+
+function BitcoinConnectLightningGoalsMonitorInner({ 
   userPubkey, 
   wordCount,
   authData 

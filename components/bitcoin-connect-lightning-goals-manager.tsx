@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { WalletConnect } from './wallet-connect'
+import { ClientOnly } from './client-only'
 import * as bolt11 from 'bolt11'
 
 interface InvoiceData {
@@ -11,6 +12,20 @@ interface InvoiceData {
 }
 
 export function BitcoinConnectLightningGoalsManager({ 
+  userPubkey, 
+  authData 
+}: { 
+  userPubkey: string
+  authData: any 
+}) {
+  return (
+    <ClientOnly fallback={<div className="p-8 text-center">Loading payment system...</div>}>
+      <BitcoinConnectLightningGoalsManagerInner userPubkey={userPubkey} authData={authData} />
+    </ClientOnly>
+  )
+}
+
+function BitcoinConnectLightningGoalsManagerInner({ 
   userPubkey, 
   authData 
 }: { 
