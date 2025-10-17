@@ -99,15 +99,26 @@ function BitcoinConnectLightningGoalsManagerInner({
     const loadUserProfile = async () => {
       if (!isConnected) return // Only load when wallet is connected
       
+      console.log('[Manager] 🔍 Loading user profile, isConnected:', isConnected)
+      
       try {
         // Try to get lightning address from window.webln first
         if (window.webln?.getInfo) {
           const info = await window.webln.getInfo()
+          console.log('[Manager] 📊 Wallet info received:', info)
+          
           if (info.lightningAddress) {
             setLightningAddress(info.lightningAddress)
             console.log('[Manager] ⚡ Lightning address from wallet:', info.lightningAddress)
+            
+            // Save to localStorage for future use
+            localStorage.setItem(`lightning-address-${userPubkey}`, info.lightningAddress)
             return
+          } else {
+            console.log('[Manager] ⚠️ No lightning address in wallet info')
           }
+        } else {
+          console.log('[Manager] ⚠️ window.webln.getInfo not available')
         }
         
         // Fallback: try to get from localStorage
@@ -115,6 +126,37 @@ function BitcoinConnectLightningGoalsManagerInner({
         if (savedAddress) {
           setLightningAddress(savedAddress)
           console.log('[Manager] ⚡ Lightning address from localStorage:', savedAddress)
+        } else {
+          console.log('[Manager] ⚠️ No saved lightning address found')
+          
+          // Additional fallback: try to get from Nostr profile
+          try {
+            const { SimplePool } = await import('nostr-tools')
+            const pool = new SimplePool()
+            
+            // Query for user's profile event (kind 0)
+            const profileEvents = await pool.querySync(['wss://relay.damus.io'], {
+              kinds: [0],
+              authors: [userPubkey],
+              limit: 1
+            })
+            
+            if (profileEvents.length > 0) {
+              const profile = JSON.parse(profileEvents[0].content)
+              if (profile.lud16 || profile.lightning_address) {
+                const address = profile.lud16 || profile.lightning_address
+                setLightningAddress(address)
+                console.log('[Manager] ⚡ Lightning address from Nostr profile:', address)
+                
+                // Save to localStorage for future use
+                localStorage.setItem(`lightning-address-${userPubkey}`, address)
+              }
+            }
+            
+            pool.close()
+          } catch (profileError) {
+            console.log('[Manager] ⚠️ Could not load from Nostr profile:', profileError)
+          }
         }
       } catch (error) {
         console.log('[Manager] ⚠️ Could not load lightning address:', error)
@@ -217,8 +259,8 @@ function BitcoinConnectLightningGoalsManagerInner({
       
       setScreen('invoice')
       
-      // Start checking for payment
-      startPaymentVerification(data.paymentHash, data.invoice)
+      // Note: Payment verification is handled by Bitcoin Connect directly
+      // No need to poll backend since we get immediate confirmation
       
     } catch (error) {
       console.error('[Manager] ❌ Failed to create invoice:', error)
@@ -249,9 +291,14 @@ function BitcoinConnectLightningGoalsManagerInner({
       const paymentResult = await window.webln.sendPayment(invoiceData.invoice)
       
       console.log('[Manager] ✅ Payment sent!', paymentResult)
-      console.log('[Manager] Waiting for confirmation...')
+      console.log('[Manager] Payment confirmed by Bitcoin Connect, proceeding...')
       
-      // Payment verification will pick this up automatically
+      // Since Bitcoin Connect payment was successful, we can immediately proceed
+      // No need to verify through backend - the payment is confirmed
+      await handlePaymentConfirmed(invoiceData.amount)
+      
+      setLoading(false)
+      setScreen('active')
       
     } catch (error) {
       console.error('[Manager] ❌ Payment failed:', error)
