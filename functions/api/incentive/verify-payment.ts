@@ -58,47 +58,41 @@ export async function onRequestPost(context: any) {
         log('📋 Invoice string length:', invoiceString.length)
         log('📋 Invoice string preview:', invoiceString.substring(0, 50) + '...')
         
-        // Try to lookup the invoice using different parameter formats
+        // Use the working method: lookup by invoice string directly
+        // This is how it was working before - NWC can verify invoices by their string
         try {
-          // Method 1: Try with just the invoice string
+          log('🔍 Looking up invoice by invoice string...')
+          log('📋 Invoice string length:', invoiceString.length)
+          
+          // The working method: lookup by invoice string
           invoiceStatus = await nwc.lookupInvoice(invoiceString)
+          
           lookupMethod = 'nwc_invoice_string'
           log('✅ Invoice lookup successful with invoice string')
           
-        } catch (stringError) {
-          log('⚠️ Invoice string lookup failed:', stringError.message)
+        } catch (invoiceError) {
+          log('⚠️ Invoice string lookup failed:', invoiceError.message)
           
+          // Fallback: try with payment hash (in case the invoice string method doesn't work)
           try {
-            // Method 2: Try with payment_hash parameter
+            log('🔍 Trying fallback with payment hash...')
             invoiceStatus = await nwc.lookupInvoice({
               payment_hash: paymentHash
             })
-            lookupMethod = 'nwc_payment_hash'
-            log('✅ Invoice lookup successful with payment hash')
+            lookupMethod = 'nwc_payment_hash_fallback'
+            log('✅ Invoice lookup successful with payment hash fallback')
             
           } catch (hashError) {
-            log('⚠️ Payment hash lookup failed:', hashError.message)
+            log('⚠️ Payment hash lookup also failed:', hashError.message)
             
-            // Method 3: Try with invoice parameter
-            try {
-              invoiceStatus = await nwc.lookupInvoice({
-                invoice: invoiceString
-              })
-              lookupMethod = 'nwc_invoice_param'
-              log('✅ Invoice lookup successful with invoice parameter')
-              
-            } catch (paramError) {
-              log('⚠️ Invoice parameter lookup failed:', paramError.message)
-              
-              // All methods failed - return pending
-              invoiceStatus = {
-                settled: false,
-                paid: false,
-                amount: 0,
-                state: 'pending'
-              }
-              lookupMethod = 'all_lookup_methods_failed'
+            // All methods failed - return pending
+            invoiceStatus = {
+              settled: false,
+              paid: false,
+              amount: 0,
+              state: 'pending'
             }
+            lookupMethod = 'all_lookup_methods_failed'
           }
         }
         

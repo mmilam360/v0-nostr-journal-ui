@@ -75,12 +75,14 @@ export function decodeBolt11(invoice: string): Bolt11Decoded {
 }
 
 function generatePaymentHashFromInvoice(invoice: string): string {
-  // Generate a deterministic hash from the invoice string
-  // This is not a real payment hash, but a tracking identifier
-  let hash = ''
+  // For now, generate a simple tracking hash
+  // In a real implementation, we'd decode the BOLT11 invoice properly
+  const timestamp = Date.now()
+  const hashInput = `${invoice.substring(0, 20)}-${timestamp}`
   
-  for (let i = 0; i < invoice.length; i++) {
-    const char = invoice.charCodeAt(i)
+  let hash = ''
+  for (let i = 0; i < hashInput.length; i++) {
+    const char = hashInput.charCodeAt(i)
     hash += char.toString(16).padStart(2, '0')
   }
   

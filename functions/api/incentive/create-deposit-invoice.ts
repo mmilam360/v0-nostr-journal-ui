@@ -62,8 +62,8 @@ export async function onRequestPost(context: any) {
     log('🔍 Using invoice string for payment verification...')
     
     // Generate a simple tracking ID for this invoice
-    const timestamp = Date.now()
-    const paymentHash = `${userPubkey.substring(0, 8)}-${amountSats}-${timestamp}`
+    const invoiceTimestamp = Date.now()
+    const paymentHash = `${userPubkey.substring(0, 8)}-${amountSats}-${invoiceTimestamp}`
     
     log('📋 Generated tracking ID:', paymentHash)
     log('📋 Invoice string length:', invoice.paymentRequest.length)
