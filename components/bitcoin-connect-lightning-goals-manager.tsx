@@ -97,33 +97,56 @@ function BitcoinConnectLightningGoalsManagerInner({
   // ============================================
   
   async function createDepositInvoice() {
+    console.log('[Manager] 🔘 Create Stake Invoice button clicked')
+    console.log('[Manager] 🔍 Current state:', { 
+      isConnected, 
+      goalWords, 
+      stakeAmount, 
+      dailyReward, 
+      lightningAddress,
+      loading 
+    })
+    
     if (!isConnected) {
+      console.log('[Manager] ❌ Wallet not connected')
       alert('Please connect your wallet first')
       return
     }
     
     // Validate required fields
     if (!lightningAddress || !lightningAddress.includes('@')) {
+      console.log('[Manager] ❌ Invalid lightning address:', lightningAddress)
       alert('Please enter a valid Lightning address (format: user@domain.com)')
       return
     }
     
     if (dailyReward <= 0) {
+      console.log('[Manager] ❌ Invalid daily reward:', dailyReward)
       alert('Daily reward must be greater than 0')
       return
     }
     
     if (stakeAmount <= 0) {
+      console.log('[Manager] ❌ Invalid stake amount:', stakeAmount)
       alert('Stake amount must be greater than 0')
       return
     }
     
+    console.log('[Manager] ✅ All validations passed, creating invoice...')
     setLoading(true)
     console.log('[Manager] Creating deposit invoice...')
     console.log('[Manager] Settings:', { goalWords, stakeAmount, dailyReward, lightningAddress })
     
     try {
       // Call backend to create invoice via YOUR NWC
+      console.log('[Manager] 📡 Calling API with data:', {
+        userPubkey,
+        amountSats: stakeAmount,
+        dailyReward: dailyReward,
+        lightningAddress: lightningAddress,
+        timestamp: Date.now()
+      })
+      
       const response = await fetch('/api/incentive/create-deposit-invoice', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -136,18 +159,24 @@ function BitcoinConnectLightningGoalsManagerInner({
         })
       })
       
+      console.log('[Manager] 📡 API response status:', response.status)
+      
       if (!response.ok) {
-        throw new Error(`API returned ${response.status}`)
+        const errorText = await response.text()
+        console.log('[Manager] ❌ API error response:', errorText)
+        throw new Error(`API returned ${response.status}: ${errorText}`)
       }
       
       const data = await response.json()
+      console.log('[Manager] 📡 API response data:', data)
       
       if (!data.success) {
+        console.log('[Manager] ❌ API returned success: false:', data.error)
         throw new Error(data.error || 'Failed to create invoice')
       }
       
-      console.log('[Manager] ✅ Invoice created:', {
-        invoice: data.invoice.substring(0, 50) + '...',
+      console.log('[Manager] ✅ Invoice created successfully:', {
+        invoice: data.invoice?.substring(0, 50) + '...',
         paymentHash: data.paymentHash,
         amount: data.amount
       })
@@ -164,9 +193,15 @@ function BitcoinConnectLightningGoalsManagerInner({
       startPaymentVerification(data.paymentHash, data.invoice)
       
     } catch (error) {
-      console.error('[Manager] ❌ Error:', error)
+      console.error('[Manager] ❌ Failed to create invoice:', error)
+      console.error('[Manager] ❌ Error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      })
       alert('Failed to create invoice: ' + error.message)
     } finally {
+      console.log('[Manager] 🔄 Setting loading to false')
       setLoading(false)
     }
   }
@@ -329,22 +364,8 @@ function BitcoinConnectLightningGoalsManagerInner({
               min="100"
               step="50"
             />
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              Stake Amount (sats)
-            </label>
-            <input
-              type="number"
-              value={stakeAmount}
-              onChange={(e) => setStakeAmount(Number(e.target.value))}
-              className="w-full px-3 py-2 border rounded"
-              min="10"
-              step="10"
-            />
             <p className="text-xs text-gray-500 mt-1">
-              ≈ {(stakeAmount / goalWords).toFixed(2)} sats per word
+              How many words you need to write each day
             </p>
           </div>
           
@@ -367,6 +388,23 @@ function BitcoinConnectLightningGoalsManagerInner({
           
           <div>
             <label className="block text-sm font-medium mb-1">
+              Stake Amount (sats)
+            </label>
+            <input
+              type="number"
+              value={stakeAmount}
+              onChange={(e) => setStakeAmount(Number(e.target.value))}
+              className="w-full px-3 py-2 border rounded"
+              min="10"
+              step="10"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              ≈ {(stakeAmount / goalWords).toFixed(2)} sats per word
+            </p>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium mb-1">
               Lightning Address
             </label>
             <input
@@ -383,12 +421,24 @@ function BitcoinConnectLightningGoalsManagerInner({
           
           <button
             onClick={createDepositInvoice}
-            disabled={!isConnected || loading}
+            disabled={!isConnected || loading || !lightningAddress || dailyReward <= 0 || stakeAmount <= 0}
             className="w-full py-3 bg-orange-500 text-white rounded font-medium
                      hover:bg-orange-600 disabled:bg-gray-300 disabled:cursor-not-allowed"
           >
             {loading ? 'Creating Invoice...' : 'Create Stake Invoice'}
           </button>
+          
+          {!isConnected && (
+            <p className="text-xs text-red-500 text-center">
+              Please connect your wallet first
+            </p>
+          )}
+          
+          {isConnected && (!lightningAddress || dailyReward <= 0 || stakeAmount <= 0) && (
+            <p className="text-xs text-red-500 text-center">
+              Please fill in all fields with valid values
+            </p>
+          )}
         </div>
       )}
       
