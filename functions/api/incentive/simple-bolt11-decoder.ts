@@ -75,64 +75,16 @@ export function decodeBolt11(invoice: string): Bolt11Decoded {
 }
 
 function generatePaymentHashFromInvoice(invoice: string): string {
-  // Try to extract payment hash from BOLT11 invoice
-  // BOLT11 invoices contain a payment hash in the signature section
+  // BOLT11 invoices are bech32-encoded, so we need to decode them properly
+  // For now, let's use a different approach: ask the user to provide the real payment hash
   
-  try {
-    // BOLT11 format: lnbc{amount}{multiplier}p{timestamp}{payment_hash}{signature}
-    // The payment hash is typically 32 bytes (64 hex chars) before the signature
-    
-    // Find the 'p' character which separates the amount from the timestamp
-    const pIndex = invoice.indexOf('p')
-    if (pIndex === -1) {
-      throw new Error('Invalid BOLT11 format - no p separator found')
-    }
-    
-    // Extract the part after 'p' which contains timestamp, payment_hash, and signature
-    const afterP = invoice.substring(pIndex + 1)
-    
-    // The payment hash is typically 64 characters long and comes after the timestamp
-    // We need to find it in the bech32-encoded data
-    // For now, let's try a simple approach: look for a 64-character hex string
-    
-    // Split by common separators and look for 64-char hex strings
-    const parts = afterP.split(/[^a-f0-9]/i)
-    for (const part of parts) {
-      if (part.length === 64 && /^[a-f0-9]{64}$/i.test(part)) {
-        log('🔑 Found potential payment hash:', part)
-        return part
-      }
-    }
-    
-    // If no 64-char hex found, generate a hash from the invoice
-    log('⚠️ No 64-char hex found, generating hash from invoice')
-    const timestamp = Date.now()
-    const hashInput = `${invoice.substring(0, 20)}-${timestamp}`
-    
-    let hash = ''
-    for (let i = 0; i < hashInput.length; i++) {
-      const char = hashInput.charCodeAt(i)
-      hash += char.toString(16).padStart(2, '0')
-    }
-    
-    // Take first 64 characters and pad if needed
-    return hash.substring(0, 64).padEnd(64, '0')
-    
-  } catch (error) {
-    log('❌ Error extracting payment hash:', error.message)
-    
-    // Fallback: generate a hash from the invoice
-    const timestamp = Date.now()
-    const hashInput = `${invoice.substring(0, 20)}-${timestamp}`
-    
-    let hash = ''
-    for (let i = 0; i < hashInput.length; i++) {
-      const char = hashInput.charCodeAt(i)
-      hash += char.toString(16).padStart(2, '0')
-    }
-    
-    return hash.substring(0, 64).padEnd(64, '0')
-  }
+  log('⚠️ BOLT11 decoding not fully implemented in Cloudflare Workers')
+  log('⚠️ This is a complex operation that requires bech32 decoding')
+  log('⚠️ For now, we need to get the payment hash from the Lightning node directly')
+  
+  // Return empty string to indicate we couldn't extract it
+  // The system should fall back to using the invoice string for verification
+  return ''
 }
 
 // Test function
