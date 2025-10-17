@@ -200,36 +200,78 @@ export async function onRequestPost(context: any) {
     
     log('  💬 Comment:', paymentComment)
     
+    log('🚀 Attempting to create invoice from Lightning address...')
+    
+    // First, try to create an invoice from the Lightning address using LNURL-pay
+    let invoice
+    try {
+      log('🔍 Converting Lightning address to BOLT11 invoice...')
+      
+      // Try to get LNURL-pay info from the Lightning address
+      const [username, domain] = lightningAddress.split('@')
+      const lnurlPayUrl = `https://${domain}/.well-known/lnurlp/${username}`
+      
+      log('🔍 LNURL-pay URL:', lnurlPayUrl)
+      
+      const lnurlResponse = await fetch(lnurlPayUrl)
+      const lnurlData = await lnurlResponse.json()
+      
+      log('📋 LNURL-pay response:', lnurlData)
+      
+      if (lnurlData.callback) {
+        // Create invoice using LNURL-pay callback
+        const invoiceUrl = `${lnurlData.callback}?amount=${amount * 1000}` // Convert to millisats
+        log('🔍 Invoice URL:', invoiceUrl)
+        
+        const invoiceResponse = await fetch(invoiceUrl)
+        const invoiceData = await invoiceResponse.json()
+        
+        log('📋 Invoice response:', invoiceData)
+        
+        if (invoiceData.pr) {
+          invoice = { paymentRequest: invoiceData.pr }
+          log('✅ Invoice created from Lightning address:', invoice.paymentRequest.substring(0, 80) + '...')
+        } else {
+          throw new Error('No payment request in LNURL-pay response')
+        }
+      } else {
+        throw new Error('No callback in LNURL-pay response')
+      }
+    } catch (lnurlError) {
+      log('❌ Failed to create invoice from Lightning address:', lnurlError.message)
+      log('🔄 Falling back to direct Lightning address payment...')
+    }
+    
     log('🚀 Calling nwc.sendPayment()...')
     
     let paymentResult
     try {
-      // Try different parameter formats based on NWC documentation
-      // Format 1: Object with destination and amount
-      paymentResult = await nwc.sendPayment({
-        destination: lightningAddress,
-        amount: amount,
-        comment: paymentComment
-      })
+      if (invoice && invoice.paymentRequest) {
+        // Use the created invoice
+        log('🚀 Trying Format 1: BOLT11 invoice string...')
+        paymentResult = await nwc.sendPayment(invoice.paymentRequest)
+      } else {
+        // Fallback to Lightning address
+        log('🚀 Trying Format 1: Lightning address as string...')
+        paymentResult = await nwc.sendPayment(lightningAddress)
+      }
     } catch (paymentError) {
       log('❌ Format 1 failed:', paymentError.message)
       
-      // Try Format 2: Just the invoice string (if we had one)
-      // Since we don't have an invoice, let's try Format 3: Different object structure
+      // Try Format 2: Object with 'invoice' field (as the error suggests)
       try {
-        log('🚀 Trying Format 2: Different object structure...')
+        log('🚀 Trying Format 2: Object with invoice field...')
         paymentResult = await nwc.sendPayment({
-          invoice: lightningAddress,  // Some NWC implementations expect 'invoice' field
-          amount: amount,
-          memo: paymentComment
+          invoice: lightningAddress,  // The error specifically mentions 'payInvoiceParams.invoice'
+          amount: amount
         })
         log('✅ Format 2 succeeded!')
       } catch (paymentError2) {
         log('❌ Format 2 failed:', paymentError2.message)
         
-        // Try Format 3: Minimal object
+        // Try Format 3: Object with destination field
         try {
-          log('🚀 Trying Format 3: Minimal object...')
+          log('🚀 Trying Format 3: Object with destination field...')
           paymentResult = await nwc.sendPayment({
             destination: lightningAddress,
             amount: amount
@@ -238,17 +280,28 @@ export async function onRequestPost(context: any) {
         } catch (paymentError3) {
           log('❌ Format 3 failed:', paymentError3.message)
           
-          // Provide helpful error messages based on common issues
-          if (paymentError.message.includes('Insufficient') || paymentError.message.includes('balance')) {
-            throw new Error('Insufficient balance in wallet to send payment')
-          } else if (paymentError.message.includes('destination') || paymentError.message.includes('address')) {
-            throw new Error('Invalid Lightning address or destination unreachable')
-          } else if (paymentError.message.includes('timeout') || paymentError.message.includes('timed out')) {
-            throw new Error('Payment timed out. Please try again')
-          } else if (paymentError.message.includes('not found') || paymentError.message.includes('No route')) {
-            throw new Error('Could not find route to destination. Lightning address may be invalid or offline')
-          } else {
-            throw new Error('Payment failed: ' + paymentError.message)
+          // Try Format 4: Minimal object with just amount
+          try {
+            log('🚀 Trying Format 4: Minimal object with amount...')
+            paymentResult = await nwc.sendPayment({
+              amount: amount
+            })
+            log('✅ Format 4 succeeded!')
+          } catch (paymentError4) {
+            log('❌ Format 4 failed:', paymentError4.message)
+            
+            // Provide helpful error messages based on common issues
+            if (paymentError.message.includes('Insufficient') || paymentError.message.includes('balance')) {
+              throw new Error('Insufficient balance in wallet to send payment')
+            } else if (paymentError.message.includes('destination') || paymentError.message.includes('address')) {
+              throw new Error('Invalid Lightning address or destination unreachable')
+            } else if (paymentError.message.includes('timeout') || paymentError.message.includes('timed out')) {
+              throw new Error('Payment timed out. Please try again')
+            } else if (paymentError.message.includes('not found') || paymentError.message.includes('No route')) {
+              throw new Error('Could not find route to destination. Lightning address may be invalid or offline')
+            } else {
+              throw new Error('Payment failed: ' + paymentError.message)
+            }
           }
         }
       }
