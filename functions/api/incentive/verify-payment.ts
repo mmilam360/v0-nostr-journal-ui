@@ -1,278 +1,133 @@
-import { onRequestPost } from 'wrangler'
 import { NostrWebLNProvider } from '@getalby/sdk'
-import { decode } from 'light-bolt11-decoder'
 
-export const onRequestPost: onRequestPost = async (context) => {
-  const startTime = Date.now()
-  
+const log = (msg: string, data?: any) => console.log(`[VerifyPayment] ${msg}`, data || '')
+
+export async function onRequestPost(context: any) {
   try {
+    log('========================================')
+    log('📥 VERIFY PAYMENT REQUEST')
+    log('========================================')
+    
     const { paymentHash, invoiceString } = await context.request.json()
     
-    console.log('[Verify] ============================================')
-    console.log('[Verify] 🔍 PAYMENT VERIFICATION REQUEST')
-    console.log('[Verify] Timestamp:', new Date().toISOString())
-    console.log('[Verify] Payment hash:', paymentHash)
-    console.log('[Verify] Has invoice string:', !!invoiceString)
-    console.log('[Verify] ============================================')
+    log('🔍 Payment hash:', paymentHash)
+    log('🔍 Has invoice string:', !!invoiceString)
     
-    // Validate inputs
-    if (!paymentHash) {
-      throw new Error('Payment hash is required')
+    // Validate payment hash format
+    if (!paymentHash || paymentHash.length !== 64 || !/^[a-f0-9]{64}$/i.test(paymentHash)) {
+      throw new Error('Invalid payment hash format')
     }
     
-    if (paymentHash.length !== 64 || !/^[a-f0-9]{64}$/i.test(paymentHash)) {
-      throw new Error(`Invalid payment hash format: ${paymentHash}`)
+    // ⚠️ CRITICAL: Use context.env for Cloudflare
+    const NWC_CONNECTION_URL = context.env.NWC_CONNECTION_URL
+    
+    if (!NWC_CONNECTION_URL) {
+      log('❌ NWC_CONNECTION_URL not configured!')
+      throw new Error('Server not configured: NWC_CONNECTION_URL missing')
     }
     
-    // Check environment variables
-    const hasAlbyToken = !!context.env.ALBY_ACCESS_TOKEN
-    const hasNWC = !!context.env.NWC_CONNECTION_URL
+    log('✅ NWC_CONNECTION_URL found')
+    log('🔌 NWC preview:', NWC_CONNECTION_URL.substring(0, 50) + '...')
     
-    console.log('[Verify] 🔑 Has Alby API token:', hasAlbyToken)
-    console.log('[Verify] 🔌 Has NWC connection:', hasNWC)
+    // Connect to NWC
+    log('🔌 Creating NWC connection...')
     
-    if (!hasAlbyToken && !hasNWC) {
-      throw new Error('Neither ALBY_ACCESS_TOKEN nor NWC_CONNECTION_URL is configured')
-    }
+    const nwc = new NostrWebLNProvider({
+      nostrWalletConnectUrl: NWC_CONNECTION_URL
+    })
     
-    let verificationResult = null
-    let usedMethod = ''
+    log('🔌 Enabling NWC...')
+    await nwc.enable()
     
-    // =====================================================
-    // METHOD 1: NWC lookupInvoice (RECOMMENDED BY ALBY)
-    // =====================================================
+    log('✅ NWC connected successfully')
     
-    if (hasNWC) {
-      try {
-        console.log('[Verify] 🔌 Attempting Method 1: NWC lookupInvoice (Alby Recommended)...')
+    // Look up invoice via NWC
+    log('🔍 Looking up invoice via NWC...')
+    
+    let invoiceStatus
+    let lookupMethod = ''
+    
+    // Method 1: Try by payment_hash
+    try {
+      log('🔍 Trying lookup by payment_hash...')
+      
+      invoiceStatus = await nwc.lookupInvoice({
+        payment_hash: paymentHash
+      })
+      
+      lookupMethod = 'payment_hash'
+      log('✅ Found via payment_hash')
+      
+    } catch (hashError) {
+      log('⚠️ payment_hash lookup failed:', hashError.message)
+      
+      // Method 2: Fallback to invoice string
+      if (invoiceString) {
+        log('🔍 Trying lookup by invoice string...')
         
-        // Use the imported NostrWebLNProvider for lookup operations
-        const nwc = new NostrWebLNProvider({
-          nostrWalletConnectUrl: context.env.NWC_CONNECTION_URL
+        invoiceStatus = await nwc.lookupInvoice({
+          invoice: invoiceString
         })
         
-        await nwc.enable()
-        console.log('[Verify] ✅ NWC connection established')
-        
-        // Try lookup methods in order of success (based on test results)
-        let invoiceStatus
-        let lookupMethod = ''
-        
-        // Method 1: camelCase paymentHash (WORKING METHOD from test)
-        try {
-          console.log('[Verify] Method 1: Trying NWC lookup by paymentHash (camelCase)...')
-          invoiceStatus = await nwc.lookupInvoice({
-            paymentHash: paymentHash
-          })
-          console.log('[Verify] ✅ Found via paymentHash (camelCase)')
-          lookupMethod = 'paymentHash (camelCase)'
-        } catch (camelCaseError) {
-          console.log('[Verify] ⚠️ paymentHash (camelCase) lookup failed:', camelCaseError.message)
-          
-          // Method 2: snake_case payment_hash (fallback)
-          try {
-            console.log('[Verify] Method 2: Trying NWC lookup by payment_hash (snake_case)...')
-            invoiceStatus = await nwc.lookupInvoice({
-              payment_hash: paymentHash
-            })
-            console.log('[Verify] ✅ Found via payment_hash (snake_case)')
-            lookupMethod = 'payment_hash (snake_case)'
-          } catch (hashError) {
-            console.log('[Verify] ⚠️ payment_hash (snake_case) lookup failed:', hashError.message)
-            
-            // Method 3: invoice string (last resort)
-            if (invoiceString) {
-              console.log('[Verify] Method 3: Trying NWC lookup by invoice string...')
-              invoiceStatus = await nwc.lookupInvoice({
-                invoice: invoiceString
-              })
-              console.log('[Verify] ✅ Found via invoice string')
-              lookupMethod = 'invoice string'
-            } else {
-              throw new Error(`All lookup methods failed: camelCase(${camelCaseError.message}), snake_case(${hashError.message})`)
-            }
-          }
-        }
-        
-        console.log('[Verify] NWC invoice status:', JSON.stringify(invoiceStatus, null, 2))
-        
-        verificationResult = {
-          paid: invoiceStatus.settled === true || 
-                invoiceStatus.state === 'settled' ||
-                invoiceStatus.status === 'SETTLED' ||
-                invoiceStatus.paid === true,
-          amount: invoiceStatus.amount || invoiceStatus.value || (invoiceStatus.amt_msat ? invoiceStatus.amt_msat / 1000 : null),
-          settledAt: invoiceStatus.settled_at || invoiceStatus.settledAt,
-          state: invoiceStatus.state || invoiceStatus.status,
-          paymentHash: paymentHash
-        }
-        
-        usedMethod = `NWC lookupInvoice (${lookupMethod})`
-        
-      } catch (nwcError) {
-        console.log('[Verify] ⚠️ NWC method failed:', nwcError.message)
-        console.log('[Verify] NWC error details:', nwcError)
-        // Continue to next method
+        lookupMethod = 'invoice_string'
+        log('✅ Found via invoice string')
+      } else {
+        throw hashError
       }
     }
     
-    // =====================================================
-    // METHOD 2: Direct Alby API (FALLBACK)
-    // =====================================================
+    log('📋 Invoice status:', invoiceStatus)
     
-    if (!verificationResult && hasAlbyToken) {
-      try {
-        console.log('[Verify] 📡 Attempting Method 2: Direct Alby API (Fallback)...')
-        
-        // Try the incoming invoices endpoint
-        const albyResponse = await fetch(
-          `https://api.getalby.com/invoices/incoming/${paymentHash}`,
-          {
-            method: 'GET',
-            headers: {
-              'Authorization': `Bearer ${context.env.ALBY_ACCESS_TOKEN}`,
-              'Content-Type': 'application/json'
-            }
-          }
-        )
-        
-        console.log('[Verify] Alby API response status:', albyResponse.status)
-        
-        if (albyResponse.ok) {
-          const invoice = await albyResponse.json()
-          console.log('[Verify] ✅ Found invoice via Alby API')
-          console.log('[Verify] Invoice data:', JSON.stringify(invoice, null, 2))
-          
-          verificationResult = {
-            paid: invoice.settled === true || invoice.state === 'SETTLED',
-            amount: invoice.amount,
-            settledAt: invoice.settled_at,
-            state: invoice.state,
-            paymentHash: invoice.payment_hash || paymentHash,
-            expiresAt: invoice.expires_at,
-            createdAt: invoice.created_at
-          }
-          
-          usedMethod = 'Alby Direct API (Fallback)'
-          
-        } else if (albyResponse.status === 404) {
-          console.log('[Verify] ⚠️ Invoice not found via Alby API (404)')
-          // Continue to try other methods
-        } else {
-          const errorText = await albyResponse.text()
-          console.log('[Verify] ⚠️ Alby API error:', albyResponse.status, errorText)
-          // Continue to try other methods
-        }
-        
-      } catch (apiError) {
-        console.log('[Verify] ⚠️ Alby API method failed:', apiError.message)
-        // Continue to try other methods
-      }
-    }
+    // Check if paid (multiple possible field names)
+    const isPaid = invoiceStatus.settled === true || 
+                   invoiceStatus.state === 'settled' ||
+                   invoiceStatus.status === 'SETTLED' ||
+                   invoiceStatus.paid === true
     
-    // =====================================================
-    // METHOD 3: Decode and Check Invoice String (LAST RESORT)
-    // =====================================================
+    const amount = invoiceStatus.amount || 
+                   invoiceStatus.value ||
+                   (invoiceStatus.amt_msat ? Math.floor(invoiceStatus.amt_msat / 1000) : null)
     
-    if (!verificationResult && invoiceString) {
-      try {
-        console.log('[Verify] 📝 Attempting Method 3: Decode invoice string...')
-        
-        const decoded = decode(invoiceString)
-        
-        console.log('[Verify] ⚠️ Can only decode invoice, cannot verify payment status')
-        console.log('[Verify] Invoice amount:', decoded.sections?.find(s => s.name === 'amount')?.value)
-        console.log('[Verify] Invoice expiry:', decoded.sections?.find(s => s.name === 'expiry')?.value)
-        
-        // We can decode but can't verify payment status this way
-        verificationResult = {
-          paid: false, // Unknown - we can't verify without API/NWC
-          amount: decoded.sections?.find(s => s.name === 'amount')?.value,
-          state: 'unknown',
-          paymentHash: decoded.sections?.find(s => s.name === 'payment_hash')?.value,
-          warning: 'Payment status unknown - could not verify via API or NWC'
-        }
-        
-        usedMethod = 'BOLT11 decode only (status unknown)'
-        
-      } catch (decodeError) {
-        console.log('[Verify] ⚠️ Invoice decode failed:', decodeError.message)
-      }
-    }
+    log('========================================')
+    log(isPaid ? '✅ PAID' : '⏳ PENDING')
+    log('💰 Amount:', amount, 'sats')
+    log('========================================')
     
-    // =====================================================
-    // RETURN RESULT OR ERROR
-    // =====================================================
-    
-    const elapsedTime = Date.now() - startTime
-    
-    if (!verificationResult) {
-      console.log('[Verify] ❌ ALL VERIFICATION METHODS FAILED')
-      console.log('[Verify] Elapsed time:', elapsedTime, 'ms')
-      
-      return new Response(JSON.stringify({
-        success: false,
-        error: 'Could not verify payment - all methods failed',
-        details: {
-          hasAlbyToken: hasAlbyToken,
-          hasNWC: hasNWC,
-          attemptedMethods: [
-            hasNWC ? 'NWC (Alby Recommended)' : null,
-            hasAlbyToken ? 'Alby API (Fallback)' : null,
-            invoiceString ? 'BOLT11 decode (Last Resort)' : null
-          ].filter(Boolean)
-        }
-      }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      })
-    }
-    
-    console.log('[Verify] ============================================')
-    console.log('[Verify] ✅ VERIFICATION RESULT')
-    console.log('[Verify] Method used:', usedMethod)
-    console.log('[Verify] Payment status:', verificationResult.paid ? '💰 PAID' : '⏳ PENDING')
-    console.log('[Verify] Amount:', verificationResult.amount, 'sats')
-    console.log('[Verify] State:', verificationResult.state)
-    console.log('[Verify] Elapsed time:', elapsedTime, 'ms')
-    console.log('[Verify] ============================================')
-    
-    return new Response(JSON.stringify({
+    const response = {
       success: true,
-      paid: verificationResult.paid,
-      amount: verificationResult.amount,
-      settledAt: verificationResult.settledAt,
-      state: verificationResult.state,
-      paymentHash: verificationResult.paymentHash,
-      verificationMethod: usedMethod,
-      warning: verificationResult.warning
-    }), {
-      headers: { 
+      paid: isPaid,
+      amount: amount,
+      settledAt: invoiceStatus.settled_at || invoiceStatus.settledAt,
+      state: invoiceStatus.state || invoiceStatus.status,
+      lookupMethod: lookupMethod
+    }
+    
+    return new Response(JSON.stringify(response), {
+      headers: {
         'Content-Type': 'application/json',
-        'Cache-Control': 'no-cache, no-store, must-revalidate'
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Access-Control-Allow-Origin': '*'
       }
     })
     
   } catch (error) {
-    const elapsedTime = Date.now() - startTime
-    
-    console.error('[Verify] ============================================')
-    console.error('[Verify] ❌ VERIFICATION ERROR')
-    console.error('[Verify] Error type:', error.constructor.name)
-    console.error('[Verify] Error message:', error.message)
-    console.error('[Verify] Error stack:', error.stack)
-    console.error('[Verify] Elapsed time:', elapsedTime, 'ms')
-    console.error('[Verify] ============================================')
+    log('========================================')
+    log('❌ ERROR VERIFYING PAYMENT')
+    log('❌ Error:', error.message)
+    log('❌ Stack:', error.stack)
+    log('========================================')
     
     return new Response(JSON.stringify({
       success: false,
       paid: false,
       error: error.message,
-      errorType: error.constructor.name,
-      errorStack: error.stack
+      details: error.stack
     }), {
       status: 500,
-      headers: { 'Content-Type': 'application/json' }
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*'
+      }
     })
   }
 }

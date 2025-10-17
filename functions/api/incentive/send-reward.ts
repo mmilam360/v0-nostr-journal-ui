@@ -5,7 +5,7 @@ const log = (msg: string, data?: any) => {
   console.log(`[SendReward API] ${msg}`, data || '')
 }
 
-export async function onRequestPost({ request }: { request: Request }) {
+export async function onRequestPost(context: any) {
   const requestStartTime = Date.now()
   
   try {
@@ -20,7 +20,7 @@ export async function onRequestPost({ request }: { request: Request }) {
     
     let body
     try {
-      body = await request.json()
+      body = await context.request.json()
     } catch (parseError) {
       log('❌ Failed to parse request body:', parseError.message)
       throw new Error('Invalid JSON in request body')
@@ -97,7 +97,7 @@ export async function onRequestPost({ request }: { request: Request }) {
     log('========================================')
     
     // Get NWC connection URL from environment
-    const NWC_CONNECTION_URL = process.env.NWC_CONNECTION_URL
+    const NWC_CONNECTION_URL = context.env.NWC_CONNECTION_URL
     
     if (!NWC_CONNECTION_URL) {
       log('❌ NWC_CONNECTION_URL environment variable not set!')
