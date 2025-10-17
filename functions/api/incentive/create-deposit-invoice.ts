@@ -1,4 +1,5 @@
 import { NostrWebLNProvider } from '@getalby/sdk'
+import { decodeBolt11 } from './simple-bolt11-decoder'
 
 const log = (msg: string, data?: any) => console.log(`[CreateInvoice] ${msg}`, data || '')
 
@@ -56,22 +57,39 @@ export async function onRequestPost(context: any) {
     log('✅ Invoice created via NWC')
     log('📋 Invoice string:', invoice.paymentRequest?.substring(0, 80) + '...')
     
-    // Since we can't decode BOLT11 in Cloudflare Functions, we'll use the invoice string directly
-    // The payment hash will be extracted by the Lightning node when we verify payment
-    log('🔍 Using invoice string for payment verification...')
+    // Try to decode the BOLT11 invoice to extract payment hash
+    log('🔍 Attempting to decode BOLT11 invoice...')
     
-    // Generate a tracking ID for this invoice (not a real payment hash)
-    const timestamp = Date.now()
-    const trackingId = `${userPubkey.substring(0, 8)}-${amountSats}-${timestamp}`
+    let paymentHash = ''
+    let decodedInvoice = null
     
-    log('✅ Invoice created, using invoice string for verification')
-    log('📋 Tracking ID:', trackingId)
+    try {
+      decodedInvoice = decodeBolt11(invoice.paymentRequest)
+      if (decodedInvoice.valid) {
+        paymentHash = decodedInvoice.paymentHash
+        log('✅ BOLT11 decoded successfully')
+        log('🔑 Payment hash:', paymentHash)
+        log('💰 Amount:', decodedInvoice.amount, 'sats')
+      } else {
+        throw new Error('BOLT11 decode returned invalid result')
+      }
+    } catch (decodeError) {
+      log('⚠️ BOLT11 decode failed:', decodeError.message)
+      log('🔍 Falling back to tracking ID...')
+      
+      // Fallback: generate a tracking ID
+      const timestamp = Date.now()
+      paymentHash = `${userPubkey.substring(0, 8)}-${amountSats}-${timestamp}`
+      log('📋 Generated tracking ID:', paymentHash)
+    }
+    
+    log('✅ Invoice created with payment hash/tracking ID')
     log('========================================')
     
     const response = {
       success: true,
       invoice: invoice.paymentRequest,      // BOLT11 invoice string
-      paymentHash: trackingId,              // Tracking ID (not real payment hash)
+      paymentHash: paymentHash,             // Real payment hash or tracking ID
       amount: amountSats,
       timestamp: new Date().toISOString()
     }

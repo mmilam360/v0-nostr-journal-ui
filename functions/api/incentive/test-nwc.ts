@@ -58,7 +58,19 @@ export async function onRequestPost(context: any) {
     
     // Test invoice lookup
     log('🔍 Testing invoice lookup...')
-    log('📋 Test invoice:', testInvoice.substring(0, 50) + '...')
+    log('📋 Test invoice length:', testInvoice.length)
+    log('📋 Test invoice preview:', testInvoice.substring(0, 50) + '...')
+    
+    // Validate invoice format first
+    if (!testInvoice.startsWith('lnbc') || testInvoice.length < 50) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: 'Invalid invoice format - must start with lnbc and be at least 50 characters'
+      }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      })
+    }
     
     let lookupResult = null
     let lookupError = null
