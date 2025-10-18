@@ -535,7 +535,7 @@ function BitcoinConnectLightningGoalsManagerInner({
               type="number"
               value={goalWords}
               onChange={(e) => setGoalWords(Number(e.target.value))}
-              className="w-full px-3 py-2 border rounded"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
               min="100"
               step="50"
             />
@@ -552,7 +552,7 @@ function BitcoinConnectLightningGoalsManagerInner({
               type="number"
               value={dailyReward}
               onChange={(e) => setDailyReward(Number(e.target.value))}
-              className="w-full px-3 py-2 border rounded"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
               min="1"
               step="1"
             />
@@ -569,7 +569,7 @@ function BitcoinConnectLightningGoalsManagerInner({
               type="number"
               value={stakeAmount}
               onChange={(e) => setStakeAmount(Number(e.target.value))}
-              className="w-full px-3 py-2 border rounded"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
               min="10"
               step="10"
             />
@@ -586,7 +586,7 @@ function BitcoinConnectLightningGoalsManagerInner({
               type="text"
               value={lightningAddress}
               onChange={(e) => setLightningAddress(e.target.value)}
-              className="w-full px-3 py-2 border rounded"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
               placeholder="your@lightning.address"
             />
             <p className="text-xs text-gray-500 mt-1">

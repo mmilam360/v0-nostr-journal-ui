@@ -104,6 +104,7 @@ export async function onRequestPost(context: any) {
         } catch (invoiceError) {
           log('⚠️ Invoice string lookup failed:', invoiceError.message)
           log('⚠️ Error type:', invoiceError.constructor.name)
+          log('⚠️ Full error:', invoiceError)
           
           // Method 2: Try with invoice parameter
           try {
@@ -117,6 +118,7 @@ export async function onRequestPost(context: any) {
           } catch (paramError) {
             log('⚠️ Invoice parameter lookup failed:', paramError.message)
             log('⚠️ Error type:', paramError.constructor.name)
+            log('⚠️ Full error:', paramError)
             
             // Method 3: Try with payment hash if it's a real one (fallback)
             if (isRealPaymentHash) {
@@ -132,6 +134,8 @@ export async function onRequestPost(context: any) {
                 
               } catch (hashError) {
                 log('⚠️ Payment hash lookup failed:', hashError.message)
+                log('⚠️ Error type:', hashError.constructor.name)
+                log('⚠️ Full error:', hashError)
                 
                 // All methods failed
                 invoiceStatus = {
