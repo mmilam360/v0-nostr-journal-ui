@@ -85,8 +85,10 @@ export async function onRequestPost(context: any) {
     // Look up invoice via NWC
     log('🔍 Looking up invoice via NWC...')
     log('📋 Payment hash:', paymentHash)
+    log('📋 Payment hash length:', paymentHash.length)
     log('📋 Invoice string length:', invoiceString?.length || 0)
     log('📋 Invoice string preview:', invoiceString?.substring(0, 50) + '...' || 'None')
+    log('📋 Full invoice string:', invoiceString)
     
     let invoiceStatus = null
     let lookupMethod = 'invoice_verification'
@@ -130,27 +132,62 @@ export async function onRequestPost(context: any) {
               try {
                 log('🔍 Method 3: Looking up by payment hash (fallback)...')
                 log('📋 Payment hash:', paymentHash)
+                log('📋 Payment hash is real:', isRealPaymentHash)
                 
                 invoiceStatus = await nwc.lookupInvoice({
                   payment_hash: paymentHash
                 })
                 lookupMethod = 'nwc_payment_hash'
                 log('✅ Invoice lookup successful with payment hash')
+                log('📋 Invoice status result:', invoiceStatus)
                 
               } catch (hashError) {
                 log('⚠️ Payment hash lookup failed:', hashError.message)
                 log('⚠️ Error type:', hashError.constructor.name)
                 log('⚠️ Full error:', hashError)
                 
-                // All methods failed
-                invoiceStatus = {
-                  settled: false,
-                  paid: false,
-                  amount: 0,
-                  state: 'pending'
+                // Try alternative payment hash field names
+                try {
+                  log('🔍 Method 3b: Trying alternative payment hash field names...')
+                  
+                  // Try different field names that NWC might expect
+                  const alternatives = [
+                    { paymentHash: paymentHash },
+                    { paymentHash: paymentHash },
+                    { hash: paymentHash },
+                    { invoice: invoiceString }
+                  ]
+                  
+                  for (let i = 0; i < alternatives.length; i++) {
+                    try {
+                      log(`🔍 Trying alternative ${i + 1}:`, Object.keys(alternatives[i])[0])
+                      invoiceStatus = await nwc.lookupInvoice(alternatives[i])
+                      lookupMethod = `nwc_alternative_${i + 1}`
+                      log('✅ Alternative lookup successful:', lookupMethod)
+                      log('📋 Invoice status result:', invoiceStatus)
+                      break
+                    } catch (altError) {
+                      log(`⚠️ Alternative ${i + 1} failed:`, altError.message)
+                    }
+                  }
+                  
+                  if (!invoiceStatus) {
+                    throw new Error('All alternatives failed')
+                  }
+                  
+                } catch (altError) {
+                  log('❌ All alternative methods failed:', altError.message)
+                  
+                  // All methods failed
+                  invoiceStatus = {
+                    settled: false,
+                    paid: false,
+                    amount: 0,
+                    state: 'pending'
+                  }
+                  lookupMethod = 'all_lookup_methods_failed'
+                  log('❌ All lookup methods failed')
                 }
-                lookupMethod = 'all_lookup_methods_failed'
-                log('❌ All lookup methods failed')
               }
             } else {
               log('⚠️ Not a real payment hash, skipping payment hash lookup')
