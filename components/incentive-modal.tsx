@@ -456,10 +456,16 @@ export function IncentiveModal({
                     currentWordCount={lastSavedWordCount || 0}
                     onStakeActivated={async () => {
                       console.log('[IncentiveModal] 🎉 Stake activated, switching to Progress/Summary...')
-                      // Force modal to show Progress/Summary screen immediately
-                      setHasSetup(true)
+                      
+                      // Wait a moment for the stake to be published to relays
+                      await new Promise(resolve => setTimeout(resolve, 2000))
+                      
                       // Reload goals data to get the latest information
                       await loadGoals()
+                      
+                      // Force modal to show Progress/Summary screen after data is loaded
+                      setHasSetup(true)
+                      
                       // Also trigger parent component refresh for header updates
                       if (onSetupStatusChange) {
                         onSetupStatusChange(true)

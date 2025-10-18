@@ -1574,7 +1574,14 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                     title={hasLightningGoals ? `${userStreak} day streak` : "Set up Lightning Goals"}
                   >
                     {hasLightningGoals ? (
-                      <span className="font-semibold">{userStreak} day streak</span>
+                      <>
+                        {/* Mobile: Circle with number */}
+                        <div className="sm:hidden flex items-center justify-center w-8 h-8 bg-orange-100 dark:bg-orange-900/30 rounded-full">
+                          <span className="text-orange-600 dark:text-orange-400 font-bold text-sm">{userStreak}</span>
+                        </div>
+                        {/* Desktop: Full text */}
+                        <span className="hidden sm:inline font-semibold">{userStreak} day streak</span>
+                      </>
                     ) : (
                       <span className="hidden sm:inline">Set Up Daily Goal</span>
                     )}
