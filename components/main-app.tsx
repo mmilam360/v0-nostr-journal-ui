@@ -404,6 +404,15 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     console.log('[MainApp] 🎯 Word count updated:', wordCount)
     
     try {
+      // Ensure remote signer is initialized if using remote auth
+      if (authData.authMethod === 'remote' && authData.sessionData) {
+        const { remoteSignerManager } = await import('@/lib/remote-signer-manager')
+        if (!remoteSignerManager.isAvailable()) {
+          console.log('[MainApp] 🔧 Remote signer not available, initializing...')
+          await remoteSignerManager.initializeFromSessionData(authData.sessionData, authData.pubkey)
+        }
+      }
+      
       // Import Lightning Goals functions
       const { getLightningGoals, updateLightningGoals } = await import('@/lib/lightning-goals')
       

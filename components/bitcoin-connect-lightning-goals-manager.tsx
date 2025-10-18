@@ -191,6 +191,30 @@ function BitcoinConnectLightningGoalsManagerInner({
   // STEP 1: CREATE DEPOSIT INVOICE (Backend)
   // ============================================
   
+  // Initialize remote signer to ensure Lightning Goals can sign events
+  useEffect(() => {
+    async function initializeRemoteSigner() {
+      if (authData.authMethod === 'remote' && authData.sessionData) {
+        try {
+          console.log('[Manager] 🔧 Initializing remote signer for Lightning Goals...')
+          const { remoteSignerManager } = await import('@/lib/remote-signer-manager')
+          
+          const success = await remoteSignerManager.initializeFromSessionData(authData.sessionData, authData.pubkey)
+          
+          if (success) {
+            console.log('[Manager] ✅ Remote signer initialized for Lightning Goals')
+          } else {
+            console.error('[Manager] ❌ Failed to initialize remote signer for Lightning Goals')
+          }
+        } catch (error) {
+          console.error('[Manager] ❌ Error initializing remote signer:', error)
+        }
+      }
+    }
+    
+    initializeRemoteSigner()
+  }, [authData])
+  
   async function createDepositInvoice() {
     console.log('[Manager] 🔘 Create Stake Invoice button clicked')
     console.log('[Manager] 🔍 Current state:', { 
@@ -535,7 +559,7 @@ function BitcoinConnectLightningGoalsManagerInner({
   })
   
   return (
-    <div className="space-y-4">
+    <div className="max-w-md mx-auto">
       {/* Show setup screen directly */}
       {screen === 'setup' && (
         <div className="space-y-4">

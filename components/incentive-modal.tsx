@@ -272,9 +272,31 @@ export function IncentiveModal({
 
   useEffect(() => {
     if (isOpen && userPubkey) {
+      // Initialize remote signer if needed
+      initializeRemoteSigner()
       loadGoals()
     }
   }, [isOpen, userPubkey])
+
+  // Initialize remote signer to ensure Lightning Goals can sign events
+  async function initializeRemoteSigner() {
+    if (authData.authMethod === 'remote' && authData.sessionData) {
+      try {
+        console.log('[IncentiveModal] 🔧 Initializing remote signer for Lightning Goals...')
+        const { remoteSignerManager } = await import('@/lib/remote-signer-manager')
+        
+        const success = await remoteSignerManager.initializeFromSessionData(authData.sessionData, authData.pubkey)
+        
+        if (success) {
+          console.log('[IncentiveModal] ✅ Remote signer initialized for Lightning Goals')
+        } else {
+          console.error('[IncentiveModal] ❌ Failed to initialize remote signer for Lightning Goals')
+        }
+      } catch (error) {
+        console.error('[IncentiveModal] ❌ Error initializing remote signer:', error)
+      }
+    }
+  }
 
   const loadGoals = async () => {
     try {
