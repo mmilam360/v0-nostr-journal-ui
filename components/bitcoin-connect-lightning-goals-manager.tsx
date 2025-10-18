@@ -471,46 +471,30 @@ function BitcoinConnectLightningGoalsManagerInner({
     console.log('[Manager] 💰 Crediting balance:', amount, 'sats')
     
     try {
-      // Update Lightning Goals event with new balance and settings
-      const { updateLightningGoals } = await import('@/lib/lightning-goals')
+      // Use createStake function (same as Bitcoin Connect method)
+      const { createStake } = await import('@/lib/lightning-goals')
       
-      await updateLightningGoals(userPubkey, {
+      await createStake(userPubkey, {
         dailyWordGoal: goalWords,
         dailyReward: dailyReward,
-        currentBalance: amount,
-        initialStake: amount,
-        totalDeposited: amount,
-        status: 'active',
+        depositAmount: amount,
         lightningAddress: lightningAddress,
-        createdAt: Date.now(),
-        lastUpdated: Date.now(),
-        todayDate: new Date().toISOString().split('T')[0],
-        todayWords: 0,
-        baselineWordCount: currentWordCount, // Set baseline to current word count at stake creation
-        totalWordCountAtLastUpdate: currentWordCount, // Track current word count for incremental updates
-        todayGoalMet: false,
-        todayRewardSent: false,
-        todayRewardAmount: 0,
-        history: [],
-        currentStreak: 0,
-        totalGoalsMet: 0,
-        totalRewardsEarned: 0,
-        lastRewardDate: '',
-        missedDays: 0,
-        lastMissedDate: '',
-        stakeCreatedAt: Date.now() // Track when this stake was created
+        currentWordCount: currentWordCount,
+        paymentHash: invoiceData?.paymentHash // Include payment hash if available
       }, authData)
       
       console.log('[Manager] ✅ Balance credited with settings:', {
         goalWords,
         dailyReward,
-        lightningAddress
+        lightningAddress,
+        amount
       })
       
       setScreen('active')
       
     } catch (error) {
       console.error('[Manager] ❌ Failed to credit balance:', error)
+      console.error('[Manager] ❌ Error details:', error.message)
       alert('Payment received but failed to update balance. Please refresh.')
     }
   }

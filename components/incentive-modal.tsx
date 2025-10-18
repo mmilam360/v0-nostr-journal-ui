@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { X } from 'lucide-react'
 import { BitcoinConnectLightningGoalsManager } from './bitcoin-connect-lightning-goals-manager'
@@ -317,18 +316,18 @@ export function IncentiveModal({
         }
       }}
     >
-      <Card className="max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="flex items-center gap-2">
+      <div className="max-w-2xl w-full max-h-[90vh] overflow-y-auto bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700">
+        <div className="flex flex-row items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+          <h2 className="flex items-center gap-2 text-xl font-semibold">
             <span className="text-2xl">⚡</span>
             Lightning Goals
-          </CardTitle>
+          </h2>
           <Button variant="ghost" size="sm" onClick={onClose}>
             <X className="w-4 h-4" />
           </Button>
-        </CardHeader>
+        </div>
         
-        <CardContent>
+        <div className="p-6">
           {loading ? (
             <div className="text-center py-8">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-4"></div>
@@ -351,8 +350,8 @@ export function IncentiveModal({
                      currentWordCount={lastSavedWordCount || 0}
                    />
                  )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   )
 }
