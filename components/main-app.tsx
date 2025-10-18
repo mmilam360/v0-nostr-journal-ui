@@ -477,50 +477,52 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
           if (result.success) {
             console.log('[MainApp] ✅ Reward sent successfully!')
             
-            // Add payout transaction to history
-            const payoutTransaction = {
-              id: `payout-${Date.now()}`,
-              type: 'payout' as const,
-              amount: goals.dailyReward,
-              timestamp: Date.now(),
-              description: `Daily writing goal reward - ${goals.dailyWordGoal} words`,
-              txHash: result.paymentHash
-            }
+            // ✅ STEP 1: Get CURRENT history from goals we just fetched
+            const existingHistory = goals.history || []
+            console.log('[MainApp] 📚 Existing history entries:', existingHistory.length)
             
-            // Find today's history entry or create it
+            // ✅ STEP 2: Create new reward entry
             const today = new Date().toISOString().split('T')[0]
-            let todayHistory = updatedGoals.history.find(h => h.date === today)
+            const dateString = new Date().toLocaleDateString('en-US', { 
+              month: '2-digit', 
+              day: '2-digit', 
+              year: '2-digit' 
+            })
             
-            if (!todayHistory) {
-              todayHistory = {
-                date: today,
-                words: updatedGoals.todayWords,
-                goalMet: true,
-                rewardSent: true,
+            const rewardEntry = {
+              date: today,
+              words: updatedGoals.todayWords,
+              goalMet: true,
+              rewardSent: true,
+              amount: goals.dailyReward,
+              transactions: [{
+                id: `reward-${Date.now()}`,
+                type: 'payout' as const,
                 amount: goals.dailyReward,
-                transactions: []
-              }
-              updatedGoals.history.unshift(todayHistory)
+                timestamp: Date.now(),
+                description: `Journal Reward - ${dateString}`,
+                txHash: result.paymentHash || 'unknown'
+              }]
             }
             
-            // Initialize transactions array if it doesn't exist
-            if (!todayHistory.transactions) {
-              todayHistory.transactions = []
-            }
+            console.log('[MainApp] 📝 New reward entry:', rewardEntry)
             
-            // Add the payout transaction
-            todayHistory.transactions.push(payoutTransaction)
+            // ✅ STEP 3: Append to existing history
+            const updatedHistory = [...existingHistory, rewardEntry]
+            console.log('[MainApp] 📚 Updated history entries:', updatedHistory.length)
             
-            // Update goals with reward information
+            // ✅ STEP 4: Update all goal data including accumulated history
             updatedGoals.todayGoalMet = true
             updatedGoals.todayRewardSent = true
             updatedGoals.todayRewardAmount = goals.dailyReward
             updatedGoals.totalGoalsMet = (goals.totalGoalsMet || 0) + 1
             updatedGoals.totalRewardsEarned = (goals.totalRewardsEarned || 0) + goals.dailyReward
             updatedGoals.currentStreak = (goals.currentStreak || 0) + 1
-            updatedGoals.lastRewardDate = new Date().toISOString().split('T')[0]
+            updatedGoals.lastRewardDate = today
             updatedGoals.currentBalance = Math.max(0, goals.currentBalance - goals.dailyReward)
+            updatedGoals.history = updatedHistory  // ← Include accumulated history!
             
+            console.log('[MainApp] 💾 Saving to Nostr with', updatedHistory.length, 'history entries')
             console.log('[MainApp] 🎉 Goal completed and reward sent!')
           } else {
             console.error('[MainApp] ❌ Failed to send reward:', result.error)

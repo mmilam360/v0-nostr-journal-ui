@@ -231,10 +231,23 @@ export async function updateLightningGoals(
   updates: Partial<LightningGoals>,
   authData: any
 ): Promise<void> {
-  console.log('[LightningGoals] 📝 Updating master event')
+  console.log('[LightningGoals] ========================================')
+  console.log('[LightningGoals] 💾 UPDATE CALLED')
+  console.log('[LightningGoals] ========================================')
+  console.log('[LightningGoals] User pubkey:', userPubkey.substring(0, 16))
+  console.log('[LightningGoals] Data passed in:', {
+    hasHistory: !!updates.history,
+    historyLength: updates.history?.length || 0,
+    status: updates.status
+  })
   
   // Get current state
   const current = await getLightningGoals(userPubkey)
+  
+  console.log('[LightningGoals] Current data from Nostr:', {
+    hasData: !!current,
+    currentHistoryLength: current?.history?.length || 0
+  })
   
   // Merge with updates
   const updated: LightningGoals = {
@@ -265,6 +278,12 @@ export async function updateLightningGoals(
     ...updates,
     lastUpdated: Date.now()
   }
+  
+  console.log('[LightningGoals] ========================================')
+  console.log('[LightningGoals] FINAL DATA TO SAVE:')
+  console.log('[LightningGoals] History entries:', updated.history.length)
+  console.log('[LightningGoals] History preview:', updated.history.slice(-3))
+  console.log('[LightningGoals] ========================================')
   
   // Check if date changed - if so, archive today and reset
   const today = new Date().toISOString().split('T')[0]
@@ -351,9 +370,14 @@ export async function updateLightningGoals(
   console.log('[LightningGoals] Signing and publishing...')
   
   const signedEvent = await signEventWithRemote(event, authData)
+  console.log('[LightningGoals] ✅ Event signed:', signedEvent.id)
   
   await pool.publish(RELAYS, signedEvent)
   
+  console.log('[LightningGoals] ========================================')
+  console.log('[LightningGoals] ✅ PUBLISHED TO NOSTR')
+  console.log('[LightningGoals] Event contains', updated.history.length, 'history entries')
+  console.log('[LightningGoals] ========================================')
   console.log('[LightningGoals] ✅ Master event updated')
 }
 
