@@ -10,7 +10,7 @@
 import { useState } from "react"
 import { ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import NostrConnectClientConnector from "./nostrconnect-client-connector"
+// Import the remote signer directly like the main login page
 import { setActiveSigner } from "@/lib/signer-connector"
 
 interface BunkerLoginPageProps {
@@ -66,11 +66,19 @@ export function BunkerLoginPage({ onLoginSuccess, onBack }: BunkerLoginPageProps
           </Button>
         )}
 
-        {/* Use the new connector component */}
-        <NostrConnectClientConnector
-          onConnectSuccess={handleConnectSuccess}
-          onClose={() => setShowConnector(false)}
-        />
+        {/* Simple remote signer connection */}
+        <div className="bg-slate-800 rounded-lg p-6 border border-slate-600">
+          <h2 className="text-xl font-semibold text-white mb-4">Connect Remote Signer</h2>
+          <p className="text-slate-300 mb-4">
+            This feature is temporarily disabled. Please use the main login page to connect your remote signer.
+          </p>
+          <Button
+            onClick={onBack}
+            className="w-full bg-blue-600 hover:bg-blue-700"
+          >
+            Back to Main Login
+          </Button>
+        </div>
       </div>
     </div>
   )
