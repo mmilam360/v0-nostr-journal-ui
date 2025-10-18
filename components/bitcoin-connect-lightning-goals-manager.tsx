@@ -215,6 +215,15 @@ function BitcoinConnectLightningGoalsManagerInner({
     initializeRemoteSigner()
   }, [authData])
   
+  // Start payment verification for QR code payments
+  useEffect(() => {
+    if (screen === 'invoice' && paymentMethod === 'invoice' && invoiceData && !verificationStarted) {
+      console.log('[Manager] 🔍 Starting payment verification for QR code payment...')
+      setVerificationStarted(true)
+      startPaymentVerification(invoiceData.paymentHash, invoiceData.invoice)
+    }
+  }, [screen, paymentMethod, invoiceData, verificationStarted])
+  
   async function createDepositInvoice() {
     console.log('[Manager] 🔘 Create Stake Invoice button clicked')
     console.log('[Manager] 🔍 Current state:', { 
@@ -338,17 +347,8 @@ function BitcoinConnectLightningGoalsManagerInner({
       
       setScreen('invoice')
       
-      // ✅ CRITICAL FIX: Start verification polling IMMEDIATELY
-      // This allows QR code payments to be detected automatically
-      console.log('[Manager] 🔍 Starting automatic payment verification...')
-      console.log('[Manager] Will check every 3 seconds for payment confirmation')
-      startPaymentVerification(realPaymentHash, data.invoice)
-      
-      // Note: We do NOT set loading=false here because we're still waiting for payment
-      // The loading state will be cleared when:
-      // - Payment is confirmed (verification polling succeeds)
-      // - User goes back to setup (manual cancel)
-      // - Verification times out after 3 minutes
+      // Note: Payment verification will start only when user chooses QR code payment method
+      // For Bitcoin Connect payments, we don't need verification polling
       
     } catch (error) {
       console.error('[Manager] ❌ Failed to create invoice:', error)
@@ -359,12 +359,9 @@ function BitcoinConnectLightningGoalsManagerInner({
       })
       alert('Failed to create invoice: ' + error.message)
     } finally {
-      // Don't set loading=false here - keep loading=true until payment is confirmed
-      // The loading state will be cleared when:
-      // - Payment is confirmed (verification polling succeeds)
-      // - User goes back to setup (manual cancel)
-      // - Verification times out after 3 minutes
-      console.log('[Manager] 🔄 Keeping loading state for payment verification')
+      // Set loading=false since we're showing the payment options screen
+      setLoading(false)
+      console.log('[Manager] 🔄 Invoice created, showing payment options')
     }
   }
   
