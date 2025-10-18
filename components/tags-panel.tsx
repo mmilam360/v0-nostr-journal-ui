@@ -63,7 +63,7 @@ export default function TagsPanel({ tags, selectedTag, onSelectTag, pubkey, onLo
       </div>
       
       {/* Donation Bubble - Bottom of left column */}
-      <div className="mt-auto p-4">
+      <div className="mt-auto p-4 flex justify-center">
         <DonationBubble onClick={onDonationClick || (() => {})} />
       </div>
     </div>

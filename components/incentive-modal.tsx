@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
-import { X } from 'lucide-react'
+import { X, Zap, CheckCircle, XCircle, DollarSign, CreditCard, RotateCcw, Smartphone } from 'lucide-react'
 import { BitcoinConnectLightningGoalsManager } from './bitcoin-connect-lightning-goals-manager'
 
 function LightningGoalsSummary({ 
@@ -62,21 +62,23 @@ function LightningGoalsSummary({
     <div className="space-y-6">
       {/* Status Header */}
       <div className="text-center">
-        <div className="text-4xl mb-2">⚡</div>
+        <div className="flex justify-center mb-2">
+          <Zap className="w-12 h-12 text-green-600" />
+        </div>
         <h2 className="text-2xl font-bold text-green-600">Active Lightning Goal</h2>
-        <p className="text-gray-600">Write {goals.dailyWordGoal} words daily to earn rewards</p>
+        <p className="text-gray-600 dark:text-gray-400">Write {goals.dailyWordGoal} words daily to earn rewards</p>
       </div>
       
       {/* Progress Section */}
-      <div className="bg-gray-50 p-6 rounded-lg">
+      <div className="bg-gray-50 dark:bg-gray-800 p-6 rounded-lg">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold">Today's Progress</h3>
-          <span className="text-sm text-gray-500">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Today's Progress</h3>
+          <span className="text-sm text-gray-500 dark:text-gray-400">
             {wordsSinceStake} / {goals.dailyWordGoal} words
           </span>
         </div>
         
-        <div className="w-full bg-gray-200 rounded-full h-3 mb-4">
+        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 mb-4">
           <div 
             className={`h-3 rounded-full transition-all duration-500 ${
               wordsSinceStake >= goals.dailyWordGoal 
@@ -89,17 +91,27 @@ function LightningGoalsSummary({
         
         {wordsSinceStake >= goals.dailyWordGoal ? (
           <div className="text-center space-y-2">
-            <p className="text-green-600 font-medium text-lg">
-              {goals.todayRewardSent ? '✅ Reward sent!' : '🎉 Goal complete! Processing reward...'}
+            <p className="text-green-600 dark:text-green-400 font-medium text-lg flex items-center justify-center gap-2">
+              {goals.todayRewardSent ? (
+                <>
+                  <CheckCircle className="w-5 h-5" />
+                  Reward sent!
+                </>
+              ) : (
+                <>
+                  <CheckCircle className="w-5 h-5" />
+                  Goal complete! Processing reward...
+                </>
+              )}
             </p>
             {goals.todayRewardSent && (
-              <p className="text-green-700 text-sm font-medium">
+              <p className="text-green-700 dark:text-green-300 text-sm font-medium">
                 Rewards have been paid out today for reaching your goal
               </p>
             )}
           </div>
         ) : (
-          <p className="text-center text-gray-600">
+          <p className="text-center text-gray-600 dark:text-gray-400">
             {wordsToGo} words to go
           </p>
         )}
@@ -107,47 +119,58 @@ function LightningGoalsSummary({
       
       {/* Stats Grid */}
       <div className="grid grid-cols-2 gap-4">
-        <div className="bg-blue-50 p-4 rounded-lg text-center">
-          <div className="text-2xl font-bold text-blue-600">{goals.dailyReward}</div>
-          <div className="text-sm text-gray-600">Daily Reward (sats)</div>
+        <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg text-center">
+          <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{goals.dailyReward}</div>
+          <div className="text-sm text-gray-600 dark:text-gray-400">Daily Reward (sats)</div>
         </div>
-        <div className="bg-green-50 p-4 rounded-lg text-center">
-          <div className="text-2xl font-bold text-green-600">{goals.currentBalance}</div>
-          <div className="text-sm text-gray-600">Current Balance (sats)</div>
+        <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg text-center">
+          <div className="text-2xl font-bold text-green-600 dark:text-green-400">{goals.currentBalance}</div>
+          <div className="text-sm text-gray-600 dark:text-gray-400">Current Balance (sats)</div>
         </div>
-        <div className="bg-purple-50 p-4 rounded-lg text-center">
-          <div className="text-2xl font-bold text-purple-600">{goals.currentStreak || 0}</div>
-          <div className="text-sm text-gray-600">Day Streak</div>
+        <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg text-center">
+          <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">{goals.currentStreak || 0}</div>
+          <div className="text-sm text-gray-600 dark:text-gray-400">Day Streak</div>
         </div>
-        <div className="bg-orange-50 p-4 rounded-lg text-center">
-          <div className="text-2xl font-bold text-orange-600">{goals.totalGoalsMet || 0}</div>
-          <div className="text-sm text-gray-600">Goals Met</div>
+        <div className="bg-orange-50 dark:bg-orange-900/20 p-4 rounded-lg text-center">
+          <div className="text-2xl font-bold text-orange-600 dark:text-orange-400">{goals.totalGoalsMet || 0}</div>
+          <div className="text-sm text-gray-600 dark:text-gray-400">Goals Met</div>
         </div>
       </div>
       
       {/* History */}
-      <div className="bg-gray-50 p-4 rounded-lg">
-        <h3 className="font-semibold mb-3">Recent History</h3>
+      <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
+        <h3 className="font-semibold mb-3 text-gray-900 dark:text-gray-100">Recent History</h3>
         {goals.history && goals.history.length > 0 ? (
           <div className="space-y-3">
             {goals.history.slice(-7).reverse().map((day: any, index: number) => (
-              <div key={index} className="flex justify-between items-center text-sm bg-white p-3 rounded-lg border">
+              <div key={index} className="flex justify-between items-center text-sm bg-white dark:bg-gray-700 p-3 rounded-lg border border-gray-200 dark:border-gray-600">
                 <div className="flex flex-col">
-                  <span className="font-medium">{day.date}</span>
-                  <span className="text-gray-500 text-xs">
+                  <span className="font-medium text-gray-900 dark:text-gray-100">{day.date}</span>
+                  <span className="text-gray-500 dark:text-gray-400 text-xs">
                     {day.words} words written
                   </span>
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="flex flex-col items-end">
                     <div className="flex items-center gap-2">
-                      <span className={day.goalMet ? 'text-green-600' : 'text-red-600'}>
-                        {day.goalMet ? '✅ Goal Met' : '❌ Goal Missed'}
+                      <span className={day.goalMet ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'} className="flex items-center gap-1">
+                        {day.goalMet ? (
+                          <>
+                            <CheckCircle className="w-4 h-4" />
+                            Goal Met
+                          </>
+                        ) : (
+                          <>
+                            <XCircle className="w-4 h-4" />
+                            Goal Missed
+                          </>
+                        )}
                       </span>
                     </div>
                     {day.rewardSent && (
-                      <span className="text-green-600 text-xs font-medium">
-                        💰 {goals.dailyReward} sats paid out
+                      <span className="text-green-600 dark:text-green-400 text-xs font-medium flex items-center gap-1">
+                        <DollarSign className="w-3 h-3" />
+                        {goals.dailyReward} sats paid out
                       </span>
                     )}
                     {/* Show transaction history */}
@@ -156,18 +179,21 @@ function LightningGoalsSummary({
                         {day.transactions.map((tx: any, txIndex: number) => (
                           <div key={txIndex} className="flex items-center gap-1">
                             {tx.type === 'deposit' && (
-                              <span className="text-blue-600 text-xs">
-                                💳 +{tx.amount} sats deposit
+                              <span className="text-blue-600 dark:text-blue-400 text-xs flex items-center gap-1">
+                                <CreditCard className="w-3 h-3" />
+                                +{tx.amount} sats deposit
                               </span>
                             )}
                             {tx.type === 'payout' && (
-                              <span className="text-green-600 text-xs">
-                                💰 -{tx.amount} sats payout
+                              <span className="text-green-600 dark:text-green-400 text-xs flex items-center gap-1">
+                                <DollarSign className="w-3 h-3" />
+                                -{tx.amount} sats payout
                               </span>
                             )}
                             {tx.type === 'refund' && (
-                              <span className="text-orange-600 text-xs">
-                                🔄 +{tx.amount} sats refund
+                              <span className="text-orange-600 dark:text-orange-400 text-xs flex items-center gap-1">
+                                <RotateCcw className="w-3 h-3" />
+                                +{tx.amount} sats refund
                               </span>
                             )}
                           </div>
@@ -180,7 +206,7 @@ function LightningGoalsSummary({
             ))}
           </div>
         ) : (
-          <p className="text-gray-500 text-sm">No history yet</p>
+          <p className="text-gray-500 dark:text-gray-400 text-center py-4">No history yet</p>
         )}
       </div>
       
