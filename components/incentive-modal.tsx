@@ -137,78 +137,6 @@ function LightningGoalsSummary({
         </div>
       </div>
       
-      {/* History */}
-      <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
-        <h3 className="font-semibold mb-3 text-gray-900 dark:text-gray-100">Recent History</h3>
-        {goals.history && goals.history.length > 0 ? (
-          <div className="space-y-3">
-            {goals.history.slice(-7).reverse().map((day: any, index: number) => (
-              <div key={index} className="flex justify-between items-center text-sm bg-white dark:bg-gray-700 p-3 rounded-lg border border-gray-200 dark:border-gray-600">
-                <div className="flex flex-col">
-                  <span className="font-medium text-gray-900 dark:text-gray-100">{day.date}</span>
-                  <span className="text-gray-500 dark:text-gray-400 text-xs">
-                    {day.words} words written
-                  </span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="flex flex-col items-end">
-                    <div className="flex items-center gap-2">
-                      <span className={day.goalMet ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'} className="flex items-center gap-1">
-                        {day.goalMet ? (
-                          <>
-                            <CheckCircle className="w-4 h-4" />
-                            Goal Met
-                          </>
-                        ) : (
-                          <>
-                            <XCircle className="w-4 h-4" />
-                            Goal Missed
-                          </>
-                        )}
-                      </span>
-                    </div>
-                    {day.rewardSent && (
-                      <span className="text-green-600 dark:text-green-400 text-xs font-medium flex items-center gap-1">
-                        <DollarSign className="w-3 h-3" />
-                        {goals.dailyReward} sats paid out
-                      </span>
-                    )}
-                    {/* Show transaction history */}
-                    {day.transactions && day.transactions.length > 0 && (
-                      <div className="flex flex-col items-end gap-1 mt-2">
-                        {day.transactions.map((tx: any, txIndex: number) => (
-                          <div key={txIndex} className="flex items-center gap-1">
-                            {tx.type === 'deposit' && (
-                              <span className="text-blue-600 dark:text-blue-400 text-xs flex items-center gap-1">
-                                <CreditCard className="w-3 h-3" />
-                                +{tx.amount} sats deposit
-                              </span>
-                            )}
-                            {tx.type === 'payout' && (
-                              <span className="text-green-600 dark:text-green-400 text-xs flex items-center gap-1">
-                                <DollarSign className="w-3 h-3" />
-                                -{tx.amount} sats payout
-                              </span>
-                            )}
-                            {tx.type === 'refund' && (
-                              <span className="text-orange-600 dark:text-orange-400 text-xs flex items-center gap-1">
-                                <RotateCcw className="w-3 h-3" />
-                                +{tx.amount} sats refund
-                              </span>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="text-gray-500 dark:text-gray-400 text-center py-4">No history yet</p>
-        )}
-      </div>
       
       {/* Actions */}
       <div className="flex gap-3">
@@ -396,10 +324,11 @@ export function IncentiveModal({
                     userPubkey={userPubkey}
                     authData={authData}
                     currentWordCount={lastSavedWordCount || 0}
-                    onStakeActivated={() => {
+                    onStakeActivated={async () => {
                       // Force modal to show Progress/Summary screen
                       setHasSetup(true)
-                      loadGoals()
+                      // Reload goals data to get the latest information
+                      await loadGoals()
                       // Also trigger parent component refresh for header updates
                       if (onSetupStatusChange) {
                         onSetupStatusChange(true)
