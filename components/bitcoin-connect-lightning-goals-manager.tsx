@@ -413,13 +413,23 @@ function BitcoinConnectLightningGoalsManagerInner({
           console.log('[Manager] ========================================')
           console.log('[Manager] 🎉 PAYMENT CONFIRMED!')
           console.log('[Manager] ========================================')
-          console.log('[Manager] Amount:', result.amount, 'sats')
+          console.log('[Manager] API response amount:', result.amount)
+          console.log('[Manager] Invoice amount:', invoiceData?.amount)
           
           clearInterval(interval)
           
-          // Credit user's balance
-          console.log('[Manager] 💰 Crediting balance:', result.amount, 'sats')
-          await handlePaymentConfirmed(result.amount)
+          // Use invoice amount if API doesn't return amount
+          const confirmedAmount = result.amount || invoiceData?.amount
+          console.log('[Manager] 💰 Crediting balance:', confirmedAmount, 'sats')
+          
+          if (!confirmedAmount) {
+            console.error('[Manager] ❌ No amount available for crediting!')
+            alert('Payment confirmed but amount could not be determined. Please contact support.')
+            setLoading(false)
+            return
+          }
+          
+          await handlePaymentConfirmed(confirmedAmount)
           
           setLoading(false)
           setScreen('active')
@@ -480,7 +490,7 @@ function BitcoinConnectLightningGoalsManagerInner({
         depositAmount: amount,
         lightningAddress: lightningAddress,
         currentWordCount: currentWordCount,
-        paymentHash: invoiceData?.paymentHash // Include payment hash if available
+        paymentHash: invoiceData?.paymentHash || 'confirmed' // Include payment hash if available
       }, authData)
       
       console.log('[Manager] ✅ Balance credited with settings:', {
@@ -525,10 +535,10 @@ function BitcoinConnectLightningGoalsManagerInner({
   })
   
   return (
-    <div className="max-w-md mx-auto p-6 bg-white rounded-lg shadow">
+    <div className="space-y-4">
       {/* Show setup screen directly */}
       {screen === 'setup' && (
-        <div className="space-y-4">
+        <>
           {/* Optional wallet connection status */}
           {isConnected && (
             <div className="flex items-center gap-2 mb-4">
@@ -870,18 +880,20 @@ function BitcoinConnectLightningGoalsManagerInner({
                >
                  ← Back to setup
                </button>
-        </div>
+        </>
       )}
       
       {/* Show active screen if connected and screen is active */}
       {isConnected && screen === 'active' && (
-        <div className="text-center space-y-4">
-          <div className="text-6xl">✅</div>
-          <h2 className="text-xl font-bold">Stake Active!</h2>
-          <p className="text-gray-600">
-            Write {goalWords} words today to earn your reward
-          </p>
-        </div>
+        <>
+          <div className="text-center space-y-4">
+            <div className="text-6xl">✅</div>
+            <h2 className="text-xl font-bold">Stake Active!</h2>
+            <p className="text-gray-600">
+              Write {goalWords} words today to earn your reward
+            </p>
+          </div>
+        </>
       )}
     </div>
   )
