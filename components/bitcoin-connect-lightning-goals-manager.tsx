@@ -15,11 +15,15 @@ interface InvoiceData {
 export function BitcoinConnectLightningGoalsManager({ 
   userPubkey,
   authData,
-  currentWordCount = 0
+  currentWordCount = 0,
+  onStakeActivated,
+  onSetupStatusChange
 }: { 
   userPubkey: string
   authData: any
   currentWordCount?: number
+  onStakeActivated?: () => void
+  onSetupStatusChange?: (hasSetup: boolean) => void
 }) {
   return (
     <ClientOnly fallback={<div className="p-8 text-center">Loading payment system...</div>}>
@@ -27,6 +31,8 @@ export function BitcoinConnectLightningGoalsManager({
         userPubkey={userPubkey} 
         authData={authData} 
         currentWordCount={currentWordCount}
+        onStakeActivated={onStakeActivated}
+        onSetupStatusChange={onSetupStatusChange}
       />
     </ClientOnly>
   )
@@ -35,11 +41,15 @@ export function BitcoinConnectLightningGoalsManager({
 function BitcoinConnectLightningGoalsManagerInner({ 
   userPubkey, 
   authData,
-  currentWordCount = 0
+  currentWordCount = 0,
+  onStakeActivated,
+  onSetupStatusChange
 }: { 
   userPubkey: string
   authData: any
   currentWordCount?: number
+  onStakeActivated?: () => void
+  onSetupStatusChange?: (hasSetup: boolean) => void
 }) {
   const [isConnected, setIsConnected] = useState(false)
   
@@ -533,6 +543,14 @@ function BitcoinConnectLightningGoalsManagerInner({
         amount
       })
       
+      // Trigger callbacks to update parent components
+      if (onStakeActivated) {
+        onStakeActivated()
+      }
+      if (onSetupStatusChange) {
+        onSetupStatusChange(true) // Stake is now active
+      }
+      
       setScreen('active')
       
     } catch (error) {
@@ -660,68 +678,61 @@ function BitcoinConnectLightningGoalsManagerInner({
             </div>
           </div>
           
-          {/* Payment Method Choice Section */}
+          {/* Primary Payment Button - Default to Bitcoin Connect */}
           <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
-            <h3 className="text-sm font-medium mb-3 text-center">
-              How would you like to pay?
-            </h3>
+            <button
+              onClick={async () => {
+                if (!isConnected) {
+                  alert('Please connect your wallet using the button at the top of the page first')
+                  return
+                }
+                setPaymentMethod('connect')
+                await createDepositInvoice()
+              }}
+              disabled={loading || !lightningAddress || dailyReward <= 0 || stakeAmount <= 0}
+              className="w-full py-4 bg-green-500 text-white rounded-lg font-medium text-lg
+                       hover:bg-green-600 disabled:bg-gray-300 transition-colors
+                       flex items-center justify-center gap-2"
+            >
+              {loading ? (
+                <>
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                  Creating Invoice...
+                </>
+              ) : (
+                <>
+                  <span className="text-2xl">⚡</span>
+                  Create Stake Invoice
+                </>
+              )}
+            </button>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {/* Option 1: Connect Wallet (Bitcoin Connect) */}
-              <button
-                onClick={async () => {
-                  if (!isConnected) {
-                    alert('Please connect your wallet using the button at the top of the page first')
-                    return
-                  }
-                  setPaymentMethod('connect')
-                  await createDepositInvoice()
-                }}
-                disabled={loading || !lightningAddress || dailyReward <= 0 || stakeAmount <= 0}
-                className="relative flex flex-col items-center gap-3 p-6 border-2 rounded-lg transition-all
-                         border-green-200 dark:border-green-800 hover:border-green-400 dark:hover:border-green-600
-                         bg-green-50 dark:bg-green-900/20 hover:bg-green-100 dark:hover:bg-green-900/30
-                         disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-green-200"
-              >
-                <div className="text-4xl">⚡</div>
-                <div className="text-center">
-                  <p className="font-semibold text-green-700 dark:text-green-300">
-                    Connect Wallet
-                  </p>
-                  <p className="text-xs text-green-600 dark:text-green-400 mt-1">
-                    Pay with 1-click using Bitcoin Connect
-                  </p>
-                </div>
-                {isConnected && (
-                  <div className="absolute top-2 right-2">
-                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                  </div>
-                )}
-              </button>
-              
-              {/* Option 2: Generate Invoice (QR Code) */}
-              <button
-                onClick={async () => {
-                  setPaymentMethod('invoice')
-                  await createDepositInvoice()
-                }}
-                disabled={loading || !lightningAddress || dailyReward <= 0 || stakeAmount <= 0}
-                className="flex flex-col items-center gap-3 p-6 border-2 rounded-lg transition-all
-                         border-blue-200 dark:border-blue-800 hover:border-blue-400 dark:hover:border-blue-600
-                         bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30
-                         disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-blue-200"
-              >
-                <div className="text-4xl">📱</div>
-                <div className="text-center">
-                  <p className="font-semibold text-blue-700 dark:text-blue-300">
-                    Generate Invoice
-                  </p>
-                  <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
-                    Get QR code to pay with any wallet
-                  </p>
-                </div>
-              </button>
-            </div>
+            <p className="text-xs text-gray-500 mt-2 text-center">
+              Pay instantly with your connected Bitcoin wallet
+            </p>
+            
+            {/* Alternative Payment Method */}
+            <details className="mt-4">
+              <summary className="text-sm text-blue-600 dark:text-blue-400 cursor-pointer hover:text-blue-700 dark:hover:text-blue-300 text-center">
+                Or pay manually with QR code
+              </summary>
+              <div className="mt-3">
+                <button
+                  onClick={async () => {
+                    setPaymentMethod('invoice')
+                    await createDepositInvoice()
+                  }}
+                  disabled={loading || !lightningAddress || dailyReward <= 0 || stakeAmount <= 0}
+                  className="w-full py-3 border-2 border-blue-200 dark:border-blue-800 rounded-lg
+                           bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30
+                           disabled:opacity-50 disabled:cursor-not-allowed transition-colors
+                           flex items-center justify-center gap-2"
+                >
+                  <span className="text-xl">📱</span>
+                  Generate QR Code Invoice
+                </button>
+              </div>
+            </details>
             
             {/* Validation Message */}
             {(!lightningAddress || dailyReward <= 0 || stakeAmount <= 0) && (

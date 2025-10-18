@@ -365,13 +365,23 @@ export function IncentiveModal({
               onSetupStatusChange={onSetupStatusChange}
               onClose={onClose}
             />
-                 ) : (
-                   <BitcoinConnectLightningGoalsManager
-                     userPubkey={userPubkey}
-                     authData={authData}
-                     currentWordCount={lastSavedWordCount || 0}
-                   />
-                 )}
+                ) : (
+                  <BitcoinConnectLightningGoalsManager
+                    userPubkey={userPubkey}
+                    authData={authData}
+                    currentWordCount={lastSavedWordCount || 0}
+                    onStakeActivated={() => {
+                      // Force modal to show Progress/Summary screen
+                      setHasSetup(true)
+                      loadGoals()
+                      // Also trigger parent component refresh for header updates
+                      if (onSetupStatusChange) {
+                        onSetupStatusChange(true)
+                      }
+                    }}
+                    onSetupStatusChange={setHasSetup}
+                  />
+                )}
         </div>
       </div>
     </div>
