@@ -494,8 +494,21 @@ function BitcoinConnectLightningGoalsManagerInner({
       
     } catch (error) {
       console.error('[Manager] ❌ Failed to credit balance:', error)
-      console.error('[Manager] ❌ Error details:', error.message)
-      alert('Payment received but failed to update balance. Please refresh.')
+      console.error('[Manager] ❌ Error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      })
+      console.error('[Manager] ❌ Function parameters:', {
+        userPubkey: userPubkey?.substring(0, 8) + '...',
+        goalWords,
+        dailyReward,
+        amount,
+        lightningAddress,
+        currentWordCount,
+        paymentHash: invoiceData?.paymentHash
+      })
+      alert('Payment received but failed to update balance. Check console for details.')
     }
   }
   

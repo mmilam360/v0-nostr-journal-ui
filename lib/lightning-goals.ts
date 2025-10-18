@@ -372,6 +372,13 @@ export async function createStake(
   },
   authData: any
 ): Promise<void> {
+  console.log('[LightningGoals] ========================================')
+  console.log('[LightningGoals] 🔧 CREATE STAKE DEBUG')
+  console.log('[LightningGoals] ========================================')
+  console.log('[LightningGoals] User pubkey:', userPubkey?.substring(0, 8) + '...')
+  console.log('[LightningGoals] Config:', config)
+  console.log('[LightningGoals] Has payment hash:', !!config.paymentHash)
+  console.log('[LightningGoals] Payment hash:', config.paymentHash)
   console.log('[LightningGoals] Creating new stake...')
   console.log('[LightningGoals] Current word count:', config.currentWordCount)
   console.log('[LightningGoals] This will be the baseline (words before stake)')
@@ -396,32 +403,47 @@ export async function createStake(
     }] : []
   }]
   
-  await updateLightningGoals(userPubkey, {
-    dailyWordGoal: config.dailyWordGoal,
-    dailyReward: config.dailyReward,
-    currentBalance: config.paymentHash ? config.depositAmount : 0, // Only credit if payment confirmed
-    initialStake: config.depositAmount,
-    totalDeposited: config.paymentHash ? config.depositAmount : 0, // Only count if payment confirmed
-    totalWithdrawn: 0,
-    status: config.paymentHash ? 'active' : 'pending_payment', // Pending until payment confirmed
-    createdAt: now,
-    stakeCreatedAt: now,  // When stake was created
-    baselineWordCount: config.currentWordCount,  // NEW: Baseline to subtract
-    totalWordCountAtLastUpdate: config.currentWordCount,  // Track current word count for incremental updates
-    lightningAddress: config.lightningAddress,
-    todayDate: today,
-    todayWords: 0,  // Start with 0 - we'll track incremental progress
-    todayGoalMet: false,
-    todayRewardSent: false,
-    todayRewardAmount: 0,
-    history: initialHistory,
-    currentStreak: 0,
-    totalGoalsMet: 0,
-    totalRewardsEarned: 0,
-    lastRewardDate: '',
-    missedDays: 0,
-    lastMissedDate: ''
-  }, authData)
+  try {
+    console.log('[LightningGoals] 📝 Calling updateLightningGoals...')
+    
+    await updateLightningGoals(userPubkey, {
+      dailyWordGoal: config.dailyWordGoal,
+      dailyReward: config.dailyReward,
+      currentBalance: config.paymentHash ? config.depositAmount : 0, // Only credit if payment confirmed
+      initialStake: config.depositAmount,
+      totalDeposited: config.paymentHash ? config.depositAmount : 0, // Only count if payment confirmed
+      totalWithdrawn: 0,
+      status: config.paymentHash ? 'active' : 'pending_payment', // Pending until payment confirmed
+      createdAt: now,
+      stakeCreatedAt: now,  // When stake was created
+      baselineWordCount: config.currentWordCount,  // NEW: Baseline to subtract
+      totalWordCountAtLastUpdate: config.currentWordCount,  // Track current word count for incremental updates
+      lightningAddress: config.lightningAddress,
+      todayDate: today,
+      todayWords: 0,  // Start with 0 - we'll track incremental progress
+      todayGoalMet: false,
+      todayRewardSent: false,
+      todayRewardAmount: 0,
+      history: initialHistory,
+      currentStreak: 0,
+      totalGoalsMet: 0,
+      totalRewardsEarned: 0,
+      lastRewardDate: '',
+      missedDays: 0,
+      lastMissedDate: ''
+    }, authData)
+    
+    console.log('[LightningGoals] ✅ updateLightningGoals completed successfully')
+    
+  } catch (error) {
+    console.error('[LightningGoals] ❌ updateLightningGoals failed:', error)
+    console.error('[LightningGoals] ❌ Error details:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    })
+    throw error // Re-throw to let the calling function handle it
+  }
   
   console.log('[LightningGoals] ✅ Stake created with baseline:', config.currentWordCount, config.paymentHash ? 'with payment confirmed' : 'pending payment')
 }
