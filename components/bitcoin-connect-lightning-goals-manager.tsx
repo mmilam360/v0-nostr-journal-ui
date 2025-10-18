@@ -314,8 +314,17 @@ function BitcoinConnectLightningGoalsManagerInner({
       
       setScreen('invoice')
       
-      // Note: Payment verification is handled by Bitcoin Connect directly
-      // No need to poll backend since we get immediate confirmation
+      // ✅ CRITICAL FIX: Start verification polling IMMEDIATELY
+      // This allows QR code payments to be detected automatically
+      console.log('[Manager] 🔍 Starting automatic payment verification...')
+      console.log('[Manager] Will check every 3 seconds for payment confirmation')
+      startPaymentVerification(realPaymentHash, data.invoice)
+      
+      // Note: We do NOT set loading=false here because we're still waiting for payment
+      // The loading state will be cleared when:
+      // - Payment is confirmed (verification polling succeeds)
+      // - User goes back to setup (manual cancel)
+      // - Verification times out after 3 minutes
       
     } catch (error) {
       console.error('[Manager] ❌ Failed to create invoice:', error)
@@ -326,8 +335,12 @@ function BitcoinConnectLightningGoalsManagerInner({
       })
       alert('Failed to create invoice: ' + error.message)
     } finally {
-      console.log('[Manager] 🔄 Setting loading to false')
-      setLoading(false)
+      // Don't set loading=false here - keep loading=true until payment is confirmed
+      // The loading state will be cleared when:
+      // - Payment is confirmed (verification polling succeeds)
+      // - User goes back to setup (manual cancel)
+      // - Verification times out after 3 minutes
+      console.log('[Manager] 🔄 Keeping loading state for payment verification')
     }
   }
   
@@ -338,8 +351,7 @@ function BitcoinConnectLightningGoalsManagerInner({
   async function payInvoice() {
     if (!invoiceData || !window.webln) return
     
-    setLoading(true)
-    console.log('[Manager] 💸 Paying invoice...')
+    console.log('[Manager] 💸 Paying invoice via Bitcoin Connect...')
     
     try {
       // Use Bitcoin Connect to send payment from user's wallet
@@ -367,12 +379,13 @@ function BitcoinConnectLightningGoalsManagerInner({
   // ============================================
   
   function startPaymentVerification(paymentHash: string, invoice: string) {
-    console.log('[Manager] 🔍 Starting payment verification...')
-    console.log('[Manager] 📋 Verification details:', {
-      paymentHash: paymentHash.substring(0, 16) + '...',
-      invoicePreview: invoice.substring(0, 50) + '...',
-      paymentMethod: paymentMethod
-    })
+    console.log('[Manager] ========================================')
+    console.log('[Manager] 🔍 STARTING PAYMENT VERIFICATION')
+    console.log('[Manager] ========================================')
+    console.log('[Manager] Payment hash:', paymentHash)
+    console.log('[Manager] Invoice preview:', invoice.substring(0, 50) + '...')
+    console.log('[Manager] Payment method:', paymentMethod)
+    console.log('[Manager] Will check every 3 seconds for up to 3 minutes')
     
     let attempts = 0
     const maxAttempts = 60 // 3 minutes (60 * 3 seconds)
@@ -381,11 +394,8 @@ function BitcoinConnectLightningGoalsManagerInner({
       attempts++
       
       try {
-        console.log(`[Manager] 🔍 Checking payment (attempt ${attempts}/${maxAttempts})...`)
-        console.log('[Manager] 📋 Sending to API:', {
-          paymentHash: paymentHash.substring(0, 16) + '...',
-          invoicePreview: invoice.substring(0, 50) + '...'
-        })
+        console.log(`[Manager] 🔄 Verification attempt ${attempts}/${maxAttempts}`)
+        console.log(`[Manager] Time remaining: ${Math.floor((maxAttempts - attempts) * 3 / 60)} minutes`)
         
         const response = await fetch('/api/incentive/verify-payment', {
           method: 'POST',
@@ -400,23 +410,37 @@ function BitcoinConnectLightningGoalsManagerInner({
         console.log('[Manager] 📡 API response:', result)
         
         if (result.paid) {
+          console.log('[Manager] ========================================')
           console.log('[Manager] 🎉 PAYMENT CONFIRMED!')
+          console.log('[Manager] ========================================')
+          console.log('[Manager] Amount:', result.amount, 'sats')
+          
           clearInterval(interval)
           
           // Credit user's balance
+          console.log('[Manager] 💰 Crediting balance:', result.amount, 'sats')
           await handlePaymentConfirmed(result.amount)
           
           setLoading(false)
           setScreen('active')
           
+          console.log('[Manager] ✅ Stake activated successfully!')
+          
         } else if (attempts >= maxAttempts) {
-          console.log('[Manager] ⏰ Verification timeout after', maxAttempts, 'attempts')
+          console.log('[Manager] ========================================')
+          console.log('[Manager] ⏰ VERIFICATION TIMEOUT')
+          console.log('[Manager] ========================================')
+          console.log('[Manager] Checked', maxAttempts, 'times over 3 minutes')
+          console.log('[Manager] No payment detected')
+          
           clearInterval(interval)
           setLoading(false)
-          alert('Payment verification timed out. Please check your wallet or try again.')
+          
+          alert('Payment verification timed out after 3 minutes. If you paid, please contact support with this payment hash: ' + paymentHash.substring(0, 16) + '...')
           
         } else {
-          console.log('[Manager] ⏳ Payment not confirmed yet, waiting... (attempt', attempts, 'of', maxAttempts, ')')
+          // Still waiting
+          console.log('[Manager] ⏳ Payment not confirmed yet, will check again in 3 seconds')
         }
         
       } catch (error) {
@@ -515,8 +539,6 @@ function BitcoinConnectLightningGoalsManagerInner({
               <span className="text-sm text-green-600 font-medium">Wallet Connected</span>
             </div>
           )}
-          <h2 className="text-xl font-bold">Create Your Writing Goal</h2>
-          
           {/* Optional wallet connection */}
           {!isConnected && (
             <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
@@ -527,76 +549,83 @@ function BitcoinConnectLightningGoalsManagerInner({
             </div>
           )}
           
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              Daily Word Goal
-            </label>
-            <input
-              type="number"
-              value={goalWords}
-              onChange={(e) => setGoalWords(Number(e.target.value))}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-              min="100"
-              step="50"
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              How many words you need to write each day
-            </p>
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              Daily Reward (sats)
-            </label>
-            <input
-              type="number"
-              value={dailyReward}
-              onChange={(e) => setDailyReward(Number(e.target.value))}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-              min="1"
-              step="1"
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              Reward you'll earn when you reach your daily goal
-            </p>
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              Stake Amount (sats)
-            </label>
-            <input
-              type="number"
-              value={stakeAmount}
-              onChange={(e) => setStakeAmount(Number(e.target.value))}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-              min="10"
-              step="10"
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              ≈ {(stakeAmount / goalWords).toFixed(2)} sats per word
-            </p>
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              Lightning Address
-            </label>
-            <input
-              type="text"
-              value={lightningAddress}
-              onChange={(e) => setLightningAddress(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-              placeholder="your@lightning.address"
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              Where rewards will be sent (auto-filled from your wallet or profile)
-            </p>
-            {!lightningAddress && (
-              <p className="text-xs text-amber-600 mt-1">
-                ⚠️ No Lightning address found in wallet. Please enter one manually.
-              </p>
-            )}
+          {/* Consolidated Goal Setup Form */}
+          <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+            <h2 className="text-xl font-bold mb-6 text-center">Create Your Writing Goal</h2>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  Daily Word Goal
+                </label>
+                <input
+                  type="number"
+                  value={goalWords}
+                  onChange={(e) => setGoalWords(Number(e.target.value))}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                  min="100"
+                  step="50"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  How many words you need to write each day
+                </p>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  Daily Reward (sats)
+                </label>
+                <input
+                  type="number"
+                  value={dailyReward}
+                  onChange={(e) => setDailyReward(Number(e.target.value))}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                  min="1"
+                  step="1"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Reward you'll earn when you reach your daily goal
+                </p>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  Stake Amount (sats)
+                </label>
+                <input
+                  type="number"
+                  value={stakeAmount}
+                  onChange={(e) => setStakeAmount(Number(e.target.value))}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                  min="10"
+                  step="10"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  ≈ {(stakeAmount / goalWords).toFixed(2)} sats per word
+                </p>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  Lightning Address
+                </label>
+                <input
+                  type="text"
+                  value={lightningAddress}
+                  onChange={(e) => setLightningAddress(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                  placeholder="your@lightning.address"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Where rewards will be sent (auto-filled from your wallet or profile)
+                </p>
+                {!lightningAddress && (
+                  <p className="text-xs text-amber-600 mt-1">
+                    ⚠️ No Lightning address found in wallet. Please enter one manually.
+                  </p>
+                )}
+              </div>
+            </div>
           </div>
           
           {/* Payment Method Choice Section */}
@@ -783,13 +812,19 @@ function BitcoinConnectLightningGoalsManagerInner({
           
           {/* Payment Status (shown for both methods) */}
           {loading && (
-            <div className="text-center p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-yellow-600 dark:border-yellow-400 mx-auto mb-2"></div>
-              <p className="text-sm text-yellow-800 dark:text-yellow-300">
-                ⏳ Waiting for payment confirmation...
+            <div className="text-center p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 dark:border-blue-400 mx-auto mb-3"></div>
+              <p className="text-sm font-medium text-blue-800 dark:text-blue-300 mb-2">
+                ⏳ Waiting for Payment...
               </p>
-              <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-1">
-                This usually takes 5-30 seconds
+              <p className="text-xs text-blue-600 dark:text-blue-400">
+                Pay the invoice above from any Lightning wallet
+              </p>
+              <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                Checking automatically every 3 seconds
+              </p>
+              <p className="text-xs text-blue-500 dark:text-blue-500 mt-2">
+                This usually takes 5-30 seconds after you pay
               </p>
             </div>
           )}
