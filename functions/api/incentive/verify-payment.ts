@@ -12,6 +12,8 @@ export async function onRequestPost(context: any) {
     
     log('🔍 Payment hash:', paymentHash)
     log('🔍 Has invoice string:', !!invoiceString)
+    log('🔍 Invoice string length:', invoiceString?.length || 0)
+    log('🔍 Invoice string preview:', invoiceString?.substring(0, 50) + '...' || 'None')
     
     // Validate payment hash format - accept both real payment hashes and tracking IDs
     if (!paymentHash) {
@@ -28,6 +30,9 @@ export async function onRequestPost(context: any) {
     
     log('🔍 Payment hash type:', isRealPaymentHash ? 'real_payment_hash' : 'tracking_id')
     log('🔍 Payment hash value:', paymentHash)
+    log('🔍 Payment hash length:', paymentHash.length)
+    log('🔍 Is real payment hash?', isRealPaymentHash)
+    log('🔍 Is tracking ID?', isTrackingId)
     
     // ⚠️ CRITICAL: Use context.env for Cloudflare
     const NWC_CONNECTION_URL = context.env.NWC_CONNECTION_URL

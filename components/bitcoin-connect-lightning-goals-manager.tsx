@@ -794,18 +794,46 @@ function BitcoinConnectLightningGoalsManagerInner({
             </div>
           )}
           
-          {/* Back Button */}
-          <button
-            onClick={() => {
-              setScreen('setup')
-              setPaymentMethod(null)
-              setInvoiceData(null)
-              setVerificationStarted(false)
-            }}
-            className="w-full py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
-          >
-            ← Back to setup
-          </button>
+               {/* Debug Button (temporary) */}
+               {invoiceData && (
+                 <button
+                   onClick={async () => {
+                     console.log('[Manager] 🔧 Testing debug endpoint...')
+                     try {
+                       const response = await fetch('/api/incentive/debug-nwc', {
+                         method: 'POST',
+                         headers: { 'Content-Type': 'application/json' },
+                         body: JSON.stringify({
+                           invoiceString: invoiceData.invoice,
+                           paymentHash: invoiceData.paymentHash
+                         })
+                       })
+                       const result = await response.json()
+                       console.log('[Manager] 🔧 Debug result:', result)
+                       alert('Debug result logged to console. Check browser console for details.')
+                     } catch (error) {
+                       console.error('[Manager] 🔧 Debug error:', error)
+                       alert('Debug failed: ' + error.message)
+                     }
+                   }}
+                   className="w-full py-2 text-sm bg-purple-500 text-white rounded hover:bg-purple-600"
+                 >
+                   🔧 Debug Payment Verification
+                 </button>
+               )}
+
+               {/* Back Button */}
+               <button
+                 onClick={() => {
+                   setScreen('setup')
+                   setPaymentMethod(null)
+                   setInvoiceData(null)
+                   setVerificationStarted(false)
+                 }}
+                 className="w-full py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
+               >
+                 ← Back to setup
+               </button>
         </div>
       )}
       
