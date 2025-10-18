@@ -1504,8 +1504,6 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                 {/* Logo */}
                 <div className="flex items-center gap-3">
                   <Logo className="h-8 w-auto" />
-                  {/* Color test - should be logo blue */}
-                  <div className="w-4 h-4 bg-primary rounded ml-2" title="Logo blue test"></div>
                   <div className="hidden sm:flex items-center gap-2 text-xs text-muted-foreground">
                     <span>{notes.length} notes</span>
                     <span>•</span>

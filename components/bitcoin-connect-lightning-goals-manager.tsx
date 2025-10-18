@@ -395,6 +395,14 @@ function BitcoinConnectLightningGoalsManagerInner({
       // No need to verify through backend - the payment is confirmed
       await handlePaymentConfirmed(invoiceData.amount)
       
+      // Trigger callbacks to update parent components and switch to Progress/Summary
+      if (onStakeActivated) {
+        onStakeActivated()
+      }
+      if (onSetupStatusChange) {
+        onSetupStatusChange(true) // Stake is now active
+      }
+      
       setLoading(false)
       setScreen('active')
       
@@ -651,7 +659,7 @@ function BitcoinConnectLightningGoalsManagerInner({
                   step="10"
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  ≈ {(stakeAmount / goalWords).toFixed(2)} sats per word
+                  Balance you'd like to load to your account
                 </p>
               </div>
               
@@ -872,37 +880,6 @@ function BitcoinConnectLightningGoalsManagerInner({
             </div>
           )}
           
-               {/* Debug Button (temporary) */}
-               {invoiceData && (
-                 <button
-                   onClick={async () => {
-                     console.log('[Manager] 🔧 Testing debug endpoint...')
-                     try {
-                       console.log('[Manager] 🔧 Full invoice string length:', invoiceData.invoice.length)
-                       console.log('[Manager] 🔧 Full invoice string:', invoiceData.invoice)
-                       console.log('[Manager] 🔧 Payment hash:', invoiceData.paymentHash)
-                       
-                       const response = await fetch('/api/incentive/debug-nwc', {
-                         method: 'POST',
-                         headers: { 'Content-Type': 'application/json' },
-                         body: JSON.stringify({
-                           invoiceString: invoiceData.invoice,
-                           paymentHash: invoiceData.paymentHash
-                         })
-                       })
-                       const result = await response.json()
-                       console.log('[Manager] 🔧 Debug result:', result)
-                       alert('Debug result logged to console. Check browser console for details.')
-                     } catch (error) {
-                       console.error('[Manager] 🔧 Debug error:', error)
-                       alert('Debug failed: ' + error.message)
-                     }
-                   }}
-                   className="w-full py-2 text-sm bg-purple-500 text-white rounded hover:bg-purple-600"
-                 >
-                   🔧 Debug Payment Verification
-                 </button>
-               )}
 
                {/* Back Button */}
                <button

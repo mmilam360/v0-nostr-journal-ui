@@ -21,6 +21,7 @@ export default function ProfilePage({ authData, onClose, onLightningAddressUpdat
   const [copiedNsec, setCopiedNsec] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
+  const [saveSuccess, setSaveSuccess] = useState(false)
 
   useEffect(() => {
     console.log('[Profile] 🔄 Profile page loading for user:', authData.pubkey)
@@ -106,6 +107,7 @@ export default function ProfilePage({ authData, onClose, onLightningAddressUpdat
   const handleSaveLightningAddress = async () => {
     console.log('[Profile] 💾 Saving Lightning address:', lightningAddress)
     setIsSaving(true)
+    setSaveSuccess(false)
     try {
       // Save to localStorage for immediate use
       localStorage.setItem(`lightning-address-${authData.pubkey}`, lightningAddress)
@@ -162,6 +164,9 @@ export default function ProfilePage({ authData, onClose, onLightningAddressUpdat
       if (onLightningAddressUpdate) {
         onLightningAddressUpdate(lightningAddress)
       }
+      
+      // Show success state
+      setSaveSuccess(true)
       
     } catch (error) {
       console.error("Failed to save Lightning address:", error)
@@ -292,10 +297,15 @@ export default function ProfilePage({ authData, onClose, onLightningAddressUpdat
                       disabled={isSaving}
                       variant="outline"
                       size="sm"
-                      className="border-blue-500 text-blue-600 hover:bg-blue-50"
+                      className={saveSuccess 
+                        ? "border-green-500 text-green-600 bg-green-50 hover:bg-green-100" 
+                        : "border-blue-500 text-blue-600 hover:bg-blue-50"
+                      }
                     >
                       {isSaving ? (
                         <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-slate-300"></div>
+                      ) : saveSuccess ? (
+                        <Check className="h-4 w-4" />
                       ) : (
                         <Save className="h-4 w-4" />
                       )}
