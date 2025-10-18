@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { WalletConnect } from './wallet-connect'
 import { ClientOnly } from './client-only'
 import { LightningInvoiceQR } from './lightning-invoice-qr'
@@ -538,7 +538,7 @@ function BitcoinConnectLightningGoalsManagerInner({
     <div className="space-y-4">
       {/* Show setup screen directly */}
       {screen === 'setup' && (
-        <>
+        <div className="space-y-4">
           {/* Optional wallet connection status */}
           {isConnected && (
             <div className="flex items-center gap-2 mb-4">
@@ -880,7 +880,7 @@ function BitcoinConnectLightningGoalsManagerInner({
                >
                  ← Back to setup
                </button>
-        </>
+        </div>
       )}
       
       {/* Show active screen if connected and screen is active */}
@@ -893,7 +893,7 @@ function BitcoinConnectLightningGoalsManagerInner({
               Write {goalWords} words today to earn your reward
             </p>
           </div>
-        </>
+        </div>
       )}
     </div>
   )
