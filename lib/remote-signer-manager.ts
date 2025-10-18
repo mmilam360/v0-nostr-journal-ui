@@ -127,12 +127,6 @@ class RemoteSignerManager {
     console.log("[RemoteSignerManager] Event content length:", unsignedEvent.content?.length)
     
     try {
-      // Request permissions for Lightning Goals events if this is a kind 30078 event
-      if (unsignedEvent.kind === 30078) {
-        console.log("[RemoteSignerManager] 🔐 Requesting Lightning Goals permissions for kind 30078 event...")
-        await this.requestLightningGoalsPermissions()
-      }
-      
       // Add timeout wrapper to prevent indefinite hanging
       const timeoutPromise = new Promise((_, reject) => {
         setTimeout(() => {

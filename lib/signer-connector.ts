@@ -49,6 +49,7 @@ export async function connectNip46(bunkerUri: string): Promise<{
     const permissions = [
       'sign_event:1',     // Permission for Kind 1 public posts (publish to Nostr)
       'sign_event:30001', // Specific permission for Kind 30001 journal entries
+      'sign_event:30078', // Permission for Kind 30078 Lightning Goals events
       'sign_event:5',     // Permission for Kind 5 deletion events
       'get_public_key',
       'delete_event',
@@ -149,6 +150,7 @@ export function startClientInitiatedFlow(
     const permissions = [
       'sign_event:1',     // Permission for Kind 1 public posts (publish to Nostr)
       'sign_event:30001', // Specific permission for Kind 30001 journal entries
+      'sign_event:30078', // Permission for Kind 30078 Lightning Goals events
       'sign_event:5',     // Permission for Kind 5 deletion events
       'get_public_key',
       'delete_event',
