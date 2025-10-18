@@ -178,13 +178,18 @@ export default function Home() {
         session.relays = data.relays
         session.sessionData = data.sessionData
         if (data.clientSecretKey) {
-          // Handle both Uint8Array and regular arrays
+          // Handle Uint8Array, arrays, and hex strings
           if (data.clientSecretKey instanceof Uint8Array) {
             session.clientSecretKey = Array.from(data.clientSecretKey)
           } else if (Array.isArray(data.clientSecretKey)) {
             session.clientSecretKey = data.clientSecretKey.map(Number)
+          } else if (typeof data.clientSecretKey === 'string') {
+            // Handle hex string - convert to array of numbers
+            const hexString = data.clientSecretKey.startsWith('0x') ? data.clientSecretKey.slice(2) : data.clientSecretKey
+            session.clientSecretKey = hexString.match(/.{1,2}/g)?.map(byte => parseInt(byte, 16)) || []
+            console.log("[NostrJournal] ✅ Converted hex string clientSecretKey to array")
           } else {
-            console.error("[NostrJournal] ❌ ERROR: clientSecretKey is not an array or Uint8Array:", typeof data.clientSecretKey)
+            console.error("[NostrJournal] ❌ ERROR: clientSecretKey is not an array, Uint8Array, or string:", typeof data.clientSecretKey)
             throw new Error("Invalid clientSecretKey format")
           }
         }
