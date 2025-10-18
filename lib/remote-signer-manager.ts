@@ -114,7 +114,7 @@ class RemoteSignerManager {
   }
 
   /**
-   * Sign an event with proper permission handling
+   * Sign an event with proper permission handling and timeout
    * This is where the permission popup should appear on first sign
    */
   async signEvent(unsignedEvent: any): Promise<any> {
@@ -127,9 +127,24 @@ class RemoteSignerManager {
     console.log("[RemoteSignerManager] Event content length:", unsignedEvent.content?.length)
     
     try {
+      // Request permissions for Lightning Goals events if this is a kind 30078 event
+      if (unsignedEvent.kind === 30078) {
+        console.log("[RemoteSignerManager] 🔐 Requesting Lightning Goals permissions for kind 30078 event...")
+        await this.requestLightningGoalsPermissions()
+      }
+      
+      // Add timeout wrapper to prevent indefinite hanging
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => {
+          reject(new Error("NIP-46 signing timeout after 30 seconds"))
+        }, 30000) // 30 second timeout
+      })
+      
       // This should trigger the permission request if not already granted
       // The remote signer app should show a permission popup for the first sign_event call
-      const signedEvent = await this.session.signer.signEvent(unsignedEvent)
+      const signPromise = this.session.signer.signEvent(unsignedEvent)
+      
+      const signedEvent = await Promise.race([signPromise, timeoutPromise])
       
       console.log("[RemoteSignerManager] ✅ Event signed successfully")
       console.log("[RemoteSignerManager] Signed event ID:", signedEvent.id)
@@ -138,6 +153,16 @@ class RemoteSignerManager {
       
     } catch (error) {
       console.error("[RemoteSignerManager] ❌ Failed to sign event:", error)
+      
+      // Provide more helpful error messages
+      if (error.message.includes("timeout")) {
+        throw new Error("Remote signer request timed out. Please check your remote signer app and try again.")
+      } else if (error.message.includes("permission")) {
+        throw new Error("Permission denied by remote signer. Please approve the signing request in your remote signer app.")
+      } else if (error.message.includes("NIP-46")) {
+        throw new Error("NIP-46 communication error. Please check your remote signer connection and try again.")
+      }
+      
       throw error
     }
   }
@@ -222,6 +247,21 @@ class RemoteSignerManager {
       console.error("[RemoteSignerManager] ❌ Failed to request permissions:", error)
       return false
     }
+  }
+
+  /**
+   * Request permissions for Lightning Goals events (kind 30078)
+   */
+  async requestLightningGoalsPermissions(): Promise<boolean> {
+    console.log("[RemoteSignerManager] 🔐 Requesting Lightning Goals permissions...")
+    
+    // Request permissions for kind 30078 events
+    const permissions = [
+      "sign_event:30078", // Lightning Goals events
+      "nip04_encrypt",    // For encrypting event content if needed
+    ]
+    
+    return await this.requestPermissions(permissions)
   }
 
   /**
