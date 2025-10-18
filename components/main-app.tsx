@@ -460,6 +460,12 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
         
         // Send reward via API
         try {
+          const dateString = new Date().toLocaleDateString('en-US', { 
+            month: '2-digit', 
+            day: '2-digit', 
+            year: '2-digit' 
+          })
+          
           const response = await fetch('/api/incentive/send-reward', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -467,7 +473,8 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
               userPubkey: authData.pubkey,
               amount: goals.dailyReward,
               lightningAddress: goals.lightningAddress,
-              isRefund: false
+              isRefund: false,
+              memo: `Nostr Journal - ${dateString} Reward`
             })
           })
           
@@ -1585,7 +1592,14 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                         <span className="hidden sm:inline font-semibold">{userStreak} day streak</span>
                       </>
                     ) : (
-                      <span className="hidden sm:inline">Set Up Daily Goal</span>
+                      <>
+                        {/* Mobile: Lightning icon to indicate feature */}
+                        <div className="sm:hidden flex items-center justify-center w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-full">
+                          <Zap className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                        </div>
+                        {/* Desktop: Full text */}
+                        <span className="hidden sm:inline">Set Up Daily Goal</span>
+                      </>
                     )}
                   </Button>
                 )}
