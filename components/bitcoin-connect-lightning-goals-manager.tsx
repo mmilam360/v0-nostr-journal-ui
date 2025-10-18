@@ -62,6 +62,7 @@ function BitcoinConnectLightningGoalsManagerInner({
   const [loading, setLoading] = useState(false)
   const [paymentMethod, setPaymentMethod] = useState<'connect' | 'invoice' | null>(null)
   const [verificationStarted, setVerificationStarted] = useState(false)
+  const [showPaymentSuccess, setShowPaymentSuccess] = useState(false)
   
   // Start payment verification for QR code payments
   useEffect(() => {
@@ -395,6 +396,9 @@ function BitcoinConnectLightningGoalsManagerInner({
       // No need to verify through backend - the payment is confirmed
       await handlePaymentConfirmed(invoiceData.amount)
       
+      // Show payment success alert
+      setShowPaymentSuccess(true)
+      
       // Trigger callbacks to update parent components and switch to Progress/Summary
       if (onStakeActivated) {
         onStakeActivated()
@@ -404,7 +408,12 @@ function BitcoinConnectLightningGoalsManagerInner({
       }
       
       setLoading(false)
-      setScreen('active')
+      
+      // Wait a moment to show the success alert, then switch to Progress/Summary
+      setTimeout(() => {
+        setShowPaymentSuccess(false)
+        setScreen('active')
+      }, 2000)
       
     } catch (error) {
       console.error('[Manager] ❌ Payment failed:', error)
@@ -482,8 +491,16 @@ function BitcoinConnectLightningGoalsManagerInner({
           
           await handlePaymentConfirmed(confirmedAmount)
           
+          // Show payment success alert
+          setShowPaymentSuccess(true)
+          
           setLoading(false)
-          setScreen('active')
+          
+          // Wait a moment to show the success alert, then switch to Progress/Summary
+          setTimeout(() => {
+            setShowPaymentSuccess(false)
+            setScreen('active')
+          }, 2000)
           
           console.log('[Manager] ✅ Stake activated successfully!')
           
@@ -761,6 +778,21 @@ function BitcoinConnectLightningGoalsManagerInner({
       {screen === 'invoice' && invoiceData && (
         <div className="space-y-6">
           <h2 className="text-2xl font-bold text-center">Pay Your Stake</h2>
+          
+          {/* Payment Success Alert */}
+          {showPaymentSuccess && (
+            <div className="bg-green-100 dark:bg-green-900/30 border border-green-300 dark:border-green-700 rounded-lg p-4 text-center">
+              <div className="flex items-center justify-center gap-2 text-green-700 dark:text-green-300">
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+                <span className="font-semibold">Payment Confirmed!</span>
+              </div>
+              <p className="text-sm text-green-600 dark:text-green-400 mt-1">
+                Switching to Progress/Summary...
+              </p>
+            </div>
+          )}
           
           {/* Show different UI based on payment method chosen */}
           {paymentMethod === 'connect' ? (

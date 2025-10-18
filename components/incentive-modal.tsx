@@ -309,7 +309,15 @@ export function IncentiveModal({
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-4"></div>
               <p className="text-gray-600">Loading Lightning Goals...</p>
             </div>
-          ) : goals && goals.status === 'active' ? (
+          ) : (() => {
+            console.log('[IncentiveModal] 🔍 Conditional check:', { 
+              hasGoals: !!goals, 
+              goalsStatus: goals?.status, 
+              hasSetup, 
+              shouldShowSummary: goals && goals.status === 'active' 
+            })
+            return goals && goals.status === 'active'
+          })() ? (
             <LightningGoalsSummary
               goals={goals}
               currentWordCount={lastSavedWordCount || 0}
@@ -325,7 +333,8 @@ export function IncentiveModal({
                     authData={authData}
                     currentWordCount={lastSavedWordCount || 0}
                     onStakeActivated={async () => {
-                      // Force modal to show Progress/Summary screen
+                      console.log('[IncentiveModal] 🎉 Stake activated, switching to Progress/Summary...')
+                      // Force modal to show Progress/Summary screen immediately
                       setHasSetup(true)
                       // Reload goals data to get the latest information
                       await loadGoals()
@@ -333,6 +342,7 @@ export function IncentiveModal({
                       if (onSetupStatusChange) {
                         onSetupStatusChange(true)
                       }
+                      console.log('[IncentiveModal] ✅ Modal should now show Progress/Summary screen')
                     }}
                     onSetupStatusChange={setHasSetup}
                   />
