@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react'
 import { WalletConnect } from './wallet-connect'
 import { ClientOnly } from './client-only'
 import { LightningInvoiceQR } from './lightning-invoice-qr'
+import { CheckCircle } from 'lucide-react'
 import * as bolt11 from 'bolt11'
 
 interface InvoiceData {
@@ -635,8 +636,8 @@ function BitcoinConnectLightningGoalsManagerInner({
                 </label>
                 <input
                   type="number"
-                  value={goalWords}
-                  onChange={(e) => setGoalWords(Number(e.target.value))}
+                  value={goalWords || ''}
+                  onChange={(e) => setGoalWords(e.target.value === '' ? 0 : Number(e.target.value))}
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                   min="100"
                   step="50"
@@ -652,8 +653,8 @@ function BitcoinConnectLightningGoalsManagerInner({
                 </label>
                 <input
                   type="number"
-                  value={dailyReward}
-                  onChange={(e) => setDailyReward(Number(e.target.value))}
+                  value={dailyReward || ''}
+                  onChange={(e) => setDailyReward(e.target.value === '' ? 0 : Number(e.target.value))}
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                   min="1"
                   step="1"
@@ -669,8 +670,8 @@ function BitcoinConnectLightningGoalsManagerInner({
                 </label>
                 <input
                   type="number"
-                  value={stakeAmount}
-                  onChange={(e) => setStakeAmount(Number(e.target.value))}
+                  value={stakeAmount || ''}
+                  onChange={(e) => setStakeAmount(e.target.value === '' ? 0 : Number(e.target.value))}
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                   min="10"
                   step="10"
@@ -932,7 +933,9 @@ function BitcoinConnectLightningGoalsManagerInner({
       {isConnected && screen === 'active' && (
         <>
           <div className="text-center space-y-4">
-            <div className="text-6xl">✅</div>
+            <div className="flex justify-center">
+              <CheckCircle className="w-16 h-16 text-green-600" />
+            </div>
             <h2 className="text-xl font-bold">Stake Active!</h2>
             <p className="text-gray-600">
               Write {goalWords} words today to earn your reward

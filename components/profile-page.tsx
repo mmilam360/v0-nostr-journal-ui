@@ -170,7 +170,8 @@ export default function ProfilePage({ authData, onClose, onLightningAddressUpdat
       
     } catch (error) {
       console.error("Failed to save Lightning address:", error)
-      alert("Failed to save Lightning address. Please try again.")
+      // Don't show browser popup - just log the error
+      setSaveSuccess(false)
     } finally {
       setIsSaving(false)
     }

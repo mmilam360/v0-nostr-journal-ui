@@ -4,7 +4,7 @@ import type React from "react"
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { CheckCircle, Loader2, AlertCircle, CloudOff, AlertTriangle, Calendar, Plus, Upload, Download } from "lucide-react"
+import { CheckCircle, Loader2, AlertCircle, CloudOff, AlertTriangle, Calendar, Plus, Upload, Download, Search } from "lucide-react"
 import type { Note } from "@/components/main-app"
 
 interface NoteListProps {
@@ -69,7 +69,7 @@ export default function NoteList({ notes, selectedNote, onSelectNote, onCreateNo
     <div className="w-full md:w-80 bg-white dark:bg-card flex flex-col h-full border-r border-border">
       <div className="p-4 border-b border-border">
         <div className="relative mb-4">
-          <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground text-sm">🔍</span>
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
           <Input
             placeholder="Search all notes..."
             value={searchQuery}
