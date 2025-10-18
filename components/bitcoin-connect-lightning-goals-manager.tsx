@@ -550,14 +550,6 @@ function BitcoinConnectLightningGoalsManagerInner({
   // RENDER
   // ============================================
   
-  // Debug logging
-  console.log('[Manager] 🎨 Rendering with state:', { 
-    isConnected, 
-    screen, 
-    loading,
-    lightningAddress: lightningAddress ? 'set' : 'not set'
-  })
-  
   return (
     <div className="max-w-md mx-auto">
       {/* Show setup screen directly */}
