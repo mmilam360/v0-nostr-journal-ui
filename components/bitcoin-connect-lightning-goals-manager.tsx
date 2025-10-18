@@ -800,6 +800,10 @@ function BitcoinConnectLightningGoalsManagerInner({
                    onClick={async () => {
                      console.log('[Manager] 🔧 Testing debug endpoint...')
                      try {
+                       console.log('[Manager] 🔧 Full invoice string length:', invoiceData.invoice.length)
+                       console.log('[Manager] 🔧 Full invoice string:', invoiceData.invoice)
+                       console.log('[Manager] 🔧 Payment hash:', invoiceData.paymentHash)
+                       
                        const response = await fetch('/api/incentive/debug-nwc', {
                          method: 'POST',
                          headers: { 'Content-Type': 'application/json' },

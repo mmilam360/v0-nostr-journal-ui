@@ -54,7 +54,9 @@ export async function onRequestPost(context: any) {
     })
     
     log('✅ Invoice created via NWC')
-    log('📋 Invoice string:', invoice.paymentRequest?.substring(0, 80) + '...')
+    log('📋 Invoice string length:', invoice.paymentRequest?.length || 0)
+    log('📋 Invoice string preview:', invoice.paymentRequest?.substring(0, 80) + '...')
+    log('📋 Full invoice string:', invoice.paymentRequest)
     
     // For Cloudflare Functions, we'll use the invoice string directly for verification
     // since BOLT11 decoding requires Node.js built-ins that aren't available
