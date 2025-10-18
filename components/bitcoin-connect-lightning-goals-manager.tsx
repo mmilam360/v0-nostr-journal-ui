@@ -443,11 +443,23 @@ function BitcoinConnectLightningGoalsManagerInner({
           clearInterval(interval)
           
           // Use invoice amount if API doesn't return amount
-          const confirmedAmount = result.amount || invoiceData?.amount
+          const confirmedAmount = result.amount || invoiceData?.amount || stakeAmount
           console.log('[Manager] 💰 Crediting balance:', confirmedAmount, 'sats')
+          console.log('[Manager] 💰 Amount sources:', { 
+            apiAmount: result.amount, 
+            invoiceAmount: invoiceData?.amount, 
+            stakeAmount: stakeAmount,
+            finalAmount: confirmedAmount 
+          })
           
-          if (!confirmedAmount) {
+          if (!confirmedAmount || confirmedAmount <= 0) {
             console.error('[Manager] ❌ No amount available for crediting!')
+            console.error('[Manager] ❌ Amount sources:', { 
+              apiAmount: result.amount, 
+              invoiceAmount: invoiceData?.amount, 
+              stakeAmount: stakeAmount,
+              finalAmount: confirmedAmount 
+            })
             alert('Payment confirmed but amount could not be determined. Please contact support.')
             setLoading(false)
             return
