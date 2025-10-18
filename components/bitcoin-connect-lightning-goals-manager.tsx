@@ -909,7 +909,7 @@ function BitcoinConnectLightningGoalsManagerInner({
               Write {goalWords} words today to earn your reward
             </p>
           </div>
-        </div>
+        </>
       )}
     </div>
   )
