@@ -27,12 +27,36 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [findingEventId, setFindingEventId] = useState(false)
+  const [isMobileKeyboardOpen, setIsMobileKeyboardOpen] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const currentNoteIdRef = useRef<string | null>(null)
   const previousNoteDataRef = useRef<{ id: string; title: string; content: string } | null>(null)
 
   const debouncedTitle = useDebounce(title, 1500)
   const debouncedContent = useDebounce(content, 1500)
+
+  // Detect mobile keyboard open/close
+  useEffect(() => {
+    const handleResize = () => {
+      // On mobile, when keyboard opens, viewport height decreases significantly
+      const initialHeight = window.innerHeight
+      const currentHeight = window.innerHeight
+      const heightDifference = initialHeight - currentHeight
+      
+      // If height decreased by more than 150px, likely keyboard is open
+      const isKeyboardOpen = heightDifference > 150
+      setIsMobileKeyboardOpen(isKeyboardOpen)
+    }
+
+    // Set initial height
+    const initialHeight = window.innerHeight
+    
+    window.addEventListener('resize', handleResize)
+    
+    return () => {
+      window.removeEventListener('resize', handleResize)
+    }
+  }, [])
 
   useEffect(() => {
     if (note) {
@@ -253,7 +277,8 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
 
   return (
     <div className="flex-1 bg-white dark:bg-background flex flex-col w-full h-full">
-      {/* Clean Header */}
+      {/* Clean Header - Hidden on mobile when keyboard is open */}
+      {!(isMobileKeyboardOpen && window.innerWidth < 1024) && (
       <div className="border-b border-border px-4 sm:px-8 py-3 sm:py-6">
         <input
           type="text"
@@ -335,6 +360,7 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
           </div>
         </div>
       </div>
+      )}
 
       {/* Clean Editor */}
       <div className="flex-1 px-4 sm:px-8 py-3 sm:py-6">
@@ -356,7 +382,8 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
         />
       </div>
 
-      {/* Clean Footer - Tags and Sync Status */}
+      {/* Clean Footer - Tags and Sync Status - Hidden on mobile when keyboard is open */}
+      {!(isMobileKeyboardOpen && window.innerWidth < 1024) && (
       <div className="border-t border-border px-4 sm:px-8 py-2 sm:py-4 bg-secondary/30">
         <div className="flex flex-wrap gap-2 mb-3">
           {note.tags.map((tag) => (
@@ -475,6 +502,7 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
           </div>
         )}
       </div>
+      )}
     </div>
   )
 }

@@ -223,7 +223,7 @@ function LightningGoalsSummary({
                         </div>
                         {day.rewardSent && (
                           <span className="text-green-600 dark:text-green-400 text-xs font-medium flex items-center gap-1">
-                            <DollarSign className="w-3 h-3" />
+                            <Zap className="w-3 h-3" />
                             {goals.dailyReward} sats paid out
                           </span>
                         )}
@@ -240,7 +240,7 @@ function LightningGoalsSummary({
                                 )}
                                 {tx.type === 'payout' && (
                                   <span className="text-green-600 dark:text-green-400 text-xs flex items-center gap-1">
-                                    <DollarSign className="w-3 h-3" />
+                                    <Zap className="w-3 h-3" />
                                     -{tx.amount} sats payout
                                   </span>
                                 )}
