@@ -168,18 +168,16 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   const [showRelayManager, setShowRelayManager] = useState(false)
   const [showRelaysInDropdown, setShowRelaysInDropdown] = useState(false)
 
-  // Clear all local storage and cache on app startup for consistent cross-device experience
-  const clearAllStorage = async () => {
-    console.log("[NostrJournal] 🧹 Clearing all local storage and cache for consistent cross-device experience...")
-    console.log("[NostrJournal] 💡 This ensures all data is fetched fresh from Nostr relays for consistency across devices")
+  // Clear selective storage on app startup for consistent cross-device experience
+  // IMPORTANT: Preserve remote signer sessions for fast reconnect
+  const clearSelectiveStorage = async () => {
+    console.log("[NostrJournal] 🧹 Clearing selective storage for consistent cross-device experience...")
+    console.log("[NostrJournal] 💡 Preserving remote signer sessions for fast reconnect")
     
-    // Clear all localStorage keys used by the app
+    // Clear only data that should be fetched fresh from Nostr relays
+    // DO NOT clear remote signer sessions or authentication data
     const keysToRemove = [
-      // Session and authentication
-      'nostr_remote_session',
-      'nostr_session',
-      
-      // Relay preferences
+      // Relay preferences (will be fetched from Nostr)
       'nostr_user_relays',
       'nostr-relays',
       
@@ -194,12 +192,14 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       ...Object.keys(localStorage).filter(key => key.startsWith('daily-progress-')),
       ...Object.keys(localStorage).filter(key => key.startsWith('incentive-settings-')),
       
-      // Any other app-specific keys
+      // App-specific data keys (but preserve auth sessions)
       ...Object.keys(localStorage).filter(key => 
-        key.includes('nostr') || 
-        key.includes('journal') || 
-        key.includes('lightning') ||
-        key.includes('incentive')
+        (key.includes('journal') || 
+         key.includes('lightning') ||
+         key.includes('incentive')) &&
+        !key.includes('session') &&
+        !key.includes('nostr_remote_session') &&
+        !key.includes('nostr_session')
       )
     ]
     
@@ -212,7 +212,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       }
     })
     
-    // Clear event cache
+    // Clear event cache but preserve auth sessions
     try {
       const { clearUserCache } = await import('@/lib/nostr-storage')
       clearUserCache(authData)
@@ -221,7 +221,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       console.warn("[NostrJournal] ⚠️ Failed to clear event cache:", error)
     }
     
-    console.log("[NostrJournal] ✅ All local storage and cache cleared - app will fetch fresh data from Nostr relays")
+    console.log("[NostrJournal] ✅ Selective storage cleared - preserved auth sessions for fast reconnect")
   }
 
   // AUDIT POINT 3: Calculate total word count from ALL notes
@@ -634,8 +634,9 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     const loadUserNotes = async () => {
       console.log("[NostrJournal] Loading notes for user:", authData.pubkey)
       
-      // Clear all local storage and cache on app startup for consistent cross-device experience
-      await clearAllStorage()
+      // Clear selective storage on app startup for consistent cross-device experience
+      // Preserves remote signer sessions for fast reconnect
+      await clearSelectiveStorage()
       
       setIsLoading(true)
       setSyncStatus("syncing")
