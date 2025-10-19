@@ -26,7 +26,8 @@ import {
   createConnectURI,
   generateClientKeypair,
   isMobile,
-  supportsNostrConnect
+  supportsNostrConnect,
+  clearDebugLogs
 } from '@/lib/bunker-auth-v2'
 
 interface BunkerAuthModalProps {
@@ -62,6 +63,32 @@ export function BunkerAuthModal({ isOpen, onClose, onSuccess }: BunkerAuthModalP
       })
     }
   }, [isOpen])
+
+  // Mobile return detection for same-device auth
+  useEffect(() => {
+    // Only run if currently connecting
+    if (authState.status !== 'connecting' && authState.status !== 'waiting_approval') return
+    
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState === 'visible') {
+        console.log('[BunkerAuth] User returned to app')
+        
+        // Wait a moment for bunker response to arrive
+        await new Promise(resolve => setTimeout(resolve, 2000))
+        
+        // Check if connection completed while we were away
+        if (authState.status === 'connected') {
+          console.log('[BunkerAuth] Connection verified after return!')
+          onSuccess(authState.pubkey, authState.signer)
+        } else {
+          console.log('[BunkerAuth] Still not connected after return')
+        }
+      }
+    }
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
+  }, [authState.status, authState.pubkey, authState.signer])
 
   // Handle auth state changes
   useEffect(() => {
@@ -283,6 +310,58 @@ export function BunkerAuthModal({ isOpen, onClose, onSuccess }: BunkerAuthModalP
             </div>
           )}
         </div>
+
+        {/* Debug Log Viewer - Only shows in development */}
+        {process.env.NODE_ENV === 'development' && (
+          <details style={{ 
+            position: 'fixed', 
+            bottom: 0, 
+            right: 0, 
+            background: 'rgba(0,0,0,0.95)',
+            color: 'lime',
+            fontSize: '10px',
+            padding: '4px',
+            maxWidth: '300px',
+            maxHeight: '150px',
+            overflow: 'auto',
+            zIndex: 9999,
+            border: '1px solid lime'
+          }}>
+            <summary style={{ cursor: 'pointer', marginBottom: '4px' }}>
+              Debug Logs
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation()
+                  clearDebugLogs()
+                  window.location.reload()
+                }}
+                style={{ 
+                  marginLeft: '8px', 
+                  background: 'transparent', 
+                  border: '1px solid lime', 
+                  color: 'lime', 
+                  padding: '2px 4px',
+                  fontSize: '8px',
+                  cursor: 'pointer'
+                }}
+              >
+                Clear
+              </button>
+            </summary>
+            {(() => {
+              try {
+                const logs = JSON.parse(sessionStorage.getItem('debug_logs') || '[]')
+                return logs.map((log: string, i: number) => (
+                  <div key={i} style={{ marginBottom: '2px', wordBreak: 'break-all' }}>
+                    {log}
+                  </div>
+                ))
+              } catch {
+                return <div>No logs available</div>
+              }
+            })()}
+          </details>
+        )}
       </div>
     </div>
   )

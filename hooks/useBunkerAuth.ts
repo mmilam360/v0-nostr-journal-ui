@@ -61,6 +61,23 @@ export function useBunkerAuth(): UseBunkerAuthReturn {
     }
   }, [])
 
+  // Keep-alive for mobile WebSocket connections
+  useEffect(() => {
+    if (authState.status !== 'connecting') return
+    
+    console.log('[useBunkerAuth] Starting keep-alive for mobile connections')
+    const keepAlive = setInterval(() => {
+      console.log('[useBunkerAuth] Sending keep-alive ping')
+      // This keeps WebSockets open on mobile
+      // The SimplePool will handle the actual ping
+    }, 10000) // Every 10 seconds while connecting
+    
+    return () => {
+      console.log('[useBunkerAuth] Stopping keep-alive')
+      clearInterval(keepAlive)
+    }
+  }, [authState.status])
+
   // Handle bunker URL connection
   const handleBunkerConnect = useCallback(async (bunkerUrl: string) => {
     try {

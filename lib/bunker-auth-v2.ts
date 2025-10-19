@@ -7,6 +7,32 @@ import { BunkerSigner, createNostrConnectURI } from '@nostr/tools/nip46'
 import { generateSecretKey, getPublicKey } from '@nostr/tools/pure'
 import { SimplePool } from '@nostr/tools/pool'
 
+// Debug logging utility for mobile debugging
+const log = (message: string) => {
+  const timestamp = new Date().toISOString().split('T')[1].slice(0, -1)
+  const logEntry = `[${timestamp}] ${message}`
+  console.log(logEntry)
+  
+  // Store in sessionStorage so you can view on mobile
+  try {
+    const logs = JSON.parse(sessionStorage.getItem('debug_logs') || '[]')
+    logs.push(logEntry)
+    sessionStorage.setItem('debug_logs', JSON.stringify(logs.slice(-30))) // Keep last 30
+  } catch (error) {
+    // Ignore sessionStorage errors on some mobile browsers
+  }
+}
+
+// Clear debug logs utility
+export function clearDebugLogs(): void {
+  try {
+    sessionStorage.removeItem('debug_logs')
+    console.log('[BunkerAuth] Debug logs cleared')
+  } catch (error) {
+    // Ignore sessionStorage errors
+  }
+}
+
 // Auth state management
 export type AuthState = 
   | { status: 'disconnected' }
@@ -115,36 +141,41 @@ export async function connectViaQR(
   onStateChange: (state: AuthState) => void
 ): Promise<BunkerSigner | null> {
   try {
+    log('Starting QR bunker connection...')
     onStateChange({ status: 'connecting', method: 'qr' })
     
     const localPubkey = getPublicKey(localSecretKey)
     const connectURI = createConnectURI(localPubkey, relay, appMetadata)
     
-    console.log('[BunkerAuth] 📱 Generated connect URI:', connectURI)
-    console.log('[BunkerAuth] 📱 Waiting for user to scan QR code...')
+    log(`Generated connect URI: ${connectURI.substring(0, 50)}...`)
+    log('Waiting for user to scan QR code...')
     
     onStateChange({ status: 'waiting_approval' })
     
     // Create signer and wait for connection
+    log('Creating BunkerSigner...')
     const signer = new BunkerSigner(localSecretKey, relay, {
       ...appMetadata
     })
     
-    // Set up connection timeout
+    // Set up connection timeout (reduced to 30s for mobile)
     const timeoutPromise = new Promise<never>((_, reject) => {
       setTimeout(() => {
-        reject(new Error('Connection timeout - please try again'))
-      }, 60000) // 60 second timeout
+        log('Connection timeout after 30s')
+        reject(new Error('Connection timed out'))
+      }, 30000) // 30 second timeout for mobile
     })
     
-    // Wait for connection
+    // Wait for connection with timeout wrapper
+    log('Waiting for bunker response...')
     const connectionPromise = signer.connect()
     
     await Promise.race([connectionPromise, timeoutPromise])
+    log('BunkerSigner connected successfully!')
     
     // Test connection
     const remotePubkey = await signer.getPublicKey()
-    console.log('[BunkerAuth] ✅ Connected to remote signer:', remotePubkey)
+    log(`Connected to remote signer: ${remotePubkey}`)
     
     // Save session for fast reconnect
     const session: BunkerSession = {
@@ -160,7 +191,7 @@ export async function connectViaQR(
     return signer
     
   } catch (error) {
-    console.error('[BunkerAuth] ❌ QR connection failed:', error)
+    log(`QR connection failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
     onStateChange({ 
       status: 'error', 
       error: error instanceof Error ? error.message : 'Connection failed'
@@ -177,34 +208,48 @@ export async function connectViaBunker(
   onStateChange: (state: AuthState) => void
 ): Promise<BunkerSigner | null> {
   try {
+    log('Starting bunker URL connection...')
     onStateChange({ status: 'connecting', method: 'bunker' })
     
-    console.log('[BunkerAuth] 🔗 Connecting to bunker:', bunkerUrl)
+    log(`Connecting to bunker: ${bunkerUrl}`)
     
     // Generate new client keypair
     const { secretKey, pubkey } = generateClientKeypair()
     
-    // Create signer from bunker URL
-    const signer = await BunkerSigner.fromBunker(secretKey, bunkerUrl)
+    // Create signer from bunker URL with timeout wrapper
+    log('Creating BunkerSigner from bunker URL...')
+    const signer = await Promise.race([
+      BunkerSigner.fromBunker(secretKey, bunkerUrl),
+      new Promise<never>((_, reject) => 
+        setTimeout(() => {
+          log('BunkerSigner creation timeout after 30s')
+          reject(new Error('BunkerSigner creation timed out'))
+        }, 30000)
+      )
+    ])
+    log('BunkerSigner created successfully!')
     
-    console.log('[BunkerAuth] 📱 Waiting for approval...')
+    log('Waiting for approval...')
     onStateChange({ status: 'waiting_approval' })
     
-    // Set up connection timeout
+    // Set up connection timeout (reduced to 30s for mobile)
     const timeoutPromise = new Promise<never>((_, reject) => {
       setTimeout(() => {
-        reject(new Error('Connection timeout - please try again'))
-      }, 60000) // 60 second timeout
+        log('Connection timeout after 30s')
+        reject(new Error('Connection timed out'))
+      }, 30000) // 30 second timeout for mobile
     })
     
-    // Wait for connection
+    // Wait for connection with timeout wrapper
+    log('Waiting for bunker response...')
     const connectionPromise = signer.connect()
     
     await Promise.race([connectionPromise, timeoutPromise])
+    log('BunkerSigner connected successfully!')
     
     // Test connection
     const remotePubkey = await signer.getPublicKey()
-    console.log('[BunkerAuth] ✅ Connected to remote signer:', remotePubkey)
+    log(`Connected to remote signer: ${remotePubkey}`)
     
     // Save session for fast reconnect
     const session: BunkerSession = {
@@ -220,7 +265,7 @@ export async function connectViaBunker(
     return signer
     
   } catch (error) {
-    console.error('[BunkerAuth] ❌ Bunker connection failed:', error)
+    log(`Bunker connection failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
     onStateChange({ 
       status: 'error', 
       error: error instanceof Error ? error.message : 'Connection failed'
@@ -277,8 +322,11 @@ function extractRelayFromBunkerUrl(bunkerUrl: string): string {
   try {
     const url = new URL(bunkerUrl)
     const relay = url.searchParams.get('relay')
-    return relay || 'wss://relay.nsecbunker.com'
+    const extractedRelay = relay || 'wss://relay.nsecbunker.com'
+    log(`Using relay: ${extractedRelay}`)
+    return extractedRelay
   } catch {
+    log('Using fallback relay: wss://relay.nsecbunker.com')
     return 'wss://relay.nsecbunker.com'
   }
 }
