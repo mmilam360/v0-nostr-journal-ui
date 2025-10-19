@@ -168,6 +168,62 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   const [showRelayManager, setShowRelayManager] = useState(false)
   const [showRelaysInDropdown, setShowRelaysInDropdown] = useState(false)
 
+  // Clear all local storage and cache on app startup for consistent cross-device experience
+  const clearAllStorage = async () => {
+    console.log("[NostrJournal] 🧹 Clearing all local storage and cache for consistent cross-device experience...")
+    console.log("[NostrJournal] 💡 This ensures all data is fetched fresh from Nostr relays for consistency across devices")
+    
+    // Clear all localStorage keys used by the app
+    const keysToRemove = [
+      // Session and authentication
+      'nostr_remote_session',
+      'nostr_session',
+      
+      // Relay preferences
+      'nostr_user_relays',
+      'nostr-relays',
+      
+      // Lightning addresses (will be fetched from Nostr events)
+      ...Object.keys(localStorage).filter(key => key.startsWith('lightning-address-')),
+      
+      // Payment hashes and invoice strings (temporary data)
+      ...Object.keys(localStorage).filter(key => key.startsWith('payment-hash-')),
+      ...Object.keys(localStorage).filter(key => key.startsWith('invoice-string-')),
+      
+      // Progress data (will be fetched from Nostr events)
+      ...Object.keys(localStorage).filter(key => key.startsWith('daily-progress-')),
+      ...Object.keys(localStorage).filter(key => key.startsWith('incentive-settings-')),
+      
+      // Any other app-specific keys
+      ...Object.keys(localStorage).filter(key => 
+        key.includes('nostr') || 
+        key.includes('journal') || 
+        key.includes('lightning') ||
+        key.includes('incentive')
+      )
+    ]
+    
+    keysToRemove.forEach(key => {
+      try {
+        localStorage.removeItem(key)
+        console.log(`[NostrJournal] 🗑️ Removed localStorage key: ${key}`)
+      } catch (error) {
+        console.warn(`[NostrJournal] ⚠️ Failed to remove localStorage key ${key}:`, error)
+      }
+    })
+    
+    // Clear event cache
+    try {
+      const { clearUserCache } = await import('@/lib/nostr-storage')
+      clearUserCache(authData)
+      console.log("[NostrJournal] 🗑️ Cleared event cache")
+    } catch (error) {
+      console.warn("[NostrJournal] ⚠️ Failed to clear event cache:", error)
+    }
+    
+    console.log("[NostrJournal] ✅ All local storage and cache cleared - app will fetch fresh data from Nostr relays")
+  }
+
   // AUDIT POINT 3: Calculate total word count from ALL notes
   const calculateTotalWordCount = (notes: Note[]): number => {
     if (!notes || notes.length === 0) {
@@ -577,6 +633,9 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   useEffect(() => {
     const loadUserNotes = async () => {
       console.log("[NostrJournal] Loading notes for user:", authData.pubkey)
+      
+      // Clear all local storage and cache on app startup for consistent cross-device experience
+      await clearAllStorage()
       
       setIsLoading(true)
       setSyncStatus("syncing")
