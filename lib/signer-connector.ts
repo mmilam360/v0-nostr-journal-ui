@@ -1,17 +1,17 @@
 /**
  * Signer Connector - Handles NIP-46 remote signer connections
- * Based on latest nostr-signer-connector documentation and best practices
+ * Updated to use nostr-tools v2 BunkerSigner
  */
 
-import { Nip46RemoteSigner, type Nip46SessionState, type Nip46ClientMetadata } from 'nostr-signer-connector'
+import { BunkerSigner } from 'nostr-tools/nip46'
 
-let activeSigner: Nip46RemoteSigner | null = null
+let activeSigner: BunkerSigner | null = null
 
 export function getActiveSigner() {
   return activeSigner
 }
 
-export function setActiveSigner(signer: Nip46RemoteSigner | null) {
+export function setActiveSigner(signer: BunkerSigner | null) {
   console.log("[SignerConnector] 🔧 Setting active signer:", !!signer)
   if (signer) {
     console.log("[SignerConnector] ✅ Active signer set successfully")
@@ -33,8 +33,8 @@ export function clearActiveSigner() {
  */
 export async function connectNip46(bunkerUri: string): Promise<{
   success: boolean
-  signer?: Nip46RemoteSigner
-  session?: Nip46SessionState
+  signer?: BunkerSigner
+  session?: any
   error?: string
 }> {
   try {
@@ -62,10 +62,12 @@ export async function connectNip46(bunkerUri: string): Promise<{
     
     console.log("[SignerConnector] Bunker connection requesting permissions:", permissions)
     
-    const connectionPromise = Nip46RemoteSigner.connectToRemote(bunkerUri, {
-      connectTimeoutMs: timeoutMs,
-      permissions: permissions
-    })
+    // Generate client keypair
+    const { generateSecretKey } = await import('nostr-tools/pure')
+    const secretKey = generateSecretKey()
+    
+    // Use the new BunkerSigner.fromBunker method
+    const connectionPromise = BunkerSigner.fromBunker(secretKey, bunkerUri)
     
     // Add our own timeout wrapper for better error handling
     const timeoutPromise = new Promise<never>((_, reject) => {
@@ -74,20 +76,19 @@ export async function connectNip46(bunkerUri: string): Promise<{
       }, timeoutMs)
     })
     
-    const { signer, session } = await Promise.race([connectionPromise, timeoutPromise])
+    const signer = await Promise.race([connectionPromise, timeoutPromise])
     
     console.log("[SignerConnector] ✅ Connected successfully")
     console.log("[SignerConnector] Signer object:", signer)
-    console.log("[SignerConnector] Session object:", session)
     
     // Test the connection by getting public key
     const pubkey = await signer.getPublicKey()
     console.log("[SignerConnector] ✅ Got user pubkey:", pubkey)
     
-    // Create proper session data if not provided
-    const sessionData: Nip46SessionState = session || {
+    // Create proper session data
+    const sessionData = {
       sessionKey: signer.clientSecretKey,
-      remotePubkey: signer.remotePubkey,
+      remotePubkey: pubkey,
       relayUrls: [extractRelayFromUri(bunkerUri)]
     }
     
@@ -126,13 +127,13 @@ export async function connectNip46(bunkerUri: string): Promise<{
  * Start listening for remote signer connection (Client-initiated flow)
  * Uses the library's built-in method with proper configuration
  */
-export function startClientInitiatedFlow(
+export async function startClientInitiatedFlow(
   relayUrls: string[],
-  clientMetadata: Nip46ClientMetadata
-): {
+  clientMetadata: any
+): Promise<{
   connectUri: string
-  established: Promise<{ signer: Nip46RemoteSigner; session: Nip46SessionState }>
-} {
+  established: Promise<{ signer: BunkerSigner; session: any }>
+}> {
   console.log("[SignerConnector] Starting NIP-46 client-initiated flow...")
   console.log("[SignerConnector] Relays:", relayUrls)
   console.log("[SignerConnector] Client metadata:", clientMetadata)
@@ -163,10 +164,33 @@ export function startClientInitiatedFlow(
     
     console.log("[SignerConnector] Requesting permissions:", permissions)
     
-    const result = Nip46RemoteSigner.listenConnectionFromRemote([primaryRelay], clientMetadata, {
-      connectTimeoutMs: timeoutMs,
-      permissions: permissions
+    // Generate client keypair for new BunkerSigner
+    const { generateSecretKey, getPublicKey } = await import('nostr-tools/pure')
+    const secretKey = generateSecretKey()
+    const localPubkey = getPublicKey(secretKey)
+    
+    // Create connect URI
+    const { createNostrConnectURI } = await import('nostr-tools/nip46')
+    const connectUri = createNostrConnectURI({
+      localPubkey,
+      relay: primaryRelay,
+      ...clientMetadata
     })
+    
+    // Create signer instance
+    const signer = new BunkerSigner(secretKey, primaryRelay, clientMetadata)
+    
+    const result = {
+      connectUri,
+      established: signer.connect().then(async () => ({
+        signer,
+        session: {
+          sessionKey: secretKey,
+          remotePubkey: await signer.getPublicKey(),
+          relayUrls: [primaryRelay]
+        }
+      }))
+    }
     
     console.log("[SignerConnector] Generated connect URI:", result.connectUri)
     console.log("[SignerConnector] URI analysis:")
@@ -281,7 +305,7 @@ export function startClientInitiatedFlow(
 /**
  * Resume a NIP-46 session from stored session data
  */
-export async function resumeNip46Session(sessionData: Nip46SessionState): Promise<Nip46RemoteSigner | null> {
+export async function resumeNip46Session(sessionData: any): Promise<BunkerSigner | null> {
   try {
     console.log("[SignerConnector] Resuming session with data:", sessionData)
     
