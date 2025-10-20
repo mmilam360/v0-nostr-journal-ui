@@ -388,6 +388,11 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
         console.log('[Login] ✅ Signer-initiated connection successful')
         console.log('[Login] 🔑 Remote Signer Login (Bunker) - User pubkey:', userPubkey)
 
+        // CRITICAL: Save signer to global state so main app can reuse it
+        const { setActiveSigner } = await import('@/lib/ndk-signer-manager')
+        setActiveSigner(remoteSigner)
+        console.log('[Login] ✅ Saved remote signer to global state for instant reuse')
+
         // Store for reconnection
         localStorage.setItem('nip46-bunker-uri', input)
 

@@ -308,12 +308,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
             const success = await initializeSignerFromAuthData(authData)
 
             if (success && isSignerReady()) {
-              console.log("[NostrJournal] ✅ NDK-based signer manager initialized and ready")
-
-              // Give the connection a moment to fully stabilize
-              console.log("[NostrJournal] 🔧 Stabilizing connection...")
-              await new Promise(resolve => setTimeout(resolve, 1000))
-              console.log("[NostrJournal] ✅ Connection stabilized, ready to load notes")
+              console.log("[NostrJournal] ✅ NDK signer ready (reused from login - instant!)")
             } else {
               console.error("[NostrJournal] ❌ Failed to initialize NDK-based signer manager")
               throw new Error("Remote signer initialization failed")

@@ -125,6 +125,14 @@ export async function initializeSignerFromAuthData(authData: AuthData): Promise<
         throw new Error('No bunker URI provided')
       }
 
+      // Check if we already have an active signer (from login)
+      if (globalSigner) {
+        console.log('[NDK Signer Manager] ✅ Reusing existing remote signer from login')
+        return true
+      }
+
+      console.log('[NDK Signer Manager] ⚠️ No existing signer, creating new connection...')
+
       // Create bunker NDK instance
       const bunkerNDK = new NDK({
         explicitRelayUrls: authData.relays || [
@@ -149,11 +157,6 @@ export async function initializeSignerFromAuthData(authData: AuthData): Promise<
 
       // Create NIP-46 signer
       const remoteSigner = new NDKNip46Signer(bunkerNDK, authData.bunkerUri, localSigner)
-
-      // Listen for auth URL if needed
-      remoteSigner.on('authUrl', (url: string) => {
-        console.log('[NDK Signer Manager] Auth URL:', url)
-      })
 
       console.log('[NDK Signer Manager] Waiting for remote signer to be ready...')
       await remoteSigner.blockUntilReady()
