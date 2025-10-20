@@ -467,96 +467,91 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
         // Import and use the correct API
         const { startClientInitiatedFlow, setActiveSigner } = await import('@/lib/signer-connector')
         
-        // Start listening for connection
-        const { connectUri, established } = await startClientInitiatedFlow(relays, clientMetadata)
+        // Start listening for connection - this returns immediately
+        const result = await startClientInitiatedFlow(relays, clientMetadata)
+        
+        console.log('[Login] ✅ Flow started, result:', {
+          hasConnectUri: !!result.connectUri,
+          hasEstablished: !!result.established
+        })
+        
+        const connectUri = result.connectUri
+        const establishedPromise = result.established
+        
+        // Debug the promise type
+        console.log('[Login] 🔍 Promise type check:', {
+          establishedType: typeof establishedPromise,
+          establishedIsPromise: establishedPromise instanceof Promise,
+          establishedToString: establishedPromise?.toString?.()
+        })
+        
+        if (!(establishedPromise instanceof Promise)) {
+          console.error('[Login] ❌ CRITICAL: established is not a Promise!')
+          throw new Error('startClientInitiatedFlow returned invalid established value')
+        }
         
         console.log('[Login] Generated nostrconnect URI:', connectUri)
         setConnectUri(connectUri)
         
-        // Wait for connection with better timeout handling
+        // Display QR code BEFORE waiting for connection
+        await new Promise(resolve => setTimeout(resolve, 100)) // Give UI time to render
+        
+        // Now wait for connection with timeout
         console.log('[Login] Waiting for remote signer to scan and connect...')
-        console.log('[Login] Promise state:', established)
         
-        console.log('[Login] 🔍 About to await established promise...')
-        console.log('[Login] 🔍 Promise state:', established)
-        
-        // Add a manual timeout to provide better error handling
-        // Standard timeout for all users
         const timeoutMs = 120000 // 2 minutes
         
         const connectionTimeout = setTimeout(() => {
-          console.log('[Login] ⏰ Manual timeout reached:', timeoutMs / 1000, 'seconds')
-          console.log('[Login] 🔍 Debugging info:')
-          console.log('[Login] - Connection state:', connectionState)
-          console.log('[Login] - Connect URI:', connectUri)
-          console.log('[Login] - Promise state:', established)
-          
-      setConnectionState('error')
+          console.log('[Login] ⏰ Connection timeout reached')
+          setConnectionState('error')
           setError('Connection timeout after ' + (timeoutMs / 1000) + ' seconds. The remote signer may not be responding properly.\n\nTroubleshooting steps:\n1. Make sure your signing app (nsec.app) is open and connected to the internet\n2. Try the bunker:// URL method instead (often more reliable)\n3. Check that you scanned the QR code correctly\n4. Try refreshing and generating a new QR code\n5. Check browser console for detailed error logs')
         }, timeoutMs)
         
         // Store timeout reference for mobile acknowledgment
         setConnectionTimeoutRef(connectionTimeout)
         
-        const { signer, session } = await established.then(
-          (result) => {
-            clearTimeout(connectionTimeout)
-            console.log('[Login] ✅ Client-initiated connection successful')
-            console.log('[Login] Signer:', result.signer)
-            console.log('[Login] Session:', result.session)
-            console.log('[Login] Session type check:', {
-              hasSessionKey: !!result.session?.sessionKey,
-              hasRemotePubkey: !!result.session?.remotePubkey,
-              hasRelayUrls: !!result.session?.relayUrls
-            })
-            return result
-          },
-          (error) => {
-            clearTimeout(connectionTimeout)
-            console.error('[Login] ❌ Connection promise rejected:', error)
-            console.error('[Login] ❌ Error details:', {
-              name: error.name,
-              message: error.message,
-              stack: error.stack
-            })
-            throw error
+        try {
+          console.log('[Login] 🔍 About to await established promise...')
+          
+          const { signer, session } = await establishedPromise
+          
+          clearTimeout(connectionTimeout)
+          console.log('[Login] ✅ Connection established!')
+          console.log('[Login] Signer:', !!signer)
+          console.log('[Login] Session:', !!session)
+        
+          // Get user pubkey
+          const userPubkey = await signer.getPublicKey()
+          console.log('[Login] 🔑 User pubkey:', userPubkey)
+          
+          // Set active signer and save session
+          setActiveSigner(signer)
+          localStorage.setItem('nostr_remote_session', JSON.stringify(session))
+          setConnectionState('success')
+          
+          // Prepare auth data
+          const clientSecretKey = session.sessionKey
+          const bunkerPubkey = session.remotePubkey
+          
+          const authData = {
+            pubkey: userPubkey,
+            authMethod: 'remote' as const,
+            bunkerUri: connectUri,
+            relays: session.relayUrls || relays,
+            sessionData: session,
+            clientSecretKey: clientSecretKey,
+            bunkerPubkey: bunkerPubkey
           }
-        )
-        
-        // Get user pubkey
-        const userPubkey = await signer.getPublicKey()
-        console.log('[Login] 🔑 Remote Signer Login (QR) - User pubkey:', userPubkey)
-        
-        // Set active signer
-        setActiveSigner(signer)
-        
-        // Store session for reconnection
-        localStorage.setItem('nostr_remote_session', JSON.stringify(session))
-        
-        setConnectionState('success')
-        
-        // Extract required fields for main app validation
-        const clientSecretKey = session.sessionKey // This is the session key from NIP-46
-        const bunkerPubkey = session.remotePubkey // This is the remote signer's pubkey
-        
-        console.log('[Login] Session data fields:', {
-          sessionKey: clientSecretKey,
-          remotePubkey: bunkerPubkey,
-          relayUrls: session.relayUrls
-        })
-        
-        // Create auth data with all required fields
-        const authData = {
-          pubkey: userPubkey,
-          authMethod: 'remote' as const,
-          bunkerUri: connectUri,
-          relays: session.relayUrls || relays,
-          sessionData: session,
-          clientSecretKey: clientSecretKey, // Required by main app validation
-          bunkerPubkey: bunkerPubkey // Required by main app validation
+          
+          console.log('[Login] 🎉 Calling onLoginSuccess with auth data:', authData)
+          await onLoginSuccess(authData)
+          
+        } catch (error) {
+          clearTimeout(connectionTimeout)
+          console.error('[Login] ❌ Connection failed:', error)
+          setConnectionState('error')
+          setError(error.message || 'Failed to connect')
         }
-        
-        onLoginSuccess(authData)
       }
 
     } catch (error: any) {
