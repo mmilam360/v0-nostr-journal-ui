@@ -50,13 +50,13 @@ export const publishToNostr = async (unsignedEvent: any, authData: any): Promise
     case "remote":
       console.log("[Publish] 🔌 Using unified remote signer...")
       
-      const unifiedSigner = await import('@/lib/auth/unified-remote-signer')
+      const { remoteSigner } = await import('@/lib/auth/unified-remote-signer')
       
-      if (!unifiedSigner.isConnected()) {
+      if (!remoteSigner.isConnected()) {
         throw new Error("Remote signer not connected. Please log in again.")
       }
       
-      signedEvent = await unifiedSigner.signEvent(unsignedEvent)
+      signedEvent = await remoteSigner.signEvent(unsignedEvent)
       console.log("[Publish] ✅ Event signed by remote signer")
       console.log("[Publish] 🔑 Signed event pubkey:", signedEvent.pubkey)
       break

@@ -97,19 +97,40 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
     if (prevIndex >= 0) {
       console.log('[Login] 🔄 Going back from step:', currentStep, 'to step:', steps[prevIndex])
       
-      // Only terminate connections if going back from connect step
+      // TERMINATE ALL ACTIVE CONNECTIONS when going back from connect step
       if (currentStep === 'connect') {
-        console.log('[Login] 🔄 Terminating connections from connect step')
+        console.log('[Login] 🔄 Terminating all active connections from connect step')
         terminateAllConnections(false) // Don't clear signer, just reset connection state
+        
+        // Also clear any remote signer connections
+        try {
+          import('@/lib/auth/unified-remote-signer').then(({ disconnect }) => {
+            disconnect()
+            console.log('[Login] 🛑 Cleared remote signer connections')
+          }).catch(error => {
+            console.log('[Login] ⚠️ Could not clear remote signer:', error)
+          })
+        } catch (error) {
+          console.log('[Login] ⚠️ Could not clear remote signer:', error)
+        }
       }
       
       setCurrentStep(steps[prevIndex] as any)
       
-      // Only reset to first page state if going back to choose step
+      // Reset state based on the step we're going back to
       if (steps[prevIndex] === 'choose') {
         console.log('[Login] 🔄 Resetting to first page state')
         setSelectedPath(null)
         setSelectedMethod(null)
+        // Clear all connection states when going back to choose
+        setConnectionState('idle')
+        setError('')
+      } else if (steps[prevIndex] === 'method') {
+        console.log('[Login] 🔄 Resetting to method selection state')
+        setSelectedMethod(null)
+        // Clear connection states but keep selectedPath
+        setConnectionState('idle')
+        setError('')
       }
       
       // Force UI update to ensure state changes are reflected

@@ -77,7 +77,7 @@ class YakiHonneStyleRemoteSigner {
       // Create proper Nostr Connect URI following NIP-47 standard (YakiHonne format)
       const nostrConnectUri = this.createProperNostrConnectURI(clientPubkey, secret)
       
-      console.log('[YakiHonneRemoteSigner] ✅ Generated Nostr Connect URI:', nostrConnectUri)
+      console.log('[YakiHonneRemoteSigner] ✅ Generated Bunker URI:', nostrConnectUri)
       
       // Start listening for connection
       await this.listenForRemoteSigner()
@@ -363,8 +363,8 @@ class YakiHonneStyleRemoteSigner {
   }
 
   /**
-   * Create proper Nostr Connect URI following NIP-47 standard (YakiHonne format)
-   * Format: nostrconnect://[client-pubkey]?relay=[relays]&secret=[secret]
+   * Create proper Bunker URI for nsec.app compatibility
+   * Format: bunker://[client-pubkey]?relay=[relays]&secret=[secret]
    */
   private createProperNostrConnectURI(clientPubkey: string, secret: string): string {
     const params = new URLSearchParams()
@@ -377,7 +377,7 @@ class YakiHonneStyleRemoteSigner {
     // Add secret parameter
     params.append('secret', secret)
     
-    return `nostrconnect://${clientPubkey}?${params.toString()}`
+    return `bunker://${clientPubkey}?${params.toString()}`
   }
 
   /**

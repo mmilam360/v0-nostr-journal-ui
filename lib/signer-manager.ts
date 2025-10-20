@@ -61,13 +61,13 @@ export async function signEventWithRemote(unsignedEvent: any, authData: AuthData
       // ⚠️ THIS IS THE ONLY PART THAT CHANGES - Use unified remote signer
       console.log("[SignerManager] Using unified remote signer for signing")
       
-      const unifiedSigner = await import('@/lib/auth/unified-remote-signer')
+      const { remoteSigner } = await import('@/lib/auth/unified-remote-signer')
       
-      if (!unifiedSigner.isConnected()) {
+      if (!remoteSigner.isConnected()) {
         throw new Error("Remote signer not connected. Please log in again.")
       }
       
-      const signedEvent = await unifiedSigner.signEvent(unsignedEvent)
+      const signedEvent = await remoteSigner.signEvent(unsignedEvent)
       console.log("[SignerManager] ✅ Event signed with NIP-46 remote signer")
       return signedEvent
       
