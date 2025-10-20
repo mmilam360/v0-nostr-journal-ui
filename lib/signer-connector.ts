@@ -198,16 +198,21 @@ export async function startClientInitiatedFlow(
     
     console.log('[SignerConnector] Generated connect URI:', connectUri)
     
-    // Use the correct BunkerSigner.fromURI method instead of manual initialization
+    // Create signer instance manually and use the connect method
     const { BunkerSigner } = await import('nostr-tools/nip46')
+    
+    // Create the signer with proper parameters
+    const signer = new BunkerSigner(secretKey, [primaryRelay], {
+      name: clientMetadata.name,
+      description: clientMetadata.description
+    })
+    
+    console.log('[SignerConnector] Created BunkerSigner instance')
     
     const result = {
       connectUri,
-      established: BunkerSigner.fromURI(connectUri, { 
-        pool: new SimplePool(),
-        timeout: timeoutMs 
-      }).then(async (signer) => {
-        console.log('[SignerConnector] ✅ BunkerSigner.fromURI successful')
+      established: signer.connect().then(async () => {
+        console.log('[SignerConnector] ✅ BunkerSigner.connect() successful')
         
         // Test the connection by getting public key
         const remotePubkey = await signer.getPublicKey()
