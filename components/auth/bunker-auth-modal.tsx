@@ -100,9 +100,14 @@ export function BunkerAuthModal({ isOpen, onClose, onSuccess }: BunkerAuthModalP
   const handleQRConnect = async () => {
     try {
       const { secretKey, pubkey } = generateClientKeypair()
+      
+      // Convert secret key to hex string for URI
+      const secretHex = Array.from(secretKey).map(b => b.toString(16).padStart(2, '0')).join('')
+      
       const connectURI = createConnectURI(
         pubkey,
-        primaryRelay,
+        secretHex,
+        [primaryRelay],
         appMetadata
       )
       

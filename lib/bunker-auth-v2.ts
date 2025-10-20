@@ -67,13 +67,15 @@ export function generateClientKeypair(): { secretKey: Uint8Array; pubkey: string
  * Create a nostrconnect URI for QR code display
  */
 export function createConnectURI(
-  localPubkey: string,
-  relay: string,
+  clientPubkey: string,
+  secret: string,
+  relays: string[],
   appMetadata: { name: string; url: string; description: string }
 ): string {
   return createNostrConnectURI({
-    localPubkey,
-    relay,
+    clientPubkey,
+    secret,
+    relays,
     ...appMetadata
   })
 }
@@ -145,7 +147,11 @@ export async function connectViaQR(
     onStateChange({ status: 'connecting', method: 'qr' })
     
     const localPubkey = getPublicKey(localSecretKey)
-    const connectURI = createConnectURI(localPubkey, relay, appMetadata)
+    
+    // Convert secret key to hex string for URI
+    const secretHex = Array.from(localSecretKey).map(b => b.toString(16).padStart(2, '0')).join('')
+    
+    const connectURI = createConnectURI(localPubkey, secretHex, [relay], appMetadata)
     
     log(`Generated connect URI: ${connectURI.substring(0, 50)}...`)
     log('Waiting for user to scan QR code...')
