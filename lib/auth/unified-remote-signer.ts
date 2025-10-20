@@ -1,9 +1,9 @@
 /**
- * Unified Remote Signer System (NIP-46 ONLY)
- * Complete implementation following Claude's integration checklist
+ * Unified Remote Signer System (NIP-46) - YakiHonne Style Implementation
+ * Complete implementation following YakiHonne's proven approach
  * 
  * Features:
- * - Bunker URL generation and connection
+ * - Proper nostrconnect:// URL generation using createNostrConnectURI
  * - Session management and persistence
  * - Mobile app-switching resilience
  * - Auto-reconnection
@@ -13,7 +13,6 @@
 import { BunkerSigner } from 'nostr-tools/nip46'
 import { SimplePool } from 'nostr-tools/pool'
 import { generateSecretKey, getPublicKey as getPublicKeyFromSecret } from 'nostr-tools/pure'
-import { nip04 } from 'nostr-tools'
 
 // Session storage key
 const SESSION_STORAGE_KEY = 'nostr_remote_session'
@@ -32,8 +31,8 @@ const DEFAULT_PERMISSIONS = [
   'get_relays'
 ]
 
-// Bunker relays for connection
-const BUNKER_RELAYS = [
+// Relays for connection
+const RELAYS = [
   'wss://relay.nsec.app',
   'wss://relay.damus.io',
   'wss://nos.lol'
@@ -44,7 +43,7 @@ interface SessionData {
   sessionKey: string
   remotePubkey: string
   relayUrls: string[]
-  bunkerUri?: string
+  nostrConnectUri?: string
 }
 
 // Connection state
@@ -55,33 +54,37 @@ class UnifiedRemoteSigner {
   private relayConnections: SimplePool | null = null
   private connectionState: ConnectionState = 'disconnected'
   private stateChangeCallbacks: ((state: { status: ConnectionState; error?: string }) => void)[] = []
+  private currentSecretKey: Uint8Array | null = null
 
   constructor() {
-    console.log('[UnifiedRemoteSigner] 🚀 Initialized')
+    console.log('[UnifiedRemoteSigner] 🚀 Initialized (YakiHonne Style)')
   }
 
   /**
-   * Start Nostr Connect URL flow - generates nostrconnect:// URL for mobile connection
+   * Start Nostr Connect flow - generates proper nostrconnect:// URL
    */
   async startNostrConnectFlow(): Promise<string> {
-    console.log('[UnifiedRemoteSigner] 🚀 Starting Nostr Connect URL flow...')
+    console.log('[UnifiedRemoteSigner] 🚀 Starting Nostr Connect flow (YakiHonne style)...')
     
     try {
       this.setConnectionState('connecting')
       
       // Generate client keypair
-      const clientSecretKey = generateSecretKey()
-      const clientPubkey = getPublicKeyFromSecret(clientSecretKey)
+      this.currentSecretKey = generateSecretKey()
+      const clientPubkey = getPublicKeyFromSecret(this.currentSecretKey)
       
-      // Create Nostr Connect URL
-      const nostrConnectUrl = this.createNostrConnectUrl(clientPubkey)
+      // Generate random secret for connection
+      const secret = this.generateRandomString(32)
       
-      console.log('[UnifiedRemoteSigner] ✅ Generated Nostr Connect URL:', nostrConnectUrl)
+      // Create proper Nostr Connect URI using the standard format
+      const nostrConnectUri = this.createNostrConnectURI(clientPubkey, secret)
+      
+      console.log('[UnifiedRemoteSigner] ✅ Generated Nostr Connect URI:', nostrConnectUri)
       
       // Start listening for connection
-      await this.listenForRemoteSigner(clientSecretKey)
+      await this.listenForRemoteSigner()
       
-      return nostrConnectUrl
+      return nostrConnectUri
       
     } catch (error) {
       console.error('[UnifiedRemoteSigner] ❌ Nostr Connect flow failed:', error)
@@ -93,24 +96,28 @@ class UnifiedRemoteSigner {
   /**
    * Listen for remote signer connection using NIP-46 protocol
    */
-  private async listenForRemoteSigner(localSecretKey: Uint8Array): Promise<void> {
+  private async listenForRemoteSigner(): Promise<void> {
     console.log('[UnifiedRemoteSigner] 👂 Listening for remote signer...')
     
     try {
       // Create relay connections
       this.relayConnections = new SimplePool()
       
-      const localPubkey = getPublicKeyFromSecret(localSecretKey)
+      if (!this.currentSecretKey) {
+        throw new Error('No secret key available')
+      }
+      
+      const localPubkey = getPublicKeyFromSecret(this.currentSecretKey)
       console.log('[UnifiedRemoteSigner] 📡 Listening on pubkey:', localPubkey)
       
-      // Subscribe to NIP-46 events using relay URLs directly
+      // Subscribe to NIP-46 events
       const sub = this.relayConnections.subscribe(
-        BUNKER_RELAYS,
+        RELAYS,
         [{ kinds: [24133], authors: [localPubkey] }],
         {
           onevent: async (event) => {
             console.log('[UnifiedRemoteSigner] 📨 Received NIP-46 event:', event)
-            await this.handleNip46Event(event, localSecretKey)
+            await this.handleNip46Event(event)
           },
           oneose: () => {
             console.log('[UnifiedRemoteSigner] 📡 Subscription complete')
@@ -137,7 +144,7 @@ class UnifiedRemoteSigner {
   /**
    * Handle incoming NIP-46 events
    */
-  private async handleNip46Event(event: any, localSecretKey: Uint8Array): Promise<void> {
+  private async handleNip46Event(event: any): Promise<void> {
     try {
       console.log('[UnifiedRemoteSigner] 🔍 Processing NIP-46 event:', event.kind)
       
@@ -146,7 +153,7 @@ class UnifiedRemoteSigner {
       
       if (content.method === 'connect') {
         console.log('[UnifiedRemoteSigner] 🔗 Connection request received')
-        await this.handleConnectionRequest(event, localSecretKey)
+        await this.handleConnectionRequest(event)
       }
       
     } catch (error) {
@@ -157,16 +164,20 @@ class UnifiedRemoteSigner {
   /**
    * Handle connection request from remote signer
    */
-  private async handleConnectionRequest(event: any, localSecretKey: Uint8Array): Promise<void> {
+  private async handleConnectionRequest(event: any): Promise<void> {
     try {
       console.log('[UnifiedRemoteSigner] 🤝 Handling connection request...')
+      
+      if (!this.currentSecretKey) {
+        throw new Error('No secret key available')
+      }
       
       // Extract remote pubkey from event
       const remotePubkey = event.pubkey
       console.log('[UnifiedRemoteSigner] 🔑 Remote pubkey:', remotePubkey)
       
       // Create BunkerSigner instance
-      this.activeSigner = new BunkerSigner(localSecretKey, {
+      this.activeSigner = new BunkerSigner(this.currentSecretKey, {
         permissions: DEFAULT_PERMISSIONS
       })
       
@@ -177,9 +188,9 @@ class UnifiedRemoteSigner {
       
       // Save session
       const sessionData: SessionData = {
-        sessionKey: this.bytesToHex(localSecretKey),
+        sessionKey: this.bytesToHex(this.currentSecretKey),
         remotePubkey,
-        relayUrls: BUNKER_RELAYS
+        relayUrls: RELAYS
       }
       this.saveSession(sessionData)
       
@@ -255,13 +266,14 @@ class UnifiedRemoteSigner {
       
       // Recreate signer from session data
       const clientSecretKey = this.hexToBytes(sessionData.sessionKey)
+      this.currentSecretKey = clientSecretKey
+      
       this.activeSigner = new BunkerSigner(clientSecretKey, {
-        pool: this.relayConnections || new SimplePool(),
         permissions: DEFAULT_PERMISSIONS
       })
       
       // Try to reconnect
-      await this.activeSigner.connect(sessionData.remotePubkey)
+      await this.activeSigner.connect(sessionData.remotePubkey, this.relayConnections || new SimplePool())
       
       this.setConnectionState('connected')
       console.log('[UnifiedRemoteSigner] ✅ Session resumed successfully')
@@ -282,6 +294,7 @@ class UnifiedRemoteSigner {
     
     this.activeSigner = null
     this.relayConnections = null
+    this.currentSecretKey = null
     this.setConnectionState('disconnected')
     
     // Clear from storage
@@ -318,9 +331,13 @@ class UnifiedRemoteSigner {
     })
   }
 
-  private createNostrConnectUrl(clientPubkey: string): string {
+  /**
+   * Create proper Nostr Connect URI following the standard format
+   */
+  private createNostrConnectURI(clientPubkey: string, secret: string): string {
     const params = new URLSearchParams({
-      relay: BUNKER_RELAYS.join(','),
+      relay: RELAYS.join(','),
+      secret: secret,
       pubkey: clientPubkey
     })
     
