@@ -157,6 +157,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   const [needsSync, setNeedsSync] = useState(false)
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false)
   const [noteToDelete, setNoteToDelete] = useState<Note | null>(null)
+  const [focusMode, setFocusMode] = useState(false)
   const [deletedNotes, setDeletedNotes] = useState<{ id: string; deletedAt: Date }[]>([])
   const [showProfile, setShowProfile] = useState(false)
   const [showIncentives, setShowIncentives] = useState(false)
@@ -2073,17 +2074,30 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
         {selectedNote && (
             <div className="fixed inset-0 z-40 lg:hidden bg-background">
               <div className="h-full flex flex-col">
-                <div className="bg-card border-b border-border px-4 py-3 flex items-center justify-between shadow-sm">
-                <h2 className="text-foreground font-medium truncate">{selectedNote.title}</h2>
-                <Button
-                  onClick={() => setSelectedNote(null)}
-                  variant="ghost"
-                  size="sm"
-                  className="text-muted-foreground hover:text-foreground"
-                >
-                  <X className="w-4 h-4" />
-                </Button>
-              </div>
+                {!focusMode && (
+                  <div className="bg-card border-b border-border px-4 py-3 flex items-center justify-between shadow-sm">
+                    <h2 className="text-foreground font-medium truncate">{selectedNote.title}</h2>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        onClick={() => setFocusMode(true)}
+                        variant="ghost"
+                        size="sm"
+                        className="text-muted-foreground hover:text-foreground"
+                        title="Focus Mode"
+                      >
+                        <Zap className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        onClick={() => setSelectedNote(null)}
+                        variant="ghost"
+                        size="sm"
+                        className="text-muted-foreground hover:text-foreground"
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
                 <div className="flex-1 overflow-hidden">
               <Editor
                 note={selectedNote}
@@ -2094,6 +2108,16 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                     authData={authData}
               />
                 </div>
+
+                {/* Floating exit button (only in focus mode) */}
+                {focusMode && (
+                  <button
+                    onClick={() => setFocusMode(false)}
+                    className="fixed bottom-4 right-4 h-12 w-12 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center z-50"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                )}
             </div>
           </div>
         )}
