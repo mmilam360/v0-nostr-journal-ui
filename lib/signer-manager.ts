@@ -27,18 +27,10 @@ declare global {
  */
 export async function signEventWithRemote(unsignedEvent: any, authData: AuthData) {
   console.log("[SignerManager] 📝 Signing event with auth method:", authData.authMethod)
-  console.log("[SignerManager] 📝 Unsigned event structure:", {
-    kind: unsignedEvent.kind,
-    created_at: unsignedEvent.created_at,
-    tags: unsignedEvent.tags,
-    content_length: unsignedEvent.content?.length,
-    pubkey: unsignedEvent.pubkey,
-    has_content: !!unsignedEvent.content
-  })
-  
+
   try {
     if (authData.authMethod === "extension") {
-      // Use browser extension for signing
+      // ✅ KEEP EXTENSION LOGIC - Works perfectly
       console.log("[SignerManager] Using browser extension for signing")
       const { nip07 } = await import("nostr-tools")
       
@@ -53,7 +45,7 @@ export async function signEventWithRemote(unsignedEvent: any, authData: AuthData
       return signedEvent
       
     } else if (authData.authMethod === "nsec") {
-      // Use private key for signing
+      // ✅ KEEP NSEC LOGIC - Works perfectly
       console.log("[SignerManager] Using private key for signing")
       const { finalizeEvent } = await import("nostr-tools")
       
@@ -70,32 +62,19 @@ export async function signEventWithRemote(unsignedEvent: any, authData: AuthData
       return signedEvent
       
     } else if (authData.authMethod === "remote") {
-      // Use NIP-46 remote signer for signing
-      console.log("[SignerManager] Using NIP-46 remote signer for signing")
-      console.log("[SignerManager] Auth data structure:", {
-        hasSessionData: !!authData.sessionData,
-        hasBunkerUri: !!authData.bunkerUri,
-        hasBunkerPubkey: !!authData.bunkerPubkey,
-        hasClientSecretKey: !!authData.clientSecretKey
-      })
+      // ⚠️ THIS IS THE ONLY PART THAT CHANGES - Use unified remote signer
+      console.log("[SignerManager] Using unified remote signer for signing")
       
-      // Check if remote signer manager is available
-      if (!remoteSignerManager.isAvailable()) {
-        console.error("[SignerManager] ❌ Remote signer manager not available")
-        throw new Error("No active signer available")
+      const unifiedSigner = await import('@/lib/unified-remote-signer')
+      
+      if (!unifiedSigner.isConnected()) {
+        throw new Error("Remote signer not connected. Please log in again.")
       }
       
-      console.log("[SignerManager] ✅ Remote signer manager is available")
-      
-      // This should trigger the permission request if needed
-      // The remote signer app should show a permission popup for the first sign_event call
-      const signedEvent = await remoteSignerManager.signEvent(unsignedEvent)
+      const signedEvent = await unifiedSigner.signEvent(unsignedEvent)
       console.log("[SignerManager] ✅ Event signed with NIP-46 remote signer")
       return signedEvent
       
-    } else if (authData.authMethod === "noauth") {
-      console.log("[SignerManager] ❌ Noauth method no longer supported")
-      throw new Error("Noauth method has been removed. Please use Remote Signer instead.")
     } else {
       throw new Error(`Unsupported auth method: ${authData.authMethod}`)
     }
