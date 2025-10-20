@@ -145,26 +145,80 @@ export async function connectWithBunkerUri(bunkerUri: string): Promise<{ userPub
     // Generate client keypair
     const clientSecretKey = generateSecretKey()
     
-    // Detect if this is likely a mobile device for longer timeout
+    // Detect if this is likely a mobile device
     const isMobile = typeof window !== 'undefined' && (
       window.innerWidth < 768 || 
       /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
     )
     
-    // Use longer timeout for mobile users who need to switch between apps
-    const timeoutMs = isMobile ? 120000 : 60000 // 2 minutes for mobile, 1 minute for desktop
-    console.log(`[UnifiedRemoteSigner] ⏱️ Using ${timeoutMs/1000}s timeout (${isMobile ? 'mobile' : 'desktop'} detected)`)
+    console.log(`[UnifiedRemoteSigner] 📱 Mobile detected: ${isMobile}`)
     
-    // Connect using BunkerSigner.fromBunker with retry logic
+    // For mobile, use a more resilient connection approach
+    if (isMobile) {
+      return await connectWithMobileResilience(clientSecretKey, bunkerUri, extractedRelay)
+    } else {
+      // Desktop connection with standard timeout
+      return await connectWithStandardTimeout(clientSecretKey, bunkerUri, extractedRelay)
+    }
+    
+  } catch (error) {
+    console.error('[UnifiedRemoteSigner] ❌ Bunker connection failed:', error)
+    const friendlyError = getUserFriendlyError(error as Error)
+    throw new Error(friendlyError)
+  }
+}
+
+/**
+ * Mobile-specific connection with resilience to app switching
+ */
+async function connectWithMobileResilience(
+  clientSecretKey: Uint8Array, 
+  bunkerUri: string, 
+  extractedRelay: string
+): Promise<{ userPubkey: string }> {
+  console.log('[UnifiedRemoteSigner] 📱 Using mobile-resilient connection...')
+  
+  // Set up page visibility handling for mobile app switching
+  let connectionPromise: Promise<any> | null = null
+  let isPageVisible = !document.hidden
+  let retryCount = 0
+  const maxRetries = 3
+  
+  const handleVisibilityChange = () => {
+    const wasVisible = isPageVisible
+    isPageVisible = !document.hidden
+    
+    console.log(`[UnifiedRemoteSigner] 📱 Page visibility changed: ${wasVisible} -> ${isPageVisible}`)
+    
+    // If page becomes visible again after being hidden, we might need to retry
+    if (isPageVisible && !wasVisible && connectionPromise && retryCount < maxRetries) {
+      console.log('[UnifiedRemoteSigner] 📱 Page became visible again - connection may need retry')
+      retryCount++
+    }
+  }
+  
+  // Listen for page visibility changes
+  document.addEventListener('visibilitychange', handleVisibilityChange)
+  
+  try {
+    // Use shorter timeout but with retry logic specifically for mobile
+    const timeoutMs = 30000 // 30 seconds per attempt (shorter for faster retries)
+    console.log(`[UnifiedRemoteSigner] ⏱️ Mobile timeout: ${timeoutMs/1000}s per attempt`)
+    
+    // Try connection with mobile-specific retry logic
     const signer = await connectWithRetry(async () => {
-      console.log('[UnifiedRemoteSigner] 🔌 Attempting bunker connection...')
-      return await BunkerSigner.fromBunker(clientSecretKey, bunkerUri, {
+      console.log(`[UnifiedRemoteSigner] 🔌 Mobile connection attempt ${retryCount + 1}/${maxRetries}...`)
+      
+      // Create a promise that resolves when connection is established
+      connectionPromise = BunkerSigner.fromBunker(clientSecretKey, bunkerUri, {
         permissions: DEFAULT_PERMISSIONS,
         timeout: timeoutMs
       })
-    }, 2, 3000) // Reduced retries but longer delay for app switching
+      
+      return await connectionPromise
+    }, maxRetries, 1000) // 3 attempts with 1s delay (faster retries)
     
-    console.log('[UnifiedRemoteSigner] ✅ Connected via bunker URI')
+    console.log('[UnifiedRemoteSigner] ✅ Mobile connection successful!')
     
     // Get user pubkey
     const userPubkey = await signer.getPublicKey()
@@ -173,22 +227,64 @@ export async function connectWithBunkerUri(bunkerUri: string): Promise<{ userPub
     // Store in memory
     activeSigner = signer
     
-    // Save session for future reconnection - use extracted relay, not signer.relays
+    // Save session for future reconnection
     const sessionData: SessionData = {
       sessionKey: bytesToHex(clientSecretKey),
       remotePubkey: userPubkey,
-      relayUrls: [extractedRelay], // Use extracted relay
-      bunkerUri // Save for easy reconnection
+      relayUrls: [extractedRelay],
+      bunkerUri
     }
     saveSession(sessionData)
     
     return { userPubkey }
     
-  } catch (error) {
-    console.error('[UnifiedRemoteSigner] ❌ Bunker connection failed:', error)
-    const friendlyError = getUserFriendlyError(error as Error)
-    throw new Error(friendlyError)
+  } finally {
+    // Clean up event listener
+    document.removeEventListener('visibilitychange', handleVisibilityChange)
   }
+}
+
+/**
+ * Standard desktop connection
+ */
+async function connectWithStandardTimeout(
+  clientSecretKey: Uint8Array, 
+  bunkerUri: string, 
+  extractedRelay: string
+): Promise<{ userPubkey: string }> {
+  console.log('[UnifiedRemoteSigner] 🖥️ Using standard desktop connection...')
+  
+  const timeoutMs = 60000 // 1 minute for desktop
+  console.log(`[UnifiedRemoteSigner] ⏱️ Desktop timeout: ${timeoutMs/1000}s`)
+  
+  // Connect using BunkerSigner.fromBunker with retry logic
+  const signer = await connectWithRetry(async () => {
+    console.log('[UnifiedRemoteSigner] 🔌 Desktop connection attempt...')
+    return await BunkerSigner.fromBunker(clientSecretKey, bunkerUri, {
+      permissions: DEFAULT_PERMISSIONS,
+      timeout: timeoutMs
+    })
+  }, 2, 3000)
+  
+  console.log('[UnifiedRemoteSigner] ✅ Desktop connection successful!')
+  
+  // Get user pubkey
+  const userPubkey = await signer.getPublicKey()
+  console.log('[UnifiedRemoteSigner] 🔑 User pubkey:', userPubkey)
+  
+  // Store in memory
+  activeSigner = signer
+  
+  // Save session for future reconnection
+  const sessionData: SessionData = {
+    sessionKey: bytesToHex(clientSecretKey),
+    remotePubkey: userPubkey,
+    relayUrls: [extractedRelay],
+    bunkerUri
+  }
+  saveSession(sessionData)
+  
+  return { userPubkey }
 }
 
 /**

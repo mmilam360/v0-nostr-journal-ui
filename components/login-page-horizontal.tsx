@@ -284,7 +284,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
       } catch (error) {
         console.log('[Login] ⚠️ Could not clear active signer:', error)
       }
-    } else {
+      } else {
       console.log('[Login] 🛑 Preserving active signer (user is logged in or component unmounting)')
     }
     
@@ -471,22 +471,22 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
               </p>
               <div className="grid gap-4 sm:grid-cols-2">
                 {/* Remote Signer */}
-                <button
-                  onClick={() => {
+              <button
+                onClick={() => {
                     setSelectedPath('existing')
                     setSelectedMethod('remote')
                     setCurrentStep('connect')
-                  }}
+                }}
                   className="p-6 rounded-lg border-2 border-border hover:border-primary text-left bg-card hover:bg-card/80"
-                >
-                  <div className="flex items-center gap-3 mb-3">
+              >
+                <div className="flex items-center gap-3 mb-3">
                     <Smartphone className="w-6 h-6 text-primary" />
                     <h3 className="font-semibold">Remote Signer</h3>
-                  </div>
-                  <p className="text-sm text-muted-foreground">
+                </div>
+                <p className="text-sm text-muted-foreground">
                     For mobile users. Connect with nsec.app or Amber.
-                  </p>
-                </button>
+                </p>
+              </button>
 
                 {/* Import Key */}
                 <button
@@ -500,7 +500,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                   <div className="flex items-center gap-3 mb-3">
                     <Key className="w-6 h-6 text-primary" />
                     <h3 className="font-semibold">Import Private Key</h3>
-                  </div>
+            </div>
                   <p className="text-sm text-muted-foreground">
                     For advanced users. Paste your nsec directly.
                   </p>
@@ -756,7 +756,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                         Connect Remote Signer
                       </h2>
                       <p className="text-muted-foreground">Choose your connection method</p>
-                    </div>
+                      </div>
 
                     {/* MOBILE: Bunker URL - Primary */}
                     <div className="max-w-md mx-auto">
@@ -766,7 +766,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                           <h3 className="font-semibold text-primary">
                             Recommended for Mobile
                           </h3>
-                        </div>
+                    </div>
                         
                         <p className="text-sm text-muted-foreground mb-4">
                           Most reliable method for mobile users
@@ -774,32 +774,32 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
 
                         <div className="space-y-3">
                           <label className="text-sm font-medium">Paste Bunker URL:</label>
-                          <input
-                            type="text"
-                            value={bunkerUrl}
-                            onChange={(e) => setBunkerUrl(e.target.value)}
+                        <input
+                          type="text"
+                          value={bunkerUrl}
+                          onChange={(e) => setBunkerUrl(e.target.value)}
                             placeholder="bunker://...?relay=...&secret=..."
                             className="w-full px-3 py-3 border rounded-md bg-background text-foreground font-mono text-sm"
                             disabled={connectionState === 'connecting'}
-                          />
+                        />
                           
-                          <Button
-                            onClick={handleBunkerConnect}
-                            disabled={!bunkerUrl || connectionState === 'connecting'}
+                        <Button
+                          onClick={handleBunkerConnect}
+                          disabled={!bunkerUrl || connectionState === 'connecting'}
                             className="w-full bg-primary hover:bg-primary/90 py-6 text-base font-semibold"
-                          >
-                            {connectionState === 'connecting' ? (
+                        >
+                          {connectionState === 'connecting' ? (
                               <>
                                 <Loader2 className="h-5 w-5 animate-spin mr-2" />
                                 Connecting...
                               </>
-                            ) : (
+                          ) : (
                               <>
                                 <Smartphone className="h-5 w-5 mr-2" />
                                 Connect with Bunker URL
                               </>
-                            )}
-                          </Button>
+                          )}
+                        </Button>
 
                           {/* How-to Instructions */}
                           <div className="bg-muted/50 rounded-lg p-4">
@@ -819,8 +819,8 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                               <p className="text-xs text-green-700 dark:text-green-300">
                                 <strong>💡 Tip:</strong> Keep both apps open - you'll need to switch between them to complete the connection.
                               </p>
-                            </div>
-                          </div>
+                      </div>
+                    </div>
                         </div>
                       </div>
                     </div>
@@ -888,7 +888,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                     {connectionState === 'connecting' && (
                       <div className="max-w-md mx-auto text-center">
                         <div className="flex items-center justify-center space-x-2 text-muted-foreground mb-4">
-                          <Loader2 className="h-4 w-4 animate-spin" />
+                        <Loader2 className="h-4 w-4 animate-spin" />
                           <span className="text-sm">Waiting for approval...</span>
                         </div>
                         {bunkerUrl && (
@@ -903,10 +903,13 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                               <li>Return to this tab</li>
                             </ol>
                             <p className="text-xs text-blue-700 dark:text-blue-300 mt-2">
-                              ⏱️ You have 2 minutes to complete this process
+                              ⏱️ Connection will retry automatically if interrupted by app switching
                             </p>
-                          </div>
-                        )}
+                            <p className="text-xs text-blue-700 dark:text-blue-300">
+                              🔄 Up to 3 attempts with 30s timeout each
+                            </p>
+                      </div>
+                    )}
                       </div>
                     )}
 
@@ -1000,7 +1003,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
           setCurrentStep('method')
           return null
         }
-        
+
         return (
           <div className="space-y-8">
             <div className="text-center">
