@@ -314,13 +314,22 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
     }
   }, [currentStep, connectionState])
 
+  // Auto-generate QR code when connect step is reached for remote signer
+  useEffect(() => {
+    if (currentStep === 'connect' && selectedMethod === 'remote' && remoteSignerMode === 'client' && !connectUri && connectionState === 'idle') {
+      console.log('[Login] 🚀 Auto-generating QR code for remote signer...')
+      console.log('[Login] 🔍 Connect step reached with remote signer in client mode')
+      handleBunkerConnect()
+    }
+  }, [currentStep, selectedMethod, remoteSignerMode, connectUri, connectionState])
+
   const handleRemoteSignerClick = () => {
     console.log('[Login] 🚀 handleRemoteSignerClick started')
     
     try {
-      // Terminate any active connections before switching methods
+      // Only terminate connection states, NOT the signer - we need it for QR generation
       console.log('[Login] 🛑 Terminating connections...')
-      terminateAllConnections()
+      terminateAllConnections(false) // Don't clear signer!
       console.log('[Login] ✅ Connections terminated')
       
       console.log('[Login] 🔄 Setting selected method to remote...')
