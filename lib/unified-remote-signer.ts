@@ -145,13 +145,24 @@ export async function connectWithBunkerUri(bunkerUri: string): Promise<{ userPub
     // Generate client keypair
     const clientSecretKey = generateSecretKey()
     
+    // Detect if this is likely a mobile device for longer timeout
+    const isMobile = typeof window !== 'undefined' && (
+      window.innerWidth < 768 || 
+      /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+    )
+    
+    // Use longer timeout for mobile users who need to switch between apps
+    const timeoutMs = isMobile ? 120000 : 60000 // 2 minutes for mobile, 1 minute for desktop
+    console.log(`[UnifiedRemoteSigner] ⏱️ Using ${timeoutMs/1000}s timeout (${isMobile ? 'mobile' : 'desktop'} detected)`)
+    
     // Connect using BunkerSigner.fromBunker with retry logic
     const signer = await connectWithRetry(async () => {
+      console.log('[UnifiedRemoteSigner] 🔌 Attempting bunker connection...')
       return await BunkerSigner.fromBunker(clientSecretKey, bunkerUri, {
         permissions: DEFAULT_PERMISSIONS,
-        timeout: 30000 // 30 seconds
+        timeout: timeoutMs
       })
-    }, 3, 2000)
+    }, 2, 3000) // Reduced retries but longer delay for app switching
     
     console.log('[UnifiedRemoteSigner] ✅ Connected via bunker URI')
     
@@ -436,19 +447,23 @@ function getUserFriendlyError(error: Error): string {
   }
   
   if (msg.includes('subscription closed')) {
-    return 'Connection timeout. On mobile, use the bunker:// URL method for better reliability.'
+    return 'Connection timeout. Please make sure you approved the connection in your signing app (nsec.app) and return to this tab.'
   }
   
   if (msg.includes('timeout')) {
-    return 'Connection timeout. Please check your internet connection and try again.'
+    return 'Connection timeout. On mobile: 1) Paste bunker URL, 2) Switch to nsec.app, 3) Approve connection, 4) Return here. Please try again.'
   }
   
   if (msg.includes('rejected')) {
-    return 'Connection rejected. Please approve the permission request in your signing app.'
+    return 'Connection rejected. Please approve the permission request in your signing app (nsec.app).'
   }
   
   if (msg.includes('already connected')) {
     return 'You are already connected to a remote signer. Please disconnect first.'
+  }
+  
+  if (msg.includes('connection timeout')) {
+    return 'Connection timeout. Make sure you approved the connection in your signing app and returned to this tab.'
   }
   
   return error.message || 'Connection failed. Please try again.'

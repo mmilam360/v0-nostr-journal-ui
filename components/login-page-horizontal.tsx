@@ -812,8 +812,14 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                               <li>Tap "Create new connection"</li>
                               <li>Copy the bunker:// URL</li>
                               <li>Paste it above and click Connect</li>
-                              <li>Return to nsec.app to approve</li>
+                              <li>Switch back to nsec.app to approve</li>
+                              <li>Return to this tab to complete</li>
                             </ol>
+                            <div className="mt-2 p-2 bg-green-50 dark:bg-green-900/20 rounded">
+                              <p className="text-xs text-green-700 dark:text-green-300">
+                                <strong>💡 Tip:</strong> Keep both apps open - you'll need to switch between them to complete the connection.
+                              </p>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -881,10 +887,26 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                     {/* Connection Status & Errors */}
                     {connectionState === 'connecting' && (
                       <div className="max-w-md mx-auto text-center">
-                        <div className="flex items-center justify-center space-x-2 text-muted-foreground">
+                        <div className="flex items-center justify-center space-x-2 text-muted-foreground mb-4">
                           <Loader2 className="h-4 w-4 animate-spin" />
                           <span className="text-sm">Waiting for approval...</span>
                         </div>
+                        {bunkerUrl && (
+                          <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
+                            <p className="text-xs text-blue-700 dark:text-blue-300 font-medium mb-2">
+                              📱 Mobile Connection Steps:
+                            </p>
+                            <ol className="text-xs text-blue-700 dark:text-blue-300 space-y-1 list-decimal list-inside text-left">
+                              <li>Switch to nsec.app on your device</li>
+                              <li>Look for the pending connection request</li>
+                              <li>Tap "Approve" or "Allow"</li>
+                              <li>Return to this tab</li>
+                            </ol>
+                            <p className="text-xs text-blue-700 dark:text-blue-300 mt-2">
+                              ⏱️ You have 2 minutes to complete this process
+                            </p>
+                          </div>
+                        )}
                       </div>
                     )}
 
