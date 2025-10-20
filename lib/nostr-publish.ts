@@ -48,12 +48,15 @@ export const publishToNostr = async (unsignedEvent: any, authData: any): Promise
       break
 
     case "remote":
-      if (!authData.bunkerUri || !authData.clientSecretKey) {
-        throw new Error("Remote signer connection data is missing. Please log in again.")
+      console.log("[Publish] 🔌 Using unified remote signer...")
+      
+      const unifiedSigner = await import('@/lib/unified-remote-signer')
+      
+      if (!unifiedSigner.isConnected()) {
+        throw new Error("Remote signer not connected. Please log in again.")
       }
-
-      // Use signer manager - persistent connection, no popup!
-      signedEvent = await signEventWithRemote(unsignedEvent, authData)
+      
+      signedEvent = await unifiedSigner.signEvent(unsignedEvent)
       console.log("[Publish] ✅ Event signed by remote signer")
       console.log("[Publish] 🔑 Signed event pubkey:", signedEvent.pubkey)
       break

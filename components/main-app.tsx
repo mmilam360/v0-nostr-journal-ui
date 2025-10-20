@@ -78,10 +78,9 @@ import { ConnectionStatus } from "@/components/connection-status"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { getDefaultRelays, initializePersistentRelayPool, shutdownPersistentRelayPool } from "@/lib/relay-manager"
 import { DonationModal } from "@/components/donation-modal-proper"
-import { setActiveSigner } from "@/lib/signer-connector"
-import { remoteSignerManager } from "@/lib/remote-signer-manager"
+// Note: Unified remote signer imports are done dynamically when needed
 import { LoadingScreen } from "@/components/loading-screen"
-import type { Nip46SessionState } from 'nostr-signer-connector'
+// Note: Nip46SessionState type removed as we're using unified remote signer
 
 // Sync Status Component
 const SyncStatusIcons = ({ note }: { note: Note }) => {
@@ -302,41 +301,21 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     console.log("[NostrJournal] 🔧 Checking if remote signer is available...")
     
     try {
-      // Check if remote signer manager is available
-      if (remoteSignerManager.isAvailable()) {
-        console.log("[NostrJournal] ✅ Remote signer manager is available")
-        const sessionInfo = remoteSignerManager.getSessionInfo()
-        console.log("[NostrJournal] 🔍 Remote signer session info:", sessionInfo)
+      const unifiedSigner = await import('@/lib/unified-remote-signer')
+      
+      if (unifiedSigner.isConnected()) {
+        console.log("[NostrJournal] ✅ Remote signer is available")
         return true
       }
       
-      console.log("[NostrJournal] ⚠️ Remote signer manager not available, attempting to resume...")
+      console.log("[NostrJournal] ⚠️ Remote signer not available, attempting to resume...")
       
-      // Debug: Check what's in localStorage
-      console.log("[NostrJournal] 🔍 Debugging localStorage contents:")
-      console.log("[NostrJournal] 🔍 - nostr_remote_session:", localStorage.getItem('nostr_remote_session'))
-      console.log("[NostrJournal] 🔍 - All localStorage keys:", Object.keys(localStorage))
-      
-      // Try to resume session from localStorage
-      const savedSession = localStorage.getItem('nostr_remote_session')
-      if (savedSession) {
-        console.log("[NostrJournal] 🔧 Found saved session, attempting to resume...")
-        console.log("[NostrJournal] 🔧 Session data:", savedSession)
-        const sessionData = JSON.parse(savedSession)
-        
-        // Try to initialize remote signer manager from saved session
-        const success = await remoteSignerManager.initializeFromSessionData(sessionData, authData.pubkey)
-        
-        if (success) {
-          console.log("[NostrJournal] ✅ Remote signer session resumed successfully")
-          return true
-        } else {
-          console.error("[NostrJournal] ❌ Failed to resume remote signer session")
-          return false
-        }
+      const result = await unifiedSigner.resumeSession()
+      if (result) {
+        console.log("[NostrJournal] ✅ Remote signer session resumed successfully")
+        return true
       } else {
-        console.error("[NostrJournal] ❌ No saved session found for remote signer")
-        console.log("[NostrJournal] 🔍 This suggests the session was never saved during login")
+        console.error("[NostrJournal] ❌ Failed to resume remote signer session")
         return false
       }
     } catch (error) {
@@ -462,11 +441,11 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     
     try {
       // Ensure remote signer is initialized if using remote auth
-      if (authData.authMethod === 'remote' && authData.sessionData) {
-        const { remoteSignerManager } = await import('@/lib/remote-signer-manager')
-        if (!remoteSignerManager.isAvailable()) {
-          console.log('[MainApp] 🔧 Remote signer not available, initializing...')
-          await remoteSignerManager.initializeFromSessionData(authData.sessionData, authData.pubkey)
+      if (authData.authMethod === 'remote') {
+        const unifiedSigner = await import('@/lib/unified-remote-signer')
+        if (!unifiedSigner.isConnected()) {
+          console.log('[MainApp] 🔧 Remote signer not available, attempting to resume...')
+          await unifiedSigner.resumeSession()
         }
       }
       
@@ -646,51 +625,27 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
         // ALWAYS check and set up remote signer if needed
         console.log("[NostrJournal] 🔧 Checking remote signer setup for auth method:", authData.authMethod)
         
-        // Set up the remote signer for remote authentication
+        // Auto-resume remote signer session if using remote auth
         if (authData.authMethod === 'remote') {
-          console.log("[NostrJournal] 🔧 Setting up remote signer from session data")
-          console.log("[NostrJournal] 🔧 AuthData:", {
-            pubkey: authData.pubkey,
-            authMethod: authData.authMethod,
-            hasSessionData: !!authData.sessionData,
-            hasClientSecretKey: !!authData.clientSecretKey,
-            hasBunkerUri: !!authData.bunkerUri
-          })
+          console.log("[NostrJournal] 🔧 Attempting to auto-resume remote signer...")
           
-          // Use the new remote signer manager
-          if (authData.sessionData) {
-            console.log("[NostrJournal] 🔧 Initializing remote signer manager from session data...")
-            console.log("[NostrJournal] 🔧 Session data being passed:", {
-              hasSessionData: !!authData.sessionData,
-              sessionDataType: typeof authData.sessionData,
-              sessionDataKeys: authData.sessionData ? Object.keys(authData.sessionData) : [],
-              sessionDataContent: authData.sessionData
-            })
+          try {
+            const unifiedSigner = await import('@/lib/unified-remote-signer')
+            const result = await unifiedSigner.resumeSession()
             
-            try {
-              const success = await remoteSignerManager.initializeFromSessionData(authData.sessionData, authData.pubkey)
+            if (result) {
+              console.log("[NostrJournal] ✅ Remote signer auto-resumed successfully")
               
-              if (success) {
-                console.log("[NostrJournal] ✅ Remote signer manager initialized successfully")
-                
-                // Also set up the legacy signer connector for backward compatibility
-                try {
-                  const { resumeNip46Session } = await import('@/lib/signer-connector')
-                  const signer = await resumeNip46Session(authData.sessionData)
-                  if (signer) {
-                    console.log("[NostrJournal] ✅ Legacy signer connector also set up for compatibility")
-        }
-      } catch (error) {
-                  console.warn("[NostrJournal] ⚠️ Could not set up legacy signer connector:", error)
-                }
-              } else {
-                console.error("[NostrJournal] ❌ Failed to initialize remote signer manager")
+              // Verify pubkey matches
+              if (result.userPubkey !== authData.pubkey) {
+                console.warn("[NostrJournal] ⚠️ Pubkey mismatch after resume!")
               }
-            } catch (error) {
-              console.error("[NostrJournal] ❌ Error during remote signer manager initialization:", error)
+            } else {
+              console.warn("[NostrJournal] ⚠️ Failed to auto-resume remote signer")
+              // User will need to reconnect
             }
-          } else {
-            console.error("[NostrJournal] ❌ No session data available for remote signer setup")
+          } catch (error) {
+            console.error("[NostrJournal] ❌ Error resuming remote signer:", error)
           }
         }
 
@@ -913,9 +868,8 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       
       // CRITICAL: Check if remote signer is active
       if (authData.authMethod === 'remote') {
-        const { getActiveSigner } = await import('@/lib/signer-connector')
-        const signer = getActiveSigner()
-        if (!signer) {
+        const unifiedSigner = await import('@/lib/unified-remote-signer')
+        if (!unifiedSigner.isConnected()) {
           console.error("[NostrJournal] ❌ Remote signer not active!")
           throw new Error("Remote signer disconnected. Please reconnect.")
         }
@@ -996,9 +950,8 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       
       // CRITICAL: Check if remote signer is active
       if (authData.authMethod === 'remote') {
-        const { getActiveSigner } = await import('@/lib/signer-connector')
-        const signer = getActiveSigner()
-        if (!signer) {
+        const unifiedSigner = await import('@/lib/unified-remote-signer')
+        if (!unifiedSigner.isConnected()) {
           console.error("[NostrJournal] ❌ Remote signer not active!")
           throw new Error("Remote signer disconnected. Please reconnect.")
         }

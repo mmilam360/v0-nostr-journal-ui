@@ -314,18 +314,8 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
     }
   }, [currentStep, connectionState])
 
-  // Auto-generate QR code when connect step is reached for remote signer (CLIENT mode only)
-  useEffect(() => {
-    if (currentStep === 'connect' && 
-        selectedMethod === 'remote' && 
-        remoteSignerMode === 'client' && 
-        !connectUri && 
-        connectionState === 'idle') {
-      console.log('[Login] 🚀 Auto-generating QR code for remote signer...')
-      console.log('[Login] 🔍 Connect step reached with remote signer in client mode')
-      handleBunkerConnect()
-    }
-  }, [currentStep, selectedMethod, remoteSignerMode, connectUri, connectionState])
+  // Note: Auto-generation removed - user must explicitly choose connection method
+  // This prevents automatic connection attempts when user hasn't chosen their preferred method
 
   const handleRemoteSignerClick = () => {
     console.log('[Login] 🚀 handleRemoteSignerClick started')
@@ -339,13 +329,6 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
       console.log('[Login] 🔄 Setting selected method to remote...')
       setSelectedMethod('remote')
       console.log('[Login] ✅ Selected method set to remote')
-      
-      // Mobile-specific: Auto-show QR code by default
-      if (isMobile) {
-        console.log('[Login] 📱 Mobile detected - setting QR code mode')
-        setRemoteSignerMode('client')
-        console.log('[Login] 📱 Mobile QR code mode set')
-      }
       
       console.log('[Login] 🔄 Forcing UI update...')
       forceUIUpdate()
@@ -374,221 +357,58 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
     setError('')
 
     try {
+      const unifiedSigner = await import('@/lib/unified-remote-signer')
+      
       if (remoteSignerMode === 'signer') {
         // ============ SIGNER-INITIATED FLOW (Paste bunker:// URL) ============
         console.log('[Login] Signer-initiated: Connecting with bunker URL...')
         
-        const input = bunkerUrl.trim()
-        
-        if (!input) {
-          throw new Error('Please enter a bunker URL')
-        }
-        
-        if (!input.startsWith('bunker://')) {
-          throw new Error('Invalid bunker URL. Must start with bunker://')
-        }
-        
-        // Use the correct API from signer-connector
-        const { connectNip46, setActiveSigner } = await import('@/lib/signer-connector')
-        
-        // Mobile-specific: Add longer timeout for mobile connections
-        if (isMobile) {
-          console.log('[Login] 📱 Mobile detected - using extended timeout for bunker connection')
-        }
-        
-        const result = await connectNip46(input)
-        
-        if (!result.success || !result.signer || !result.session) {
-          throw new Error(result.error || 'Failed to connect')
-        }
-        
-        console.log('[Login] ✅ Signer-initiated connection successful')
-        
-        // Get user pubkey
-        const userPubkey = await result.signer.getPublicKey()
-        console.log('[Login] 🔑 Remote Signer Login (Bunker) - User pubkey:', userPubkey)
-        
-        // Set active signer
-        setActiveSigner(result.signer)
-        
-        // Store session for reconnection
-        const sessionData = result.session
-        localStorage.setItem('nostr_remote_session', JSON.stringify(sessionData))
-        
-      setConnectionState('success')
-
-        // Extract required fields for main app validation
-        const clientSecretKey = sessionData.sessionKey // This is the session key from NIP-46
-        const bunkerPubkey = sessionData.remotePubkey // This is the remote signer's pubkey
-        
-        console.log('[Login] Session data fields:', {
-          sessionKey: clientSecretKey,
-          remotePubkey: bunkerPubkey,
-          relayUrls: sessionData.relayUrls
-        })
-        
-        // Create auth data with all required fields
-        const authData = {
-          pubkey: userPubkey,
-          authMethod: 'remote' as const,
-          bunkerUri: input,
-          relays: sessionData.relayUrls || ['wss://relay.nsec.app', 'wss://relay.damus.io', 'wss://nos.lol'],
-          sessionData: sessionData,
-          clientSecretKey: clientSecretKey, // Required by main app validation
-          bunkerPubkey: bunkerPubkey // Required by main app validation
-        }
+        const { userPubkey } = await unifiedSigner.connectWithBunkerUri(bunkerUrl.trim())
         
         console.log('[Login] ✅ Bunker connection successful!')
-        console.log('[Login] Auth data being passed to main app:', {
-          pubkey: authData.pubkey,
-          authMethod: authData.authMethod,
-          bunkerUri: authData.bunkerUri,
-          relays: authData.relays,
-          hasSessionData: !!authData.sessionData
+        setConnectionState('success')
+        
+        // Pass to main app
+        onLoginSuccess({
+          pubkey: userPubkey,
+          authMethod: 'remote' as const,
+          bunkerUri: bunkerUrl.trim()
         })
         
-        try {
-          onLoginSuccess(authData)
-          console.log('[Login] ✅ onLoginSuccess called successfully')
-    } catch (error) {
-          console.error('[Login] ❌ Error calling onLoginSuccess:', error)
-          throw error
-        }
-
       } else {
         // ============ CLIENT-INITIATED FLOW (Generate QR Code) ============
-        console.log('[Login] Client-initiated: Generating nostrconnect URI...')
+        console.log('[Login] Client-initiated: Generating QR code...')
         
-        const clientMetadata = {
-          name: 'Nostr Journal',
-          description: 'Private journaling on Nostr'
-          // Removed url to avoid potential encoding issues
-        }
-
-        // Use nsec.app relay for better compatibility with nsec.app
-        const relays = [
-          'wss://relay.nsec.app', // Primary relay for nsec.app compatibility
-          'wss://relay.damus.io', // Fallback relay
-          'wss://nos.lol' // Additional fallback
-        ]
+        const { connectUri, established } = await unifiedSigner.startClientInitiatedConnection(
+          ['wss://relay.nsec.app', 'wss://relay.damus.io', 'wss://nos.lol'],
+          { name: 'Nostr Journal', description: 'Private journaling on Nostr' }
+        )
         
-        // Import and use the correct API
-        const { startClientInitiatedFlow, setActiveSigner } = await import('@/lib/signer-connector')
-        
-        // Start listening for connection - this returns immediately
-        const result = await startClientInitiatedFlow(relays, clientMetadata)
-        
-        console.log('[Login] ✅ Flow started, result:', {
-          hasConnectUri: !!result.connectUri,
-          hasEstablished: !!result.established
-        })
-        
-        const connectUri = result.connectUri
-        const establishedPromise = result.established
-        
-        // Debug the promise type
-        console.log('[Login] 🔍 Promise type check:', {
-          establishedType: typeof establishedPromise,
-          establishedIsPromise: establishedPromise instanceof Promise,
-          establishedToString: establishedPromise?.toString?.()
-        })
-        
-        if (!(establishedPromise instanceof Promise)) {
-          console.error('[Login] ❌ CRITICAL: established is not a Promise!')
-          throw new Error('startClientInitiatedFlow returned invalid established value')
-        }
-        
-        console.log('[Login] Generated nostrconnect URI:', connectUri)
         setConnectUri(connectUri)
+        console.log('[Login] ✅ QR code generated, waiting for connection...')
         
-        // Display QR code BEFORE waiting for connection
-        await new Promise(resolve => setTimeout(resolve, 100)) // Give UI time to render
-        
-        // Now wait for connection with timeout
-        console.log('[Login] Waiting for remote signer to scan and connect...')
-        
+        // Wait for connection (with timeout)
         const timeoutMs = 120000 // 2 minutes
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error('Connection timeout')), timeoutMs)
+        })
         
-        const connectionTimeout = setTimeout(() => {
-          console.log('[Login] ⏰ Connection timeout reached')
-          setConnectionState('error')
-          setError('Connection timeout after ' + (timeoutMs / 1000) + ' seconds. The remote signer may not be responding properly.\n\nTroubleshooting steps:\n1. Make sure your signing app (nsec.app) is open and connected to the internet\n2. Try the bunker:// URL method instead (often more reliable)\n3. Check that you scanned the QR code correctly\n4. Try refreshing and generating a new QR code\n5. Check browser console for detailed error logs')
-        }, timeoutMs)
+        const { userPubkey } = await Promise.race([established, timeoutPromise])
         
-        // Store timeout reference for mobile acknowledgment
-        setConnectionTimeoutRef(connectionTimeout)
+        console.log('[Login] ✅ Client connection successful!')
+        setConnectionState('success')
         
-        try {
-          console.log('[Login] 🔍 About to await established promise...')
-          
-          const { signer, session } = await establishedPromise
-          
-          clearTimeout(connectionTimeout)
-          console.log('[Login] ✅ Connection established!')
-          console.log('[Login] Signer:', !!signer)
-          console.log('[Login] Session:', !!session)
-        
-          // Get user pubkey
-          const userPubkey = await signer.getPublicKey()
-          console.log('[Login] 🔑 User pubkey:', userPubkey)
-          
-          // Set active signer and save session
-          setActiveSigner(signer)
-          localStorage.setItem('nostr_remote_session', JSON.stringify(session))
-          setConnectionState('success')
-          
-          // Prepare auth data
-          const clientSecretKey = session.sessionKey
-          const bunkerPubkey = session.remotePubkey
-          
-          const authData = {
-            pubkey: userPubkey,
-            authMethod: 'remote' as const,
-            bunkerUri: connectUri,
-            relays: session.relayUrls || relays,
-            sessionData: session,
-            clientSecretKey: clientSecretKey,
-            bunkerPubkey: bunkerPubkey
-          }
-          
-          console.log('[Login] 🎉 Calling onLoginSuccess with auth data:', authData)
-          await onLoginSuccess(authData)
-          
-        } catch (error) {
-          clearTimeout(connectionTimeout)
-          console.error('[Login] ❌ Connection failed:', error)
-          setConnectionState('error')
-          setError(error.message || 'Failed to connect')
-        }
+        // Pass to main app
+        onLoginSuccess({
+          pubkey: userPubkey,
+          authMethod: 'remote' as const
+        })
       }
-
+      
     } catch (error: any) {
-      console.error('[Login] Connection failed:', error)
+      console.error('[Login] ❌ Connection failed:', error)
       setConnectionState('error')
-      
-      let errorMsg = 'Failed to connect to remote signer'
-        if (error.message.includes('timeout')) {
-        // Mobile-specific timeout message
-        if (isMobile) {
-          errorMsg = 'Connection timeout. On mobile, try:\n\n1. Make sure your signing app is open\n2. Try the bunker:// URL method (more reliable on mobile)\n3. Check internet connection on both devices\n4. Try refreshing the page'
-        } else {
-          errorMsg = 'Connection timeout after 5 minutes. Please try:\n\n1. Scan the QR code with your Nostr app (nsec.app, Damus, etc.)\n2. Make sure to approve the connection in your app\n3. Try the bunker:// URL method instead (often more reliable)\n4. Check that both devices have internet connection'
-        }
-      } else if (error.message.includes('rejected')) {
-        errorMsg = 'Connection rejected by your signing app. Please try again.'
-      } else if (error.message.includes('Invalid URL')) {
-        errorMsg = error.message
-      } else {
-        errorMsg = error.message || 'Failed to connect'
-      }
-      
-      setError(errorMsg)
-      
-      // Mobile-specific: Don't kick back to method selection, stay on current screen
-      if (isMobile) {
-        console.log('[Login] 📱 Mobile detected - staying on current screen after error')
-        // Don't change the current step, just show the error
-      }
+      setError(error.message || 'Connection failed')
     }
   }
 
