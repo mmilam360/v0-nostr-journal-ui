@@ -301,22 +301,32 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
           })
 
           try {
-            // Initialize NDK-based signer manager
-            const { initializeSignerFromAuthData } = await import('@/lib/ndk-signer-manager')
+            // Initialize NDK-based signer manager and WAIT for it to be ready
+            const { initializeSignerFromAuthData, isSignerReady } = await import('@/lib/ndk-signer-manager')
+
+            console.log("[NostrJournal] 🔧 Initializing NDK signer...")
             const success = await initializeSignerFromAuthData(authData)
 
-            if (success) {
-              console.log("[NostrJournal] ✅ NDK-based signer manager initialized successfully")
+            if (success && isSignerReady()) {
+              console.log("[NostrJournal] ✅ NDK-based signer manager initialized and ready")
+
+              // Give the connection a moment to fully stabilize
+              console.log("[NostrJournal] 🔧 Stabilizing connection...")
+              await new Promise(resolve => setTimeout(resolve, 1000))
+              console.log("[NostrJournal] ✅ Connection stabilized, ready to load notes")
             } else {
               console.error("[NostrJournal] ❌ Failed to initialize NDK-based signer manager")
+              throw new Error("Remote signer initialization failed")
             }
           } catch (error) {
             console.error("[NostrJournal] ❌ Error during NDK signer manager initialization:", error)
+            throw error // Re-throw to be caught by outer try-catch
           }
         }
 
         // Load notes from Kind 30001 lists
-        console.log("[NostrJournal] Loading journal entries from Kind 30001 lists...")
+        console.log("[NostrJournal] 📝 Loading journal entries from Kind 30001 lists...")
+        setSyncStatus("syncing") // Show syncing status while loading
         let relayNotes: any[] = []
         try {
           relayNotes = await loadJournalFromKind30001(authData)

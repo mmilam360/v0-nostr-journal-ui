@@ -84,16 +84,9 @@ export async function loadJournalFromKind30001(authData: any): Promise<Decrypted
       console.log("[Kind30001Journal] Got actual pubkey from extension:", actualPubkey)
       console.log("[Kind30001Journal] ⚠️  EXTENSION PUBKEY DIFFERENT FROM AUTH DATA:", actualPubkey !== authData.pubkey)
     } else if (authData.authMethod === "remote") {
-      // For remote signers, use the pubkey from the remote signer session
-      const { remoteSignerManager } = await import("./remote-signer-manager")
-      if (remoteSignerManager.isAvailable()) {
-        const sessionInfo = remoteSignerManager.getSessionInfo()
-        if (sessionInfo.userPubkey) {
-          actualPubkey = sessionInfo.userPubkey
-          console.log("[Kind30001Journal] Got actual pubkey from remote signer:", actualPubkey)
-          console.log("[Kind30001Journal] ⚠️  REMOTE PUBKEY DIFFERENT FROM AUTH DATA:", actualPubkey !== authData.pubkey)
-        }
-      }
+      // For remote signers, use the pubkey from authData (already validated during login)
+      actualPubkey = authData.pubkey
+      console.log("[Kind30001Journal] Using remote signer pubkey from authData:", actualPubkey)
     } else if (authData.authMethod === "nsec") {
       console.log("[Kind30001Journal] Using nsec authData pubkey:", actualPubkey)
     }
@@ -251,16 +244,9 @@ export async function saveJournalAsKind30001(note: DecryptedNote, authData: any)
       console.log("[Kind30001Journal] Got actual pubkey from extension:", actualPubkey)
       console.log("[Kind30001Journal] ⚠️  EXTENSION PUBKEY DIFFERENT FROM AUTH DATA:", actualPubkey !== authData.pubkey)
     } else if (authData.authMethod === "remote") {
-      // For remote signers, use the pubkey from the remote signer session
-      const { remoteSignerManager } = await import("./remote-signer-manager")
-      if (remoteSignerManager.isAvailable()) {
-        const sessionInfo = remoteSignerManager.getSessionInfo()
-        if (sessionInfo.userPubkey) {
-          actualPubkey = sessionInfo.userPubkey
-          console.log("[Kind30001Journal] Got actual pubkey from remote signer:", actualPubkey)
-          console.log("[Kind30001Journal] ⚠️  REMOTE PUBKEY DIFFERENT FROM AUTH DATA:", actualPubkey !== authData.pubkey)
-        }
-      }
+      // For remote signers, use the pubkey from authData (already validated during login)
+      actualPubkey = authData.pubkey
+      console.log("[Kind30001Journal] Using remote signer pubkey from authData:", actualPubkey)
     }
     
     console.log("[Kind30001Journal] 🎯 FINAL PUBKEY FOR SAVE:", actualPubkey)
