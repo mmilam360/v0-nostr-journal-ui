@@ -1337,6 +1337,10 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     setSyncStatus("syncing")
 
     try {
+      // Clear selective storage first (same as initial login) to prevent stale data
+      console.log("[NostrJournal] 🧹 Clearing selective storage before manual sync...")
+      await clearSelectiveStorage()
+      
       // Sync is just loading from Kind 30001 lists (same as app startup)
       const relayNotes = await syncFromKind30001(authData)
       
@@ -1390,6 +1394,10 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     setIsRefreshing(true)
     
     try {
+      // Clear selective storage first (same as initial login) to prevent stale data
+      console.log("[NostrJournal] 🧹 Clearing selective storage before manual refresh...")
+      await clearSelectiveStorage()
+      
       // Use the same logic as page load - fetch from Kind 30001 lists
       const relayNotes = await loadJournalFromKind30001(authData)
       console.log("[NostrJournal] ✅ Refreshed", relayNotes.length, "journal entries from Kind 30001 lists")
