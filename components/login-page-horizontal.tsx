@@ -50,6 +50,9 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
   const [nsecInput, setNsecInput] = useState('')
   const [showNsec, setShowNsec] = useState(false)
   const [remoteSignerMode, setRemoteSignerMode] = useState<'client' | 'signer'>('client')
+  // Mobile nostrconnect copy/paste mode
+  const [nostrConnectUri, setNostrConnectUri] = useState('')
+  const [showNostrConnectPaste, setShowNostrConnectPaste] = useState(false)
   
   // Mobile detection for mobile-specific fixes
   const [isMobile, setIsMobile] = useState(false)
@@ -387,8 +390,8 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
         setConnectUri(connectUri)
         console.log('[Login] ✅ QR code generated, waiting for connection...')
         
-        // Wait for connection (with timeout)
-        const timeoutMs = 120000 // 2 minutes
+        // Wait for connection (with timeout) - longer on mobile for copy/paste flow
+        const timeoutMs = isMobile ? 180000 : 120000
         const timeoutPromise = new Promise<never>((_, reject) => {
           setTimeout(() => reject(new Error('Connection timeout')), timeoutMs)
         })
@@ -737,21 +740,58 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                         </div>
                         {connectUri ? (
                           <div className="flex flex-col items-center space-y-4">
-                            <div className="w-64 h-64 bg-white rounded-xl flex items-center justify-center p-6 shadow-lg">
-                        {qrCodeDataUrl && (
-                          <img 
-                            src={qrCodeDataUrl} 
-                            alt="NIP-46 Connection QR Code"
-                            className="w-60 h-60"
-                          />
-                        )}
-                      </div>
-                            <div className="text-center">
-                              <p className="text-sm text-muted-foreground">
-                                Scan with your signing app or copy the connection string below
-                              </p>
-                    </div>
-                            
+                            {/* Desktop: Show QR code; Mobile: hide QR and show copy workflow */}
+                            {!isMobile && (
+                              <div className="w-64 h-64 bg-white rounded-xl flex items-center justify-center p-6 shadow-lg">
+                                {qrCodeDataUrl && (
+                                  <img 
+                                    src={qrCodeDataUrl} 
+                                    alt="NIP-46 Connection QR Code"
+                                    className="w-60 h-60"
+                                  />
+                                )}
+                              </div>
+                            )}
+                            <div className="w-full space-y-3">
+                              {isMobile ? (
+                                <div className="space-y-3">
+                                  <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3">
+                                    <p className="text-xs text-blue-700 dark:text-blue-300 font-medium mb-1">📱 Mobile Connection Steps</p>
+                                    <ol className="text-xs text-blue-700 dark:text-blue-300 space-y-1 list-decimal list-inside">
+                                      <li>Tap Copy Connection String</li>
+                                      <li>Open nsec.app (keep this tab open)</li>
+                                      <li>Paste and approve</li>
+                                      <li>Return to this tab</li>
+                                    </ol>
+                                  </div>
+                                  <Button
+                                    onClick={() => {
+                                      navigator.clipboard.writeText(connectUri)
+                                      const active = document.activeElement as HTMLButtonElement
+                                      const original = active?.textContent
+                                      if (active) active.textContent = '✓ Copied!'
+                                      setTimeout(() => { if (active) active.textContent = original || '' }, 1500)
+                                    }}
+                                    className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-6 text-base"
+                                  >
+                                    Copy Connection String
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    onClick={() => setShowNostrConnectPaste(true)}
+                                    className="w-full"
+                                  >
+                                    Or paste nostrconnect:// URI
+                                  </Button>
+                                </div>
+                              ) : (
+                                <div className="text-center">
+                                  <p className="text-sm text-muted-foreground">
+                                    Scan the QR with your signing app or copy the connection string below
+                                  </p>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         ) : (
                           <div className="flex justify-center">
@@ -778,9 +818,9 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                         )}
                         
                         {connectUri && (
-                    <div className="space-y-2">
-                      <label className="text-sm text-muted-foreground">
-                              Or copy connection string:
+                          <div className="space-y-2">
+                            <label className="text-sm text-muted-foreground">
+                              {isMobile ? 'Connection string:' : 'Or copy connection string:'}
                             </label>
                             <div className="flex gap-2">
                               <input
@@ -789,38 +829,52 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                                 readOnly
                                 className="flex-1 px-3 py-2 border rounded-md bg-background text-foreground text-xs font-mono"
                               />
+                              {!isMobile && (
+                                <Button
+                                  onClick={() => navigator.clipboard.writeText(connectUri)}
+                                  variant="outline"
+                                  size="sm"
+                                >
+                                  <Copy className="h-4 w-4" />
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Mobile: Paste nostrconnect URI input */}
+                        {connectUri && isMobile && showNostrConnectPaste && (
+                          <div className="space-y-4 w-full">
+                            <div className="text-center">
+                              <p className="text-sm text-muted-foreground mb-2">Paste the nostrconnect:// URI you copied</p>
+                            </div>
+                            <div className="flex gap-2">
+                              <input
+                                type="text"
+                                value={nostrConnectUri}
+                                onChange={(e) => setNostrConnectUri(e.target.value)}
+                                placeholder="nostrconnect://..."
+                                className="flex-1 px-3 py-2 border rounded-md bg-background text-foreground font-mono text-sm"
+                              />
                               <Button
-                                onClick={() => {
-                                  navigator.clipboard.writeText(connectUri)
-                                  // Show feedback
-                                  const button = document.querySelector('[data-copy-button]') as HTMLButtonElement
-                                  if (button) {
-                                    const originalText = button.innerHTML
-                                    button.innerHTML = '<Check className="h-4 w-4" />'
-                                    setTimeout(() => {
-                                      button.innerHTML = originalText
-                                    }, 2000)
-                                  }
-                                }}
-                                variant="outline"
-                                size="sm"
-                                data-copy-button
+                                onClick={handleBunkerConnect}
+                                disabled={!nostrConnectUri || connectionState === 'connecting'}
+                                className="bg-purple-600 hover:bg-purple-700 text-white"
                               >
-                                <Copy className="h-4 w-4" />
+                                {connectionState === 'connecting' ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  'Connect'
+                                )}
                               </Button>
                             </div>
-                            <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3">
-                              <p className="text-xs text-blue-700 dark:text-blue-300">
-                                <strong>Instructions:</strong>
-                              </p>
-                              <ol className="text-xs text-blue-700 dark:text-blue-300 space-y-1 list-decimal list-inside mt-1">
-                                <li>Scan QR code or copy connection string</li>
-                                <li>Open your signing app (nsec.app, Alby, etc.)</li>
-                                <li>Paste the connection string if scanning fails</li>
-                                <li>Return to this app and approve the connection</li>
-                              </ol>
-                            </div>
-                            
+                            <Button
+                              variant="ghost"
+                              onClick={() => { setShowNostrConnectPaste(false); setNostrConnectUri('') }}
+                              className="w-full"
+                            >
+                              ← Back
+                            </Button>
                           </div>
                         )}
                       </div>
