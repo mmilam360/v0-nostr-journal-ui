@@ -1,7 +1,7 @@
 /**
  * Remote Signer Login Component
- * YakiHonne-style UI for bunker URL connection flow
- * Provides copy/paste interface with clear instructions
+ * YakiHonne-style UI with QR code and bunker options
+ * Provides copy/paste interface with QR code and clear instructions
  */
 
 import React, { useState, useEffect } from 'react'
@@ -13,8 +13,11 @@ import {
   Smartphone, 
   Loader2, 
   AlertTriangle,
-  CheckCircle
+  CheckCircle,
+  QrCode,
+  Link
 } from 'lucide-react'
+import QRCode from 'qrcode'
 
 interface RemoteSignerLoginProps {
   onSuccess: (pubkey: string) => void
@@ -22,40 +25,63 @@ interface RemoteSignerLoginProps {
 }
 
 type ConnectionState = 'idle' | 'generating' | 'waiting' | 'connected' | 'error'
+type ConnectionMethod = 'nostrconnect' | 'bunker'
 
 export default function RemoteSignerLogin({ onSuccess, onCancel }: RemoteSignerLoginProps) {
   const [connectionState, setConnectionState] = useState<ConnectionState>('idle')
-  const [bunkerUrl, setBunkerUrl] = useState<string>('')
+  const [connectionMethod, setConnectionMethod] = useState<ConnectionMethod>('nostrconnect')
+  const [connectionUrl, setConnectionUrl] = useState<string>('')
+  const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>('')
   const [error, setError] = useState<string>('')
   const [copied, setCopied] = useState<boolean>(false)
 
-  // Generate Nostr Connect URL when component mounts
+  // Generate connection URL when component mounts
   useEffect(() => {
-    generateNostrConnectUrl()
+    generateConnectionUrl()
   }, [])
 
-  const generateNostrConnectUrl = async () => {
+  const generateConnectionUrl = async () => {
     try {
       setConnectionState('generating')
       setError('')
       
-      console.log('[RemoteSignerLogin] 🚀 Generating Nostr Connect URL...')
+      console.log('[RemoteSignerLogin] 🚀 Generating connection URL...')
       
       const { startNostrConnectFlow } = await import('@/lib/auth/unified-remote-signer')
       const url = await startNostrConnectFlow()
       
-      setBunkerUrl(url)
+      setConnectionUrl(url)
       setConnectionState('waiting')
       
-      console.log('[RemoteSignerLogin] ✅ Nostr Connect URL generated:', url)
+      console.log('[RemoteSignerLogin] ✅ Connection URL generated:', url)
+      
+      // Generate QR code
+      await generateQRCode(url)
       
       // Listen for connection
       listenForConnection()
       
     } catch (error) {
-      console.error('[RemoteSignerLogin] ❌ Failed to generate Nostr Connect URL:', error)
+      console.error('[RemoteSignerLogin] ❌ Failed to generate connection URL:', error)
       setError(error.message || 'Failed to generate connection URL')
       setConnectionState('error')
+    }
+  }
+
+  const generateQRCode = async (url: string) => {
+    try {
+      const qrDataUrl = await QRCode.toDataURL(url, {
+        width: 256,
+        margin: 2,
+        color: {
+          dark: '#000000',
+          light: '#FFFFFF'
+        }
+      })
+      setQrCodeDataUrl(qrDataUrl)
+      console.log('[RemoteSignerLogin] ✅ QR code generated')
+    } catch (error) {
+      console.error('[RemoteSignerLogin] ❌ Failed to generate QR code:', error)
     }
   }
 
@@ -96,7 +122,7 @@ export default function RemoteSignerLogin({ onSuccess, onCancel }: RemoteSignerL
 
   const copyToClipboard = async () => {
     try {
-      await navigator.clipboard.writeText(bunkerUrl)
+      await navigator.clipboard.writeText(connectionUrl)
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     } catch (error) {
@@ -107,7 +133,7 @@ export default function RemoteSignerLogin({ onSuccess, onCancel }: RemoteSignerL
   const retryConnection = () => {
     setError('')
     setConnectionState('idle')
-    generateNostrConnectUrl()
+    generateConnectionUrl()
   }
 
   return (
@@ -141,30 +167,68 @@ export default function RemoteSignerLogin({ onSuccess, onCancel }: RemoteSignerL
             </div>
           )}
 
-          {connectionState === 'waiting' && bunkerUrl && (
+          {connectionState === 'waiting' && connectionUrl && (
             <div className="space-y-6">
+              {/* Connection Method Selection */}
+              <div className="flex gap-2 p-1 bg-gray-100 dark:bg-gray-700 rounded-lg">
+                <Button
+                  onClick={() => setConnectionMethod('nostrconnect')}
+                  variant={connectionMethod === 'nostrconnect' ? 'default' : 'ghost'}
+                  size="sm"
+                  className="flex-1"
+                >
+                  <Link className="w-4 h-4 mr-2" />
+                  Nostr Connect
+                </Button>
+                <Button
+                  onClick={() => setConnectionMethod('bunker')}
+                  variant={connectionMethod === 'bunker' ? 'default' : 'ghost'}
+                  size="sm"
+                  className="flex-1"
+                >
+                  <QrCode className="w-4 h-4 mr-2" />
+                  Bunker
+                </Button>
+              </div>
+
               {/* Instructions */}
               <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
                 <h3 className="font-semibold text-blue-900 dark:text-blue-100 mb-2">
                   📱 Connection Steps:
                 </h3>
                 <ol className="text-sm text-blue-800 dark:text-blue-200 space-y-1 list-decimal list-inside">
-                  <li>Copy the Nostr Connect URL below</li>
-                  <li>Open nsec.app on your mobile device</li>
-                  <li>Paste the URL and approve the connection</li>
+                  <li>Scan the QR code below with your mobile Nostr app</li>
+                  <li>Or copy the connection URL and paste it in your app</li>
+                  <li>Approve the connection in your mobile app</li>
                   <li>Return to this page</li>
                 </ol>
               </div>
 
-              {/* Nostr Connect URL Display */}
+              {/* QR Code Display */}
+              {qrCodeDataUrl && (
+                <div className="text-center">
+                  <div className="inline-block p-4 bg-white dark:bg-gray-800 rounded-lg shadow-lg">
+                    <img 
+                      src={qrCodeDataUrl} 
+                      alt="Connection QR Code" 
+                      className="w-48 h-48 mx-auto"
+                    />
+                  </div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+                    Scan with your mobile Nostr app
+                  </p>
+                </div>
+              )}
+
+              {/* Connection URL Display */}
               <div className="space-y-3">
                 <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Nostr Connect URL:
+                  Connection URL:
                 </label>
                 <div className="flex gap-2">
                   <input
                     type="text"
-                    value={bunkerUrl}
+                    value={connectionUrl}
                     readOnly
                     className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white text-sm font-mono"
                   />

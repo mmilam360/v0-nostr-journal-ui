@@ -42,6 +42,7 @@
     "@radix-ui/react-toggle-group": "1.1.1",
     "@radix-ui/react-tooltip": "1.1.6",
     "@tanstack/react-query": "^5.90.2",
+    "@types/qrcode": "^1.5.5",
     "autoprefixer": "^10.4.20",
     "bolt11": "^1.4.1",
     "class-variance-authority": "^0.7.1",
