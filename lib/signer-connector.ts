@@ -183,13 +183,20 @@ export async function startClientInitiatedFlow(
     const secretKey = generateSecretKey()
     const clientPubkey = getPublicKey(secretKey)
     
+    // Ensure clientPubkey is a string (hex format)
+    const clientPubkeyHex = typeof clientPubkey === 'string' ? clientPubkey : Array.from(clientPubkey).map(b => b.toString(16).padStart(2, '0')).join('')
+    
     // Generate secret for this connection
     const secret = generateRandomString(16)
+    
+    console.log('[SignerConnector] Generated clientPubkey:', clientPubkeyHex)
+    console.log('[SignerConnector] Generated secret:', secret)
+    console.log('[SignerConnector] Primary relay:', primaryRelay)
     
     // Create connect URI using the correct nostr-tools v2 API
     const { createNostrConnectURI } = await import('nostr-tools/nip46')
     const connectUri = createNostrConnectURI({
-      clientPubkey,
+      clientPubkey: clientPubkeyHex,
       secret,
       relays: [primaryRelay],
       name: clientMetadata.name,
