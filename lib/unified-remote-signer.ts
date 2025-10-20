@@ -127,19 +127,31 @@ export async function connectWithBunkerUri(bunkerUri: string): Promise<{ userPub
   console.log('[UnifiedRemoteSigner] 🚀 Starting signer-initiated flow...')
   
   try {
+    // Validate connection state
+    const validation = validateConnectionState()
+    if (!validation.valid) {
+      throw new Error(validation.error)
+    }
+    
     // Validate URI format
     if (!bunkerUri.startsWith('bunker://')) {
       throw new Error('Invalid bunker URI format. Must start with bunker://')
     }
     
+    // Extract relay from bunker URI BEFORE creating signer
+    const extractedRelay = extractRelayFromBunkerUri(bunkerUri)
+    console.log('[UnifiedRemoteSigner] 📡 Extracted relay from URI:', extractedRelay)
+    
     // Generate client keypair
     const clientSecretKey = generateSecretKey()
     
-    // Connect using BunkerSigner.fromBunker
-    const signer = await BunkerSigner.fromBunker(clientSecretKey, bunkerUri, {
-      permissions: DEFAULT_PERMISSIONS,
-      timeout: 30000 // 30 seconds
-    })
+    // Connect using BunkerSigner.fromBunker with retry logic
+    const signer = await connectWithRetry(async () => {
+      return await BunkerSigner.fromBunker(clientSecretKey, bunkerUri, {
+        permissions: DEFAULT_PERMISSIONS,
+        timeout: 30000 // 30 seconds
+      })
+    }, 3, 2000)
     
     console.log('[UnifiedRemoteSigner] ✅ Connected via bunker URI')
     
@@ -150,12 +162,11 @@ export async function connectWithBunkerUri(bunkerUri: string): Promise<{ userPub
     // Store in memory
     activeSigner = signer
     
-    // Save session for future reconnection
-    const relay = extractRelayFromBunkerUri(bunkerUri)
+    // Save session for future reconnection - use extracted relay, not signer.relays
     const sessionData: SessionData = {
       sessionKey: bytesToHex(clientSecretKey),
       remotePubkey: userPubkey,
-      relayUrls: [relay],
+      relayUrls: [extractedRelay], // Use extracted relay
       bunkerUri // Save for easy reconnection
     }
     saveSession(sessionData)
@@ -164,7 +175,8 @@ export async function connectWithBunkerUri(bunkerUri: string): Promise<{ userPub
     
   } catch (error) {
     console.error('[UnifiedRemoteSigner] ❌ Bunker connection failed:', error)
-    throw new Error(`Connection failed: ${error.message}`)
+    const friendlyError = getUserFriendlyError(error as Error)
+    throw new Error(friendlyError)
   }
 }
 
@@ -369,4 +381,75 @@ function extractRelayFromBunkerUri(uri: string): string {
   } catch {
     return 'wss://relay.nsec.app'
   }
+}
+
+// ============================================================
+// STABILITY HELPERS
+// ============================================================
+
+/**
+ * Retry connection attempts with exponential backoff
+ */
+async function connectWithRetry(
+  connectFn: () => Promise<any>,
+  maxRetries: number = 3,
+  delayMs: number = 2000
+): Promise<any> {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`[UnifiedRemoteSigner] Connection attempt ${attempt}/${maxRetries}`)
+      return await connectFn()
+    } catch (error) {
+      if (attempt === maxRetries) throw error
+      
+      console.log(`[UnifiedRemoteSigner] Attempt ${attempt} failed, retrying in ${delayMs}ms...`)
+      await new Promise(resolve => setTimeout(resolve, delayMs))
+    }
+  }
+}
+
+/**
+ * Validate connection state before attempting connection
+ */
+function validateConnectionState(): { valid: boolean; error?: string } {
+  // Check if already connected
+  if (activeSigner) {
+    return { valid: false, error: 'Already connected to a remote signer' }
+  }
+  
+  // Check browser compatibility
+  if (typeof WebSocket === 'undefined') {
+    return { valid: false, error: 'WebSocket not supported in this browser' }
+  }
+  
+  return { valid: true }
+}
+
+/**
+ * Convert technical errors to user-friendly messages
+ */
+function getUserFriendlyError(error: Error): string {
+  const msg = error.message.toLowerCase()
+  
+  if (msg.includes('relays') && msg.includes('undefined')) {
+    return 'Invalid bunker URL format. Please check the URL and try again.'
+  }
+  
+  if (msg.includes('subscription closed')) {
+    return 'Connection timeout. On mobile, use the bunker:// URL method for better reliability.'
+  }
+  
+  if (msg.includes('timeout')) {
+    return 'Connection timeout. Please check your internet connection and try again.'
+  }
+  
+  if (msg.includes('rejected')) {
+    return 'Connection rejected. Please approve the permission request in your signing app.'
+  }
+  
+  if (msg.includes('already connected')) {
+    return 'You are already connected to a remote signer. Please disconnect first.'
+  }
+  
+  return error.message || 'Connection failed. Please try again.'
 }

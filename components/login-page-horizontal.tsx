@@ -15,7 +15,8 @@ import {
   Radio, 
   Smartphone, 
   User,
-  AlertTriangle
+  AlertTriangle,
+  Monitor
 } from 'lucide-react'
 import { generateSecretKey, getPublicKey, nip19 } from 'nostr-tools'
 import { bytesToHex } from '@noble/hashes/utils'
@@ -348,12 +349,6 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
 
 
   const handleBunkerConnect = async () => {
-    // Early return if in bunker mode but no URL provided
-    if (remoteSignerMode === 'signer' && !bunkerUrl) {
-      console.log('[Login] ⚠️ Bunker mode selected but no URL provided - waiting for user input')
-      return
-    }
-
     console.log('[Login] 🔄 Starting bunker connect...')
     resetConnectionStates() // Reset any previous state first
     setConnectionState('connecting')
@@ -362,7 +357,8 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
     try {
       const unifiedSigner = await import('@/lib/unified-remote-signer')
       
-      if (remoteSignerMode === 'signer') {
+      // Check if we have a bunker URL (primary method)
+      if (bunkerUrl && bunkerUrl.trim()) {
         // ============ SIGNER-INITIATED FLOW (Paste bunker:// URL) ============
         console.log('[Login] Signer-initiated: Connecting with bunker URL...')
         
@@ -432,43 +428,101 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
       case 'choose':
         return (
           <div className="space-y-8">
+            {/* Header */}
             <div className="text-center">
               <Logo className="h-24 w-auto mx-auto mb-8" />
-              <h2 className="text-3xl font-bold text-foreground mb-2">Welcome to Nostr Journal</h2>
-              <p className="text-muted-foreground">Your private, decentralized note-taking app</p>
+              <h2 className="text-3xl font-bold text-foreground mb-2">
+                Welcome to Nostr Journal
+              </h2>
+              <p className="text-muted-foreground">
+                Your private, decentralized note-taking app
+              </p>
             </div>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-2 max-w-2xl mx-auto">
+
+            {/* PRIMARY: Browser Extension */}
+            <div className="max-w-md mx-auto">
               <button
                 onClick={() => {
                   setSelectedPath('existing')
-                  goNext()
+                  setSelectedMethod('extension')
+                  setCurrentStep('connect')
                 }}
-                className="p-6 rounded-lg border-2 border-border hover:border-primary text-left bg-card hover:bg-card/80 group"
+                className="w-full p-8 rounded-lg border-4 border-primary bg-primary/5 hover:bg-primary/10 text-left group transition-all"
               >
                 <div className="flex items-center gap-3 mb-3">
-                  <User className="w-6 h-6 text-primary" />
-                  <h3 className="font-semibold">Use Existing Nostr Account</h3>
+                  <Radio className="w-8 h-8 text-primary" />
+                  <div>
+                    <h3 className="font-bold text-xl">Browser Extension</h3>
+                    <span className="text-sm text-primary font-semibold">
+                      ⭐ Recommended
+                    </span>
+                  </div>
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  Connect with browser extension, remote signer, or import your key
-                </p>
-              </button>
-              <button
-                onClick={() => {
-                  setSelectedPath('new')
-                  goNext()
-                }}
-                className="p-6 rounded-lg border-2 border-border hover:border-primary text-left bg-card hover:bg-card/80 group"
-              >
-                <div className="flex items-center gap-3 mb-3">
-                  <Plus className="w-6 h-6 text-primary" />
-                  <h3 className="font-semibold">Create New Nostr Account</h3>
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  Generate a new cryptographic key pair for secure note-taking
+                  Fast, secure, and works everywhere. Use Alby, nos2x, or other Nostr extensions.
                 </p>
               </button>
             </div>
+
+            {/* ALTERNATIVE METHODS */}
+            <div className="max-w-2xl mx-auto">
+              <p className="text-center text-sm text-muted-foreground mb-4">
+                Alternative Sign-in Methods
+              </p>
+              <div className="grid gap-4 sm:grid-cols-2">
+                {/* Remote Signer */}
+                <button
+                  onClick={() => {
+                    setSelectedPath('existing')
+                    setSelectedMethod('remote')
+                    setCurrentStep('connect')
+                  }}
+                  className="p-6 rounded-lg border-2 border-border hover:border-primary text-left bg-card hover:bg-card/80"
+                >
+                  <div className="flex items-center gap-3 mb-3">
+                    <Smartphone className="w-6 h-6 text-primary" />
+                    <h3 className="font-semibold">Remote Signer</h3>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    For mobile users. Connect with nsec.app or Amber.
+                  </p>
+                </button>
+
+                {/* Import Key */}
+                <button
+                  onClick={() => {
+                    setSelectedPath('existing')
+                    setSelectedMethod('nsec')
+                    setCurrentStep('connect')
+                  }}
+                  className="p-6 rounded-lg border-2 border-border hover:border-primary text-left bg-card hover:bg-card/80"
+                >
+                  <div className="flex items-center gap-3 mb-3">
+                    <Key className="w-6 h-6 text-primary" />
+                    <h3 className="font-semibold">Import Private Key</h3>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    For advanced users. Paste your nsec directly.
+                  </p>
+                </button>
+              </div>
+            </div>
+
+            {/* Create New Account - Less Prominent */}
+            <div className="text-center">
+              <button
+                onClick={() => {
+                  setSelectedPath('new')
+                  setCurrentStep('method')
+                }}
+                className="text-primary hover:underline text-sm"
+              >
+                <Plus className="w-4 h-4 inline mr-1" />
+                Create New Nostr Account
+              </button>
+            </div>
+
+            {/* What is Nostr */}
             <div className="text-center">
               <button
                 onClick={() => setShowInfo(true)}
@@ -696,284 +750,168 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                 )}
 
                 {selectedMethod === 'remote' && (
-                  <div className="space-y-4">
-                    {/* Connection Mode Selection - Hidden on mobile, auto-show QR */}
-                    {!isMobile && (
-                      <div className="flex gap-2 mb-4">
-                        <Button
-                          variant={remoteSignerMode === 'client' ? 'default' : 'outline'}
-                          onClick={() => setRemoteSignerMode('client')}
-                          className="flex-1"
-                        >
-                          Generate QR Code
-                        </Button>
-                        <Button
-                          variant={remoteSignerMode === 'signer' ? 'default' : 'outline'}
-                          onClick={() => setRemoteSignerMode('signer')}
-                          className="flex-1"
-                        >
-                          Paste Bunker URL
-                        </Button>
-                      </div>
-                    )}
-                    
-                    {/* Mobile-specific: Show bunker option as a button */}
-                    {isMobile && remoteSignerMode === 'client' && (
-                      <div className="mb-4">
-                        <Button
-                          variant="outline"
-                          onClick={() => setRemoteSignerMode('signer')}
-                          className="w-full"
-                        >
-                          Or paste bunker:// URL instead
-                        </Button>
-                      </div>
-                    )}
+                  <div className="space-y-6">
+                    <div className="text-center">
+                      <h2 className="text-3xl font-bold text-foreground mb-2">
+                        Connect Remote Signer
+                      </h2>
+                      <p className="text-muted-foreground">Choose your connection method</p>
+                    </div>
 
-                    {remoteSignerMode === 'client' ? (
-                      /* Client-initiated flow: Generate nostrconnect:// URI */
-                      <div className="space-y-4">
-                        <div className="text-center">
-                          <p className="text-sm text-muted-foreground mb-4">
-                            Scan with nsec.app, Alby, or Amethyst to connect
-                          </p>
+                    {/* MOBILE: Bunker URL - Primary */}
+                    <div className="max-w-md mx-auto">
+                      <div className="p-6 rounded-lg border-2 border-primary bg-primary/5">
+                        <div className="flex items-center gap-2 mb-4">
+                          <Smartphone className="w-5 h-5 text-primary" />
+                          <h3 className="font-semibold text-primary">
+                            Recommended for Mobile
+                          </h3>
                         </div>
-                        {connectUri ? (
-                          <div className="flex flex-col items-center space-y-4">
-                            {/* Desktop: Show QR code; Mobile: hide QR and show copy workflow */}
-                            {!isMobile && (
-                              <div className="w-64 h-64 bg-white rounded-xl flex items-center justify-center p-6 shadow-lg">
-                                {qrCodeDataUrl && (
-                                  <img 
-                                    src={qrCodeDataUrl} 
-                                    alt="NIP-46 Connection QR Code"
-                                    className="w-60 h-60"
-                                  />
-                                )}
-                              </div>
+                        
+                        <p className="text-sm text-muted-foreground mb-4">
+                          Most reliable method for mobile users
+                        </p>
+
+                        <div className="space-y-3">
+                          <label className="text-sm font-medium">Paste Bunker URL:</label>
+                          <input
+                            type="text"
+                            value={bunkerUrl}
+                            onChange={(e) => setBunkerUrl(e.target.value)}
+                            placeholder="bunker://...?relay=...&secret=..."
+                            className="w-full px-3 py-3 border rounded-md bg-background text-foreground font-mono text-sm"
+                            disabled={connectionState === 'connecting'}
+                          />
+                          
+                          <Button
+                            onClick={handleBunkerConnect}
+                            disabled={!bunkerUrl || connectionState === 'connecting'}
+                            className="w-full bg-primary hover:bg-primary/90 py-6 text-base font-semibold"
+                          >
+                            {connectionState === 'connecting' ? (
+                              <>
+                                <Loader2 className="h-5 w-5 animate-spin mr-2" />
+                                Connecting...
+                              </>
+                            ) : (
+                              <>
+                                <Smartphone className="h-5 w-5 mr-2" />
+                                Connect with Bunker URL
+                              </>
                             )}
-                            <div className="w-full space-y-3">
-                              {isMobile ? (
-                                <div className="space-y-3">
-                                  <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3">
-                                    <p className="text-xs text-blue-700 dark:text-blue-300 font-medium mb-1">📱 Mobile Connection Steps</p>
-                                    <ol className="text-xs text-blue-700 dark:text-blue-300 space-y-1 list-decimal list-inside">
-                                      <li>Tap Copy Connection String</li>
-                                      <li>Open nsec.app (keep this tab open)</li>
-                                      <li>Paste and approve</li>
-                                      <li>Return to this tab</li>
-                                    </ol>
-                                  </div>
-                                  <Button
-                                    onClick={() => {
-                                      navigator.clipboard.writeText(connectUri)
-                                      const active = document.activeElement as HTMLButtonElement
-                                      const original = active?.textContent
-                                      if (active) active.textContent = '✓ Copied!'
-                                      setTimeout(() => { if (active) active.textContent = original || '' }, 1500)
-                                    }}
-                                    className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-6 text-base"
-                                  >
-                                    Copy Connection String
-                                  </Button>
-                                  <Button
-                                    variant="outline"
-                                    onClick={() => setShowNostrConnectPaste(true)}
-                                    className="w-full"
-                                  >
-                                    Or paste nostrconnect:// URI
-                                  </Button>
-                                </div>
-                              ) : (
-                                <div className="text-center">
-                                  <p className="text-sm text-muted-foreground">
-                                    Scan the QR with your signing app or copy the connection string below
-                                  </p>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="flex justify-center">
-                            <div className="text-center space-y-4">
-                              <p className="text-sm text-muted-foreground mb-4">
-                                Click below to generate QR code for connection
-                              </p>
-                              <Button
-                                onClick={handleBunkerConnect}
-                                disabled={connectionState === 'connecting'}
-                                className="bg-purple-600 hover:bg-purple-700 text-white"
-                              >
-                                {connectionState === 'connecting' ? (
-                                  <>
-                                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                                    Generating...
-                                  </>
-                                ) : (
-                                  'Generate QR Code'
-                                )}
-                              </Button>
-                            </div>
-                          </div>
-                        )}
-                        
-                        {connectUri && (
-                          <div className="space-y-2">
-                            <label className="text-sm text-muted-foreground">
-                              {isMobile ? 'Connection string:' : 'Or copy connection string:'}
-                            </label>
-                            <div className="flex gap-2">
-                              <input
-                                type="text"
-                                value={connectUri}
-                                readOnly
-                                className="flex-1 px-3 py-2 border rounded-md bg-background text-foreground text-xs font-mono"
-                              />
-                              {!isMobile && (
-                                <Button
-                                  onClick={() => navigator.clipboard.writeText(connectUri)}
-                                  variant="outline"
-                                  size="sm"
-                                >
-                                  <Copy className="h-4 w-4" />
-                                </Button>
-                              )}
-                            </div>
-                          </div>
-                        )}
+                          </Button>
 
-                        {/* Mobile: Paste nostrconnect URI input */}
-                        {connectUri && isMobile && showNostrConnectPaste && (
-                          <div className="space-y-4 w-full">
-                            <div className="text-center">
-                              <p className="text-sm text-muted-foreground mb-2">Paste the nostrconnect:// URI you copied</p>
-                            </div>
-                            <div className="flex gap-2">
-                              <input
-                                type="text"
-                                value={nostrConnectUri}
-                                onChange={(e) => setNostrConnectUri(e.target.value)}
-                                placeholder="nostrconnect://..."
-                                className="flex-1 px-3 py-2 border rounded-md bg-background text-foreground font-mono text-sm"
-                              />
-                              <Button
-                                onClick={handleBunkerConnect}
-                                disabled={!nostrConnectUri || connectionState === 'connecting'}
-                                className="bg-purple-600 hover:bg-purple-700 text-white"
-                              >
-                                {connectionState === 'connecting' ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
-                                  'Connect'
-                                )}
-                              </Button>
-                            </div>
-                            <Button
-                              variant="ghost"
-                              onClick={() => { setShowNostrConnectPaste(false); setNostrConnectUri('') }}
-                              className="w-full"
-                            >
-                              ← Back
-                            </Button>
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      /* Signer-initiated flow: User pastes bunker:// URL */
-                      <div className="space-y-4">
-                        <div className="text-center">
-                          <p className="text-sm text-muted-foreground mb-4">
-                            Paste the bunker:// URL from your signing app
-                          </p>
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm text-muted-foreground">
-                            Bunker URL:
-                      </label>
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          value={bunkerUrl}
-                          onChange={(e) => setBunkerUrl(e.target.value)}
-                              placeholder="bunker://...?relay=...&secret=..."
-                              className="flex-1 px-3 py-2 border rounded-md bg-background text-foreground font-mono text-sm"
-                        />
-                        <Button
-                          onClick={handleBunkerConnect}
-                          disabled={!bunkerUrl || connectionState === 'connecting'}
-                              className="bg-purple-600 hover:bg-purple-700 text-white"
-                        >
-                          {connectionState === 'connecting' ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            'Connect'
-                          )}
-                        </Button>
-                      </div>
-                    </div>
-                        <div className="bg-muted/50 rounded-lg p-3">
-                          <p className="text-xs text-muted-foreground mb-2">
-                            <strong>How to get your bunker URL:</strong>
-                          </p>
-                          <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside">
-                            <li>Open nsec.app on your device</li>
-                            <li>Go to "Connections" or "Apps"</li>
-                            <li>Create new connection</li>
-                            <li>Copy the bunker:// URL</li>
-                            <li>Paste it above and click Connect</li>
-                            <li>Return to nsec.app to approve the connection</li>
-                          </ol>
-                          <div className="mt-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded">
-                            <p className="text-xs text-blue-700 dark:text-blue-300">
-                              <strong>💡 Tip:</strong> The bunker:// method is often more reliable than QR codes for initial connections.
+                          {/* How-to Instructions */}
+                          <div className="bg-muted/50 rounded-lg p-4">
+                            <p className="text-xs font-semibold text-muted-foreground mb-2">
+                              How to get your bunker URL:
                             </p>
+                            <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside">
+                              <li>Open nsec.app on your device</li>
+                              <li>Go to "Connections" tab</li>
+                              <li>Tap "Create new connection"</li>
+                              <li>Copy the bunker:// URL</li>
+                              <li>Paste it above and click Connect</li>
+                              <li>Return to nsec.app to approve</li>
+                            </ol>
                           </div>
                         </div>
-                        
                       </div>
-                    )}
+                    </div>
 
-                    {/* Connection Status */}
-                    {connectionState === 'connecting' && (
-                      <div key={`connecting-${uiKey}`} className="flex items-center justify-center space-x-2 text-muted-foreground">
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        <span className="text-sm">Connecting...</span>
+                    {/* Divider */}
+                    <div className="relative max-w-md mx-auto">
+                      <div className="absolute inset-0 flex items-center">
+                        <div className="w-full border-t border-border"></div>
                       </div>
-                    )}
-                    {connectionState === 'idle' && (
-                      <div key={`idle-${uiKey}`} className="flex items-center justify-center space-x-2 text-muted-foreground">
-                        <span className="text-sm">Ready to connect</span>
+                      <div className="relative flex justify-center text-sm">
+                        <span className="px-4 bg-background text-muted-foreground">
+                          Or use QR code (Desktop only)
+                        </span>
                       </div>
-                    )}
-                    {connectionState === 'success' && (
-                      <div className="flex items-center justify-center space-x-2 text-green-600">
-                        <CheckCircle className="h-4 w-4" />
-                        <span className="text-sm">Connected successfully!</span>
-                      </div>
-                    )}
-                    {connectionState === 'error' && (
-                      <div className="space-y-3">
-                      <div className="flex items-center justify-center space-x-2 text-red-600">
-                        <AlertTriangle className="h-4 w-4" />
-                        <span className="text-sm">{error}</span>
+                    </div>
+
+                    {/* DESKTOP: QR Code - Secondary */}
+                    <div className="max-w-md mx-auto">
+                      <div className="p-6 rounded-lg border-2 border-border bg-card">
+                        <div className="flex items-center gap-2 mb-4">
+                          <Monitor className="w-5 h-5 text-muted-foreground" />
+                          <h3 className="font-semibold">Desktop Users: QR Code</h3>
                         </div>
-                        <div className="flex gap-2">
+
+                        {!connectUri ? (
                           <Button
                             onClick={() => {
-                              setConnectionState('idle')
-                              setError('')
-                              if (remoteSignerMode === 'client') {
-                                setConnectUri('')
-                              } else {
-                                setBunkerUrl('')
-                              }
+                              setRemoteSignerMode('client')
+                              handleBunkerConnect()
                             }}
                             variant="outline"
-                            size="sm"
-                            className="flex-1"
+                            className="w-full"
+                            disabled={connectionState === 'connecting'}
                           >
-                            Try Again
+                            {connectionState === 'connecting' ? (
+                              <>
+                                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                Generating...
+                              </>
+                            ) : (
+                              'Generate QR Code'
+                            )}
                           </Button>
+                        ) : (
+                          <div className="space-y-4">
+                            {/* QR Code */}
+                            {qrCodeDataUrl && (
+                              <div className="w-full bg-white rounded-xl flex items-center justify-center p-4">
+                                <img 
+                                  src={qrCodeDataUrl} 
+                                  alt="NIP-46 Connection QR Code"
+                                  className="w-48 h-48"
+                                />
+                              </div>
+                            )}
+                            <p className="text-xs text-center text-muted-foreground">
+                              Scan with nsec.app on your mobile device
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Connection Status & Errors */}
+                    {connectionState === 'connecting' && (
+                      <div className="max-w-md mx-auto text-center">
+                        <div className="flex items-center justify-center space-x-2 text-muted-foreground">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          <span className="text-sm">Waiting for approval...</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {connectionState === 'error' && error && (
+                      <div className="max-w-md mx-auto">
+                        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+                          <div className="flex items-start gap-2">
+                            <AlertTriangle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
+                            <div className="flex-1">
+                              <p className="text-sm text-red-800 dark:text-red-200 whitespace-pre-line">
+                                {error}
+                              </p>
+                              <Button
+                                onClick={() => {
+                                  setConnectionState('idle')
+                                  setError('')
+                                  setConnectUri('')
+                                  setBunkerUrl('')
+                                }}
+                                variant="outline"
+                                size="sm"
+                                className="mt-3 w-full"
+                              >
+                                Try Again
+                              </Button>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     )}
