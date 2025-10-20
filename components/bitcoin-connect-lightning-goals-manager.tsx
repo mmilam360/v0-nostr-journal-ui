@@ -385,36 +385,36 @@ function BitcoinConnectLightningGoalsManagerInner({
     if (!invoiceData || !window.webln) return
     
     console.log('[Manager] 💸 Paying invoice via Bitcoin Connect...')
+    console.log('[Manager] 🔒 SECURITY: Bitcoin Connect will ONLY trigger payment, verification via NWC only')
     
     try {
-      // SECURITY FIX: Use Bitcoin Connect as payment trigger, not verification method
-      // Bitcoin Connect should only trigger the payment, verification must happen via NWC
-      
-      // 1. Start verification polling immediately (same as QR code method)
-      console.log('[Manager] 🔍 Starting NWC verification polling for Bitcoin Connect payment...')
+      // CRITICAL SECURITY: Start verification polling FIRST, before any Bitcoin Connect interaction
+      // This ensures verification is ALWAYS running regardless of Bitcoin Connect behavior
+      console.log('[Manager] 🔍 Starting NWC verification polling IMMEDIATELY...')
       setVerificationStarted(true)
+      setScreen('verifying') // Show verifying state immediately
       startPaymentVerification(invoiceData.paymentHash, invoiceData.invoice)
       
-      // 2. Attempt to trigger payment via Bitcoin Connect (best effort)
+      // Now attempt Bitcoin Connect payment (this is just a trigger, not verification)
       try {
+        console.log('[Manager] 🔌 Attempting Bitcoin Connect payment trigger...')
         const paymentResult = await window.webln.sendPayment(invoiceData.invoice)
         console.log('[Manager] ✅ Bitcoin Connect payment triggered!', paymentResult)
-        console.log('[Manager] 🔍 Now verifying payment via NWC backend...')
+        console.log('[Manager] 🔍 Payment verification is already running via NWC...')
         
-        // Show "Verifying payment..." state
-        setScreen('verifying')
+        // Note: We do NOT trust this response - verification polling will confirm if payment was actually made
         
       } catch (weblnError) {
-        console.log('[Manager] ⚠️ Bitcoin Connect payment failed, but verification continues:', weblnError)
-        console.log('[Manager] 🔍 Showing QR code fallback while verification continues...')
+        console.log('[Manager] ⚠️ Bitcoin Connect payment failed, but NWC verification continues:', weblnError)
+        console.log('[Manager] 🔍 Showing QR code fallback while NWC verification continues...')
         
         // Show QR code as fallback if Bitcoin Connect fails
         setPaymentMethod('invoice')
         setScreen('invoice')
       }
       
-      // Note: Payment confirmation will happen via verification polling, not here
-      // This prevents the security vulnerability of trusting Bitcoin Connect responses
+      // CRITICAL: Payment confirmation will ONLY happen via verification polling success
+      // This completely prevents the security vulnerability of trusting Bitcoin Connect responses
       
     } catch (error) {
       console.error('[Manager] ❌ Bitcoin Connect payment process failed:', error)
@@ -430,6 +430,8 @@ function BitcoinConnectLightningGoalsManagerInner({
   function startPaymentVerification(paymentHash: string, invoice: string) {
     console.log('[Manager] ========================================')
     console.log('[Manager] 🔍 STARTING PAYMENT VERIFICATION')
+    console.log('[Manager] 🔒 SECURITY: This is the ONLY way payments can be confirmed')
+    console.log('[Manager] 🔒 SECURITY: Bitcoin Connect responses are NOT trusted')
     console.log('[Manager] ========================================')
     console.log('[Manager] Payment hash:', paymentHash)
     console.log('[Manager] Invoice preview:', invoice.substring(0, 50) + '...')
@@ -461,6 +463,7 @@ function BitcoinConnectLightningGoalsManagerInner({
         if (result.paid) {
           console.log('[Manager] ========================================')
           console.log('[Manager] 🎉 PAYMENT CONFIRMED!')
+          console.log('[Manager] 🔒 SECURITY: Payment verified via NWC backend - NOT Bitcoin Connect')
           console.log('[Manager] ========================================')
           console.log('[Manager] API response amount:', result.amount)
           console.log('[Manager] Invoice amount:', invoiceData?.amount)
