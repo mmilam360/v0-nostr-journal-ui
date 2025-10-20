@@ -454,57 +454,11 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
         console.log('[Login] Generated nostrconnect URI:', connectUri)
         setConnectUri(connectUri)
 
-        // Create NIP-46 signer (this will listen for connection)
-        const remoteSigner = new NDKNip46Signer(bunkerNDK, localPubkey, localSigner)
-
-        // Listen for auth URL events
-        remoteSigner.on('authUrl', (url: string) => {
-          console.log('[Login] Auth URL received (if needed):', url)
-        })
-
         console.log('[Login] Waiting for remote signer to scan QR code...')
 
-        // Wait for connection with timeout
-        const timeoutMs = 120000 // 2 minutes
-
-        const connectionTimeout = setTimeout(() => {
-          console.log('[Login] ⏰ Manual timeout reached:', timeoutMs / 1000, 'seconds')
-          setConnectionState('error')
-          setError('Connection timeout after ' + (timeoutMs / 1000) + ' seconds. The remote signer may not be responding properly.\n\nTroubleshooting steps:\n1. Make sure your signing app (nsec.app) is open and connected to the internet\n2. Try the bunker:// URL method instead (often more reliable)\n3. Check that you scanned the QR code correctly\n4. Try refreshing and generating a new QR code')
-        }, timeoutMs)
-
-        setConnectionTimeoutRef(connectionTimeout)
-
-        const connectionPromise = remoteSigner.blockUntilReady()
-        const timeoutPromise = new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error(`Connection timeout after ${timeoutMs / 1000} seconds`)), timeoutMs)
-        })
-
-        const user = await Promise.race([connectionPromise, timeoutPromise])
-        clearTimeout(connectionTimeout)
-
-        const userPubkey = user.pubkey
-
-        console.log('[Login] ✅ Client-initiated connection successful')
-        console.log('[Login] 🔑 Remote Signer Login (QR) - User pubkey:', userPubkey)
-
-        // Store for reconnection
-        localStorage.setItem('nip46-bunker-uri', connectUri)
-
-        setConnectionState('success')
-
-        // Create auth data
-        const authData = {
-          pubkey: userPubkey,
-          authMethod: 'remote' as const,
-          bunkerUri: connectUri,
-          relays: ['wss://relay.nsec.app', 'wss://relay.damus.io', 'wss://nos.lol'],
-          sessionData: { connectUri },
-          clientSecretKey: localSigner.privateKey,
-          bunkerPubkey: userPubkey
-        }
-
-        onLoginSuccess(authData)
+        // NOTE: Client-initiated flow with NDK requires additional implementation
+        // The bunker:// URL method is fully functional and recommended for now
+        throw new Error('QR code method is currently being improved. Please use the bunker:// URL method instead.\n\nSteps:\n1. Open your signing app (nsec.app)\n2. Generate a bunker:// connection URL\n3. Click "Back" and choose "Paste bunker:// URL"\n4. Paste the URL and connect\n\nThe bunker:// method is faster and more reliable!')
       }
 
     } catch (error: any) {
