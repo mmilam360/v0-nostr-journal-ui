@@ -74,10 +74,10 @@ class YakiHonneStyleRemoteSigner {
       // Generate random secret for connection (32 bytes hex-encoded)
       const secret = this.generateHexSecret(32)
       
-      // Create proper Nostr Connect URI following NIP-46 standard
-      const nostrConnectUri = this.createProperNostrConnectURI(clientPubkey, secret)
+      // Create proper Bunker URI following NIP-46 standard
+      const bunkerUri = this.createProperBunkerURI(clientPubkey, secret)
       
-      console.log('[YakiHonneRemoteSigner] ✅ Generated Nostr Connect URI:', nostrConnectUri)
+      console.log('[YakiHonneRemoteSigner] ✅ Generated Bunker URI:', bunkerUri)
       
       // Start listening for connection
       await this.listenForRemoteSigner()
@@ -85,7 +85,7 @@ class YakiHonneStyleRemoteSigner {
       // Set connection timeout
       this.setConnectionTimeout()
       
-      return nostrConnectUri
+      return bunkerUri
       
     } catch (error) {
       console.error('[YakiHonneRemoteSigner] ❌ Nostr Connect flow failed:', error)
@@ -363,16 +363,21 @@ class YakiHonneStyleRemoteSigner {
   }
 
   /**
-   * Create proper Nostr Connect URI following NIP-46 standard
-   * Format: nostrconnect://[client-pubkey]?relay=[relays]&secret=[secret]
+   * Create proper Bunker URI following NIP-46 standard
+   * Format: bunker://[client-pubkey]?relay=[relays]&secret=[secret]
    */
-  private createProperNostrConnectURI(clientPubkey: string, secret: string): string {
-    const params = new URLSearchParams({
-      relay: RELAYS.join(','),
-      secret: secret
+  private createProperBunkerURI(clientPubkey: string, secret: string): string {
+    const params = new URLSearchParams()
+    
+    // Add each relay as a separate parameter
+    RELAYS.forEach(relay => {
+      params.append('relay', relay)
     })
     
-    return `nostrconnect://${clientPubkey}?${params.toString()}`
+    // Add secret parameter
+    params.append('secret', secret)
+    
+    return `bunker://${clientPubkey}?${params.toString()}`
   }
 
   /**

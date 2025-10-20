@@ -31,6 +31,7 @@ export default function RemoteSignerLogin({ onSuccess, onCancel }: RemoteSignerL
   const [connectionState, setConnectionState] = useState<ConnectionState>('idle')
   const [connectionMethod, setConnectionMethod] = useState<ConnectionMethod>('nostrconnect')
   const [connectionUrl, setConnectionUrl] = useState<string>('')
+  const [bunkerUrlInput, setBunkerUrlInput] = useState<string>('')
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>('')
   const [error, setError] = useState<string>('')
   const [copied, setCopied] = useState<boolean>(false)
@@ -130,10 +131,34 @@ export default function RemoteSignerLogin({ onSuccess, onCancel }: RemoteSignerL
     }
   }
 
-  const retryConnection = () => {
-    setError('')
-    setConnectionState('idle')
-    generateConnectionUrl()
+  const handleBunkerUrlSubmit = async () => {
+    if (!bunkerUrlInput.trim()) {
+      setError('Please enter a bunker URL')
+      return
+    }
+
+    try {
+      setConnectionState('generating')
+      setError('')
+      
+      console.log('[RemoteSignerLogin] 🚀 Processing bunker URL:', bunkerUrlInput)
+      
+      // Set the connection URL to the bunker URL for display
+      setConnectionUrl(bunkerUrlInput)
+      
+      // Generate QR code for the bunker URL
+      await generateQRCode(bunkerUrlInput)
+      
+      setConnectionState('waiting')
+      
+      // Listen for connection
+      listenForConnection()
+      
+    } catch (error) {
+      console.error('[RemoteSignerLogin] ❌ Failed to process bunker URL:', error)
+      setError(error.message || 'Failed to process bunker URL')
+      setConnectionState('error')
+    }
   }
 
   return (
@@ -261,6 +286,69 @@ export default function RemoteSignerLogin({ onSuccess, onCancel }: RemoteSignerL
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
                   You have 5 minutes to complete the connection
                 </p>
+              </div>
+            </div>
+          )}
+
+          {/* Bunker URL Input Mode */}
+          {connectionMethod === 'bunker' && connectionState === 'idle' && (
+            <div className="space-y-6">
+              {/* Connection Method Selection */}
+              <div className="flex gap-2 p-1 bg-gray-100 dark:bg-gray-700 rounded-lg">
+                <Button
+                  onClick={() => setConnectionMethod('nostrconnect')}
+                  variant={connectionMethod === 'nostrconnect' ? 'default' : 'ghost'}
+                  size="sm"
+                  className="flex-1"
+                >
+                  <Link className="w-4 h-4 mr-2" />
+                  Nostr Connect
+                </Button>
+                <Button
+                  onClick={() => setConnectionMethod('bunker')}
+                  variant={connectionMethod === 'bunker' ? 'default' : 'ghost'}
+                  size="sm"
+                  className="flex-1"
+                >
+                  <QrCode className="w-4 h-4 mr-2" />
+                  Bunker
+                </Button>
+              </div>
+
+              {/* Instructions */}
+              <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
+                <h3 className="font-semibold text-blue-900 dark:text-blue-100 mb-2">
+                  📱 Bunker Connection Steps:
+                </h3>
+                <ol className="text-sm text-blue-800 dark:text-blue-200 space-y-1 list-decimal list-inside">
+                  <li>Open your remote signer app (nsec.app, etc.)</li>
+                  <li>Generate a bunker URL from your app</li>
+                  <li>Paste the bunker URL in the input below</li>
+                  <li>Click Connect to establish connection</li>
+                </ol>
+              </div>
+
+              {/* Bunker URL Input */}
+              <div className="space-y-3">
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Bunker URL from Remote Signer App:
+                </label>
+                <div className="space-y-2">
+                  <input
+                    type="text"
+                    value={bunkerUrlInput}
+                    onChange={(e) => setBunkerUrlInput(e.target.value)}
+                    placeholder="bunker://..."
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm font-mono"
+                  />
+                  <Button
+                    onClick={handleBunkerUrlSubmit}
+                    className="w-full"
+                    disabled={!bunkerUrlInput.trim()}
+                  >
+                    Connect with Bunker URL
+                  </Button>
+                </div>
               </div>
             </div>
           )}
