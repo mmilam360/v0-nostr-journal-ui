@@ -4,6 +4,7 @@
  */
 
 import { BunkerSigner } from 'nostr-tools/nip46'
+import { SimplePool } from 'nostr-tools/pool'
 
 let activeSigner: BunkerSigner | null = null
 
@@ -185,28 +186,42 @@ export async function startClientInitiatedFlow(
     // Generate secret for this connection
     const secret = generateRandomString(16)
     
-    // Create connect URI
+    // Create connect URI using the correct nostr-tools v2 API
     const { createNostrConnectURI } = await import('nostr-tools/nip46')
     const connectUri = createNostrConnectURI({
-      clientPubkey,  // Fixed: was localPubkey
+      clientPubkey,
       secret,
       relays: [primaryRelay],
-      ...clientMetadata
+      name: clientMetadata.name,
+      description: clientMetadata.description
     })
     
-    // Create signer instance
-    const signer = new BunkerSigner(secretKey, primaryRelay, clientMetadata)
+    console.log('[SignerConnector] Generated connect URI:', connectUri)
+    
+    // Use the correct BunkerSigner.fromURI method instead of manual initialization
+    const { BunkerSigner } = await import('nostr-tools/nip46')
     
     const result = {
       connectUri,
-      established: signer.connect().then(async () => ({
-        signer,
-        session: {
-          sessionKey: secretKey,
-          remotePubkey: await signer.getPublicKey(),
-          relayUrls: [primaryRelay]
+      established: BunkerSigner.fromURI(connectUri, { 
+        pool: new SimplePool(),
+        timeout: timeoutMs 
+      }).then(async (signer) => {
+        console.log('[SignerConnector] ✅ BunkerSigner.fromURI successful')
+        
+        // Test the connection by getting public key
+        const remotePubkey = await signer.getPublicKey()
+        console.log('[SignerConnector] ✅ Got remote pubkey:', remotePubkey)
+        
+        return {
+          signer,
+          session: {
+            sessionKey: secretKey,
+            remotePubkey: remotePubkey,
+            relayUrls: [primaryRelay]
+          }
         }
-      }))
+      })
     }
     
     console.log("[SignerConnector] Generated connect URI:", result.connectUri)
