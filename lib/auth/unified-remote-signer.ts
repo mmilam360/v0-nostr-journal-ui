@@ -61,10 +61,10 @@ class UnifiedRemoteSigner {
   }
 
   /**
-   * Start bunker URL flow - generates bunker:// URL for mobile connection
+   * Start Nostr Connect URL flow - generates nostrconnect:// URL for mobile connection
    */
-  async startBunkerUrlFlow(): Promise<string> {
-    console.log('[UnifiedRemoteSigner] 🚀 Starting bunker URL flow...')
+  async startNostrConnectFlow(): Promise<string> {
+    console.log('[UnifiedRemoteSigner] 🚀 Starting Nostr Connect URL flow...')
     
     try {
       this.setConnectionState('connecting')
@@ -73,21 +73,18 @@ class UnifiedRemoteSigner {
       const clientSecretKey = generateSecretKey()
       const clientPubkey = getPublicKeyFromSecret(clientSecretKey)
       
-      // Generate random secret for connection
-      const secret = this.generateRandomString(32)
+      // Create Nostr Connect URL
+      const nostrConnectUrl = this.createNostrConnectUrl(clientPubkey)
       
-      // Create bunker URL
-      const bunkerUrl = this.createBunkerUrl(clientPubkey, secret)
-      
-      console.log('[UnifiedRemoteSigner] ✅ Generated bunker URL:', bunkerUrl)
+      console.log('[UnifiedRemoteSigner] ✅ Generated Nostr Connect URL:', nostrConnectUrl)
       
       // Start listening for connection
       await this.listenForRemoteSigner(clientSecretKey)
       
-      return bunkerUrl
+      return nostrConnectUrl
       
     } catch (error) {
-      console.error('[UnifiedRemoteSigner] ❌ Bunker URL flow failed:', error)
+      console.error('[UnifiedRemoteSigner] ❌ Nostr Connect flow failed:', error)
       this.setConnectionState('error', error.message)
       throw error
     }
@@ -321,14 +318,13 @@ class UnifiedRemoteSigner {
     })
   }
 
-  private createBunkerUrl(clientPubkey: string, secret: string): string {
+  private createNostrConnectUrl(clientPubkey: string): string {
     const params = new URLSearchParams({
       relay: BUNKER_RELAYS.join(','),
-      secret,
       pubkey: clientPubkey
     })
     
-    return `bunker://${clientPubkey}?${params.toString()}`
+    return `nostrconnect://${clientPubkey}?${params.toString()}`
   }
 
   private generateRandomString(length: number): string {
@@ -372,10 +368,13 @@ class UnifiedRemoteSigner {
 export const remoteSigner = new UnifiedRemoteSigner()
 
 // Export individual functions for compatibility
-export const startBunkerUrlFlow = () => remoteSigner.startBunkerUrlFlow()
+export const startNostrConnectFlow = () => remoteSigner.startNostrConnectFlow()
 export const signEvent = (event: any) => remoteSigner.signEvent(event)
 export const getPublicKey = () => remoteSigner.getPublicKey()
 export const isConnected = () => remoteSigner.isConnected()
 export const resumeSession = () => remoteSigner.resumeSession()
 export const clearSession = () => remoteSigner.clearSession()
 export const disconnect = () => remoteSigner.clearSession()
+
+// Legacy export for backward compatibility
+export const startBunkerUrlFlow = () => remoteSigner.startNostrConnectFlow()

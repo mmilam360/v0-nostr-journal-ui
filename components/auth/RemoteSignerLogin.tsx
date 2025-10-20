@@ -29,31 +29,31 @@ export default function RemoteSignerLogin({ onSuccess, onCancel }: RemoteSignerL
   const [error, setError] = useState<string>('')
   const [copied, setCopied] = useState<boolean>(false)
 
-  // Generate bunker URL when component mounts
+  // Generate Nostr Connect URL when component mounts
   useEffect(() => {
-    generateBunkerUrl()
+    generateNostrConnectUrl()
   }, [])
 
-  const generateBunkerUrl = async () => {
+  const generateNostrConnectUrl = async () => {
     try {
       setConnectionState('generating')
       setError('')
       
-      console.log('[RemoteSignerLogin] 🚀 Generating bunker URL...')
+      console.log('[RemoteSignerLogin] 🚀 Generating Nostr Connect URL...')
       
-      const { startBunkerUrlFlow } = await import('@/lib/auth/unified-remote-signer')
-      const url = await startBunkerUrlFlow()
+      const { startNostrConnectFlow } = await import('@/lib/auth/unified-remote-signer')
+      const url = await startNostrConnectFlow()
       
       setBunkerUrl(url)
       setConnectionState('waiting')
       
-      console.log('[RemoteSignerLogin] ✅ Bunker URL generated:', url)
+      console.log('[RemoteSignerLogin] ✅ Nostr Connect URL generated:', url)
       
       // Listen for connection
       listenForConnection()
       
     } catch (error) {
-      console.error('[RemoteSignerLogin] ❌ Failed to generate bunker URL:', error)
+      console.error('[RemoteSignerLogin] ❌ Failed to generate Nostr Connect URL:', error)
       setError(error.message || 'Failed to generate connection URL')
       setConnectionState('error')
     }
@@ -107,7 +107,7 @@ export default function RemoteSignerLogin({ onSuccess, onCancel }: RemoteSignerL
   const retryConnection = () => {
     setError('')
     setConnectionState('idle')
-    generateBunkerUrl()
+    generateNostrConnectUrl()
   }
 
   return (
@@ -149,17 +149,17 @@ export default function RemoteSignerLogin({ onSuccess, onCancel }: RemoteSignerL
                   📱 Connection Steps:
                 </h3>
                 <ol className="text-sm text-blue-800 dark:text-blue-200 space-y-1 list-decimal list-inside">
-                  <li>Copy the connection URL below</li>
+                  <li>Copy the Nostr Connect URL below</li>
                   <li>Open nsec.app on your mobile device</li>
                   <li>Paste the URL and approve the connection</li>
                   <li>Return to this page</li>
                 </ol>
               </div>
 
-              {/* Bunker URL Display */}
+              {/* Nostr Connect URL Display */}
               <div className="space-y-3">
                 <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Connection URL:
+                  Nostr Connect URL:
                 </label>
                 <div className="flex gap-2">
                   <input
