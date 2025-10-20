@@ -46,7 +46,6 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
   const [connectionState, setConnectionState] = useState<'idle' | 'connecting' | 'success' | 'error'>('idle')
   const [error, setError] = useState('')
   const [nsecInput, setNsecInput] = useState('')
-  const [showRemoteSignerLogin, setShowRemoteSignerLogin] = useState(false)
   const [showNsec, setShowNsec] = useState(false)
   
   // Mobile detection for mobile-specific fixes
@@ -333,11 +332,6 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
     }
   }
 
-  const handleRemoteSignerClick = () => {
-    console.log('[Login] 🚀 Starting remote signer login...')
-    setShowRemoteSignerLogin(true)
-  }
-
   const renderStepContent = () => {
     switch (currentStep) {
       case 'choose':
@@ -545,6 +539,19 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
         }
 
       case 'connect':
+        // For remote signer, automatically show the RemoteSignerLogin component
+        if (selectedMethod === 'remote') {
+          return (
+            <RemoteSignerLogin
+              onSuccess={handleRemoteSignerSuccess}
+              onCancel={() => {
+                setCurrentStep('choose')
+                setSelectedMethod(null)
+              }}
+            />
+          )
+        }
+
         if (selectedPath === 'new' && generatedKeys) {
           return (
             <div className="space-y-8">
@@ -664,27 +671,6 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                   </div>
                 )}
 
-                {selectedMethod === 'remote' && (
-                  <div className="space-y-6">
-                    <div className="text-center">
-                      <h2 className="text-3xl font-bold text-foreground mb-2">
-                        Connect Remote Signer
-                      </h2>
-                      <p className="text-muted-foreground">Use your mobile Nostr app to sign in securely</p>
-                    </div>
-
-                    <div className="max-w-md mx-auto">
-                        <Button
-                        onClick={handleRemoteSignerClick}
-                        className="w-full bg-primary hover:bg-primary/90 py-6 text-base font-semibold"
-                      >
-                        <Smartphone className="h-5 w-5 mr-2" />
-                        Login with Remote Signer
-                        </Button>
-                    </div>
-                  </div>
-                )}
-
                 {selectedMethod === 'nsec' && (
                   <div className="space-y-4">
                     <p className="text-sm text-muted-foreground text-center">
@@ -774,13 +760,6 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
   }
 
   return (
-    <>
-      {showRemoteSignerLogin ? (
-        <RemoteSignerLogin
-          onSuccess={handleRemoteSignerSuccess}
-          onCancel={() => setShowRemoteSignerLogin(false)}
-        />
-      ) : (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <div className="w-full max-w-4xl">
         <div className="bg-card rounded-xl border p-4 sm:p-8 min-h-[400px] sm:min-h-[500px] relative overflow-hidden flex flex-col justify-center">
@@ -807,7 +786,5 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
         <InfoModal onClose={() => setShowInfo(false)} />
       )}
     </div>
-      )}
-    </>
   )
 }

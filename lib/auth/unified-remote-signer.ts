@@ -103,28 +103,12 @@ class UnifiedRemoteSigner {
       // Create relay connections
       this.relayConnections = new SimplePool()
       
-      // Connect to bunker relays
-      const connectedRelays = []
-      for (const relayUrl of BUNKER_RELAYS) {
-        try {
-          const relay = await this.relayConnections.ensureRelay(relayUrl)
-          connectedRelays.push(relay)
-          console.log(`[UnifiedRemoteSigner] ✅ Connected to ${relayUrl}`)
-        } catch (error) {
-          console.warn(`[UnifiedRemoteSigner] ⚠️ Failed to connect to ${relayUrl}:`, error)
-        }
-      }
-      
-      if (connectedRelays.length === 0) {
-        throw new Error('Failed to connect to any relays')
-      }
-      
       const localPubkey = getPublicKeyFromSecret(localSecretKey)
       console.log('[UnifiedRemoteSigner] 📡 Listening on pubkey:', localPubkey)
       
-      // Subscribe to NIP-46 events
+      // Subscribe to NIP-46 events using relay URLs directly
       const sub = this.relayConnections.subscribe(
-        connectedRelays,
+        BUNKER_RELAYS,
         [{ kinds: [24133], authors: [localPubkey] }],
         {
           onevent: async (event) => {
@@ -186,12 +170,11 @@ class UnifiedRemoteSigner {
       
       // Create BunkerSigner instance
       this.activeSigner = new BunkerSigner(localSecretKey, {
-        pool: this.relayConnections!,
         permissions: DEFAULT_PERMISSIONS
       })
       
-      // Connect to remote signer
-      await this.activeSigner.connect(remotePubkey)
+      // Connect to remote signer using the pool
+      await this.activeSigner.connect(remotePubkey, this.relayConnections!)
       
       console.log('[UnifiedRemoteSigner] ✅ Connected to remote signer')
       
