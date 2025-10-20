@@ -198,16 +198,33 @@ export async function startClientInitiatedFlow(
     
     console.log('[SignerConnector] Generated connect URI:', connectUri)
     
-    // Create signer instance manually and use the connect method
+    // Create signer instance using the correct nostr-tools v2 API
     const { BunkerSigner } = await import('nostr-tools/nip46')
     
-    // Create the signer with proper parameters
-    const signer = new BunkerSigner(secretKey, [primaryRelay], {
-      name: clientMetadata.name,
-      description: clientMetadata.description
-    })
+    // Try using BunkerSigner.fromBunker if available, otherwise use constructor
+    let signer
+    try {
+      // First try the fromBunker method (if it exists)
+      if (BunkerSigner.fromBunker) {
+        console.log('[SignerConnector] Using BunkerSigner.fromBunker method')
+        signer = await BunkerSigner.fromBunker(secretKey, primaryRelay, {
+          name: clientMetadata.name,
+          description: clientMetadata.description
+        })
+      } else {
+        // Fallback to constructor
+        console.log('[SignerConnector] Using BunkerSigner constructor')
+        signer = new BunkerSigner(secretKey, [primaryRelay], {
+          name: clientMetadata.name,
+          description: clientMetadata.description
+        })
+      }
+    } catch (error) {
+      console.error('[SignerConnector] Error creating BunkerSigner:', error)
+      throw error
+    }
     
-    console.log('[SignerConnector] Created BunkerSigner instance')
+    console.log('[SignerConnector] Created BunkerSigner instance with relay:', primaryRelay)
     
     const result = {
       connectUri,
