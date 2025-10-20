@@ -21,8 +21,8 @@ import { generateSecretKey, getPublicKey, nip19 } from 'nostr-tools'
 import { bytesToHex } from '@noble/hashes/utils'
 import { QRCodeSVG } from 'qrcode.react'
 import { Logo } from './logo'
-import { Nip46RemoteSigner } from 'nostr-signer-connector'
 import InfoModal from './info-modal'
+import NDK, { NDKNip46Signer, NDKPrivateKeySigner } from '@nostr-dev-kit/ndk'
 
 interface LoginPageHorizontalProps {
   onLoginSuccess: (data: any) => void
@@ -343,195 +343,167 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
 
     try {
       if (remoteSignerMode === 'signer') {
-        // ============ SIGNER-INITIATED FLOW (Paste bunker:// URL) ============
-        console.log('[Login] Signer-initiated: Connecting with bunker URL...')
-        
+        // ============ SIGNER-INITIATED FLOW (Paste bunker:// URL) - Now using NDK ============
+        console.log('[Login] Signer-initiated: Connecting with bunker URL using NDK...')
+
         const input = bunkerUrl.trim()
-        
+
         if (!input) {
           throw new Error('Please enter a bunker URL')
         }
-        
+
         if (!input.startsWith('bunker://')) {
           throw new Error('Invalid bunker URL. Must start with bunker://')
         }
-        
-        // Use the correct API from signer-connector
-        const { connectNip46, setActiveSigner } = await import('@/lib/signer-connector')
-        
-        // Mobile-specific: Add longer timeout for mobile connections
-        if (isMobile) {
-          console.log('[Login] 📱 Mobile detected - using extended timeout for bunker connection')
-        }
-        
-        const result = await connectNip46(input)
-        
-        if (!result.success || !result.signer || !result.session) {
-          throw new Error(result.error || 'Failed to connect')
-        }
-        
-        console.log('[Login] ✅ Signer-initiated connection successful')
-        
-        // Get user pubkey
-        const userPubkey = await result.signer.getPublicKey()
-        console.log('[Login] 🔑 Remote Signer Login (Bunker) - User pubkey:', userPubkey)
-        
-        // Set active signer
-        setActiveSigner(result.signer)
-        
-        // Store session for reconnection
-        const sessionData = result.session
-        localStorage.setItem('nostr_remote_session', JSON.stringify(sessionData))
-        
-      setConnectionState('success')
 
-        // Extract required fields for main app validation
-        const clientSecretKey = sessionData.sessionKey // This is the session key from NIP-46
-        const bunkerPubkey = sessionData.remotePubkey // This is the remote signer's pubkey
-        
-        console.log('[Login] Session data fields:', {
-          sessionKey: clientSecretKey,
-          remotePubkey: bunkerPubkey,
-          relayUrls: sessionData.relayUrls
+        // Create bunker NDK instance
+        const bunkerNDK = new NDK({
+          explicitRelayUrls: [
+            'wss://relay.nsec.app',
+            'wss://relay.damus.io',
+            'wss://nos.lol',
+          ],
         })
-        
-        // Create auth data with all required fields
+
+        await bunkerNDK.connect()
+        console.log('[Login] Bunker NDK connected')
+
+        // Get or create local signer
+        const localSignerKey = localStorage.getItem('nip46-local-key')
+        const localSigner = localSignerKey
+          ? new NDKPrivateKeySigner(localSignerKey)
+          : NDKPrivateKeySigner.generate()
+
+        if (!localSignerKey) {
+          localStorage.setItem('nip46-local-key', localSigner.privateKey!)
+        }
+
+        // Create NIP-46 signer
+        const remoteSigner = new NDKNip46Signer(bunkerNDK, input, localSigner)
+
+        console.log('[Login] Waiting for remote signer to be ready...')
+        const user = await remoteSigner.blockUntilReady()
+        const userPubkey = user.pubkey
+
+        console.log('[Login] ✅ Signer-initiated connection successful')
+        console.log('[Login] 🔑 Remote Signer Login (Bunker) - User pubkey:', userPubkey)
+
+        // Store for reconnection
+        localStorage.setItem('nip46-bunker-uri', input)
+
+        setConnectionState('success')
+
+        // Create auth data
         const authData = {
           pubkey: userPubkey,
           authMethod: 'remote' as const,
           bunkerUri: input,
-          relays: sessionData.relayUrls || ['wss://relay.nsec.app', 'wss://relay.damus.io', 'wss://nos.lol'],
-          sessionData: sessionData,
-          clientSecretKey: clientSecretKey, // Required by main app validation
-          bunkerPubkey: bunkerPubkey // Required by main app validation
+          relays: ['wss://relay.nsec.app', 'wss://relay.damus.io', 'wss://nos.lol'],
+          sessionData: { bunkerUri: input },
+          clientSecretKey: localSigner.privateKey,
+          bunkerPubkey: userPubkey
         }
-        
+
         console.log('[Login] ✅ Bunker connection successful!')
         console.log('[Login] Auth data being passed to main app:', {
           pubkey: authData.pubkey,
           authMethod: authData.authMethod,
-          bunkerUri: authData.bunkerUri,
-          relays: authData.relays,
-          hasSessionData: !!authData.sessionData
+          bunkerUri: authData.bunkerUri
         })
-        
+
         try {
           onLoginSuccess(authData)
           console.log('[Login] ✅ onLoginSuccess called successfully')
-    } catch (error) {
+        } catch (error) {
           console.error('[Login] ❌ Error calling onLoginSuccess:', error)
           throw error
         }
 
       } else {
-        // ============ CLIENT-INITIATED FLOW (Generate QR Code) ============
-        console.log('[Login] Client-initiated: Generating nostrconnect URI...')
-        
-        const clientMetadata = {
-          name: 'Nostr Journal',
-          description: 'Private journaling on Nostr'
-          // Removed url to avoid potential encoding issues
+        // ============ CLIENT-INITIATED FLOW (Generate QR Code) - Now using NDK ============
+        console.log('[Login] Client-initiated: Generating nostrconnect URI using NDK...')
+
+        // Create bunker NDK instance
+        const bunkerNDK = new NDK({
+          explicitRelayUrls: [
+            'wss://relay.nsec.app',
+            'wss://relay.damus.io',
+            'wss://nos.lol',
+          ],
+        })
+
+        await bunkerNDK.connect()
+        console.log('[Login] Bunker NDK connected')
+
+        // Get or create local signer
+        const localSignerKey = localStorage.getItem('nip46-local-key')
+        const localSigner = localSignerKey
+          ? new NDKPrivateKeySigner(localSignerKey)
+          : NDKPrivateKeySigner.generate()
+
+        if (!localSignerKey) {
+          localStorage.setItem('nip46-local-key', localSigner.privateKey!)
         }
 
-        // Use nsec.app relay for better compatibility with nsec.app
-        const relays = [
-          'wss://relay.nsec.app', // Primary relay for nsec.app compatibility
-          'wss://relay.damus.io', // Fallback relay
-          'wss://nos.lol' // Additional fallback
-        ]
-        
-        // Import and use the correct API
-        const { startClientInitiatedFlow, setActiveSigner } = await import('@/lib/signer-connector')
-        
-        // Start listening for connection
-        const { connectUri, established } = startClientInitiatedFlow(relays, clientMetadata)
-        
+        const localUser = await localSigner.user()
+        const localPubkey = localUser.pubkey
+
+        // Create the nostrconnect:// URI
+        const connectUri = `nostrconnect://${localPubkey}?relay=wss://relay.nsec.app&metadata=${encodeURIComponent(JSON.stringify({ name: 'Nostr Journal', description: 'Private journaling on Nostr' }))}`
+
         console.log('[Login] Generated nostrconnect URI:', connectUri)
         setConnectUri(connectUri)
-        
-        // Wait for connection with better timeout handling
-        console.log('[Login] Waiting for remote signer to scan and connect...')
-        console.log('[Login] Promise state:', established)
-        
-        console.log('[Login] 🔍 About to await established promise...')
-        console.log('[Login] 🔍 Promise state:', established)
-        
-        // Add a manual timeout to provide better error handling
-        // Standard timeout for all users
+
+        // Create NIP-46 signer (this will listen for connection)
+        const remoteSigner = new NDKNip46Signer(bunkerNDK, localPubkey, localSigner)
+
+        // Listen for auth URL events
+        remoteSigner.on('authUrl', (url: string) => {
+          console.log('[Login] Auth URL received (if needed):', url)
+        })
+
+        console.log('[Login] Waiting for remote signer to scan QR code...')
+
+        // Wait for connection with timeout
         const timeoutMs = 120000 // 2 minutes
-        
+
         const connectionTimeout = setTimeout(() => {
           console.log('[Login] ⏰ Manual timeout reached:', timeoutMs / 1000, 'seconds')
-          console.log('[Login] 🔍 Debugging info:')
-          console.log('[Login] - Connection state:', connectionState)
-          console.log('[Login] - Connect URI:', connectUri)
-          console.log('[Login] - Promise state:', established)
-          
-      setConnectionState('error')
-          setError('Connection timeout after ' + (timeoutMs / 1000) + ' seconds. The remote signer may not be responding properly.\n\nTroubleshooting steps:\n1. Make sure your signing app (nsec.app) is open and connected to the internet\n2. Try the bunker:// URL method instead (often more reliable)\n3. Check that you scanned the QR code correctly\n4. Try refreshing and generating a new QR code\n5. Check browser console for detailed error logs')
+          setConnectionState('error')
+          setError('Connection timeout after ' + (timeoutMs / 1000) + ' seconds. The remote signer may not be responding properly.\n\nTroubleshooting steps:\n1. Make sure your signing app (nsec.app) is open and connected to the internet\n2. Try the bunker:// URL method instead (often more reliable)\n3. Check that you scanned the QR code correctly\n4. Try refreshing and generating a new QR code')
         }, timeoutMs)
-        
-        // Store timeout reference for mobile acknowledgment
+
         setConnectionTimeoutRef(connectionTimeout)
-        
-        const { signer, session } = await established.then(
-          (result) => {
-            clearTimeout(connectionTimeout)
-            console.log('[Login] ✅ Client-initiated connection successful')
-            console.log('[Login] Signer:', result.signer)
-            console.log('[Login] Session:', result.session)
-            console.log('[Login] Session type check:', {
-              hasSessionKey: !!result.session?.sessionKey,
-              hasRemotePubkey: !!result.session?.remotePubkey,
-              hasRelayUrls: !!result.session?.relayUrls
-            })
-            return result
-          },
-          (error) => {
-            clearTimeout(connectionTimeout)
-            console.error('[Login] ❌ Connection promise rejected:', error)
-            console.error('[Login] ❌ Error details:', {
-              name: error.name,
-              message: error.message,
-              stack: error.stack
-            })
-            throw error
-          }
-        )
-        
-        // Get user pubkey
-        const userPubkey = await signer.getPublicKey()
-        console.log('[Login] 🔑 Remote Signer Login (QR) - User pubkey:', userPubkey)
-        
-        // Set active signer
-        setActiveSigner(signer)
-        
-        // Store session for reconnection
-        localStorage.setItem('nostr_remote_session', JSON.stringify(session))
-        
-        setConnectionState('success')
-        
-        // Extract required fields for main app validation
-        const clientSecretKey = session.sessionKey // This is the session key from NIP-46
-        const bunkerPubkey = session.remotePubkey // This is the remote signer's pubkey
-        
-        console.log('[Login] Session data fields:', {
-          sessionKey: clientSecretKey,
-          remotePubkey: bunkerPubkey,
-          relayUrls: session.relayUrls
+
+        const connectionPromise = remoteSigner.blockUntilReady()
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error(`Connection timeout after ${timeoutMs / 1000} seconds`)), timeoutMs)
         })
-        
-        // Create auth data with all required fields
+
+        const user = await Promise.race([connectionPromise, timeoutPromise])
+        clearTimeout(connectionTimeout)
+
+        const userPubkey = user.pubkey
+
+        console.log('[Login] ✅ Client-initiated connection successful')
+        console.log('[Login] 🔑 Remote Signer Login (QR) - User pubkey:', userPubkey)
+
+        // Store for reconnection
+        localStorage.setItem('nip46-bunker-uri', connectUri)
+
+        setConnectionState('success')
+
+        // Create auth data
         const authData = {
           pubkey: userPubkey,
           authMethod: 'remote' as const,
           bunkerUri: connectUri,
-          relays: session.relayUrls || relays,
-          sessionData: session,
-          clientSecretKey: clientSecretKey, // Required by main app validation
-          bunkerPubkey: bunkerPubkey // Required by main app validation
+          relays: ['wss://relay.nsec.app', 'wss://relay.damus.io', 'wss://nos.lol'],
+          sessionData: { connectUri },
+          clientSecretKey: localSigner.privateKey,
+          bunkerPubkey: userPubkey
         }
-        
+
         onLoginSuccess(authData)
       }
 
