@@ -7,6 +7,19 @@ import { BunkerSigner } from 'nostr-tools/nip46'
 
 let activeSigner: BunkerSigner | null = null
 
+// Helper function to generate random secret string
+function generateRandomString(length: number): string {
+  const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+  let result = ''
+  const randomValues = new Uint8Array(length)
+  crypto.getRandomValues(randomValues)
+  
+  for (let i = 0; i < length; i++) {
+    result += chars[randomValues[i] % chars.length]
+  }
+  return result
+}
+
 export function getActiveSigner() {
   return activeSigner
 }
@@ -167,13 +180,17 @@ export async function startClientInitiatedFlow(
     // Generate client keypair for new BunkerSigner
     const { generateSecretKey, getPublicKey } = await import('nostr-tools/pure')
     const secretKey = generateSecretKey()
-    const localPubkey = getPublicKey(secretKey)
+    const clientPubkey = getPublicKey(secretKey)
+    
+    // Generate secret for this connection
+    const secret = generateRandomString(16)
     
     // Create connect URI
     const { createNostrConnectURI } = await import('nostr-tools/nip46')
     const connectUri = createNostrConnectURI({
-      localPubkey,
-      relay: primaryRelay,
+      clientPubkey,  // Fixed: was localPubkey
+      secret,
+      relays: [primaryRelay],
       ...clientMetadata
     })
     
