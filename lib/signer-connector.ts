@@ -208,47 +208,28 @@ export async function startClientInitiatedFlow(
     // Create signer instance using the correct nostr-tools v2 API
     const { BunkerSigner } = await import('nostr-tools/nip46')
     
-    // Try using BunkerSigner.fromBunker if available, otherwise use constructor
+    // Since we're generating a nostrconnect URI, use fromURI method
     let signer
     try {
-      // First try the fromBunker method (if it exists)
-      if (BunkerSigner.fromBunker) {
-        console.log('[SignerConnector] Using BunkerSigner.fromBunker method')
-        signer = await BunkerSigner.fromBunker(secretKey, primaryRelay, {
-          name: clientMetadata.name,
-          description: clientMetadata.description
-        })
-      } else {
-        // Fallback to constructor
-        console.log('[SignerConnector] Using BunkerSigner constructor')
-        signer = new BunkerSigner(secretKey, [primaryRelay], {
-          name: clientMetadata.name,
-          description: clientMetadata.description
-        })
-      }
+      console.log('[SignerConnector] Using BunkerSigner.fromURI for nostrconnect flow')
+      signer = await BunkerSigner.fromURI(secretKey, connectUri, {
+        pool: new SimplePool()
+      })
     } catch (error) {
       console.error('[SignerConnector] Error creating BunkerSigner:', error)
       throw error
     }
     
-    console.log('[SignerConnector] Created BunkerSigner instance with relay:', primaryRelay)
+    console.log('[SignerConnector] Created BunkerSigner instance successfully')
     
     const result = {
       connectUri,
-      established: signer.connect().then(async () => {
-        console.log('[SignerConnector] ✅ BunkerSigner.connect() successful')
-        
-        // Test the connection by getting public key
-        const remotePubkey = await signer.getPublicKey()
-        console.log('[SignerConnector] ✅ Got remote pubkey:', remotePubkey)
-        
-        return {
-          signer,
-          session: {
-            sessionKey: secretKey,
-            remotePubkey: remotePubkey,
-            relayUrls: [primaryRelay]
-          }
+      established: Promise.resolve({
+        signer,
+        session: {
+          sessionKey: secretKey,
+          remotePubkey: await signer.getPublicKey(),
+          relayUrls: [primaryRelay]
         }
       })
     }

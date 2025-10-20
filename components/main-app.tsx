@@ -2070,56 +2070,67 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
           </div>
         </div>
 
-          {/* Mobile Editor Overlay */}
+          {/* Mobile Editor Overlay - MAXIMIZED FOR MOBILE */}
         {selectedNote && (
-            <div className="fixed inset-0 z-40 lg:hidden bg-background">
-              <div className="h-full flex flex-col">
-                {!focusMode && (
-                  <div className="bg-card border-b border-border px-4 py-3 flex items-center justify-between shadow-sm">
-                    <h2 className="text-foreground font-medium truncate">{selectedNote.title}</h2>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        onClick={() => setFocusMode(true)}
-                        variant="ghost"
-                        size="sm"
-                        className="text-muted-foreground hover:text-foreground"
-                        title="Focus Mode"
-                      >
-                        <Zap className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        onClick={() => setSelectedNote(null)}
-                        variant="ghost"
-                        size="sm"
-                        className="text-muted-foreground hover:text-foreground"
-                      >
-                        <X className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </div>
-                )}
-                <div className="flex-1 overflow-hidden">
-              <Editor
-                note={selectedNote}
-                onUpdateNote={handleUpdateNote}
-                onPublishNote={handlePublishNote}
-                onPublishHighlight={handlePublishHighlight}
-                onDeleteNote={handleDeleteNote}
-                    authData={authData}
-              />
-                </div>
-
-                {/* Floating exit button (only in focus mode) */}
-                {focusMode && (
-                  <button
-                    onClick={() => setFocusMode(false)}
-                    className="fixed bottom-4 right-4 h-12 w-12 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center z-50"
+            <div className="fixed inset-0 z-40 lg:hidden bg-background mobile-editor-overlay" style={{ height: '100vh' }}>
+              {/* Compact header - MINIMIZE THIS */}
+              <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-card">
+                <h2 className="text-sm font-medium truncate flex-1">{selectedNote.title}</h2>
+                <div className="flex items-center gap-1">
+                  {!focusMode && (
+                    <Button
+                      onClick={() => setFocusMode(true)}
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 px-2"
+                      title="Focus Mode"
+                    >
+                      <Zap className="w-4 h-4" />
+                    </Button>
+                  )}
+                  <Button
+                    onClick={() => setSelectedNote(null)}
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 w-8 p-0 ml-2"
                   >
-                    <X className="w-5 h-5" />
-                  </button>
-                )}
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+
+              {/* Editor container - MAXIMIZE THIS */}
+              <div 
+                className="absolute inset-0 mobile-editor-content"
+                style={{ 
+                  top: '42px',
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  overflow: 'auto'
+                }}
+              >
+                <Editor
+                  note={selectedNote}
+                  onUpdateNote={handleUpdateNote}
+                  onPublishNote={handlePublishNote}
+                  onPublishHighlight={handlePublishHighlight}
+                  onDeleteNote={handleDeleteNote}
+                  authData={authData}
+                  isMobile={true}
+                />
+              </div>
+
+              {/* Floating exit button (only in focus mode) */}
+              {focusMode && (
+                <button
+                  onClick={() => setFocusMode(false)}
+                  className="fixed bottom-4 right-4 h-12 w-12 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center z-50"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              )}
             </div>
-          </div>
         )}
         </div>
 

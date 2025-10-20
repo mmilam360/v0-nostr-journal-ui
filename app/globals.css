@@ -371,3 +371,25 @@ button {
 .status-local {
   color: rgb(156, 163, 175);
 }
+
+/* Mobile Editor Optimizations */
+@media (max-width: 1024px) {
+  /* Force mobile editor to use full height */
+  .mobile-editor-overlay {
+    height: 100vh !important;
+    height: 100dvh !important; /* Dynamic viewport height for mobile browsers */
+  }
+
+  /* Editor container */
+  .mobile-editor-content {
+    height: calc(100vh - 42px) !important;
+    height: calc(100dvh - 42px) !important;
+  }
+
+  /* Textarea inside editor */
+  .mobile-editor textarea {
+    min-height: calc(100vh - 150px) !important;
+    min-height: calc(100dvh - 150px) !important;
+    font-size: 16px !important; /* Prevent iOS zoom */
+  }
+}

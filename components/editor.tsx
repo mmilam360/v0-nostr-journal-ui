@@ -17,9 +17,10 @@ interface EditorProps {
   onPublishHighlight: (note: Note, highlightedText: string) => void
   onDeleteNote: (note: Note) => void
   authData: any // AuthData type
+  isMobile?: boolean
 }
 
-export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHighlight, onDeleteNote, authData }: EditorProps) {
+export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHighlight, onDeleteNote, authData, isMobile = false }: EditorProps) {
   const [title, setTitle] = useState("")
   const [content, setContent] = useState("")
   const [newTag, setNewTag] = useState("")
@@ -276,232 +277,256 @@ export default function Editor({ note, onUpdateNote, onPublishNote, onPublishHig
   }
 
   return (
-    <div className="flex-1 bg-white dark:bg-background flex flex-col w-full h-full">
-      {/* Clean Header - Hidden on mobile when keyboard is open */}
-      {!(isMobileKeyboardOpen && window.innerWidth < 1024) && (
-      <div className="border-b border-border px-4 sm:px-8 py-3 sm:py-6">
-        <input
-          type="text"
-          value={title}
-          onChange={(e) => handleTitleChange(e.target.value)}
-          placeholder="Note title..."
-          className="w-full bg-transparent border-none outline-none text-xl sm:text-3xl font-bold placeholder:text-muted-foreground focus:outline-none mb-3 sm:mb-6"
-        />
+    <div className={`h-full flex flex-col bg-background overflow-hidden ${isMobile ? 'mobile-editor' : ''}`}>
+      {/* Desktop header - hidden on mobile */}
+      {!isMobile && !(isMobileKeyboardOpen && window.innerWidth < 1024) && (
+        <div className="border-b border-border px-4 sm:px-8 py-3 sm:py-6">
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => handleTitleChange(e.target.value)}
+            placeholder="Note title..."
+            className="w-full bg-transparent border-none outline-none text-xl sm:text-3xl font-bold placeholder:text-muted-foreground focus:outline-none mb-3 sm:mb-6"
+          />
 
-        <div className="flex items-center gap-2">
-          {/* Desktop buttons */}
-          <div className="hidden sm:flex items-center gap-2">
-            <Button
-              onClick={handleSave}
-              disabled={!hasUnsavedChanges}
-              variant="outline"
-              size="sm"
-              className={
-                hasUnsavedChanges
-                  ? "border-primary text-primary hover:bg-primary/10"
-                  : "border-border text-muted-foreground opacity-50"
-              }
-            >
-              <Save className="w-4 h-4 mr-2" />
-              Save
-            </Button>
+          <div className="flex items-center gap-2">
+            {/* Desktop buttons */}
+            <div className="hidden sm:flex items-center gap-2">
+              <Button
+                onClick={handleSave}
+                disabled={!hasUnsavedChanges}
+                variant="outline"
+                size="sm"
+                className={
+                  hasUnsavedChanges
+                    ? "border-primary text-primary hover:bg-primary/10"
+                    : "border-border text-muted-foreground opacity-50"
+                }
+              >
+                <Save className="w-4 h-4 mr-2" />
+                Save
+              </Button>
 
-            <Button
-              onClick={handleDeleteClick}
-              variant="ghost"
-              size="sm"
-              className="text-red-500 hover:text-red-700"
-            >
-              <Trash2 className="w-4 h-4 mr-2" />
-              Delete
-            </Button>
+              <Button
+                onClick={handleDeleteClick}
+                variant="ghost"
+                size="sm"
+                className="text-red-500 hover:text-red-700"
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Delete
+              </Button>
 
-            <Button
-              onClick={handlePublishClick}
-              disabled={!content.trim()}
-              className="bg-primary hover:bg-primary/90 disabled:opacity-50 flex items-center gap-2"
-            >
-              <Upload className="w-4 h-4" />
-              {getPublishButtonText()}
-            </Button>
-          </div>
+              <Button
+                onClick={handlePublishClick}
+                disabled={!content.trim()}
+                className="bg-primary hover:bg-primary/90 disabled:opacity-50 flex items-center gap-2"
+              >
+                <Upload className="w-4 h-4" />
+                {getPublishButtonText()}
+              </Button>
+            </div>
 
-          {/* Mobile buttons */}
-          <div className="sm:hidden flex items-center gap-2">
-            <Button
-              onClick={handleSave}
-              disabled={!hasUnsavedChanges}
-              size="sm"
-              className={
-                hasUnsavedChanges
-                  ? "bg-primary hover:bg-primary/90 text-white text-xs px-2 no-select"
-                  : "bg-muted opacity-50 text-xs px-2 no-select"
-              }
-            >
-              <Save className="w-4 h-4" />
-            </Button>
-            <Button
-              onClick={handlePublishClick}
-              disabled={!content.trim()}
-              size="sm"
-              className="bg-primary hover:bg-primary/90 disabled:opacity-50 text-xs px-2 no-select"
-            >
-              <Upload className="w-4 h-4" />
-              {getPublishButtonText()}
-            </Button>
-            <Button
-              onClick={handleDeleteClick}
-              variant="ghost"
-              size="sm"
-              className="text-red-500 hover:text-red-700 text-xs px-2 no-select"
-            >
-              <Trash2 className="w-4 h-4" />
-            </Button>
+            {/* Mobile buttons */}
+            <div className="sm:hidden flex items-center gap-2">
+              <Button
+                onClick={handleSave}
+                disabled={!hasUnsavedChanges}
+                size="sm"
+                className={
+                  hasUnsavedChanges
+                    ? "bg-primary hover:bg-primary/90 text-white text-xs px-2 no-select"
+                    : "bg-muted opacity-50 text-xs px-2 no-select"
+                }
+              >
+                <Save className="w-4 h-4" />
+              </Button>
+              <Button
+                onClick={handlePublishClick}
+                disabled={!content.trim()}
+                size="sm"
+                className="bg-primary hover:bg-primary/90 disabled:opacity-50 text-xs px-2 no-select"
+              >
+                <Upload className="w-4 h-4" />
+                {getPublishButtonText()}
+              </Button>
+              <Button
+                onClick={handleDeleteClick}
+                variant="ghost"
+                size="sm"
+                className="text-red-500 hover:text-red-700 text-xs px-2 no-select"
+              >
+                <Trash2 className="w-4 h-4" />
+              </Button>
+            </div>
           </div>
         </div>
-      </div>
       )}
 
-      {/* Clean Editor */}
-      <div className="flex-1 px-4 sm:px-8 py-3 sm:py-6">
-        <Textarea
-          ref={textareaRef}
-          value={content}
-          onChange={(e) => handleContentChange(e.target.value)}
-          onSelect={handleTextSelection}
-          onMouseUp={() => {
-            handleTextSelection()
-            handleWindowSelection()
-          }}
-          onKeyUp={handleTextSelection}
-          onFocus={handleTextSelection}
-          onMouseDown={handleTextSelection}
-          onMouseMove={handleTextSelection}
-          placeholder="Start writing..."
-          className="w-full h-full bg-transparent border-none text-foreground placeholder-muted-foreground resize-none text-base leading-relaxed focus:outline-none"
-        />
-      </div>
+      {/* Main content - THIS NEEDS TO FILL SPACE */}
+      <div className="flex-1 overflow-y-auto">
+        {note ? (
+          <div className="h-full p-3 lg:p-6">
+            {/* Title - make smaller on mobile */}
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => handleTitleChange(e.target.value)}
+              placeholder="Note Title"
+              className={`w-full bg-transparent border-none outline-none text-foreground placeholder-muted-foreground focus:outline-none ${
+                isMobile ? 'text-lg font-medium mb-2' : 'text-xl sm:text-3xl font-bold mb-3 sm:mb-6'
+              }`}
+            />
 
-      {/* Clean Footer - Tags and Sync Status - Hidden on mobile when keyboard is open */}
-      {!(isMobileKeyboardOpen && window.innerWidth < 1024) && (
-      <div className="border-t border-border px-4 sm:px-8 py-2 sm:py-4 bg-secondary/30">
-        <div className="flex flex-wrap gap-2 mb-3">
-          {note.tags.map((tag) => (
-            <span
-              key={tag}
-              className="inline-flex items-center gap-1 px-3 py-1 bg-primary/10 text-primary rounded-full text-sm border border-primary/20"
-            >
-              #{tag}
-              <button onClick={() => handleRemoveTag(tag)} className="text-primary/70 hover:text-primary">
-                ×
-              </button>
-            </span>
-          ))}
-        </div>
-
-        <div className="flex gap-2 mb-3">
-          <Input
-            value={newTag}
-            onChange={(e) => setNewTag(e.target.value)}
-            onKeyPress={handleKeyPress}
-            placeholder="Add a tag..."
-            className="flex-1"
-          />
-          <Button
-            onClick={handleAddTag}
-            disabled={!newTag.trim()}
-            variant="outline"
-            className="border-border"
-          >
-            Add
-          </Button>
-        </div>
-
-        <div className="text-xs text-muted-foreground flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
-          <span className="mono">
-            Created: {note.createdAt.toLocaleDateString()} {note.createdAt.toLocaleTimeString()}
-          </span>
-          <div className="flex items-center gap-2">
-            {hasUnsavedChanges && <span className="text-primary text-xs">● Auto-saving...</span>}
-            <span>
-              {note.lastSynced ? (
-                <span className="status-synced">
-                  Synced: {note.lastSynced.toLocaleDateString()} {note.lastSynced.toLocaleTimeString()}
-                </span>
-              ) : (
-                <span className="status-local">Not synced</span>
-              )}
-            </span>
+            {/* Content textarea - THIS IS THE KEY */}
+            <Textarea
+              ref={textareaRef}
+              value={content}
+              onChange={(e) => handleContentChange(e.target.value)}
+              onSelect={handleTextSelection}
+              onMouseUp={() => {
+                handleTextSelection()
+                handleWindowSelection()
+              }}
+              onKeyUp={handleTextSelection}
+              onFocus={handleTextSelection}
+              onMouseDown={handleTextSelection}
+              onMouseMove={handleTextSelection}
+              placeholder="Start writing..."
+              className="w-full bg-transparent border-none text-foreground placeholder-muted-foreground resize-none focus:outline-none text-base leading-relaxed"
+              style={{
+                minHeight: isMobile ? 'calc(100vh - 150px)' : '500px',
+                fontSize: '16px'  // Prevents iOS zoom
+              }}
+            />
           </div>
-        </div>
-
-        {/* Verification Section */}
-        <div className="border-t border-border pt-3 mt-3">
-          <div className="flex items-center justify-between text-xs">
-            <div className="flex items-center gap-3">
-              {/* Encryption indicator and word count */}
-              <div className="flex items-center gap-3">
-              <div className="flex items-center gap-1 text-green-600 dark:text-green-400">
-                <Lock className="w-3 h-3" />
-                <span>Encrypted</span>
-              </div>
-              
-                {/* Word/Character count */}
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <span>{content.split(/\s+/).filter(word => word.length > 0).length} words</span>
-                  <span>•</span>
-                  <span>{content.length} chars</span>
-                </div>
-                </div>
-              
-              {/* Sync status */}
-              {/* Individual note sync status removed - using global sync */}
-            </div>
-            
-            {/* Event ID with actions - Show for notes WITH eventId */}
-            {note.eventId && (
-              <div className="flex items-center gap-1">
-                <span className="text-muted-foreground">Event ID:</span>
-                <code className="text-xs font-mono text-primary bg-primary/10 px-1.5 py-0.5 rounded">
-                  {note.eventId.slice(0, 8)}...
-                </code>
-                
-                <Button
-                  onClick={() => copyEventId(note.eventId!)}
-                  variant="ghost"
-                  size="sm"
-                  className="h-6 w-6 p-0"
-                  title="Copy Full Event ID"
-                >
-                  {copiedId === note.eventId ? (
-                    <Check className="w-3 h-3 text-green-500" />
-                  ) : (
-                    <Copy className="w-3 h-3" />
-                  )}
-                </Button>
-                
-                {/* Primary verify button - njump shows all event kinds */}
-                <Button
-                  onClick={() => window.open(`https://njump.me/${note.eventId}`, '_blank')}
-                  variant="ghost"
-                  size="sm"
-                  className="h-6 w-6 p-0"
-                  title="View on njump.me"
-                >
-                  <ExternalLink className="w-3 h-3" />
-                </Button>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {selectedText && (
-          <div className="text-xs text-primary mt-2">
-            Selected: "{selectedText.substring(0, 100)}
-            {selectedText.length > 100 ? "..." : ""}"
+        ) : (
+          <div className="flex items-center justify-center h-full p-8 text-center">
+            <p className="text-muted-foreground">Select a note to begin editing</p>
           </div>
         )}
       </div>
+
+      {/* Desktop footer - hidden on mobile */}
+      {!isMobile && !(isMobileKeyboardOpen && window.innerWidth < 1024) && (
+        <div className="border-t border-border px-4 sm:px-8 py-2 sm:py-4 bg-secondary/30">
+          <div className="flex flex-wrap gap-2 mb-3">
+            {note.tags.map((tag) => (
+              <span
+                key={tag}
+                className="inline-flex items-center gap-1 px-3 py-1 bg-primary/10 text-primary rounded-full text-sm border border-primary/20"
+              >
+                #{tag}
+                <button onClick={() => handleRemoveTag(tag)} className="text-primary/70 hover:text-primary">
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+
+          <div className="flex gap-2 mb-3">
+            <Input
+              value={newTag}
+              onChange={(e) => setNewTag(e.target.value)}
+              onKeyPress={handleKeyPress}
+              placeholder="Add a tag..."
+              className="flex-1"
+            />
+            <Button
+              onClick={handleAddTag}
+              disabled={!newTag.trim()}
+              variant="outline"
+              className="border-border"
+            >
+              Add
+            </Button>
+          </div>
+
+          <div className="text-xs text-muted-foreground flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+            <span className="mono">
+              Created: {note.createdAt.toLocaleDateString()} {note.createdAt.toLocaleTimeString()}
+            </span>
+            <div className="flex items-center gap-2">
+              {hasUnsavedChanges && <span className="text-primary text-xs">● Auto-saving...</span>}
+              <span>
+                {note.lastSynced ? (
+                  <span className="status-synced">
+                    Synced: {note.lastSynced.toLocaleDateString()} {note.lastSynced.toLocaleTimeString()}
+                  </span>
+                ) : (
+                  <span className="status-local">Not synced</span>
+                )}
+              </span>
+            </div>
+          </div>
+
+          {/* Verification Section */}
+          <div className="border-t border-border pt-3 mt-3">
+            <div className="flex items-center justify-between text-xs">
+              <div className="flex items-center gap-3">
+                {/* Encryption indicator and word count */}
+                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-1 text-green-600 dark:text-green-400">
+                  <Lock className="w-3 h-3" />
+                  <span>Encrypted</span>
+                </div>
+                
+                  {/* Word/Character count */}
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <span>{content.split(/\s+/).filter(word => word.length > 0).length} words</span>
+                    <span>•</span>
+                    <span>{content.length} chars</span>
+                  </div>
+                  </div>
+                
+                {/* Sync status */}
+                {/* Individual note sync status removed - using global sync */}
+              </div>
+              
+              {/* Event ID with actions - Show for notes WITH eventId */}
+              {note.eventId && (
+                <div className="flex items-center gap-1">
+                  <span className="text-muted-foreground">Event ID:</span>
+                  <code className="text-xs font-mono text-primary bg-primary/10 px-1.5 py-0.5 rounded">
+                    {note.eventId.slice(0, 8)}...
+                  </code>
+                  
+                  <Button
+                    onClick={() => copyEventId(note.eventId!)}
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 w-6 p-0"
+                    title="Copy Full Event ID"
+                  >
+                    {copiedId === note.eventId ? (
+                      <Check className="w-3 h-3 text-green-500" />
+                    ) : (
+                      <Copy className="w-3 h-3" />
+                    )}
+                  </Button>
+                  
+                  {/* Primary verify button - njump shows all event kinds */}
+                  <Button
+                    onClick={() => window.open(`https://njump.me/${note.eventId}`, '_blank')}
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 w-6 p-0"
+                    title="View on njump.me"
+                  >
+                    <ExternalLink className="w-3 h-3" />
+                  </Button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {selectedText && (
+            <div className="text-xs text-primary mt-2">
+              Selected: "{selectedText.substring(0, 100)}
+              {selectedText.length > 100 ? "..." : ""}"
+            </div>
+          )}
+        </div>
       )}
     </div>
   )
