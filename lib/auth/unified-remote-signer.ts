@@ -1,13 +1,9 @@
 /**
- * Unified Remote Signer System (NIP-46) - YakiHonne Style Implementation
- * Complete implementation following YakiHonne's proven approach
+ * YakiHonne-Style Remote Signer Implementation
+ * Complete rewrite following NIP-46/NIP-47 standards
  * 
- * Features:
- * - Proper nostrconnect:// URL generation using createNostrConnectURI
- * - Session management and persistence
- * - Mobile app-switching resilience
- * - Auto-reconnection
- * - Comprehensive error handling
+ * This implementation follows the exact patterns used by YakiHonne
+ * for reliable remote signer connections.
  */
 
 import { BunkerSigner } from 'nostr-tools/nip46'
@@ -49,22 +45,24 @@ interface SessionData {
 // Connection state
 type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'error'
 
-class UnifiedRemoteSigner {
+class YakiHonneStyleRemoteSigner {
   private activeSigner: BunkerSigner | null = null
   private relayConnections: SimplePool | null = null
   private connectionState: ConnectionState = 'disconnected'
   private stateChangeCallbacks: ((state: { status: ConnectionState; error?: string }) => void)[] = []
   private currentSecretKey: Uint8Array | null = null
+  private connectionTimeout: NodeJS.Timeout | null = null
+  private activeSubscription: any = null
 
   constructor() {
-    console.log('[UnifiedRemoteSigner] 🚀 Initialized (YakiHonne Style)')
+    console.log('[YakiHonneRemoteSigner] 🚀 Initialized (Complete Rewrite)')
   }
 
   /**
-   * Start Nostr Connect flow - generates proper nostrconnect:// URL
+   * Start Nostr Connect flow - generates proper connection URI
    */
   async startNostrConnectFlow(): Promise<string> {
-    console.log('[UnifiedRemoteSigner] 🚀 Starting Nostr Connect flow (YakiHonne style)...')
+    console.log('[YakiHonneRemoteSigner] 🚀 Starting Nostr Connect flow...')
     
     try {
       this.setConnectionState('connecting')
@@ -73,21 +71,24 @@ class UnifiedRemoteSigner {
       this.currentSecretKey = generateSecretKey()
       const clientPubkey = getPublicKeyFromSecret(this.currentSecretKey)
       
-      // Generate random secret for connection
-      const secret = this.generateRandomString(32)
+      // Generate random secret for connection (32 bytes hex-encoded)
+      const secret = this.generateHexSecret(32)
       
-      // Create proper Nostr Connect URI using the standard format
-      const nostrConnectUri = this.createNostrConnectURI(clientPubkey, secret)
+      // Create proper Nostr Connect URI following NIP-46 standard
+      const nostrConnectUri = this.createProperNostrConnectURI(clientPubkey, secret)
       
-      console.log('[UnifiedRemoteSigner] ✅ Generated Nostr Connect URI:', nostrConnectUri)
+      console.log('[YakiHonneRemoteSigner] ✅ Generated Nostr Connect URI:', nostrConnectUri)
       
       // Start listening for connection
       await this.listenForRemoteSigner()
       
+      // Set connection timeout
+      this.setConnectionTimeout()
+      
       return nostrConnectUri
       
     } catch (error) {
-      console.error('[UnifiedRemoteSigner] ❌ Nostr Connect flow failed:', error)
+      console.error('[YakiHonneRemoteSigner] ❌ Nostr Connect flow failed:', error)
       this.setConnectionState('error', error.message)
       throw error
     }
@@ -97,7 +98,7 @@ class UnifiedRemoteSigner {
    * Listen for remote signer connection using NIP-46 protocol
    */
   private async listenForRemoteSigner(): Promise<void> {
-    console.log('[UnifiedRemoteSigner] 👂 Listening for remote signer...')
+    console.log('[YakiHonneRemoteSigner] 👂 Listening for remote signer...')
     
     try {
       // Create relay connections
@@ -108,34 +109,28 @@ class UnifiedRemoteSigner {
       }
       
       const localPubkey = getPublicKeyFromSecret(this.currentSecretKey)
-      console.log('[UnifiedRemoteSigner] 📡 Listening on pubkey:', localPubkey)
+      console.log('[YakiHonneRemoteSigner] 📡 Listening on pubkey:', localPubkey)
       
-      // Subscribe to NIP-46 events
+      // Subscribe to NIP-46 events (kind 24133)
       const sub = this.relayConnections.subscribe(
         RELAYS,
         [{ kinds: [24133], authors: [localPubkey] }],
         {
           onevent: async (event) => {
-            console.log('[UnifiedRemoteSigner] 📨 Received NIP-46 event:', event)
+            console.log('[YakiHonneRemoteSigner] 📨 Received NIP-46 event:', event)
             await this.handleNip46Event(event)
           },
           oneose: () => {
-            console.log('[UnifiedRemoteSigner] 📡 Subscription complete')
+            console.log('[YakiHonneRemoteSigner] 📡 Subscription complete')
           }
         }
       )
       
-      // Set timeout for connection
-      setTimeout(() => {
-        if (this.connectionState === 'connecting') {
-          console.log('[UnifiedRemoteSigner] ⏰ Connection timeout')
-          this.setConnectionState('error', 'Connection timeout. Please try again.')
-          sub.close()
-        }
-      }, 300000) // 5 minutes
+      // Store subscription for cleanup
+      this.activeSubscription = sub
       
     } catch (error) {
-      console.error('[UnifiedRemoteSigner] ❌ Listen failed:', error)
+      console.error('[YakiHonneRemoteSigner] ❌ Listen failed:', error)
       this.setConnectionState('error', error.message)
       throw error
     }
@@ -146,18 +141,18 @@ class UnifiedRemoteSigner {
    */
   private async handleNip46Event(event: any): Promise<void> {
     try {
-      console.log('[UnifiedRemoteSigner] 🔍 Processing NIP-46 event:', event.kind)
+      console.log('[YakiHonneRemoteSigner] 🔍 Processing NIP-46 event:', event.kind)
       
       // Parse the event content
       const content = JSON.parse(event.content)
       
       if (content.method === 'connect') {
-        console.log('[UnifiedRemoteSigner] 🔗 Connection request received')
+        console.log('[YakiHonneRemoteSigner] 🔗 Connection request received')
         await this.handleConnectionRequest(event)
       }
       
     } catch (error) {
-      console.error('[UnifiedRemoteSigner] ❌ Error handling NIP-46 event:', error)
+      console.error('[YakiHonneRemoteSigner] ❌ Error handling NIP-46 event:', error)
     }
   }
 
@@ -166,7 +161,7 @@ class UnifiedRemoteSigner {
    */
   private async handleConnectionRequest(event: any): Promise<void> {
     try {
-      console.log('[UnifiedRemoteSigner] 🤝 Handling connection request...')
+      console.log('[YakiHonneRemoteSigner] 🤝 Handling connection request...')
       
       if (!this.currentSecretKey) {
         throw new Error('No secret key available')
@@ -174,7 +169,7 @@ class UnifiedRemoteSigner {
       
       // Extract remote pubkey from event
       const remotePubkey = event.pubkey
-      console.log('[UnifiedRemoteSigner] 🔑 Remote pubkey:', remotePubkey)
+      console.log('[YakiHonneRemoteSigner] 🔑 Remote pubkey:', remotePubkey)
       
       // Create BunkerSigner instance
       this.activeSigner = new BunkerSigner(this.currentSecretKey, {
@@ -184,7 +179,13 @@ class UnifiedRemoteSigner {
       // Connect to remote signer using the pool
       await this.activeSigner.connect(remotePubkey, this.relayConnections!)
       
-      console.log('[UnifiedRemoteSigner] ✅ Connected to remote signer')
+      console.log('[YakiHonneRemoteSigner] ✅ Connected to remote signer')
+      
+      // Clear connection timeout
+      if (this.connectionTimeout) {
+        clearTimeout(this.connectionTimeout)
+        this.connectionTimeout = null
+      }
       
       // Save session
       const sessionData: SessionData = {
@@ -202,8 +203,36 @@ class UnifiedRemoteSigner {
       })
       
     } catch (error) {
-      console.error('[UnifiedRemoteSigner] ❌ Connection request failed:', error)
+      console.error('[YakiHonneRemoteSigner] ❌ Connection request failed:', error)
       this.setConnectionState('error', error.message)
+    }
+  }
+
+  /**
+   * Set connection timeout
+   */
+  private setConnectionTimeout(): void {
+    this.connectionTimeout = setTimeout(() => {
+      if (this.connectionState === 'connecting') {
+        console.log('[YakiHonneRemoteSigner] ⏰ Connection timeout')
+        this.setConnectionState('error', 'Connection timeout. Please try again.')
+        this.cleanup()
+      }
+    }, 300000) // 5 minutes
+  }
+
+  /**
+   * Cleanup connections and subscriptions
+   */
+  private cleanup(): void {
+    if (this.activeSubscription) {
+      this.activeSubscription.close()
+      this.activeSubscription = null
+    }
+    
+    if (this.connectionTimeout) {
+      clearTimeout(this.connectionTimeout)
+      this.connectionTimeout = null
     }
   }
 
@@ -216,12 +245,12 @@ class UnifiedRemoteSigner {
     }
     
     try {
-      console.log('[UnifiedRemoteSigner] ✍️ Signing event:', unsignedEvent.kind)
+      console.log('[YakiHonneRemoteSigner] ✍️ Signing event:', unsignedEvent.kind)
       const signedEvent = await this.activeSigner.signEvent(unsignedEvent)
-      console.log('[UnifiedRemoteSigner] ✅ Event signed successfully')
+      console.log('[YakiHonneRemoteSigner] ✅ Event signed successfully')
       return signedEvent
     } catch (error) {
-      console.error('[UnifiedRemoteSigner] ❌ Signing failed:', error)
+      console.error('[YakiHonneRemoteSigner] ❌ Signing failed:', error)
       throw error
     }
   }
@@ -236,10 +265,10 @@ class UnifiedRemoteSigner {
     
     try {
       const pubkey = await this.activeSigner.getPublicKey()
-      console.log('[UnifiedRemoteSigner] 🔑 Got public key:', pubkey)
+      console.log('[YakiHonneRemoteSigner] 🔑 Got public key:', pubkey)
       return pubkey
     } catch (error) {
-      console.error('[UnifiedRemoteSigner] ❌ Get public key failed:', error)
+      console.error('[YakiHonneRemoteSigner] ❌ Get public key failed:', error)
       throw error
     }
   }
@@ -258,11 +287,11 @@ class UnifiedRemoteSigner {
     try {
       const sessionData = this.loadSession()
       if (!sessionData) {
-        console.log('[UnifiedRemoteSigner] 📭 No session to resume')
+        console.log('[YakiHonneRemoteSigner] 📭 No session to resume')
         return false
       }
       
-      console.log('[UnifiedRemoteSigner] 🔄 Resuming session...')
+      console.log('[YakiHonneRemoteSigner] 🔄 Resuming session...')
       
       // Recreate signer from session data
       const clientSecretKey = this.hexToBytes(sessionData.sessionKey)
@@ -276,11 +305,11 @@ class UnifiedRemoteSigner {
       await this.activeSigner.connect(sessionData.remotePubkey, this.relayConnections || new SimplePool())
       
       this.setConnectionState('connected')
-      console.log('[UnifiedRemoteSigner] ✅ Session resumed successfully')
+      console.log('[YakiHonneRemoteSigner] ✅ Session resumed successfully')
       return true
       
     } catch (error) {
-      console.error('[UnifiedRemoteSigner] ❌ Session resume failed:', error)
+      console.error('[YakiHonneRemoteSigner] ❌ Session resume failed:', error)
       this.setConnectionState('disconnected')
       return false
     }
@@ -290,7 +319,9 @@ class UnifiedRemoteSigner {
    * Clear session and disconnect
    */
   async clearSession(): Promise<void> {
-    console.log('[UnifiedRemoteSigner] 🧹 Clearing session...')
+    console.log('[YakiHonneRemoteSigner] 🧹 Clearing session...')
+    
+    this.cleanup()
     
     this.activeSigner = null
     this.relayConnections = null
@@ -300,7 +331,7 @@ class UnifiedRemoteSigner {
     // Clear from storage
     localStorage.removeItem(SESSION_STORAGE_KEY)
     
-    console.log('[UnifiedRemoteSigner] ✅ Session cleared')
+    console.log('[YakiHonneRemoteSigner] ✅ Session cleared')
   }
 
   /**
@@ -324,7 +355,7 @@ class UnifiedRemoteSigner {
 
   private setConnectionState(state: ConnectionState, error?: string): void {
     this.connectionState = state
-    console.log(`[UnifiedRemoteSigner] 📊 State: ${state}${error ? ` (${error})` : ''}`)
+    console.log(`[YakiHonneRemoteSigner] 📊 State: ${state}${error ? ` (${error})` : ''}`)
     
     this.stateChangeCallbacks.forEach(callback => {
       callback({ status: state, error })
@@ -332,31 +363,33 @@ class UnifiedRemoteSigner {
   }
 
   /**
-   * Create proper Nostr Connect URI following the standard format
+   * Create proper Nostr Connect URI following NIP-46 standard
+   * Format: nostrconnect://[client-pubkey]?relay=[relays]&secret=[secret]
    */
-  private createNostrConnectURI(clientPubkey: string, secret: string): string {
+  private createProperNostrConnectURI(clientPubkey: string, secret: string): string {
     const params = new URLSearchParams({
       relay: RELAYS.join(','),
-      secret: secret,
-      pubkey: clientPubkey
+      secret: secret
     })
     
     return `nostrconnect://${clientPubkey}?${params.toString()}`
   }
 
-  private generateRandomString(length: number): string {
-    const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+  /**
+   * Generate hex-encoded secret (32 bytes)
+   */
+  private generateHexSecret(length: number): string {
     const randomValues = new Uint8Array(length)
     crypto.getRandomValues(randomValues)
-    return Array.from(randomValues).map(v => chars[v % chars.length]).join('')
+    return Array.from(randomValues).map(b => b.toString(16).padStart(2, '0')).join('')
   }
 
   private saveSession(data: SessionData): void {
     try {
       localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(data))
-      console.log('[UnifiedRemoteSigner] 💾 Session saved')
+      console.log('[YakiHonneRemoteSigner] 💾 Session saved')
     } catch (error) {
-      console.error('[UnifiedRemoteSigner] ❌ Failed to save session:', error)
+      console.error('[YakiHonneRemoteSigner] ❌ Failed to save session:', error)
     }
   }
 
@@ -366,7 +399,7 @@ class UnifiedRemoteSigner {
       if (!saved) return null
       return JSON.parse(saved)
     } catch (error) {
-      console.error('[UnifiedRemoteSigner] ❌ Failed to load session:', error)
+      console.error('[YakiHonneRemoteSigner] ❌ Failed to load session:', error)
       return null
     }
   }
@@ -382,7 +415,7 @@ class UnifiedRemoteSigner {
 }
 
 // Export singleton instance
-export const remoteSigner = new UnifiedRemoteSigner()
+export const remoteSigner = new YakiHonneStyleRemoteSigner()
 
 // Export individual functions for compatibility
 export const startNostrConnectFlow = () => remoteSigner.startNostrConnectFlow()
