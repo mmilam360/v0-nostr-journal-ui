@@ -99,14 +99,14 @@ export function BunkerAuthModal({ isOpen, onClose, onSuccess }: BunkerAuthModalP
 
   const handleQRConnect = async () => {
     try {
-      const { secretKey } = generateClientKeypair()
-      const localPubkey = createConnectURI(
-        secretKey.toString(),
+      const { secretKey, pubkey } = generateClientKeypair()
+      const connectURI = createConnectURI(
+        pubkey,
         primaryRelay,
         appMetadata
       )
       
-      setConnectURI(localPubkey)
+      setConnectURI(connectURI)
       setShowQR(true)
       
       const signer = await connectViaQR(secretKey, primaryRelay, appMetadata, setAuthState)

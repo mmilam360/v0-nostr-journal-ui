@@ -459,7 +459,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
         const { startClientInitiatedFlow, setActiveSigner } = await import('@/lib/signer-connector')
         
         // Start listening for connection
-        const { connectUri, established } = startClientInitiatedFlow(relays, clientMetadata)
+        const { connectUri, established } = await startClientInitiatedFlow(relays, clientMetadata)
         
         console.log('[Login] Generated nostrconnect URI:', connectUri)
         setConnectUri(connectUri)

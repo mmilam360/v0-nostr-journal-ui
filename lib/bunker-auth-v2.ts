@@ -3,9 +3,9 @@
  * Implements proper BunkerSigner with fast reconnect and mobile UX improvements
  */
 
-import { BunkerSigner, createNostrConnectURI } from '@nostr/tools/nip46'
-import { generateSecretKey, getPublicKey } from '@nostr/tools/pure'
-import { SimplePool } from '@nostr/tools/pool'
+import { BunkerSigner, createNostrConnectURI } from 'nostr-tools/nip46'
+import { generateSecretKey, getPublicKey } from 'nostr-tools/pure'
+import { SimplePool } from 'nostr-tools/pool'
 
 // Debug logging utility for mobile debugging
 const log = (message: string) => {
