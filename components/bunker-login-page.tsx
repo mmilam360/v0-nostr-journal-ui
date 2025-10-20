@@ -11,7 +11,7 @@ import { useState } from "react"
 import { ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
 // Import the remote signer directly like the main login page
-import { disconnect } from "@/lib/unified-remote-signer"
+import { disconnect } from "@/lib/auth/unified-remote-signer"
 
 interface BunkerLoginPageProps {
   onLoginSuccess: (result: { pubkey: string; token: string; relay: string }) => void

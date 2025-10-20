@@ -359,7 +359,7 @@ export function IncentiveModal({
     if (authData.authMethod === 'remote' && authData.sessionData) {
       try {
         console.log('[IncentiveModal] 🔧 Initializing remote signer for Lightning Goals...')
-        const { resumeSession } = await import('@/lib/unified-remote-signer')
+        const { resumeSession } = await import('@/lib/auth/unified-remote-signer')
         
         const resumed = await resumeSession()
         

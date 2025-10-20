@@ -301,7 +301,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     console.log("[NostrJournal] 🔧 Checking if remote signer is available...")
     
     try {
-      const unifiedSigner = await import('@/lib/unified-remote-signer')
+      const unifiedSigner = await import('@/lib/auth/unified-remote-signer')
       
       if (unifiedSigner.isConnected()) {
         console.log("[NostrJournal] ✅ Remote signer is available")
@@ -442,7 +442,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     try {
       // Ensure remote signer is initialized if using remote auth
       if (authData.authMethod === 'remote') {
-        const unifiedSigner = await import('@/lib/unified-remote-signer')
+        const unifiedSigner = await import('@/lib/auth/unified-remote-signer')
         if (!unifiedSigner.isConnected()) {
           console.log('[MainApp] 🔧 Remote signer not available, attempting to resume...')
           await unifiedSigner.resumeSession()
@@ -630,7 +630,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
           console.log("[NostrJournal] 🔧 Attempting to auto-resume remote signer...")
           
           try {
-            const unifiedSigner = await import('@/lib/unified-remote-signer')
+            const unifiedSigner = await import('@/lib/auth/unified-remote-signer')
             const result = await unifiedSigner.resumeSession()
             
             if (result) {
@@ -868,7 +868,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       
       // CRITICAL: Check if remote signer is active
       if (authData.authMethod === 'remote') {
-        const unifiedSigner = await import('@/lib/unified-remote-signer')
+        const unifiedSigner = await import('@/lib/auth/unified-remote-signer')
         if (!unifiedSigner.isConnected()) {
           console.error("[NostrJournal] ❌ Remote signer not active!")
           throw new Error("Remote signer disconnected. Please reconnect.")
@@ -950,7 +950,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       
       // CRITICAL: Check if remote signer is active
       if (authData.authMethod === 'remote') {
-        const unifiedSigner = await import('@/lib/unified-remote-signer')
+        const unifiedSigner = await import('@/lib/auth/unified-remote-signer')
         if (!unifiedSigner.isConnected()) {
           console.error("[NostrJournal] ❌ Remote signer not active!")
           throw new Error("Remote signer disconnected. Please reconnect.")

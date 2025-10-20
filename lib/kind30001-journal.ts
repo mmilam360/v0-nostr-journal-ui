@@ -85,7 +85,7 @@ export async function loadJournalFromKind30001(authData: any): Promise<Decrypted
       console.log("[Kind30001Journal] ⚠️  EXTENSION PUBKEY DIFFERENT FROM AUTH DATA:", actualPubkey !== authData.pubkey)
     } else if (authData.authMethod === "remote") {
       // For remote signers, use the pubkey from the remote signer session
-      const { isConnected, getPublicKey } = await import("./unified-remote-signer")
+      const { isConnected, getPublicKey } = await import("./auth/unified-remote-signer")
       if (isConnected()) {
         const userPubkey = await getPublicKey()
         if (userPubkey) {
@@ -252,7 +252,7 @@ export async function saveJournalAsKind30001(note: DecryptedNote, authData: any)
       console.log("[Kind30001Journal] ⚠️  EXTENSION PUBKEY DIFFERENT FROM AUTH DATA:", actualPubkey !== authData.pubkey)
     } else if (authData.authMethod === "remote") {
       // For remote signers, use the pubkey from the remote signer session
-      const { isConnected, getPublicKey } = await import("./unified-remote-signer")
+      const { isConnected, getPublicKey } = await import("./auth/unified-remote-signer")
       if (isConnected()) {
         const userPubkey = await getPublicKey()
         if (userPubkey) {

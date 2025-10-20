@@ -45,34 +45,13 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
   const [hasConfirmedSave, setHasConfirmedSave] = useState(false)
   const [connectionState, setConnectionState] = useState<'idle' | 'connecting' | 'success' | 'error'>('idle')
   const [error, setError] = useState('')
-  const [bunkerUrl, setBunkerUrl] = useState('')
-  const [connectUri, setConnectUri] = useState('')
-  const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>('')
   const [nsecInput, setNsecInput] = useState('')
   const [showRemoteSignerLogin, setShowRemoteSignerLogin] = useState(false)
   const [showNsec, setShowNsec] = useState(false)
-  const [remoteSignerMode, setRemoteSignerMode] = useState<'client' | 'signer'>('client')
-  // Mobile nostrconnect copy/paste mode
-  const [nostrConnectUri, setNostrConnectUri] = useState('')
-  const [showNostrConnectPaste, setShowNostrConnectPaste] = useState(false)
   
   // Mobile detection for mobile-specific fixes
   const [isMobile, setIsMobile] = useState(false)
 
-  // Generate QR code when connectUri changes
-  useEffect(() => {
-    if (connectUri) {
-      QRCode.toDataURL(connectUri, {
-        width: 240,
-        margin: 2,
-        color: {
-          dark: '#000000',
-          light: '#FFFFFF'
-        }
-      }).then(setQrCodeDataUrl).catch(console.error)
-    }
-  }, [connectUri])
-  
   // Mobile connection timeout management
   const [connectionTimeoutRef, setConnectionTimeoutRef] = useState<NodeJS.Timeout | null>(null)
   
@@ -280,7 +259,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
     if (clearSigner && currentStep !== 'choose') {
       try {
         // Clear unified remote signer session if needed
-        import('@/lib/unified-remote-signer').then(({ disconnect }) => {
+        import('@/lib/auth/unified-remote-signer').then(({ disconnect }) => {
           disconnect()
           console.log('[Login] 🛑 Cleared unified remote signer')
         }).catch(error => {
@@ -357,81 +336,6 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
   const handleRemoteSignerClick = () => {
     console.log('[Login] 🚀 Starting remote signer login...')
     setShowRemoteSignerLogin(true)
-  }
-
-  const handleBunkerConnect = async () => {
-    console.log('[Login] 🔄 Starting bunker connect...')
-    resetConnectionStates() // Reset any previous state first
-    setConnectionState('connecting')
-    setError('')
-
-    try {
-      const unifiedSigner = await import('@/lib/unified-remote-signer')
-      
-      // Check if we have a bunker URL (primary method)
-      if (bunkerUrl && bunkerUrl.trim()) {
-        // ============ SIGNER-INITIATED FLOW (Paste bunker:// URL) ============
-        console.log('[Login] Signer-initiated: Connecting with bunker URL...')
-        
-        const { userPubkey } = await unifiedSigner.connectWithBunkerUri(bunkerUrl.trim())
-        
-        console.log('[Login] ✅ Bunker connection successful!')
-        setConnectionState('success')
-        
-        // Pass to main app
-        onLoginSuccess({
-          pubkey: userPubkey,
-          authMethod: 'remote' as const,
-          bunkerUri: bunkerUrl.trim()
-        })
-        
-        } else {
-        // ============ CLIENT-INITIATED FLOW (Generate QR Code) ============
-        console.log('[Login] Client-initiated: Generating QR code...')
-        
-        const { connectUri, established } = await unifiedSigner.startClientInitiatedConnection(
-          ['wss://relay.nsec.app', 'wss://relay.damus.io', 'wss://nos.lol'],
-          { name: 'Nostr Journal', description: 'Private journaling on Nostr' }
-        )
-        
-        setConnectUri(connectUri)
-        console.log('[Login] ✅ QR code generated, waiting for connection...')
-        
-        // Wait for connection (with timeout) - longer on mobile for copy/paste flow
-        const timeoutMs = isMobile ? 180000 : 120000
-        const timeoutPromise = new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error('Connection timeout')), timeoutMs)
-        })
-        
-        const { userPubkey } = await Promise.race([established, timeoutPromise])
-        
-        console.log('[Login] ✅ Client connection successful!')
-        setConnectionState('success')
-        
-        // Retrieve session saved by unified signer and pass through for compatibility
-        const savedSessionRaw = localStorage.getItem('nostr_remote_session')
-        const savedSession = savedSessionRaw ? JSON.parse(savedSessionRaw) : null
-        console.log('[Login] 📦 Retrieved session after nostrconnect:', {
-          hasSession: !!savedSession,
-          keys: savedSession ? Object.keys(savedSession) : []
-        })
-        
-        onLoginSuccess({
-          pubkey: userPubkey,
-          authMethod: 'remote' as const,
-          // Back-compat fields for existing app expectations (may be undefined in QR flow)
-          sessionData: savedSession || undefined,
-          clientSecretKey: savedSession?.sessionKey,
-          bunkerPubkey: savedSession?.remotePubkey,
-          relays: savedSession?.relayUrls
-        })
-      }
-      
-    } catch (error: any) {
-      console.error('[Login] ❌ Connection failed:', error)
-      setConnectionState('error')
-      setError(error.message || 'Connection failed')
-    }
   }
 
   const renderStepContent = () => {
@@ -766,191 +670,18 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                       <h2 className="text-3xl font-bold text-foreground mb-2">
                         Connect Remote Signer
                       </h2>
-                      <p className="text-muted-foreground">Choose your connection method</p>
-                      </div>
-
-                    {/* MOBILE: Bunker URL - Primary */}
-                    <div className="max-w-md mx-auto">
-                      <div className="p-6 rounded-lg border-2 border-primary bg-primary/5">
-                        <div className="flex items-center gap-2 mb-4">
-                          <Smartphone className="w-5 h-5 text-primary" />
-                          <h3 className="font-semibold text-primary">
-                            Recommended for Mobile
-                          </h3>
+                      <p className="text-muted-foreground">Use your mobile Nostr app to sign in securely</p>
                     </div>
-                        
-                        <p className="text-sm text-muted-foreground mb-4">
-                          Most reliable method for mobile users
-                        </p>
 
-                        <div className="space-y-3">
-                          <label className="text-sm font-medium">Paste Bunker URL:</label>
-                        <input
-                          type="text"
-                          value={bunkerUrl}
-                          onChange={(e) => setBunkerUrl(e.target.value)}
-                            placeholder="bunker://...?relay=...&secret=..."
-                            className="w-full px-3 py-3 border rounded-md bg-background text-foreground font-mono text-sm"
-                            disabled={connectionState === 'connecting'}
-                        />
-                          
+                    <div className="max-w-md mx-auto">
                         <Button
-                          onClick={handleBunkerConnect}
-                          disabled={!bunkerUrl || connectionState === 'connecting'}
-                            className="w-full bg-primary hover:bg-primary/90 py-6 text-base font-semibold"
-                        >
-                          {connectionState === 'connecting' ? (
-                              <>
-                                <Loader2 className="h-5 w-5 animate-spin mr-2" />
-                                Connecting...
-                              </>
-                          ) : (
-                              <>
-                                <Smartphone className="h-5 w-5 mr-2" />
-                                Connect with Bunker URL
-                              </>
-                          )}
+                        onClick={handleRemoteSignerClick}
+                        className="w-full bg-primary hover:bg-primary/90 py-6 text-base font-semibold"
+                      >
+                        <Smartphone className="h-5 w-5 mr-2" />
+                        Login with Remote Signer
                         </Button>
-
-                          {/* How-to Instructions */}
-                          <div className="bg-muted/50 rounded-lg p-4">
-                            <p className="text-xs font-semibold text-muted-foreground mb-2">
-                              How to get your bunker URL:
-                            </p>
-                            <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside">
-                              <li>Open nsec.app on your device</li>
-                              <li>Go to "Connections" tab</li>
-                              <li>Tap "Create new connection"</li>
-                              <li>Copy the bunker:// URL</li>
-                              <li>Paste it above and click Connect</li>
-                              <li>Switch back to nsec.app to approve</li>
-                              <li>Return to this tab to complete</li>
-                            </ol>
-                            <div className="mt-2 p-2 bg-green-50 dark:bg-green-900/20 rounded">
-                              <p className="text-xs text-green-700 dark:text-green-300">
-                                <strong>💡 Tip:</strong> Keep both apps open - you'll need to switch between them to complete the connection.
-                              </p>
-                      </div>
                     </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Divider */}
-                    <div className="relative max-w-md mx-auto">
-                      <div className="absolute inset-0 flex items-center">
-                        <div className="w-full border-t border-border"></div>
-                      </div>
-                      <div className="relative flex justify-center text-sm">
-                        <span className="px-4 bg-background text-muted-foreground">
-                          Or use QR code (Desktop only)
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* DESKTOP: QR Code - Secondary */}
-                    <div className="max-w-md mx-auto">
-                      <div className="p-6 rounded-lg border-2 border-border bg-card">
-                        <div className="flex items-center gap-2 mb-4">
-                          <Monitor className="w-5 h-5 text-muted-foreground" />
-                          <h3 className="font-semibold">Desktop Users: QR Code</h3>
-                        </div>
-
-                        {!connectUri ? (
-                          <Button
-                            onClick={() => {
-                              setRemoteSignerMode('client')
-                              handleBunkerConnect()
-                            }}
-                            variant="outline"
-                            className="w-full"
-                            disabled={connectionState === 'connecting'}
-                          >
-                            {connectionState === 'connecting' ? (
-                              <>
-                                <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                                Generating...
-                              </>
-                            ) : (
-                              'Generate QR Code'
-                            )}
-                          </Button>
-                        ) : (
-                          <div className="space-y-4">
-                            {/* QR Code */}
-                            {qrCodeDataUrl && (
-                              <div className="w-full bg-white rounded-xl flex items-center justify-center p-4">
-                                <img 
-                                  src={qrCodeDataUrl} 
-                                  alt="NIP-46 Connection QR Code"
-                                  className="w-48 h-48"
-                                />
-                              </div>
-                            )}
-                            <p className="text-xs text-center text-muted-foreground">
-                              Scan with nsec.app on your mobile device
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Connection Status & Errors */}
-                    {connectionState === 'connecting' && (
-                      <div className="max-w-md mx-auto text-center">
-                        <div className="flex items-center justify-center space-x-2 text-muted-foreground mb-4">
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                          <span className="text-sm">Waiting for approval...</span>
-                        </div>
-                        {bunkerUrl && (
-                          <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
-                            <p className="text-xs text-blue-700 dark:text-blue-300 font-medium mb-2">
-                              📱 Mobile Connection Steps:
-                            </p>
-                            <ol className="text-xs text-blue-700 dark:text-blue-300 space-y-1 list-decimal list-inside text-left">
-                              <li>Switch to nsec.app on your device</li>
-                              <li>Look for the pending connection request</li>
-                              <li>Tap "Approve" or "Allow"</li>
-                              <li>Return to this tab</li>
-                            </ol>
-                            <p className="text-xs text-blue-700 dark:text-blue-300 mt-2">
-                              ⏱️ Connection will retry automatically if interrupted by app switching
-                            </p>
-                            <p className="text-xs text-blue-700 dark:text-blue-300">
-                              🔄 Up to 3 attempts with 30s timeout each
-                            </p>
-                      </div>
-                    )}
-                      </div>
-                    )}
-
-                    {connectionState === 'error' && error && (
-                      <div className="max-w-md mx-auto">
-                        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
-                          <div className="flex items-start gap-2">
-                            <AlertTriangle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
-                            <div className="flex-1">
-                              <p className="text-sm text-red-800 dark:text-red-200 whitespace-pre-line">
-                                {error}
-                              </p>
-                              <Button
-                                onClick={() => {
-                                  setConnectionState('idle')
-                                  setError('')
-                                  setConnectUri('')
-                                  setBunkerUrl('')
-                                }}
-                                variant="outline"
-                                size="sm"
-                                className="mt-3 w-full"
-                              >
-                                Try Again
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
                   </div>
                 )}
 
