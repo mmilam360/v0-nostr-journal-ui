@@ -314,9 +314,13 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
     }
   }, [currentStep, connectionState])
 
-  // Auto-generate QR code when connect step is reached for remote signer
+  // Auto-generate QR code when connect step is reached for remote signer (CLIENT mode only)
   useEffect(() => {
-    if (currentStep === 'connect' && selectedMethod === 'remote' && remoteSignerMode === 'client' && !connectUri && connectionState === 'idle') {
+    if (currentStep === 'connect' && 
+        selectedMethod === 'remote' && 
+        remoteSignerMode === 'client' && 
+        !connectUri && 
+        connectionState === 'idle') {
       console.log('[Login] 🚀 Auto-generating QR code for remote signer...')
       console.log('[Login] 🔍 Connect step reached with remote signer in client mode')
       handleBunkerConnect()
@@ -358,7 +362,11 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
 
 
   const handleBunkerConnect = async () => {
-    if (remoteSignerMode === 'signer' && !bunkerUrl) return
+    // Early return if in bunker mode but no URL provided
+    if (remoteSignerMode === 'signer' && !bunkerUrl) {
+      console.log('[Login] ⚠️ Bunker mode selected but no URL provided - waiting for user input')
+      return
+    }
 
     console.log('[Login] 🔄 Starting bunker connect...')
     resetConnectionStates() // Reset any previous state first

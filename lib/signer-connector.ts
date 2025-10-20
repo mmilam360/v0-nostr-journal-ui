@@ -80,8 +80,10 @@ export async function connectNip46(bunkerUri: string): Promise<{
     const { generateSecretKey } = await import('nostr-tools/pure')
     const secretKey = generateSecretKey()
     
-    // Use the new BunkerSigner.fromBunker method
-    const connectionPromise = BunkerSigner.fromBunker(secretKey, bunkerUri)
+    // Use the new BunkerSigner.fromBunker method with permissions
+    const connectionPromise = BunkerSigner.fromBunker(secretKey, bunkerUri, {
+      permissions: permissions
+    })
     
     // Add our own timeout wrapper for better error handling
     const timeoutPromise = new Promise<never>((_, reject) => {
@@ -200,7 +202,8 @@ export async function startClientInitiatedFlow(
       secret,
       relays: [primaryRelay],
       name: clientMetadata.name,
-      description: clientMetadata.description
+      description: clientMetadata.description,
+      permissions: permissions // Add the permissions array
     })
     
     console.log('[SignerConnector] Generated connect URI:', connectUri)
@@ -219,7 +222,8 @@ export async function startClientInitiatedFlow(
         try {
           console.log('[SignerConnector] Using BunkerSigner.fromURI for nostrconnect flow')
           const signer = await BunkerSigner.fromURI(secretKey, connectUri, {
-            pool: new SimplePool()
+            pool: new SimplePool(),
+            permissions: permissions
           })
           
           console.log('[SignerConnector] ✅ BunkerSigner connected successfully')
