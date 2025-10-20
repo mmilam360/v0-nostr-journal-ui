@@ -54,7 +54,7 @@ function BitcoinConnectLightningGoalsManagerInner({
 }) {
   const [isConnected, setIsConnected] = useState(false)
   
-  const [screen, setScreen] = useState<'setup' | 'invoice' | 'active'>('setup')
+  const [screen, setScreen] = useState<'setup' | 'invoice' | 'verifying' | 'active'>('setup')
   const [goalWords, setGoalWords] = useState(500)
   const [stakeAmount, setStakeAmount] = useState(100)
   const [dailyReward, setDailyReward] = useState(100)
@@ -359,8 +359,8 @@ function BitcoinConnectLightningGoalsManagerInner({
       
       setScreen('invoice')
       
-      // Note: Payment verification will start only when user chooses QR code payment method
-      // For Bitcoin Connect payments, we don't need verification polling
+      // Note: Payment verification will start for QR code payments
+      // Bitcoin Connect payments will also use the same verification polling for security
       
     } catch (error) {
       console.error('[Manager] ❌ Failed to create invoice:', error)
@@ -387,39 +387,39 @@ function BitcoinConnectLightningGoalsManagerInner({
     console.log('[Manager] 💸 Paying invoice via Bitcoin Connect...')
     
     try {
-      // Use Bitcoin Connect to send payment from user's wallet
-      const paymentResult = await window.webln.sendPayment(invoiceData.invoice)
+      // SECURITY FIX: Use Bitcoin Connect as payment trigger, not verification method
+      // Bitcoin Connect should only trigger the payment, verification must happen via NWC
       
-      console.log('[Manager] ✅ Payment sent!', paymentResult)
-      console.log('[Manager] Payment confirmed by Bitcoin Connect, proceeding...')
+      // 1. Start verification polling immediately (same as QR code method)
+      console.log('[Manager] 🔍 Starting NWC verification polling for Bitcoin Connect payment...')
+      setVerificationStarted(true)
+      startPaymentVerification(invoiceData.paymentHash, invoiceData.invoice)
       
-      // Since Bitcoin Connect payment was successful, we can immediately proceed
-      // No need to verify through backend - the payment is confirmed
-      await handlePaymentConfirmed(invoiceData.amount)
-      
-      // Show payment success alert
-      setShowPaymentSuccess(true)
-      
-      // Trigger callbacks to update parent components and switch to Progress/Summary
-      if (onStakeActivated) {
-        onStakeActivated()
+      // 2. Attempt to trigger payment via Bitcoin Connect (best effort)
+      try {
+        const paymentResult = await window.webln.sendPayment(invoiceData.invoice)
+        console.log('[Manager] ✅ Bitcoin Connect payment triggered!', paymentResult)
+        console.log('[Manager] 🔍 Now verifying payment via NWC backend...')
+        
+        // Show "Verifying payment..." state
+        setScreen('verifying')
+        
+      } catch (weblnError) {
+        console.log('[Manager] ⚠️ Bitcoin Connect payment failed, but verification continues:', weblnError)
+        console.log('[Manager] 🔍 Showing QR code fallback while verification continues...')
+        
+        // Show QR code as fallback if Bitcoin Connect fails
+        setPaymentMethod('invoice')
+        setScreen('invoice')
       }
-      if (onSetupStatusChange) {
-        onSetupStatusChange(true) // Stake is now active
-      }
       
-      setLoading(false)
-      
-      // Wait a moment to show the success alert, then switch to Progress/Summary
-      setTimeout(() => {
-        setShowPaymentSuccess(false)
-        setScreen('active')
-      }, 2000)
+      // Note: Payment confirmation will happen via verification polling, not here
+      // This prevents the security vulnerability of trusting Bitcoin Connect responses
       
     } catch (error) {
-      console.error('[Manager] ❌ Payment failed:', error)
-      alert('Payment failed: ' + error.message)
+      console.error('[Manager] ❌ Bitcoin Connect payment process failed:', error)
       setLoading(false)
+      alert('Payment process failed. Please try the QR code method instead.')
     }
   }
   
@@ -496,6 +496,14 @@ function BitcoinConnectLightningGoalsManagerInner({
           setShowPaymentSuccess(true)
           
           setLoading(false)
+          
+          // Trigger callbacks to update parent components and switch to Progress/Summary
+          if (onStakeActivated) {
+            onStakeActivated()
+          }
+          if (onSetupStatusChange) {
+            onSetupStatusChange(true) // Stake is now active
+          }
           
           // Wait a moment to show the success alert, then switch to Progress/Summary
           setTimeout(() => {
@@ -926,6 +934,24 @@ function BitcoinConnectLightningGoalsManagerInner({
                >
                  ← Back to setup
                </button>
+        </div>
+      )}
+      
+      {/* Show verifying screen */}
+      {screen === 'verifying' && (
+        <div className="space-y-6">
+          <div className="text-center space-y-4">
+            <div className="flex justify-center">
+              <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600"></div>
+            </div>
+            <h2 className="text-xl font-bold">Verifying Payment</h2>
+            <p className="text-gray-600 dark:text-gray-300">
+              Please wait while we verify your payment...
+            </p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              This may take up to 2 minutes
+            </p>
+          </div>
         </div>
       )}
       
