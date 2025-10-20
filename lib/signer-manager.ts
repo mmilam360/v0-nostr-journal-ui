@@ -4,7 +4,7 @@
  */
 
 import type { AuthData } from "@/components/main-app"
-import { signEvent as unifiedSignEvent, getPublicKey as unifiedGetPublicKey, resumeSession, disconnect } from './unified-remote-signer'
+import { remoteSigner } from './auth/unified-remote-signer'
 
 // Declare window.nostr for TypeScript
 declare global {
@@ -61,13 +61,13 @@ export async function signEventWithRemote(unsignedEvent: any, authData: AuthData
       // ⚠️ THIS IS THE ONLY PART THAT CHANGES - Use unified remote signer
       console.log("[SignerManager] Using unified remote signer for signing")
       
-      const unifiedSigner = await import('@/lib/unified-remote-signer')
+      const unifiedSigner = await import('@/lib/auth/unified-remote-signer')
       
-      if (!unifiedSigner.isConnected()) {
+      if (!unifiedSigner.remoteSigner.isConnected()) {
         throw new Error("Remote signer not connected. Please log in again.")
       }
       
-      const signedEvent = await unifiedSigner.signEvent(unsignedEvent)
+      const signedEvent = await unifiedSigner.remoteSigner.signEvent(unsignedEvent)
       console.log("[SignerManager] ✅ Event signed with NIP-46 remote signer")
       return signedEvent
       
@@ -169,7 +169,7 @@ export async function cleanupSigner() {
   console.log("[SignerManager] 🧹 Cleaning up signer...")
   
   // Clear unified remote signer session
-  disconnect()
+  await remoteSigner.clearSession()
 }
 
 /**
@@ -177,8 +177,7 @@ export async function cleanupSigner() {
  */
 export async function isSignerReady(): Promise<boolean> {
   try {
-    const { isConnected } = await import('./unified-remote-signer')
-    return isConnected()
+    return remoteSigner.isConnected()
   } catch {
     return false
   }

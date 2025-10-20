@@ -43,7 +43,7 @@ export default function Home() {
   const [isCheckingSession, setIsCheckingSession] = useState(true)
 
   useEffect(() => {
-    const checkSession = () => {
+    const checkSession = async () => {
       try {
         const sessionData = localStorage.getItem(SESSION_KEY)
         if (!sessionData) {
@@ -86,6 +86,19 @@ export default function Home() {
                 // Continue without clientSecretKey - might cause issues but won't crash
               }
             }
+            
+            // Try to resume remote signer session
+            try {
+              const { remoteSigner } = await import('@/lib/auth/unified-remote-signer')
+              const resumed = await remoteSigner.resumeSession()
+              if (resumed) {
+                console.log("[NostrJournal] ✅ Remote signer session resumed")
+              } else {
+                console.log("[NostrJournal] ⚠️ Remote signer session could not be resumed")
+              }
+            } catch (error) {
+              console.error("[NostrJournal] ❌ Failed to resume remote signer session:", error)
+            }
           } else if (session.authMethod === "nsec") {
             restoredAuthData.nsec = session.nsec
             restoredAuthData.privateKey = session.privateKey
@@ -106,7 +119,7 @@ export default function Home() {
       }
     }
 
-    checkSession()
+    checkSession().catch(console.error)
   }, [])
 
   const handleLoginSuccess = (data: AuthData) => {

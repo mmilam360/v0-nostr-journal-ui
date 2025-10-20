@@ -23,6 +23,7 @@ import { bytesToHex } from '@noble/hashes/utils'
 import QRCode from 'qrcode'
 import { Logo } from './logo'
 import InfoModal from './info-modal'
+import RemoteSignerLogin from './auth/RemoteSignerLogin'
 
 interface LoginPageHorizontalProps {
   onLoginSuccess: (data: any) => void
@@ -48,6 +49,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
   const [connectUri, setConnectUri] = useState('')
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>('')
   const [nsecInput, setNsecInput] = useState('')
+  const [showRemoteSignerLogin, setShowRemoteSignerLogin] = useState(false)
   const [showNsec, setShowNsec] = useState(false)
   const [remoteSignerMode, setRemoteSignerMode] = useState<'client' | 'signer'>('client')
   // Mobile nostrconnect copy/paste mode
@@ -324,32 +326,38 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
   // Note: Auto-generation removed - user must explicitly choose connection method
   // This prevents automatic connection attempts when user hasn't chosen their preferred method
 
-  const handleRemoteSignerClick = () => {
-    console.log('[Login] 🚀 handleRemoteSignerClick started')
-    
+  const handleRemoteSignerSuccess = async (pubkey: string) => {
     try {
-      // Only terminate connection states, NOT the signer - we need it for QR generation
-      console.log('[Login] 🛑 Terminating connections...')
-      terminateAllConnections(false) // Don't clear signer!
-      console.log('[Login] ✅ Connections terminated')
+      console.log('[Login] ✅ Remote signer connected successfully:', pubkey)
       
-      console.log('[Login] 🔄 Setting selected method to remote...')
-      setSelectedMethod('remote')
-      console.log('[Login] ✅ Selected method set to remote')
+      // Initialize the signer manager with remote signer
+      const { initializeRemoteSigner } = await import('@/lib/signer-manager')
+      await initializeRemoteSigner()
       
-      console.log('[Login] 🔄 Forcing UI update...')
-      forceUIUpdate()
-      console.log('[Login] ✅ UI update forced')
+      // Set up user session
+      const authData = {
+        pubkey,
+        authMethod: 'remote' as const,
+        sessionData: null, // Will be managed by unified remote signer
+        bunkerUri: '',
+        clientSecretKey: '',
+        bunkerPubkey: '',
+        relays: []
+      }
       
-      console.log('[Login] ➡️ Going to next step...')
-      goNext()
-      console.log('[Login] ✅ Moved to next step')
-      
+      await onLoginSuccess(authData)
+
     } catch (error) {
-      console.error('[Login] ❌ Error in handleRemoteSignerClick:', error)
+      console.error('[Login] ❌ Failed to complete remote signer login:', error)
+      setError('Login failed. Please try again.')
+      setConnectionState('error')
     }
   }
 
+  const handleRemoteSignerClick = () => {
+    console.log('[Login] 🚀 Starting remote signer login...')
+    setShowRemoteSignerLogin(true)
+  }
 
   const handleBunkerConnect = async () => {
     console.log('[Login] 🔄 Starting bunker connect...')
@@ -377,7 +385,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
           bunkerUri: bunkerUrl.trim()
         })
         
-      } else {
+        } else {
         // ============ CLIENT-INITIATED FLOW (Generate QR Code) ============
         console.log('[Login] Client-initiated: Generating QR code...')
         
@@ -1035,6 +1043,13 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
   }
 
   return (
+    <>
+      {showRemoteSignerLogin ? (
+        <RemoteSignerLogin
+          onSuccess={handleRemoteSignerSuccess}
+          onCancel={() => setShowRemoteSignerLogin(false)}
+        />
+      ) : (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <div className="w-full max-w-4xl">
         <div className="bg-card rounded-xl border p-4 sm:p-8 min-h-[400px] sm:min-h-[500px] relative overflow-hidden flex flex-col justify-center">
@@ -1061,5 +1076,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
         <InfoModal onClose={() => setShowInfo(false)} />
       )}
     </div>
+      )}
+    </>
   )
 }
