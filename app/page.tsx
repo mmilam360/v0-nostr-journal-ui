@@ -146,22 +146,9 @@ export default function Home() {
     }
 
     if (data.authMethod === "remote") {
-      if (!data.bunkerUri) {
-        console.error("[NostrJournal] ❌ ERROR: Remote signer missing bunkerUri!")
-        alert("Login failed: Remote signer configuration incomplete.")
-        return
-      }
-      if (!data.clientSecretKey) {
-        console.error("[NostrJournal] ❌ ERROR: Remote signer missing clientSecretKey!")
-        alert("Login failed: Remote signer configuration incomplete.")
-        return
-      }
-      if (!data.bunkerPubkey) {
-        console.error("[NostrJournal] ❌ ERROR: Remote signer missing bunkerPubkey!")
-        alert("Login failed: Remote signer configuration incomplete.")
-        return
-      }
-      console.log("[NostrJournal] ✅ Remote signer data validated")
+      // Relax validation: QR (nostrconnect) flow won't have bunkerUri/clientSecretKey/bunkerPubkey in authData
+      // The unified remote signer stores session separately and can be resumed.
+      console.log("[NostrJournal] ✅ Remote signer login via:", data.bunkerUri ? 'bunker:// URL' : 'nostrconnect QR')
     }
 
     try {

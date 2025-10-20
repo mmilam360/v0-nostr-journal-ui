@@ -398,10 +398,22 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
         console.log('[Login] ✅ Client connection successful!')
         setConnectionState('success')
         
-        // Pass to main app
+        // Retrieve session saved by unified signer and pass through for compatibility
+        const savedSessionRaw = localStorage.getItem('nostr_remote_session')
+        const savedSession = savedSessionRaw ? JSON.parse(savedSessionRaw) : null
+        console.log('[Login] 📦 Retrieved session after nostrconnect:', {
+          hasSession: !!savedSession,
+          keys: savedSession ? Object.keys(savedSession) : []
+        })
+        
         onLoginSuccess({
           pubkey: userPubkey,
-          authMethod: 'remote' as const
+          authMethod: 'remote' as const,
+          // Back-compat fields for existing app expectations (may be undefined in QR flow)
+          sessionData: savedSession || undefined,
+          clientSecretKey: savedSession?.sessionKey,
+          bunkerPubkey: savedSession?.remotePubkey,
+          relays: savedSession?.relayUrls
         })
       }
       
