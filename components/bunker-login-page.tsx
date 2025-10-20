@@ -11,7 +11,7 @@ import { useState } from "react"
 import { ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
 // Import the remote signer directly like the main login page
-import { setActiveSigner } from "@/lib/signer-connector"
+import { disconnect } from "@/lib/unified-remote-signer"
 
 interface BunkerLoginPageProps {
   onLoginSuccess: (result: { pubkey: string; token: string; relay: string }) => void
@@ -24,7 +24,8 @@ export function BunkerLoginPage({ onLoginSuccess, onBack }: BunkerLoginPageProps
   const handleConnectSuccess = async (result: { pubkey: string; sessionData: any }) => {
     console.log('[BunkerLoginPage] Connection successful:', result.pubkey);
     // Set the active signer for the session
-    setActiveSigner(result.sessionData);
+    // Session is automatically managed by unified remote signer
+    console.log('[BunkerLogin] ✅ Session managed by unified remote signer')
     
     // Convert to the expected format for backward compatibility
     await onLoginSuccess({

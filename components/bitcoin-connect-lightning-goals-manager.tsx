@@ -209,11 +209,11 @@ function BitcoinConnectLightningGoalsManagerInner({
       if (authData.authMethod === 'remote' && authData.sessionData) {
         try {
           console.log('[Manager] 🔧 Initializing remote signer for Lightning Goals...')
-          const { remoteSignerManager } = await import('@/lib/remote-signer-manager')
+          const { resumeSession } = await import('@/lib/unified-remote-signer')
           
-          const success = await remoteSignerManager.initializeFromSessionData(authData.sessionData, authData.pubkey)
+          const resumed = await resumeSession()
           
-          if (success) {
+          if (resumed) {
             console.log('[Manager] ✅ Remote signer initialized for Lightning Goals')
           } else {
             console.error('[Manager] ❌ Failed to initialize remote signer for Lightning Goals')

@@ -359,11 +359,11 @@ export function IncentiveModal({
     if (authData.authMethod === 'remote' && authData.sessionData) {
       try {
         console.log('[IncentiveModal] 🔧 Initializing remote signer for Lightning Goals...')
-        const { remoteSignerManager } = await import('@/lib/remote-signer-manager')
+        const { resumeSession } = await import('@/lib/unified-remote-signer')
         
-        const success = await remoteSignerManager.initializeFromSessionData(authData.sessionData, authData.pubkey)
+        const resumed = await resumeSession()
         
-        if (success) {
+        if (resumed) {
           console.log('[IncentiveModal] ✅ Remote signer initialized for Lightning Goals')
         } else {
           console.error('[IncentiveModal] ❌ Failed to initialize remote signer for Lightning Goals')

@@ -4,11 +4,7 @@
  */
 
 import type { AuthData } from "@/components/main-app"
-import { getActiveSigner, signWithActiveSigner, resumeNip46Session, setActiveSigner, clearActiveSigner } from './signer-connector'
-import { remoteSignerManager } from './remote-signer-manager'
-
-// Re-export getActiveSigner for external use
-export { getActiveSigner }
+import { signEvent as unifiedSignEvent, getPublicKey as unifiedGetPublicKey, resumeSession, disconnect } from './unified-remote-signer'
 
 // Declare window.nostr for TypeScript
 declare global {
@@ -172,16 +168,18 @@ export async function decryptWithRemote(ciphertext: string, senderPubkey: string
 export async function cleanupSigner() {
   console.log("[SignerManager] 🧹 Cleaning up signer...")
   
-  // The nostr-signer-connector handles cleanup automatically
-  // Just clear from memory
-  const { clearActiveSigner } = await import('./signer-connector');
-  clearActiveSigner();
+  // Clear unified remote signer session
+  disconnect()
 }
 
 /**
  * Check if signer is ready
  */
-export function isSignerReady(): boolean {
-  const signer = getActiveSigner();
-  return signer !== null;
+export async function isSignerReady(): Promise<boolean> {
+  try {
+    const { isConnected } = await import('./unified-remote-signer')
+    return isConnected()
+  } catch {
+    return false
+  }
 }

@@ -85,11 +85,11 @@ export async function loadJournalFromKind30001(authData: any): Promise<Decrypted
       console.log("[Kind30001Journal] ⚠️  EXTENSION PUBKEY DIFFERENT FROM AUTH DATA:", actualPubkey !== authData.pubkey)
     } else if (authData.authMethod === "remote") {
       // For remote signers, use the pubkey from the remote signer session
-      const { remoteSignerManager } = await import("./remote-signer-manager")
-      if (remoteSignerManager.isAvailable()) {
-        const sessionInfo = remoteSignerManager.getSessionInfo()
-        if (sessionInfo.userPubkey) {
-          actualPubkey = sessionInfo.userPubkey
+      const { isConnected, getPublicKey } = await import("./unified-remote-signer")
+      if (isConnected()) {
+        const userPubkey = await getPublicKey()
+        if (userPubkey) {
+          actualPubkey = userPubkey
           console.log("[Kind30001Journal] Got actual pubkey from remote signer:", actualPubkey)
           console.log("[Kind30001Journal] ⚠️  REMOTE PUBKEY DIFFERENT FROM AUTH DATA:", actualPubkey !== authData.pubkey)
         }
@@ -252,11 +252,11 @@ export async function saveJournalAsKind30001(note: DecryptedNote, authData: any)
       console.log("[Kind30001Journal] ⚠️  EXTENSION PUBKEY DIFFERENT FROM AUTH DATA:", actualPubkey !== authData.pubkey)
     } else if (authData.authMethod === "remote") {
       // For remote signers, use the pubkey from the remote signer session
-      const { remoteSignerManager } = await import("./remote-signer-manager")
-      if (remoteSignerManager.isAvailable()) {
-        const sessionInfo = remoteSignerManager.getSessionInfo()
-        if (sessionInfo.userPubkey) {
-          actualPubkey = sessionInfo.userPubkey
+      const { isConnected, getPublicKey } = await import("./unified-remote-signer")
+      if (isConnected()) {
+        const userPubkey = await getPublicKey()
+        if (userPubkey) {
+          actualPubkey = userPubkey
           console.log("[Kind30001Journal] Got actual pubkey from remote signer:", actualPubkey)
           console.log("[Kind30001Journal] ⚠️  REMOTE PUBKEY DIFFERENT FROM AUTH DATA:", actualPubkey !== authData.pubkey)
         }

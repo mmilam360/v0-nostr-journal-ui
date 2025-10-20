@@ -22,7 +22,6 @@ import { generateSecretKey, getPublicKey, nip19 } from 'nostr-tools'
 import { bytesToHex } from '@noble/hashes/utils'
 import QRCode from 'qrcode'
 import { Logo } from './logo'
-import { Nip46RemoteSigner } from 'nostr-signer-connector'
 import InfoModal from './info-modal'
 
 interface LoginPageHorizontalProps {
@@ -278,11 +277,15 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
     // NEVER clear the signer if we're on the 'choose' step (component unmounting after successful login)
     if (clearSigner && currentStep !== 'choose') {
       try {
-        const { clearActiveSigner } = require('@/lib/signer-connector')
-        clearActiveSigner()
-        console.log('[Login] 🛑 Cleared active signer')
+        // Clear unified remote signer session if needed
+        import('@/lib/unified-remote-signer').then(({ disconnect }) => {
+          disconnect()
+          console.log('[Login] 🛑 Cleared unified remote signer')
+        }).catch(error => {
+          console.log('[Login] ⚠️ Could not clear remote signer:', error)
+        })
       } catch (error) {
-        console.log('[Login] ⚠️ Could not clear active signer:', error)
+        console.log('[Login] ⚠️ Could not clear remote signer:', error)
       }
       } else {
       console.log('[Login] 🛑 Preserving active signer (user is logged in or component unmounting)')
