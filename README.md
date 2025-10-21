@@ -4,7 +4,7 @@ A decentralized, encrypted journaling application built on the Nostr protocol. Y
 
 ## Overview
 
-Nostr Journal is a privacy-focused journaling application that leverages the Nostr protocol for decentralized data storage and the Lightning Network for value-for-value payments. Your journal entries are encrypted locally using your cryptographic keys before being stored on Nostr relays, ensuring complete privacy and data ownership.
+Nostr Journal is a privacy-focused journaling application that leverages the Nostr protocol for decentralized data storage, log in methods, and Event Kind 30001. Your journal entries are encrypted locally using your cryptographic keys before being stored on Nostr relays, ensuring complete privacy and data ownership.
 
 ### Key Features
 

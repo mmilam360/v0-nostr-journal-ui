@@ -15,15 +15,14 @@ import {
   Radio, 
   Smartphone, 
   User,
-  AlertTriangle,
-  Monitor
+  AlertTriangle
 } from 'lucide-react'
 import { generateSecretKey, getPublicKey, nip19 } from 'nostr-tools'
 import { bytesToHex } from '@noble/hashes/utils'
-import QRCode from 'qrcode'
+import { QRCodeSVG } from 'qrcode.react'
 import { Logo } from './logo'
 import InfoModal from './info-modal'
-import RemoteSignerLogin from './auth/RemoteSignerLogin'
+import NDK, { NDKNip46Signer, NDKPrivateKeySigner } from '@nostr-dev-kit/ndk'
 
 interface LoginPageHorizontalProps {
   onLoginSuccess: (data: any) => void
@@ -45,12 +44,15 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
   const [hasConfirmedSave, setHasConfirmedSave] = useState(false)
   const [connectionState, setConnectionState] = useState<'idle' | 'connecting' | 'success' | 'error'>('idle')
   const [error, setError] = useState('')
+  const [bunkerUrl, setBunkerUrl] = useState('')
+  const [connectUri, setConnectUri] = useState('')
   const [nsecInput, setNsecInput] = useState('')
   const [showNsec, setShowNsec] = useState(false)
+  const [remoteSignerMode, setRemoteSignerMode] = useState<'client' | 'signer'>('client')
   
   // Mobile detection for mobile-specific fixes
   const [isMobile, setIsMobile] = useState(false)
-
+  
   // Mobile connection timeout management
   const [connectionTimeoutRef, setConnectionTimeoutRef] = useState<NodeJS.Timeout | null>(null)
   
@@ -97,40 +99,19 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
     if (prevIndex >= 0) {
       console.log('[Login] 🔄 Going back from step:', currentStep, 'to step:', steps[prevIndex])
       
-      // TERMINATE ALL ACTIVE CONNECTIONS when going back from connect step
+      // Only terminate connections if going back from connect step
       if (currentStep === 'connect') {
-        console.log('[Login] 🔄 Terminating all active connections from connect step')
+        console.log('[Login] 🔄 Terminating connections from connect step')
         terminateAllConnections(false) // Don't clear signer, just reset connection state
-        
-        // Also clear any remote signer connections
-        try {
-          import('@/lib/auth/unified-remote-signer').then(({ disconnect }) => {
-            disconnect()
-            console.log('[Login] 🛑 Cleared remote signer connections')
-          }).catch(error => {
-            console.log('[Login] ⚠️ Could not clear remote signer:', error)
-          })
-        } catch (error) {
-          console.log('[Login] ⚠️ Could not clear remote signer:', error)
-        }
       }
       
       setCurrentStep(steps[prevIndex] as any)
       
-      // Reset state based on the step we're going back to
+      // Only reset to first page state if going back to choose step
       if (steps[prevIndex] === 'choose') {
         console.log('[Login] 🔄 Resetting to first page state')
         setSelectedPath(null)
         setSelectedMethod(null)
-        // Clear all connection states when going back to choose
-        setConnectionState('idle')
-        setError('')
-      } else if (steps[prevIndex] === 'method') {
-        console.log('[Login] 🔄 Resetting to method selection state')
-        setSelectedMethod(null)
-        // Clear connection states but keep selectedPath
-        setConnectionState('idle')
-        setError('')
       }
       
       // Force UI update to ensure state changes are reflected
@@ -278,17 +259,13 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
     // NEVER clear the signer if we're on the 'choose' step (component unmounting after successful login)
     if (clearSigner && currentStep !== 'choose') {
       try {
-        // Clear unified remote signer session if needed
-        import('@/lib/auth/unified-remote-signer').then(({ disconnect }) => {
-          disconnect()
-          console.log('[Login] 🛑 Cleared unified remote signer')
-        }).catch(error => {
-          console.log('[Login] ⚠️ Could not clear remote signer:', error)
-        })
+        const { clearActiveSigner } = require('@/lib/signer-connector')
+        clearActiveSigner()
+        console.log('[Login] 🛑 Cleared active signer')
       } catch (error) {
-        console.log('[Login] ⚠️ Could not clear remote signer:', error)
+        console.log('[Login] ⚠️ Could not clear active signer:', error)
       }
-      } else {
+    } else {
       console.log('[Login] 🛑 Preserving active signer (user is logged in or component unmounting)')
     }
     
@@ -322,34 +299,200 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
     }
   }, [currentStep, connectionState])
 
-  // Note: Auto-generation removed - user must explicitly choose connection method
-  // This prevents automatic connection attempts when user hasn't chosen their preferred method
-
-  const handleRemoteSignerSuccess = async (pubkey: string) => {
+  const handleRemoteSignerClick = () => {
+    console.log('[Login] 🚀 handleRemoteSignerClick started')
+    
     try {
-      console.log('[Login] ✅ Remote signer connected successfully:', pubkey)
+      // Terminate any active connections before switching methods
+      console.log('[Login] 🛑 Terminating connections...')
+      terminateAllConnections()
+      console.log('[Login] ✅ Connections terminated')
       
-      // Initialize the signer manager with remote signer
-      const { initializeRemoteSigner } = await import('@/lib/signer-manager')
-      await initializeRemoteSigner()
+      console.log('[Login] 🔄 Setting selected method to remote...')
+      setSelectedMethod('remote')
+      console.log('[Login] ✅ Selected method set to remote')
       
-      // Set up user session
-      const authData = {
-        pubkey,
-        authMethod: 'remote' as const,
-        sessionData: null, // Will be managed by unified remote signer
-        bunkerUri: '',
-        clientSecretKey: '',
-        bunkerPubkey: '',
-        relays: []
+      // Mobile-specific: Auto-show QR code by default
+      if (isMobile) {
+        console.log('[Login] 📱 Mobile detected - setting QR code mode')
+        setRemoteSignerMode('client')
+        console.log('[Login] 📱 Mobile QR code mode set')
       }
       
-      await onLoginSuccess(authData)
-
+      console.log('[Login] 🔄 Forcing UI update...')
+      forceUIUpdate()
+      console.log('[Login] ✅ UI update forced')
+      
+      console.log('[Login] ➡️ Going to next step...')
+      goNext()
+      console.log('[Login] ✅ Moved to next step')
+      
     } catch (error) {
-      console.error('[Login] ❌ Failed to complete remote signer login:', error)
-      setError('Login failed. Please try again.')
+      console.error('[Login] ❌ Error in handleRemoteSignerClick:', error)
+    }
+  }
+
+
+  const handleBunkerConnect = async () => {
+    if (remoteSignerMode === 'signer' && !bunkerUrl) return
+
+    console.log('[Login] 🔄 Starting bunker connect...')
+    resetConnectionStates() // Reset any previous state first
+    setConnectionState('connecting')
+    setError('')
+
+    try {
+      if (remoteSignerMode === 'signer') {
+        // ============ SIGNER-INITIATED FLOW (Paste bunker:// URL) - Now using NDK ============
+        console.log('[Login] Signer-initiated: Connecting with bunker URL using NDK...')
+
+        const input = bunkerUrl.trim()
+
+        if (!input) {
+          throw new Error('Please enter a bunker URL')
+        }
+
+        if (!input.startsWith('bunker://')) {
+          throw new Error('Invalid bunker URL. Must start with bunker://')
+        }
+
+        // Create bunker NDK instance
+        const bunkerNDK = new NDK({
+          explicitRelayUrls: [
+            'wss://relay.nsec.app',
+            'wss://relay.damus.io',
+            'wss://nos.lol',
+          ],
+        })
+
+        await bunkerNDK.connect()
+        console.log('[Login] Bunker NDK connected')
+
+        // Get or create local signer
+        const localSignerKey = localStorage.getItem('nip46-local-key')
+        const localSigner = localSignerKey
+          ? new NDKPrivateKeySigner(localSignerKey)
+          : NDKPrivateKeySigner.generate()
+
+        if (!localSignerKey) {
+          localStorage.setItem('nip46-local-key', localSigner.privateKey!)
+        }
+
+        // Create NIP-46 signer
+        const remoteSigner = new NDKNip46Signer(bunkerNDK, input, localSigner)
+
+        console.log('[Login] Waiting for remote signer to be ready...')
+        const user = await remoteSigner.blockUntilReady()
+        const userPubkey = user.pubkey
+
+        console.log('[Login] ✅ Signer-initiated connection successful')
+        console.log('[Login] 🔑 Remote Signer Login (Bunker) - User pubkey:', userPubkey)
+
+        // CRITICAL: Save signer to global state so main app can reuse it
+        const { setActiveSigner } = await import('@/lib/ndk-signer-manager')
+        setActiveSigner(remoteSigner)
+        console.log('[Login] ✅ Saved remote signer to global state for instant reuse')
+
+        // Store for reconnection
+        localStorage.setItem('nip46-bunker-uri', input)
+
+        setConnectionState('success')
+
+        // Create auth data
+        const authData = {
+          pubkey: userPubkey,
+          authMethod: 'remote' as const,
+          bunkerUri: input,
+          relays: ['wss://relay.nsec.app', 'wss://relay.damus.io', 'wss://nos.lol'],
+          sessionData: { bunkerUri: input },
+          clientSecretKey: localSigner.privateKey,
+          bunkerPubkey: userPubkey
+        }
+
+        console.log('[Login] ✅ Bunker connection successful!')
+        console.log('[Login] Auth data being passed to main app:', {
+          pubkey: authData.pubkey,
+          authMethod: authData.authMethod,
+          bunkerUri: authData.bunkerUri
+        })
+
+        try {
+          onLoginSuccess(authData)
+          console.log('[Login] ✅ onLoginSuccess called successfully')
+        } catch (error) {
+          console.error('[Login] ❌ Error calling onLoginSuccess:', error)
+          throw error
+        }
+
+      } else {
+        // ============ CLIENT-INITIATED FLOW (Generate QR Code) - Now using NDK ============
+        console.log('[Login] Client-initiated: Generating nostrconnect URI using NDK...')
+
+        // Create bunker NDK instance
+        const bunkerNDK = new NDK({
+          explicitRelayUrls: [
+            'wss://relay.nsec.app',
+            'wss://relay.damus.io',
+            'wss://nos.lol',
+          ],
+        })
+
+        await bunkerNDK.connect()
+        console.log('[Login] Bunker NDK connected')
+
+        // Get or create local signer
+        const localSignerKey = localStorage.getItem('nip46-local-key')
+        const localSigner = localSignerKey
+          ? new NDKPrivateKeySigner(localSignerKey)
+          : NDKPrivateKeySigner.generate()
+
+        if (!localSignerKey) {
+          localStorage.setItem('nip46-local-key', localSigner.privateKey!)
+        }
+
+        const localUser = await localSigner.user()
+        const localPubkey = localUser.pubkey
+
+        // Create the nostrconnect:// URI
+        const connectUri = `nostrconnect://${localPubkey}?relay=wss://relay.nsec.app&metadata=${encodeURIComponent(JSON.stringify({ name: 'Nostr Journal', description: 'Private journaling on Nostr' }))}`
+
+        console.log('[Login] Generated nostrconnect URI:', connectUri)
+        setConnectUri(connectUri)
+
+        console.log('[Login] Waiting for remote signer to scan QR code...')
+
+        // NOTE: Client-initiated flow with NDK requires additional implementation
+        // The bunker:// URL method is fully functional and recommended for now
+        throw new Error('QR code method is currently being improved. Please use the bunker:// URL method instead.\n\nSteps:\n1. Open your signing app (nsec.app)\n2. Generate a bunker:// connection URL\n3. Click "Back" and choose "Paste bunker:// URL"\n4. Paste the URL and connect\n\nThe bunker:// method is faster and more reliable!')
+      }
+
+    } catch (error: any) {
+      console.error('[Login] Connection failed:', error)
       setConnectionState('error')
+      
+      let errorMsg = 'Failed to connect to remote signer'
+        if (error.message.includes('timeout')) {
+        // Mobile-specific timeout message
+        if (isMobile) {
+          errorMsg = 'Connection timeout. On mobile, try:\n\n1. Make sure your signing app is open\n2. Try the bunker:// URL method (more reliable on mobile)\n3. Check internet connection on both devices\n4. Try refreshing the page'
+        } else {
+          errorMsg = 'Connection timeout after 5 minutes. Please try:\n\n1. Scan the QR code with your Nostr app (nsec.app, Damus, etc.)\n2. Make sure to approve the connection in your app\n3. Try the bunker:// URL method instead (often more reliable)\n4. Check that both devices have internet connection'
+        }
+      } else if (error.message.includes('rejected')) {
+        errorMsg = 'Connection rejected by your signing app. Please try again.'
+      } else if (error.message.includes('Invalid URL')) {
+        errorMsg = error.message
+      } else {
+        errorMsg = error.message || 'Failed to connect'
+      }
+      
+      setError(errorMsg)
+      
+      // Mobile-specific: Don't kick back to method selection, stay on current screen
+      if (isMobile) {
+        console.log('[Login] 📱 Mobile detected - staying on current screen after error')
+        // Don't change the current step, just show the error
+      }
     }
   }
 
@@ -358,101 +501,43 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
       case 'choose':
         return (
           <div className="space-y-8">
-            {/* Header */}
             <div className="text-center">
               <Logo className="h-24 w-auto mx-auto mb-8" />
-              <h2 className="text-3xl font-bold text-foreground mb-2">
-                Welcome to Nostr Journal
-              </h2>
-              <p className="text-muted-foreground">
-                Your private, decentralized note-taking app
-              </p>
+              <h2 className="text-3xl font-bold text-foreground mb-2">Welcome to Nostr Journal</h2>
+              <p className="text-muted-foreground">Your private, decentralized note-taking app</p>
             </div>
-
-            {/* PRIMARY: Browser Extension */}
-            <div className="max-w-md mx-auto">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-2 max-w-2xl mx-auto">
               <button
                 onClick={() => {
                   setSelectedPath('existing')
-                  setSelectedMethod('extension')
-                  setCurrentStep('connect')
+                  goNext()
                 }}
-                className="w-full p-8 rounded-lg border-4 border-primary bg-primary/5 hover:bg-primary/10 text-left group transition-all"
+                className="p-6 rounded-lg border-2 border-border hover:border-primary text-left bg-card hover:bg-card/80 group"
               >
                 <div className="flex items-center gap-3 mb-3">
-                  <Radio className="w-8 h-8 text-primary" />
-                  <div>
-                    <h3 className="font-bold text-xl">Browser Extension</h3>
-                    <span className="text-sm text-primary font-semibold">
-                      ⭐ Recommended
-                    </span>
-                  </div>
+                  <User className="w-6 h-6 text-primary" />
+                  <h3 className="font-semibold">Use Existing Nostr Account</h3>
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  Fast, secure, and works everywhere. Use Alby, nos2x, or other Nostr extensions.
+                  Connect with browser extension, remote signer, or import your key
                 </p>
               </button>
-            </div>
-
-            {/* ALTERNATIVE METHODS */}
-            <div className="max-w-2xl mx-auto">
-              <p className="text-center text-sm text-muted-foreground mb-4">
-                Alternative Sign-in Methods
-              </p>
-              <div className="grid gap-4 sm:grid-cols-2">
-                {/* Remote Signer */}
-              <button
-                onClick={() => {
-                    setSelectedPath('existing')
-                    setSelectedMethod('remote')
-                    setCurrentStep('connect')
-                }}
-                  className="p-6 rounded-lg border-2 border-border hover:border-primary text-left bg-card hover:bg-card/80"
-              >
-                <div className="flex items-center gap-3 mb-3">
-                    <Smartphone className="w-6 h-6 text-primary" />
-                    <h3 className="font-semibold">Remote Signer</h3>
-                </div>
-                <p className="text-sm text-muted-foreground">
-                    For mobile users. Connect with nsec.app or Amber.
-                </p>
-              </button>
-
-                {/* Import Key */}
-                <button
-                  onClick={() => {
-                    setSelectedPath('existing')
-                    setSelectedMethod('nsec')
-                    setCurrentStep('connect')
-                  }}
-                  className="p-6 rounded-lg border-2 border-border hover:border-primary text-left bg-card hover:bg-card/80"
-                >
-                  <div className="flex items-center gap-3 mb-3">
-                    <Key className="w-6 h-6 text-primary" />
-                    <h3 className="font-semibold">Import Private Key</h3>
-            </div>
-                  <p className="text-sm text-muted-foreground">
-                    For advanced users. Paste your nsec directly.
-                  </p>
-                </button>
-              </div>
-            </div>
-
-            {/* Create New Account - Less Prominent */}
-            <div className="text-center">
               <button
                 onClick={() => {
                   setSelectedPath('new')
-                  setCurrentStep('method')
+                  goNext()
                 }}
-                className="text-primary hover:underline text-sm"
+                className="p-6 rounded-lg border-2 border-border hover:border-primary text-left bg-card hover:bg-card/80 group"
               >
-                <Plus className="w-4 h-4 inline mr-1" />
-                Create New Nostr Account
+                <div className="flex items-center gap-3 mb-3">
+                  <Plus className="w-6 h-6 text-primary" />
+                  <h3 className="font-semibold">Create New Nostr Account</h3>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Generate a new cryptographic key pair for secure note-taking
+                </p>
               </button>
             </div>
-
-            {/* What is Nostr */}
             <div className="text-center">
               <button
                 onClick={() => setShowInfo(true)}
@@ -560,19 +645,6 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
         }
 
       case 'connect':
-        // For remote signer, automatically show the RemoteSignerLogin component
-        if (selectedMethod === 'remote') {
-          return (
-            <RemoteSignerLogin
-              onSuccess={handleRemoteSignerSuccess}
-              onCancel={() => {
-                setCurrentStep('choose')
-                setSelectedMethod(null)
-              }}
-            />
-          )
-        }
-
         if (selectedPath === 'new' && generatedKeys) {
           return (
             <div className="space-y-8">
@@ -692,6 +764,239 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
                   </div>
                 )}
 
+                {selectedMethod === 'remote' && (
+                  <div className="space-y-4">
+                    {/* Connection Mode Selection - Hidden on mobile, auto-show QR */}
+                    {!isMobile && (
+                      <div className="flex gap-2 mb-4">
+                        <Button
+                          variant={remoteSignerMode === 'client' ? 'default' : 'outline'}
+                          onClick={() => setRemoteSignerMode('client')}
+                          className="flex-1"
+                        >
+                          Generate QR Code
+                        </Button>
+                        <Button
+                          variant={remoteSignerMode === 'signer' ? 'default' : 'outline'}
+                          onClick={() => setRemoteSignerMode('signer')}
+                          className="flex-1"
+                        >
+                          Paste Bunker URL
+                        </Button>
+                      </div>
+                    )}
+                    
+                    {/* Mobile-specific: Show bunker option as a button */}
+                    {isMobile && remoteSignerMode === 'client' && (
+                      <div className="mb-4">
+                        <Button
+                          variant="outline"
+                          onClick={() => setRemoteSignerMode('signer')}
+                          className="w-full"
+                        >
+                          Or paste bunker:// URL instead
+                        </Button>
+                      </div>
+                    )}
+
+                    {remoteSignerMode === 'client' ? (
+                      /* Client-initiated flow: Generate nostrconnect:// URI */
+                      <div className="space-y-4">
+                        <div className="text-center">
+                          <p className="text-sm text-muted-foreground mb-4">
+                            Scan with nsec.app, Alby, or Amethyst to connect
+                          </p>
+                        </div>
+                        {connectUri ? (
+                          <div className="flex flex-col items-center space-y-4">
+                            <div className="w-64 h-64 bg-white rounded-xl flex items-center justify-center p-6 shadow-lg">
+                        <QRCodeSVG 
+                                value={connectUri} 
+                                size={240} 
+                                level="L"
+                          includeMargin={true}
+                        />
+                      </div>
+                            <div className="text-center">
+                              <p className="text-sm text-muted-foreground">
+                                Scan with your signing app or copy the connection string below
+                              </p>
+                    </div>
+                            
+                          </div>
+                        ) : (
+                          <div className="flex justify-center">
+                            <div className="text-center space-y-4">
+                              <p className="text-sm text-muted-foreground mb-4">
+                                Click below to generate QR code for connection
+                              </p>
+                              <Button
+                                onClick={handleBunkerConnect}
+                                disabled={connectionState === 'connecting'}
+                                className="bg-purple-600 hover:bg-purple-700 text-white"
+                              >
+                                {connectionState === 'connecting' ? (
+                                  <>
+                                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                    Generating...
+                                  </>
+                                ) : (
+                                  'Generate QR Code'
+                                )}
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+                        
+                        {connectUri && (
+                    <div className="space-y-2">
+                      <label className="text-sm text-muted-foreground">
+                              Or copy connection string:
+                            </label>
+                            <div className="flex gap-2">
+                              <input
+                                type="text"
+                                value={connectUri}
+                                readOnly
+                                className="flex-1 px-3 py-2 border rounded-md bg-background text-foreground text-xs font-mono"
+                              />
+                              <Button
+                                onClick={() => {
+                                  navigator.clipboard.writeText(connectUri)
+                                  // Show feedback
+                                  const button = document.querySelector('[data-copy-button]') as HTMLButtonElement
+                                  if (button) {
+                                    const originalText = button.innerHTML
+                                    button.innerHTML = '<Check className="h-4 w-4" />'
+                                    setTimeout(() => {
+                                      button.innerHTML = originalText
+                                    }, 2000)
+                                  }
+                                }}
+                                variant="outline"
+                                size="sm"
+                                data-copy-button
+                              >
+                                <Copy className="h-4 w-4" />
+                              </Button>
+                            </div>
+                            <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3">
+                              <p className="text-xs text-blue-700 dark:text-blue-300">
+                                <strong>Instructions:</strong>
+                              </p>
+                              <ol className="text-xs text-blue-700 dark:text-blue-300 space-y-1 list-decimal list-inside mt-1">
+                                <li>Scan QR code or copy connection string</li>
+                                <li>Open your signing app (nsec.app, Alby, etc.)</li>
+                                <li>Paste the connection string if scanning fails</li>
+                                <li>Return to this app and approve the connection</li>
+                              </ol>
+                            </div>
+                            
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      /* Signer-initiated flow: User pastes bunker:// URL */
+                      <div className="space-y-4">
+                        <div className="text-center">
+                          <p className="text-sm text-muted-foreground mb-4">
+                            Paste the bunker:// URL from your signing app
+                          </p>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm text-muted-foreground">
+                            Bunker URL:
+                      </label>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={bunkerUrl}
+                          onChange={(e) => setBunkerUrl(e.target.value)}
+                              placeholder="bunker://...?relay=...&secret=..."
+                              className="flex-1 px-3 py-2 border rounded-md bg-background text-foreground font-mono text-sm"
+                        />
+                        <Button
+                          onClick={handleBunkerConnect}
+                          disabled={!bunkerUrl || connectionState === 'connecting'}
+                              className="bg-purple-600 hover:bg-purple-700 text-white"
+                        >
+                          {connectionState === 'connecting' ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            'Connect'
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                        <div className="bg-muted/50 rounded-lg p-3">
+                          <p className="text-xs text-muted-foreground mb-2">
+                            <strong>How to get your bunker URL:</strong>
+                          </p>
+                          <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside">
+                            <li>Open nsec.app on your device</li>
+                            <li>Go to "Connections" or "Apps"</li>
+                            <li>Create new connection</li>
+                            <li>Copy the bunker:// URL</li>
+                            <li>Paste it above and click Connect</li>
+                            <li>Return to nsec.app to approve the connection</li>
+                          </ol>
+                          <div className="mt-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded">
+                            <p className="text-xs text-blue-700 dark:text-blue-300">
+                              <strong>💡 Tip:</strong> The bunker:// method is often more reliable than QR codes for initial connections.
+                            </p>
+                          </div>
+                        </div>
+                        
+                      </div>
+                    )}
+
+                    {/* Connection Status */}
+                    {connectionState === 'connecting' && (
+                      <div key={`connecting-${uiKey}`} className="flex items-center justify-center space-x-2 text-muted-foreground">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span className="text-sm">Connecting...</span>
+                      </div>
+                    )}
+                    {connectionState === 'idle' && (
+                      <div key={`idle-${uiKey}`} className="flex items-center justify-center space-x-2 text-muted-foreground">
+                        <span className="text-sm">Ready to connect</span>
+                      </div>
+                    )}
+                    {connectionState === 'success' && (
+                      <div className="flex items-center justify-center space-x-2 text-green-600">
+                        <CheckCircle className="h-4 w-4" />
+                        <span className="text-sm">Connected successfully!</span>
+                      </div>
+                    )}
+                    {connectionState === 'error' && (
+                      <div className="space-y-3">
+                      <div className="flex items-center justify-center space-x-2 text-red-600">
+                        <AlertTriangle className="h-4 w-4" />
+                        <span className="text-sm">{error}</span>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            onClick={() => {
+                              setConnectionState('idle')
+                              setError('')
+                              if (remoteSignerMode === 'client') {
+                                setConnectUri('')
+                              } else {
+                                setBunkerUrl('')
+                              }
+                            }}
+                            variant="outline"
+                            size="sm"
+                            className="flex-1"
+                          >
+                            Try Again
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {selectedMethod === 'nsec' && (
                   <div className="space-y-4">
                     <p className="text-sm text-muted-foreground text-center">
@@ -752,7 +1057,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
           setCurrentStep('method')
           return null
         }
-
+        
         return (
           <div className="space-y-8">
             <div className="text-center">
@@ -788,7 +1093,6 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
             {renderStepContent()}
           </div>
         </div>
-        
         
         <div className="flex justify-center mt-8">
           <Button

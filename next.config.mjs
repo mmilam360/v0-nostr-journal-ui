@@ -1,30 +1,33 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Use static export for frontend, API routes as Cloudflare Functions
-  output: 'export',
-  trailingSlash: true,
-  skipTrailingSlashRedirect: true,
-  images: {
-    unoptimized: true
+  output: 'export', // Enable static export for Cloudflare Pages
+  webpack: (config, { isServer }) => {
+    if (isServer) {
+      config.externals = config.externals || [];
+      config.externals.push({
+        'nostr-tools': 'commonjs nostr-tools'
+      });
+    }
+
+    config.resolve.fallback = {
+      ...config.resolve.fallback,
+      net: false,
+      tls: false,
+      fs: false,
+    };
+
+    return config;
   },
-  // Skip type checking for now to fix deployment
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
   typescript: {
     ignoreBuildErrors: true,
   },
-  // Optimize for Cloudflare Pages
-  experimental: {
-    outputFileTracingRoot: undefined,
+  images: {
+    unoptimized: true,
   },
-  // ✅ Tell Next.js to transpile Bitcoin Connect for SSR compatibility
-  transpilePackages: ['@getalby/bitcoin-connect-react'],
-  
-  webpack: (config, { isServer }) => {
-    // ✅ Don't bundle Bitcoin Connect on server
-    if (isServer) {
-      config.externals = [...(config.externals || []), '@getalby/bitcoin-connect-react']
-    }
-    return config
-  }
+  reactStrictMode: true,
 }
 
 export default nextConfig

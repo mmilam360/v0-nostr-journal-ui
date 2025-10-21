@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect } from "react"
 import {
   Menu,
   X,
@@ -29,29 +29,6 @@ import PublishConfirmationModal from "@/components/publish-confirmation-modal"
 import PublishModal from "@/components/publish-modal"
 import DeleteConfirmationModal from "@/components/delete-confirmation-modal"
 import ProfilePage from "@/components/profile-page"
-import { isIncentiveEnabled } from "@/lib/feature-flags"
-import { getLightningGoals } from "@/lib/lightning-goals"
-// LightningGoalsMonitor will be dynamically imported below
-import dynamic from "next/dynamic"
-
-// Dynamically import Bitcoin Connect IncentiveModal to avoid SSR issues
-const IncentiveModal = dynamic(() => import("@/components/incentive-modal").then(mod => ({ default: mod.IncentiveModal })), {
-  ssr: false,
-  loading: () => (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-gray-800 p-6 rounded-lg max-w-md w-full">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-4"></div>
-        <p className="text-center text-gray-600">Loading Lightning Goals...</p>
-      </div>
-    </div>
-  )
-})
-
-// Dynamically import Bitcoin Connect LightningGoalsMonitor to avoid SSR issues
-const LightningGoalsMonitor = dynamic(() => import("@/components/bitcoin-connect-lightning-goals-monitor").then(mod => ({ default: mod.BitcoinConnectLightningGoalsMonitor })), {
-  ssr: false,
-  loading: () => null
-})
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -78,9 +55,7 @@ import { ConnectionStatus } from "@/components/connection-status"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { getDefaultRelays, initializePersistentRelayPool, shutdownPersistentRelayPool } from "@/lib/relay-manager"
 import { DonationModal } from "@/components/donation-modal-proper"
-// Note: Unified remote signer imports are done dynamically when needed
 import { LoadingScreen } from "@/components/loading-screen"
-// Note: Nip46SessionState type removed as we're using unified remote signer
 
 // Sync Status Component
 const SyncStatusIcons = ({ note }: { note: Note }) => {
@@ -129,7 +104,7 @@ export interface AuthData {
   bunkerPubkey?: string // For remote signer
   bunkerUri?: string // For remote signer
   relays?: string[] // For remote signer
-  sessionData?: Nip46SessionState // CHANGED: Use proper type
+  sessionData?: any // Session data for NDK signer
 }
 
 interface MainAppProps {
@@ -156,104 +131,16 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   const [needsSync, setNeedsSync] = useState(false)
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false)
   const [noteToDelete, setNoteToDelete] = useState<Note | null>(null)
-  const [focusMode, setFocusMode] = useState(false)
   const [deletedNotes, setDeletedNotes] = useState<{ id: string; deletedAt: Date }[]>([])
   const [showProfile, setShowProfile] = useState(false)
-  const [showIncentives, setShowIncentives] = useState(false)
-  const [lastSavedWordCount, setLastSavedWordCount] = useState<number | null>(null)
-  const [userStreak, setUserStreak] = useState(0)
-  const [hasLightningGoals, setHasLightningGoals] = useState(false)
-  const [userLightningAddress, setUserLightningAddress] = useState<string>('')
-  const [showStreakAnimation, setShowStreakAnimation] = useState(false)
   const [showRelayManager, setShowRelayManager] = useState(false)
   const [showRelaysInDropdown, setShowRelaysInDropdown] = useState(false)
-
-  // Clear selective storage on app startup for consistent cross-device experience
-  // IMPORTANT: Preserve remote signer sessions for fast reconnect
-  const clearSelectiveStorage = async () => {
-    console.log("[NostrJournal] 🧹 Clearing selective storage for consistent cross-device experience...")
-    console.log("[NostrJournal] 💡 Preserving remote signer sessions for fast reconnect")
-    
-    // Clear only data that should be fetched fresh from Nostr relays
-    // DO NOT clear remote signer sessions or authentication data
-    const keysToRemove = [
-      // Relay preferences (will be fetched from Nostr)
-      'nostr_user_relays',
-      'nostr-relays',
-      
-      // Lightning addresses (will be fetched from Nostr events)
-      ...Object.keys(localStorage).filter(key => key.startsWith('lightning-address-')),
-      
-      // Payment hashes and invoice strings (temporary data)
-      ...Object.keys(localStorage).filter(key => key.startsWith('payment-hash-')),
-      ...Object.keys(localStorage).filter(key => key.startsWith('invoice-string-')),
-      
-      // Progress data (will be fetched from Nostr events)
-      ...Object.keys(localStorage).filter(key => key.startsWith('daily-progress-')),
-      ...Object.keys(localStorage).filter(key => key.startsWith('incentive-settings-')),
-      
-      // App-specific data keys (but preserve auth sessions)
-      ...Object.keys(localStorage).filter(key => 
-        (key.includes('journal') || 
-         key.includes('lightning') ||
-         key.includes('incentive')) &&
-        !key.includes('session') &&
-        !key.includes('nostr_remote_session') &&
-        !key.includes('nostr_session')
-      )
-    ]
-    
-    keysToRemove.forEach(key => {
-      try {
-        localStorage.removeItem(key)
-        console.log(`[NostrJournal] 🗑️ Removed localStorage key: ${key}`)
-      } catch (error) {
-        console.warn(`[NostrJournal] ⚠️ Failed to remove localStorage key ${key}:`, error)
-      }
-    })
-    
-    // Clear event cache but preserve auth sessions
-    try {
-      const { clearUserCache } = await import('@/lib/nostr-storage')
-      clearUserCache(authData)
-      console.log("[NostrJournal] 🗑️ Cleared event cache")
-    } catch (error) {
-      console.warn("[NostrJournal] ⚠️ Failed to clear event cache:", error)
-    }
-    
-    console.log("[NostrJournal] ✅ Selective storage cleared - preserved auth sessions for fast reconnect")
-  }
-
-  // AUDIT POINT 3: Calculate total word count from ALL notes
-  const calculateTotalWordCount = (notes: Note[]): number => {
-    if (!notes || notes.length === 0) {
-      console.log('[MainApp] 📊 No notes, word count = 0')
-      return 0
-    }
-    
-    const total = notes.reduce((sum, note) => {
-      if (!note.content) return sum
-      
-      const words = note.content
-        .trim()
-        .split(/\s+/)
-        .filter(word => word.length > 0)
-        .length
-      
-      console.log(`[MainApp] 📝 Note "${note.title}": ${words} words`)
-      return sum + words
-    }, 0)
-    
-    console.log(`[MainApp] 📊 TOTAL WORD COUNT: ${total} (from ${notes.length} notes)`)
-    return total
-  }
   const [showDiagnostics, setShowDiagnostics] = useState(false)
   const [connectionError, setConnectionError] = useState<string | null>(null)
   const [copiedNpub, setCopiedNpub] = useState(false)
   const [npub, setNpub] = useState<string>("")
   const [relays, setRelays] = useState<string[]>([])
   const [newRelay, setNewRelay] = useState("")
-
   const [profilePicture, setProfilePicture] = useState<string>("")
   const [displayName, setDisplayName] = useState<string>("")
   const [showDonationModal, setShowDonationModal] = useState(false)
@@ -298,28 +185,31 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   }
 
   const ensureRemoteSignerAvailable = async () => {
-    console.log("[NostrJournal] 🔧 Checking if remote signer is available...")
-    
+    console.log("[NostrJournal] 🔧 Checking if NDK-based remote signer is available...")
+
     try {
-      const unifiedSigner = await import('@/lib/auth/unified-remote-signer')
-      
-      if (unifiedSigner.isConnected()) {
-        console.log("[NostrJournal] ✅ Remote signer is available")
+      // Check if NDK signer manager is ready
+      const { isSignerReady, initializeSignerFromAuthData } = await import('@/lib/ndk-signer-manager')
+
+      if (isSignerReady()) {
+        console.log("[NostrJournal] ✅ NDK signer manager is available and ready")
         return true
       }
-      
-      console.log("[NostrJournal] ⚠️ Remote signer not available, attempting to resume...")
-      
-      const result = await unifiedSigner.resumeSession()
-      if (result) {
-        console.log("[NostrJournal] ✅ Remote signer session resumed successfully")
+
+      console.log("[NostrJournal] ⚠️ NDK signer manager not ready, attempting to initialize...")
+
+      // Try to initialize from current auth data
+      const success = await initializeSignerFromAuthData(authData)
+
+      if (success) {
+        console.log("[NostrJournal] ✅ NDK signer session initialized successfully")
         return true
       } else {
-        console.error("[NostrJournal] ❌ Failed to resume remote signer session")
+        console.error("[NostrJournal] ❌ Failed to initialize NDK signer")
         return false
       }
     } catch (error) {
-      console.error("[NostrJournal] ❌ Error ensuring remote signer availability:", error)
+      console.error("[NostrJournal] ❌ Error ensuring NDK signer availability:", error)
       return false
     }
   }
@@ -388,235 +278,9 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     //   // No cleanup needed since we're not starting any intervals
     // };
 
-  const checkLightningGoals = async () => {
-    try {
-      const goals = await getLightningGoals(authData.pubkey)
-      
-      if (goals && goals.status === 'active') {
-        setHasLightningGoals(true)
-        setUserStreak(goals.currentStreak)
-        
-        // Set Lightning address from master event
-        if (goals.lightningAddress) {
-          console.log('[MainApp] ⚡ Setting Lightning address from master event:', goals.lightningAddress)
-          setUserLightningAddress(goals.lightningAddress)
-        }
-        
-        console.log('[MainApp] ✅ Active goals found, Balance:', goals.currentBalance)
-      } else {
-        setHasLightningGoals(false)
-        setUserStreak(0)
-        console.log('[MainApp] ❌ No active stake found')
-      }
-    } catch (error) {
-      console.error('[MainApp] Error checking Lightning Goals:', error)
-      setHasLightningGoals(false)
-    }
-  }
-
-  // Rate limiting for Lightning Goals updates
-  const lastLightningGoalsUpdate = useRef(0)
-  const LIGHTNING_GOALS_UPDATE_COOLDOWN = 5000 // 5 seconds
-
-  // Update Lightning Goals with current word count and check for rewards
-  const checkRewardEligibility = async (wordCount: number) => {
-    if (!isIncentiveEnabled || !authData) return
-    
-    // Rate limiting to prevent too frequent updates
-    const now = Date.now()
-    const timeSinceLastUpdate = now - lastLightningGoalsUpdate.current
-    console.log('[MainApp] 🔍 Rate limiting check:', { 
-      timeSinceLastUpdate, 
-      cooldown: LIGHTNING_GOALS_UPDATE_COOLDOWN,
-      isRateLimited: timeSinceLastUpdate < LIGHTNING_GOALS_UPDATE_COOLDOWN 
-    })
-    
-    if (timeSinceLastUpdate < LIGHTNING_GOALS_UPDATE_COOLDOWN) {
-      console.log('[MainApp] ⏳ Lightning Goals update rate limited, skipping...')
-      return
-    }
-    lastLightningGoalsUpdate.current = now
-    
-    console.log('[MainApp] 🎯 Word count updated:', wordCount)
-    
-    try {
-      // Ensure remote signer is initialized if using remote auth
-      if (authData.authMethod === 'remote') {
-        const unifiedSigner = await import('@/lib/auth/unified-remote-signer')
-        if (!unifiedSigner.isConnected()) {
-          console.log('[MainApp] 🔧 Remote signer not available, attempting to resume...')
-          await unifiedSigner.resumeSession()
-        }
-      }
-      
-      // Import Lightning Goals functions
-      const { getLightningGoals, updateLightningGoals } = await import('@/lib/lightning-goals')
-      
-      // Get current Lightning Goals data
-      const goals = await getLightningGoals(authData.pubkey)
-      console.log('[MainApp] 📊 Current Lightning Goals:', goals)
-      
-      if (!goals || goals.status !== 'active') {
-        console.log('[MainApp] ⚠️ No active Lightning Goals found')
-        return
-      }
-      
-      // Calculate newly written words since last update
-      const previousWordCount = goals.totalWordCountAtLastUpdate || goals.baselineWordCount || 0
-      const newlyWrittenWords = Math.max(0, wordCount - previousWordCount)
-      
-      console.log('[MainApp] 📊 Word calculation:', {
-        currentTotalWordCount: wordCount,
-        previousWordCount: previousWordCount,
-        newlyWrittenWords: newlyWrittenWords,
-        currentTodayWords: goals.todayWords || 0,
-        dailyWordGoal: goals.dailyWordGoal
-      })
-      
-      // Update Lightning Goals with incremental progress
-      const updatedGoals = {
-        ...goals,
-        todayWords: (goals.todayWords || 0) + newlyWrittenWords,
-        totalWordCountAtLastUpdate: wordCount,
-        lastUpdated: Date.now(),
-        todayDate: new Date().toISOString().split('T')[0]
-      }
-      
-      // Check if goal is met
-      console.log('[MainApp] 🔍 Goal check:', {
-        todayWords: updatedGoals.todayWords,
-        dailyWordGoal: goals.dailyWordGoal,
-        todayRewardSent: goals.todayRewardSent,
-        goalMet: updatedGoals.todayWords >= goals.dailyWordGoal,
-        rewardNotSent: !goals.todayRewardSent
-      })
-      
-      if (updatedGoals.todayWords >= goals.dailyWordGoal && !goals.todayRewardSent) {
-        console.log('[MainApp] 🎉 Goal reached! Sending reward...')
-        
-        // Send reward via API
-        try {
-          const dateString = new Date().toLocaleDateString('en-US', { 
-            month: '2-digit', 
-            day: '2-digit', 
-            year: '2-digit' 
-          })
-          
-          const response = await fetch('/api/incentive/send-reward', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              userPubkey: authData.pubkey,
-              amount: goals.dailyReward,
-              lightningAddress: goals.lightningAddress,
-              isRefund: false,
-              memo: `Nostr Journal - ${dateString} Reward`
-            })
-          })
-          
-          const result = await response.json()
-          console.log('[MainApp] 📡 Reward API response:', result)
-          
-          if (result.success) {
-            console.log('[MainApp] ✅ Reward sent successfully!')
-            
-            // ✅ STEP 1: Get CURRENT history from goals we just fetched
-            const existingHistory = goals.history || []
-            console.log('[MainApp] 📚 Existing history entries:', existingHistory.length)
-            
-            // ✅ STEP 2: Create new reward entry
-            const today = new Date().toISOString().split('T')[0]
-            const dateString = new Date().toLocaleDateString('en-US', { 
-              month: '2-digit', 
-              day: '2-digit', 
-              year: '2-digit' 
-            })
-            
-            const rewardEntry = {
-              date: today,
-              words: updatedGoals.todayWords,
-              goalMet: true,
-              rewardSent: true,
-              amount: goals.dailyReward,
-              transactions: [{
-                id: `reward-${Date.now()}`,
-                type: 'payout' as const,
-                amount: goals.dailyReward,
-                timestamp: Date.now(),
-                description: `Journal Reward - ${dateString}`,
-                txHash: result.paymentHash || 'unknown'
-              }]
-            }
-            
-            console.log('[MainApp] 📝 New reward entry:', rewardEntry)
-            
-            // ✅ STEP 3: Append to existing history
-            const updatedHistory = [...existingHistory, rewardEntry]
-            console.log('[MainApp] 📚 Updated history entries:', updatedHistory.length)
-            
-            // ✅ STEP 4: Update all goal data including accumulated history
-            updatedGoals.todayGoalMet = true
-            updatedGoals.todayRewardSent = true
-            updatedGoals.todayRewardAmount = goals.dailyReward
-            updatedGoals.totalGoalsMet = (goals.totalGoalsMet || 0) + 1
-            updatedGoals.totalRewardsEarned = (goals.totalRewardsEarned || 0) + goals.dailyReward
-            updatedGoals.currentStreak = (goals.currentStreak || 0) + 1
-            updatedGoals.lastRewardDate = today
-            updatedGoals.currentBalance = Math.max(0, goals.currentBalance - goals.dailyReward)
-            updatedGoals.history = updatedHistory  // ← Include accumulated history!
-            
-            console.log('[MainApp] 💾 Saving to Nostr with', updatedHistory.length, 'history entries')
-            console.log('[MainApp] 🎉 Goal completed and reward sent!')
-          } else {
-            console.error('[MainApp] ❌ Failed to send reward:', result.error)
-          }
-        } catch (rewardError) {
-          console.error('[MainApp] ❌ Error sending reward:', rewardError)
-        }
-      } else if (updatedGoals.todayWords >= goals.dailyWordGoal) {
-        console.log('[MainApp] ✅ Goal already met and reward sent today')
-        updatedGoals.todayGoalMet = true
-      } else {
-        console.log('[MainApp] ⏳ Goal not yet reached:', { todayWords: updatedGoals.todayWords, goal: goals.dailyWordGoal })
-      }
-      
-      // Update the Lightning Goals event
-      await updateLightningGoals(authData.pubkey, updatedGoals, authData)
-      console.log('[MainApp] ✅ Lightning Goals updated successfully')
-      
-      } catch (error) {
-      console.error('[MainApp] ❌ Error updating Lightning Goals:', error)
-    }
-  }
-
-  // Load Lightning address from localStorage
-  useEffect(() => {
-    if (authData?.pubkey) {
-      const savedAddress = localStorage.getItem(`lightning-address-${authData.pubkey}`)
-      console.log('[MainApp] 🔍 Loading Lightning address:', savedAddress)
-      if (savedAddress) {
-        setUserLightningAddress(savedAddress)
-        console.log('[MainApp] ✅ Lightning address loaded:', savedAddress)
-      }
-    }
-  }, [authData?.pubkey])
-
-  // AUDIT POINT 4: Update word count when notes change
-  useEffect(() => {
-    const total = calculateTotalWordCount(notes)
-    if (total !== lastSavedWordCount) {
-      console.log('[MainApp] 🔄 Word count changed:', lastSavedWordCount, '→', total)
-      setLastSavedWordCount(total)
-    }
-  }, [notes])
-
   useEffect(() => {
     const loadUserNotes = async () => {
       console.log("[NostrJournal] Loading notes for user:", authData.pubkey)
-      
-      // Clear selective storage on app startup for consistent cross-device experience
-      // Preserves remote signer sessions for fast reconnect
-      await clearSelectiveStorage()
       
       setIsLoading(true)
       setSyncStatus("syncing")
@@ -625,32 +289,39 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
         // ALWAYS check and set up remote signer if needed
         console.log("[NostrJournal] 🔧 Checking remote signer setup for auth method:", authData.authMethod)
         
-        // Auto-resume remote signer session if using remote auth
+        // Set up the remote signer for remote authentication using NDK
         if (authData.authMethod === 'remote') {
-          console.log("[NostrJournal] 🔧 Attempting to auto-resume remote signer...")
-          
+          console.log("[NostrJournal] 🔧 Setting up NDK-based remote signer from session data")
+          console.log("[NostrJournal] 🔧 AuthData:", {
+            pubkey: authData.pubkey,
+            authMethod: authData.authMethod,
+            hasSessionData: !!authData.sessionData,
+            hasClientSecretKey: !!authData.clientSecretKey,
+            hasBunkerUri: !!authData.bunkerUri
+          })
+
           try {
-            const unifiedSigner = await import('@/lib/auth/unified-remote-signer')
-            const result = await unifiedSigner.resumeSession()
-            
-            if (result) {
-              console.log("[NostrJournal] ✅ Remote signer auto-resumed successfully")
-              
-              // Verify pubkey matches
-              if (result.userPubkey !== authData.pubkey) {
-                console.warn("[NostrJournal] ⚠️ Pubkey mismatch after resume!")
-              }
+            // Initialize NDK-based signer manager and WAIT for it to be ready
+            const { initializeSignerFromAuthData, isSignerReady } = await import('@/lib/ndk-signer-manager')
+
+            console.log("[NostrJournal] 🔧 Initializing NDK signer...")
+            const success = await initializeSignerFromAuthData(authData)
+
+            if (success && isSignerReady()) {
+              console.log("[NostrJournal] ✅ NDK signer ready (reused from login - instant!)")
             } else {
-              console.warn("[NostrJournal] ⚠️ Failed to auto-resume remote signer")
-              // User will need to reconnect
+              console.error("[NostrJournal] ❌ Failed to initialize NDK-based signer manager")
+              throw new Error("Remote signer initialization failed")
             }
           } catch (error) {
-            console.error("[NostrJournal] ❌ Error resuming remote signer:", error)
+            console.error("[NostrJournal] ❌ Error during NDK signer manager initialization:", error)
+            throw error // Re-throw to be caught by outer try-catch
           }
         }
 
         // Load notes from Kind 30001 lists
-        console.log("[NostrJournal] Loading journal entries from Kind 30001 lists...")
+        console.log("[NostrJournal] 📝 Loading journal entries from Kind 30001 lists...")
+        setSyncStatus("syncing") // Show syncing status while loading
         let relayNotes: any[] = []
         try {
           relayNotes = await loadJournalFromKind30001(authData)
@@ -664,7 +335,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
         
         // Use only relay notes since local storage is disabled
         const allNotes = relayNotes.map(note => ({
-                ...note,
+          ...note,
           source: 'relay',
           fetchedFromRelays: true,
           publishedToRelays: true, // If fetched from relays, it was previously published
@@ -689,13 +360,13 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
 
         setIsLoading(false)
         setSyncStatus("synced")
-              setLastSyncTime(new Date())
+          setLastSyncTime(new Date())
 
         console.log("[NostrJournal] ✅ Notes loaded successfully:", validatedNotes.length)
 
-          } catch (error) {
+      } catch (error) {
         console.error("[NostrJournal] Error loading notes:", error)
-            setSyncStatus("error")
+        setSyncStatus("error")
         setConnectionError(error instanceof Error ? error.message : "Failed to load notes")
         setIsLoading(false)
         // CRITICAL: Set empty array instead of leaving undefined
@@ -715,7 +386,6 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       loadUserNotes().finally(() => {
         clearTimeout(loadTimeout)
       })
-      checkLightningGoals()
     } else {
       clearTimeout(loadTimeout)
     }
@@ -868,8 +538,9 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       
       // CRITICAL: Check if remote signer is active
       if (authData.authMethod === 'remote') {
-        const unifiedSigner = await import('@/lib/auth/unified-remote-signer')
-        if (!unifiedSigner.isConnected()) {
+        const { getActiveSigner } = await import('@/lib/signer-connector')
+        const signer = getActiveSigner()
+        if (!signer) {
           console.error("[NostrJournal] ❌ Remote signer not active!")
           throw new Error("Remote signer disconnected. Please reconnect.")
         }
@@ -912,11 +583,9 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   }
 
   const handleUpdateNote = async (updatedNote: Note) => {
-    console.log("🚨🚨🚨 handleUpdateNote ENTRY POINT - NOTE ID:", updatedNote.id)
-    console.log("[NostrJournal] 🔥🔥🔥 handleUpdateNote CALLED for note:", updatedNote.id)
+    console.log("[NostrJournal] Updating note:", updatedNote.id)
     console.log("[NostrJournal] 🔍 Auth method check - authData.authMethod:", authData.authMethod)
     console.log("[NostrJournal] 🔍 Auth method type:", typeof authData.authMethod)
-    console.log("[NostrJournal] 🔍 isIncentiveEnabled:", isIncentiveEnabled)
 
     // Update local state immediately
     const optimisticNote = {
@@ -950,8 +619,9 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       
       // CRITICAL: Check if remote signer is active
       if (authData.authMethod === 'remote') {
-        const unifiedSigner = await import('@/lib/auth/unified-remote-signer')
-        if (!unifiedSigner.isConnected()) {
+        const { getActiveSigner } = await import('@/lib/signer-connector')
+        const signer = getActiveSigner()
+        if (!signer) {
           console.error("[NostrJournal] ❌ Remote signer not active!")
           throw new Error("Remote signer disconnected. Please reconnect.")
         }
@@ -980,39 +650,6 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
         setSelectedNote(finalNote)
         
         console.log("[NostrJournal] ✅ Note update complete!")
-        
-        // Check for Lightning Goals reward eligibility after successful save
-        console.log("[NostrJournal] 🔥 REACHED Lightning Goals check section")
-        console.log("[NostrJournal] 🔍 isIncentiveEnabled:", isIncentiveEnabled)
-        if (isIncentiveEnabled) {
-          try {
-            console.log("[NostrJournal] ⚡ Checking Lightning Goals reward eligibility...")
-            // AUDIT POINT 5: Calculate total word count from ALL notes after save
-            const updatedNotes = notes.map(n => n.id === updatedNote.id ? finalNote : n)
-            const totalWordCount = calculateTotalWordCount(updatedNotes)
-            console.log("[NostrJournal] 🔍 About to call checkRewardEligibility with wordCount:", totalWordCount)
-            
-            console.log("[NostrJournal] 📊 Total word count after save:", totalWordCount)
-            
-            // Always set word count (even if 0) so monitor knows about the update
-            console.log("[NostrJournal] ⚡ Setting total word count:", totalWordCount)
-            setLastSavedWordCount(totalWordCount)
-            
-            // Trigger reward check if word count is provided
-            if (totalWordCount > 0) {
-              console.log("[NostrJournal] ⚡ Total word count > 0, triggering automatic reward check")
-              
-              // Call the direct reward eligibility check
-              await checkRewardEligibility(totalWordCount)
-      } else {
-              console.log("[NostrJournal] ⚡ Total word count = 0, skipping reward check")
-            }
-          } catch (rewardError) {
-            console.error("[NostrJournal] ⚠️ Error checking reward eligibility:", rewardError)
-            // Don't fail the note save if reward check fails
-          }
-        }
-        
       } else {
         console.error("[NostrJournal] ❌ Failed to save updated note to relays:", result.error || "Unknown error")
         alert(`Failed to update note: ${result.error || "Unknown error"}`)
@@ -1092,7 +729,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
 
     // Clean up the remote signer connection
     await cleanupSigner()
-
+    
     // IMPORTANT: Clear saved remote session
     if (authData.authMethod === 'remote') {
       localStorage.removeItem('nostr_remote_session')
@@ -1123,11 +760,9 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     // Remove from local state immediately
     const updatedNotes = notes.filter((note) => note.id !== noteToDelete.id)
     setNotes(updatedNotes)
-    console.log("[NostrJournal] ✅ Notes updated, new count:", updatedNotes.length)
 
     if (selectedNote?.id === noteToDelete.id) {
       setSelectedNote(null)
-      console.log("[NostrJournal] ✅ Selected note cleared")
     }
 
     // LOCAL STORAGE DISABLED - Notes are only stored on Nostr relays
@@ -1290,10 +925,6 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     setSyncStatus("syncing")
 
     try {
-      // Clear selective storage first (same as initial login) to prevent stale data
-      console.log("[NostrJournal] 🧹 Clearing selective storage before manual sync...")
-      await clearSelectiveStorage()
-      
       // Sync is just loading from Kind 30001 lists (same as app startup)
       const relayNotes = await syncFromKind30001(authData)
       
@@ -1347,10 +978,6 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     setIsRefreshing(true)
     
     try {
-      // Clear selective storage first (same as initial login) to prevent stale data
-      console.log("[NostrJournal] 🧹 Clearing selective storage before manual refresh...")
-      await clearSelectiveStorage()
-      
       // Use the same logic as page load - fetch from Kind 30001 lists
       const relayNotes = await loadJournalFromKind30001(authData)
       console.log("[NostrJournal] ✅ Refreshed", relayNotes.length, "journal entries from Kind 30001 lists")
@@ -1535,6 +1162,8 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                 {/* Logo */}
                 <div className="flex items-center gap-3">
                   <Logo className="h-8 w-auto" />
+                  {/* Color test - should be logo blue */}
+                  <div className="w-4 h-4 bg-primary rounded ml-2" title="Logo blue test"></div>
                   <div className="hidden sm:flex items-center gap-2 text-xs text-muted-foreground">
                     <span>{notes.length} notes</span>
                     <span>•</span>
@@ -1550,8 +1179,6 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                   <CheckCircle2 className="h-4 w-4 text-green-500" />
                   <span className="text-muted-foreground">Events sync instantly</span>
                 </div>
-                
-                {/* Streak Counter - Desktop (only for users with Lightning Goals) */}
                 
                 {/* Manual refresh button - Desktop */}
                 <Button
@@ -1587,44 +1214,6 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                   )}
                 </div>
                 
-                
-                {/* Dynamic Goals/Streak Button */}
-                {isIncentiveEnabled() && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      // Refresh incentive settings when opening Goals modal
-                      checkLightningGoals()
-                      setShowIncentives(true)
-                    }}
-                    className={hasLightningGoals 
-                      ? "text-orange-600 hover:text-orange-700 hover:bg-orange-50 dark:hover:bg-orange-900/20" 
-                      : "text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900/20"
-                    }
-                    title={hasLightningGoals ? `${userStreak} day streak` : "Set up Lightning Goals"}
-                  >
-                    {hasLightningGoals ? (
-                      <>
-                        {/* Mobile: Circle with number */}
-                        <div className="sm:hidden flex items-center justify-center w-8 h-8 bg-orange-100 dark:bg-orange-900/30 rounded-full">
-                          <span className="text-orange-600 dark:text-orange-400 font-bold text-sm">{userStreak}</span>
-                        </div>
-                        {/* Desktop: Full text */}
-                        <span className="hidden sm:inline font-semibold">{userStreak} day streak</span>
-                      </>
-                    ) : (
-                      <>
-                        {/* Mobile: Lightning icon to indicate feature */}
-                        <div className="sm:hidden flex items-center justify-center w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-full">
-                          <Zap className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                        </div>
-                        {/* Desktop: Full text */}
-                        <span className="hidden sm:inline">Set Up Daily Goal</span>
-                      </>
-                    )}
-                  </Button>
-                )}
                 
                 {/* Theme toggle with system option */}
                 <DropdownMenu>
@@ -1726,96 +1315,6 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                       </div>
                     </div>
                     
-                    {/* Lightning Address Section */}
-                    <div className="px-4 py-3 border-t border-border">
-                      <div className="space-y-2">
-                        <label className="text-xs font-medium text-muted-foreground">Lightning Address</label>
-                        <div className="flex items-center gap-2">
-                          <Input
-                            type="text"
-                            value={userLightningAddress || ''}
-                            onChange={(e) => setUserLightningAddress(e.target.value)}
-                            placeholder="your@lightning.address"
-                            className="flex-1 text-sm"
-                          />
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={async () => {
-                              try {
-                                // Save to localStorage
-                                localStorage.setItem(`lightning-address-${authData.pubkey}`, userLightningAddress)
-                                
-                                // Update profile metadata
-                                const { SimplePool } = await import('nostr-tools')
-                                const pool = new SimplePool()
-                                const RELAYS = ['wss://relay.damus.io', 'wss://relay.snort.social', 'wss://nos.lol', 'wss://relay.nostr.band']
-                                
-                                // Get current profile
-                                const profileEvents = await pool.querySync(RELAYS, {
-                                  kinds: [0],
-                                  authors: [authData.pubkey],
-                                  limit: 1
-                                })
-                                
-                                let profile = {}
-                                if (profileEvents.length > 0) {
-                                  try {
-                                    profile = JSON.parse(profileEvents[0].content)
-                                  } catch (e) {
-                                    console.log('Error parsing profile:', e)
-                                  }
-                                }
-                                
-                                // Update profile with Lightning address
-                                const updatedProfile = {
-                                  ...profile,
-                                  lud16: userLightningAddress,
-                                  lightning_address: userLightningAddress
-                                }
-                                
-                                // Create new profile event
-                                const profileEvent = {
-                                  kind: 0,
-                                  created_at: Math.floor(Date.now() / 1000),
-                                  tags: [],
-                                  content: JSON.stringify(updatedProfile),
-                                  pubkey: authData.pubkey
-                                }
-                                
-                                // Sign and publish
-                                const signedEvent = await window.nostr.signEvent(profileEvent)
-                                await pool.publish(RELAYS, signedEvent)
-                                
-                                console.log('✅ Lightning address saved to profile:', userLightningAddress)
-                                
-                                // Update goals if exists
-                                try {
-                                  const { updateLightningAddress } = await import('@/lib/lightning-goals')
-                                  await updateLightningAddress(authData.pubkey, userLightningAddress, authData)
-                                  console.log('✅ Lightning address updated in active goals')
-                                } catch (error) {
-                                  console.log('ℹ️ No active goals to update Lightning address:', error.message)
-                                }
-                                
-                                alert('Lightning address saved successfully!')
-                                
-                              } catch (error) {
-                                console.error('Error saving Lightning address:', error)
-                                alert('Error saving Lightning address: ' + error.message)
-                              }
-                            }}
-                            disabled={!userLightningAddress}
-                          >
-                            Save
-                          </Button>
-                        </div>
-                        <p className="text-xs text-muted-foreground">
-                          Where daily rewards will be sent
-                        </p>
-                      </div>
-                    </div>
-                    
                     <DropdownMenuGroup>
                       <DropdownMenuItem 
                         onClick={(e) => {
@@ -1907,7 +1406,6 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                     
                     <DropdownMenuSeparator />
                     
-                    
                     <DropdownMenuItem 
                       onClick={() => {
                         console.log('[Dropdown] Support clicked')
@@ -1968,20 +1466,20 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
               <div className="flex flex-col h-full">
                 {/* Tags Panel */}
                 <div className="flex-shrink-0">
-              <TagsPanel
-                tags={tags}
-                selectedTag={selectedTag}
-                onSelectTag={(tag) => {
-                  setSelectedTag(tag)
-                  setIsMobileSidebarOpen(false)
-                }}
-                pubkey={authData.pubkey}
-                onLogout={handleLogout}
-                onDonationClick={() => {
-                  setShowDonationModal(true)
-                  setIsMobileSidebarOpen(false)
-                }}
-              />
+                  <TagsPanel
+                    tags={tags}
+                    selectedTag={selectedTag}
+                    onSelectTag={(tag) => {
+                      setSelectedTag(tag)
+                      setIsMobileSidebarOpen(false)
+                    }}
+                    pubkey={authData.pubkey}
+                    onLogout={handleLogout}
+                    onDonationClick={() => {
+                      setShowDonationModal(true)
+                      setIsMobileSidebarOpen(false)
+                    }}
+                  />
                 </div>
                 
                 {/* Note List */}
@@ -2031,74 +1529,40 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
           </div>
         </div>
 
-          {/* Mobile Editor Overlay - MAXIMIZED FOR MOBILE */}
+          {/* Mobile Editor Overlay */}
         {selectedNote && (
-            <div className="fixed inset-0 z-40 lg:hidden bg-background mobile-editor-overlay" style={{ height: '100vh' }}>
-              {/* Compact header - MINIMIZE THIS */}
-              <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-card">
-                <h2 className="text-sm font-medium truncate flex-1">{selectedNote.title}</h2>
-                <div className="flex items-center gap-1">
-                  {!focusMode && (
-                    <Button
-                      onClick={() => setFocusMode(true)}
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 px-2"
-                      title="Focus Mode"
-                    >
-                      <Zap className="w-4 h-4" />
-                    </Button>
-                  )}
-                  <Button
-                    onClick={() => setSelectedNote(null)}
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 w-8 p-0 ml-2"
-                  >
-                    <X className="w-4 h-4" />
-                  </Button>
-                </div>
-              </div>
-
-              {/* Editor container - MAXIMIZE THIS */}
-              <div 
-                className="absolute inset-0 mobile-editor-content"
-                style={{ 
-                  top: '42px',
-                  bottom: 0,
-                  left: 0,
-                  right: 0,
-                  overflow: 'auto'
-                }}
-              >
-                <Editor
-                  note={selectedNote}
-                  onUpdateNote={handleUpdateNote}
-                  onPublishNote={handlePublishNote}
-                  onPublishHighlight={handlePublishHighlight}
-                  onDeleteNote={handleDeleteNote}
-                  authData={authData}
-                  isMobile={true}
-                />
-              </div>
-
-              {/* Floating exit button (only in focus mode) */}
-              {focusMode && (
-                <button
-                  onClick={() => setFocusMode(false)}
-                  className="fixed bottom-4 right-4 h-12 w-12 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center z-50"
+            <div className="fixed inset-0 z-40 lg:hidden bg-background">
+              <div className="h-full flex flex-col">
+                <div className="bg-card border-b border-border px-4 py-3 flex items-center justify-between shadow-sm">
+                <h2 className="text-foreground font-medium truncate">{selectedNote.title}</h2>
+                <Button
+                  onClick={() => setSelectedNote(null)}
+                  variant="ghost"
+                  size="sm"
+                  className="text-muted-foreground hover:text-foreground"
                 >
-                  <X className="w-5 h-5" />
-                </button>
-              )}
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
+                <div className="flex-1 overflow-hidden">
+              <Editor
+                note={selectedNote}
+                onUpdateNote={handleUpdateNote}
+                onPublishNote={handlePublishNote}
+                onPublishHighlight={handlePublishHighlight}
+                onDeleteNote={handleDeleteNote}
+                    authData={authData}
+              />
+                </div>
             </div>
+          </div>
         )}
         </div>
 
         {showPublishConfirmation && noteToPublish && (
-          <PublishConfirmationModal
-            note={noteToPublish}
-            onConfirm={handleConfirmPublish}
+          <PublishConfirmationModal 
+            note={noteToPublish} 
+            onConfirm={handleConfirmPublish} 
             onCancel={handleCancelPublish}
             isLoading={isPublishing}
           />
@@ -2110,13 +1574,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
           <DeleteConfirmationModal note={noteToDelete} onConfirm={handleConfirmDelete} onCancel={handleCancelDelete} />
         )}
 
-        {showProfile && (
-          <ProfilePage 
-            authData={authData} 
-            onClose={() => setShowProfile(false)}
-            onLightningAddressUpdate={(address) => setUserLightningAddress(address)}
-          />
-        )}
+        {showProfile && <ProfilePage authData={authData} onClose={() => setShowProfile(false)} />}
 
         {showRelayManager && (
           <RelayManager
@@ -2149,67 +1607,6 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       open={showDonationModal}
       onOpenChange={setShowDonationModal}
     />
-    
-    {/* Lightning Goals Monitor - Always Active */}
-    {(() => {
-      const shouldRender = isIncentiveEnabled() && authData
-      console.log('[MainApp] 🔍 Monitor render check:', {
-        incentiveEnabled: isIncentiveEnabled(),
-        hasAuthData: !!authData,
-        authPubkey: authData?.pubkey?.substring(0, 8) || 'NO_PUBKEY',
-        wordCount: lastSavedWordCount,
-        lightningAddress: userLightningAddress || 'NONE',
-        shouldRender
-      })
-      
-      if (shouldRender) {
-        console.log('[MainApp] ✅ RENDERING MONITOR')
-        return (
-          <LightningGoalsMonitor
-            userPubkey={authData.pubkey}
-            authData={authData}
-            currentWordCount={lastSavedWordCount || 0}
-            userLightningAddress={userLightningAddress}
-            onWordCountProcessed={() => setLastSavedWordCount(null)}
-          />
-        )
-      } else {
-        console.log('[MainApp] ❌ NOT RENDERING MONITOR')
-        return null
-      }
-    })()}
-    
-    {/* Debug Lightning address */}
-    {authData && (
-      <div style={{ display: 'none' }}>
-        Debug: Lightning address = {userLightningAddress || 'null'}
-      </div>
-    )}
-    
-    {/* Lightning Incentive Modal */}
-    {isIncentiveEnabled() && (
-      <IncentiveModal
-        isOpen={showIncentives}
-        onClose={() => setShowIncentives(false)}
-        userPubkey={authData.pubkey}
-        authData={authData}
-        selectedNote={selectedNote}
-        lastSavedWordCount={lastSavedWordCount}
-        userLightningAddress={userLightningAddress}
-        onWordCountProcessed={() => setLastSavedWordCount(null)}
-        onSetupStatusChange={async (hasSetup) => {
-          // Update header when setup status changes
-          setHasLightningGoals(hasSetup)
-          if (!hasSetup) {
-            setUserStreak(0)
-          } else {
-            // Refresh Lightning Goals data when setup is active
-            await checkLightningGoals()
-          }
-        }}
-        onStakeActivated={checkLightningGoals}
-      />
-    )}
     
     </ErrorBoundary>
   )
