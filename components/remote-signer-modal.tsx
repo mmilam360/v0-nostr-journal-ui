@@ -118,8 +118,12 @@ export default function RemoteSignerModal({ isOpen, onClose, onLoginSuccess }: R
           try {
             console.log('[RemoteSignerModal] 📬 Received NIP-46 event from:', event.pubkey)
 
-            // Create the remote signer with the actual remote pubkey
-            const remoteSigner = new NDKNip46Signer(ndk, event.pubkey, localSigner)
+            // Create bunker URL from the remote signer's pubkey
+            const bunkerUrl = `bunker://${event.pubkey}?relay=wss://relay.nsec.app`
+            console.log('[RemoteSignerModal] Creating signer with bunker URL:', bunkerUrl)
+
+            // Create the remote signer with the bunker URL
+            const remoteSigner = new NDKNip46Signer(ndk, bunkerUrl, localSigner)
 
             // Wait for signer to be ready
             await remoteSigner.blockUntilReady()
