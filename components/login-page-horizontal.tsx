@@ -22,6 +22,7 @@ import { bytesToHex } from '@noble/hashes/utils'
 import { QRCodeSVG } from 'qrcode.react'
 import { Logo } from './logo'
 import InfoModal from './info-modal'
+import RemoteSignerModal from './remote-signer-modal'
 import NDK, { NDKNip46Signer, NDKPrivateKeySigner } from '@nostr-dev-kit/ndk'
 
 interface LoginPageHorizontalProps {
@@ -49,6 +50,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
   const [nsecInput, setNsecInput] = useState('')
   const [showNsec, setShowNsec] = useState(false)
   const [remoteSignerMode, setRemoteSignerMode] = useState<'client' | 'signer'>('client')
+  const [showRemoteSignerModal, setShowRemoteSignerModal] = useState(false)
   
   // Mobile detection for mobile-specific fixes
   const [isMobile, setIsMobile] = useState(false)
@@ -300,36 +302,8 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
   }, [currentStep, connectionState])
 
   const handleRemoteSignerClick = () => {
-    console.log('[Login] 🚀 handleRemoteSignerClick started')
-    
-    try {
-      // Terminate any active connections before switching methods
-      console.log('[Login] 🛑 Terminating connections...')
-      terminateAllConnections()
-      console.log('[Login] ✅ Connections terminated')
-      
-      console.log('[Login] 🔄 Setting selected method to remote...')
-      setSelectedMethod('remote')
-      console.log('[Login] ✅ Selected method set to remote')
-      
-      // Mobile-specific: Auto-show QR code by default
-      if (isMobile) {
-        console.log('[Login] 📱 Mobile detected - setting QR code mode')
-        setRemoteSignerMode('client')
-        console.log('[Login] 📱 Mobile QR code mode set')
-      }
-      
-      console.log('[Login] 🔄 Forcing UI update...')
-      forceUIUpdate()
-      console.log('[Login] ✅ UI update forced')
-      
-      console.log('[Login] ➡️ Going to next step...')
-      goNext()
-      console.log('[Login] ✅ Moved to next step')
-      
-    } catch (error) {
-      console.error('[Login] ❌ Error in handleRemoteSignerClick:', error)
-    }
+    console.log('[Login] 🚀 Opening remote signer modal...')
+    setShowRemoteSignerModal(true)
   }
 
 
@@ -1112,6 +1086,13 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
       {showInfo && (
         <InfoModal onClose={() => setShowInfo(false)} />
       )}
+      
+      {/* Remote Signer Modal */}
+      <RemoteSignerModal
+        isOpen={showRemoteSignerModal}
+        onClose={() => setShowRemoteSignerModal(false)}
+        onLoginSuccess={onLoginSuccess}
+      />
     </div>
   )
 }
