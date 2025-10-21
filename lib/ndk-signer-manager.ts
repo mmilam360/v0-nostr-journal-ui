@@ -217,16 +217,7 @@ export async function signEventWithRemote(unsignedEvent: NostrEvent, authData: A
         }
       }
 
-      // Ensure the remote signer is still connected and ready
-      const nip46Signer = globalSigner as NDKNip46Signer
-      if (!nip46Signer.isReady()) {
-        console.log('[NDK Signer Manager] Remote signer not ready, attempting to reconnect...')
-        const reconnected = await initializeSignerFromAuthData(authData)
-        if (!reconnected) {
-          throw new Error('Remote signer connection lost and failed to reconnect')
-        }
-      }
-
+      // Try to sign with the global signer
       const ndkEvent = new NDKEvent(ndk, unsignedEvent)
       await ndkEvent.sign(globalSigner)
       console.log('[NDK Signer Manager] Event signed with remote signer')
@@ -349,12 +340,12 @@ export async function cleanupSigner() {
  */
 export function isRemoteSignerConnected(): boolean {
   if (!globalSigner) return false
-  
+
   if (currentAuthData?.authMethod === 'remote') {
-    const nip46Signer = globalSigner as NDKNip46Signer
-    return nip46Signer.isReady()
+    // If we have a global signer and it's remote auth, consider it ready
+    return true
   }
-  
+
   return false
 }
 
