@@ -17,17 +17,21 @@ export default function RemoteSignerModal({ isOpen, onClose, onLoginSuccess }: R
   const [isConnecting, setIsConnecting] = useState(false)
   const [connectionStatus, setConnectionStatus] = useState<'idle' | 'connecting' | 'connected' | 'error'>('idle')
   const [errorMessage, setErrorMessage] = useState('')
+  const [isGenerating, setIsGenerating] = useState(false)
 
   // Generate nostrconnect URL and QR code when modal opens
   useEffect(() => {
     if (isOpen && !nostrConnectUrl) {
+      console.log('[RemoteSignerModal] Modal opened, generating URL...')
       generateNostrConnectUrl()
     }
-  }, [isOpen])
+  }, [isOpen, nostrConnectUrl])
 
   const generateNostrConnectUrl = async () => {
     try {
       console.log('[RemoteSignerModal] Generating nostrconnect URL...')
+      setIsGenerating(true)
+      setErrorMessage('')
       
       // Create NDK instance
       const ndk = new NDK({
@@ -64,6 +68,7 @@ export default function RemoteSignerModal({ isOpen, onClose, onLoginSuccess }: R
       console.log('[RemoteSignerModal] Generated nostrconnect URI:', connectUri)
 
       // Generate QR code
+      console.log('[RemoteSignerModal] Generating QR code...')
       const qrCodeDataUrl = await QRCode.toDataURL(connectUri, {
         width: 256,
         margin: 2,
@@ -73,6 +78,7 @@ export default function RemoteSignerModal({ isOpen, onClose, onLoginSuccess }: R
         }
       })
       setQrCodeDataUrl(qrCodeDataUrl)
+      console.log('[RemoteSignerModal] QR code generated successfully')
 
       // Start listening for connections
       startNostrConnectListening(ndk, localSigner, localPubkey)
@@ -81,6 +87,7 @@ export default function RemoteSignerModal({ isOpen, onClose, onLoginSuccess }: R
       console.error('[RemoteSignerModal] Failed to generate nostrconnect URL:', error)
       setErrorMessage('Failed to generate connection URL')
       setConnectionStatus('error')
+      setIsGenerating(false)
     }
   }
 
@@ -224,7 +231,7 @@ export default function RemoteSignerModal({ isOpen, onClose, onLoginSuccess }: R
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div className="fixed inset-0 bg-black bg-opacity-20 backdrop-blur-sm flex items-center justify-center z-50">
       <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
         {/* Header */}
         <div className="flex justify-between items-center mb-4">
@@ -243,7 +250,13 @@ export default function RemoteSignerModal({ isOpen, onClose, onLoginSuccess }: R
         </p>
 
         {/* QR Code */}
-        {qrCodeDataUrl && (
+        {isGenerating ? (
+          <div className="flex justify-center mb-6">
+            <div className="w-64 h-64 bg-gray-100 rounded flex items-center justify-center">
+              <div className="text-gray-500">Generating QR code...</div>
+            </div>
+          </div>
+        ) : qrCodeDataUrl ? (
           <div className="flex justify-center mb-6">
             <img 
               src={qrCodeDataUrl} 
@@ -251,20 +264,21 @@ export default function RemoteSignerModal({ isOpen, onClose, onLoginSuccess }: R
               className="w-64 h-64"
             />
           </div>
-        )}
+        ) : null}
 
         {/* Nostr Connect URL */}
         <div className="mb-4">
           <div className="flex items-center space-x-2">
             <input
               type="text"
-              value={nostrConnectUrl}
+              value={isGenerating ? 'Generating connection URL...' : nostrConnectUrl}
               readOnly
               className="flex-1 px-3 py-2 border border-dashed border-gray-300 rounded text-sm bg-gray-50"
             />
             <button
               onClick={() => copyToClipboard(nostrConnectUrl)}
-              className="p-2 text-gray-400 hover:text-gray-600"
+              disabled={!nostrConnectUrl}
+              className="p-2 text-gray-400 hover:text-gray-600 disabled:opacity-50"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
