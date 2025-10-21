@@ -76,7 +76,7 @@ export default function RemoteSignerModal({ isOpen, onClose, onLoginSuccess }: R
       setQrCodeDataUrl(qrDataUrl)
       console.log('[RemoteSignerModal] ✅ QR code generated instantly')
 
-      // Now connect to NDK and start listening (async in background)
+      // Now connect to NDK and create signer (async in background)
       const ndk = new NDK({
         explicitRelayUrls: [
           'wss://relay.nsec.app',
@@ -85,9 +85,62 @@ export default function RemoteSignerModal({ isOpen, onClose, onLoginSuccess }: R
         ],
       })
 
-      ndk.connect().then(() => {
-        console.log('[RemoteSignerModal] NDK connected, now listening for remote signer...')
-        startNostrConnectListening(ndk, localSigner, localPubkey)
+      // Connect and start waiting for remote signer
+      ndk.connect().then(async () => {
+        console.log('[RemoteSignerModal] NDK connected, creating NIP-46 signer...')
+
+        // Dynamically import NDK types
+        const { NDKNip46Signer } = await import('@nostr-dev-kit/ndk')
+
+        // Create signer with LOCAL pubkey (not remote)
+        // NDK will handle the connection when remote signer scans QR
+        const remoteSigner = new NDKNip46Signer(ndk, localPubkey, localSigner)
+
+        setConnectionStatus('connecting')
+        setIsConnecting(true)
+        console.log('[RemoteSignerModal] Waiting for remote signer to scan QR...')
+
+        try {
+          // This will wait for the remote signer to connect
+          await remoteSigner.blockUntilReady()
+          console.log('[RemoteSignerModal] ✅ Remote signer connected!')
+
+          const user = await remoteSigner.user()
+          const remotePubkey = user.pubkey
+
+          // CRITICAL: Save signer to global state
+          const { setActiveSigner } = await import('@/lib/ndk-signer-manager')
+          setActiveSigner(remoteSigner)
+          console.log('[RemoteSignerModal] ✅ Saved remote signer to global state')
+
+          // Store bunker URI
+          const bunkerUri = `bunker://${remotePubkey}?relay=wss://relay.nsec.app`
+          localStorage.setItem('nip46-bunker-uri', bunkerUri)
+
+          // Create auth data
+          const authData = {
+            pubkey: remotePubkey,
+            authMethod: 'remote' as const,
+            bunkerUri: bunkerUri,
+            relays: ['wss://relay.nsec.app', 'wss://relay.damus.io', 'wss://nos.lol'],
+            sessionData: { bunkerUri },
+            clientSecretKey: localSigner.privateKey,
+            bunkerPubkey: remotePubkey
+          }
+
+          console.log('[RemoteSignerModal] ✅ QR code connection successful!')
+          setConnectionStatus('connected')
+
+          // Close modal and login
+          onClose()
+          onLoginSuccess(authData)
+
+        } catch (error) {
+          console.error('[RemoteSignerModal] Connection failed:', error)
+          setErrorMessage('Connection failed. Please try again.')
+          setConnectionStatus('error')
+          setIsConnecting(false)
+        }
       })
 
     } catch (error) {
@@ -97,98 +150,6 @@ export default function RemoteSignerModal({ isOpen, onClose, onLoginSuccess }: R
     }
   }
 
-  const startNostrConnectListening = async (ndk: any, localSigner: any, localPubkey: string) => {
-    try {
-      console.log('[RemoteSignerModal] Starting nostrconnect listening...')
-      setConnectionStatus('connecting')
-      setIsConnecting(true)
-
-      // Dynamically import NDK types
-      const { NDKNip46Signer } = await import('@nostr-dev-kit/ndk')
-
-      // Subscribe to NIP-46 connection requests
-      const filter = {
-        kinds: [24133], // NIP-46 request kind
-        '#p': [localPubkey],
-        since: Math.floor(Date.now() / 1000)
-      }
-
-      console.log('[RemoteSignerModal] Subscribing to NIP-46 connection requests...')
-
-      const sub = ndk.subscribe(filter, { closeOnEose: false })
-
-      // Wait for connection with timeout
-      const connectionPromise = new Promise<{ remotePubkey: string; remoteSigner: any }>((resolve, reject) => {
-        const timeout = setTimeout(() => {
-          sub.stop()
-          reject(new Error('Connection timeout after 120 seconds'))
-        }, 120000)
-
-        sub.on('event', async (event: any) => {
-          try {
-            console.log('[RemoteSignerModal] 📬 Received NIP-46 event from:', event.pubkey)
-
-            // Create the remote signer with the actual remote pubkey
-            // NOTE: Don't pass permissions object - NDK handles this internally
-            const remoteSigner = new NDKNip46Signer(ndk, event.pubkey, localSigner)
-
-            // Wait for signer to be ready
-            await remoteSigner.blockUntilReady()
-            console.log('[RemoteSignerModal] Remote signer connected!')
-
-            const user = await remoteSigner.user()
-            const remotePubkey = user.pubkey
-
-            clearTimeout(timeout)
-            sub.stop()
-            resolve({ remotePubkey, remoteSigner })
-          } catch (error) {
-            console.error('[RemoteSignerModal] Error handling NIP-46 event:', error)
-            reject(error)
-          }
-        })
-
-        sub.on('eose', () => {
-          console.log('[RemoteSignerModal] End of stored events, waiting for new connections...')
-        })
-      })
-
-      const { remotePubkey, remoteSigner } = await connectionPromise
-
-      // CRITICAL: Save signer to global state so main app can reuse it
-      const { setActiveSigner } = await import('@/lib/ndk-signer-manager')
-      setActiveSigner(remoteSigner)
-      console.log('[RemoteSignerModal] ✅ Saved remote signer to global state for instant reuse')
-
-      // Store bunker URI for reconnection
-      const bunkerUri = `bunker://${remotePubkey}?relay=wss://relay.nsec.app`
-      localStorage.setItem('nip46-bunker-uri', bunkerUri)
-
-      // Create auth data
-      const authData = {
-        pubkey: remotePubkey,
-        authMethod: 'remote' as const,
-        bunkerUri: bunkerUri,
-        relays: ['wss://relay.nsec.app', 'wss://relay.damus.io', 'wss://nos.lol'],
-        sessionData: { bunkerUri },
-        clientSecretKey: localSigner.privateKey,
-        bunkerPubkey: remotePubkey
-      }
-
-      console.log('[RemoteSignerModal] ✅ Nostrconnect connection successful!')
-      setConnectionStatus('connected')
-
-      // Close modal and call success callback
-      onClose()
-      onLoginSuccess(authData)
-
-    } catch (error) {
-      console.error('[RemoteSignerModal] Nostrconnect connection failed:', error)
-      setErrorMessage('Connection failed. Please try again.')
-      setConnectionStatus('error')
-      setIsConnecting(false)
-    }
-  }
 
   const handleBunkerConnect = async () => {
     if (!bunkerUrl.trim()) {
