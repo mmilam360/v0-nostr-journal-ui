@@ -442,10 +442,10 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     try {
       // Ensure remote signer is initialized if using remote auth
       if (authData.authMethod === 'remote') {
-        const unifiedSigner = await import('@/lib/auth/unified-remote-signer')
-        if (!unifiedSigner.isConnected()) {
-          console.log('[MainApp] 🔧 Remote signer not available, attempting to resume...')
-          await unifiedSigner.resumeSession()
+        const { isSignerReady, initializeSignerFromAuthData } = await import('@/lib/ndk-signer-manager')
+        if (!isSignerReady()) {
+          console.log('[MainApp] 🔧 Remote signer not available, attempting to initialize...')
+          await initializeSignerFromAuthData(authData)
         }
       }
       
@@ -630,17 +630,11 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
           console.log("[NostrJournal] 🔧 Attempting to auto-resume remote signer...")
           
           try {
-            const unifiedSigner = await import('@/lib/auth/unified-remote-signer')
-            const { initializeSigner } = await import('@/lib/ndk-signer-manager')
-        const result = await initializeSigner(authData)
-            
+            const { initializeSignerFromAuthData } = await import('@/lib/ndk-signer-manager')
+            const result = await initializeSignerFromAuthData(authData)
+
             if (result) {
               console.log("[NostrJournal] ✅ Remote signer auto-resumed successfully")
-              
-              // Verify pubkey matches
-              if (result.userPubkey !== authData.pubkey) {
-                console.warn("[NostrJournal] ⚠️ Pubkey mismatch after resume!")
-              }
             } else {
               console.warn("[NostrJournal] ⚠️ Failed to auto-resume remote signer")
               // User will need to reconnect
@@ -869,8 +863,8 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       
       // CRITICAL: Check if remote signer is active
       if (authData.authMethod === 'remote') {
-        const unifiedSigner = await import('@/lib/auth/unified-remote-signer')
-        if (!unifiedSigner.isConnected()) {
+        const { isSignerReady } = await import('@/lib/ndk-signer-manager')
+        if (!isSignerReady()) {
           console.error("[NostrJournal] ❌ Remote signer not active!")
           throw new Error("Remote signer disconnected. Please reconnect.")
         }
@@ -951,8 +945,8 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       
       // CRITICAL: Check if remote signer is active
       if (authData.authMethod === 'remote') {
-        const unifiedSigner = await import('@/lib/auth/unified-remote-signer')
-        if (!unifiedSigner.isConnected()) {
+        const { isSignerReady } = await import('@/lib/ndk-signer-manager')
+        if (!isSignerReady()) {
           console.error("[NostrJournal] ❌ Remote signer not active!")
           throw new Error("Remote signer disconnected. Please reconnect.")
         }
