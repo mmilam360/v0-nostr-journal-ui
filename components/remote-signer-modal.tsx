@@ -92,9 +92,11 @@ export default function RemoteSignerModal({ isOpen, onClose, onLoginSuccess }: R
         // Dynamically import NDK types
         const { NDKNip46Signer } = await import('@nostr-dev-kit/ndk')
 
-        // Create signer with LOCAL pubkey (not remote)
-        // NDK will handle the connection when remote signer scans QR
-        const remoteSigner = new NDKNip46Signer(ndk, localPubkey, localSigner)
+        // Create signer for client-initiated flow (QR code)
+        // For QR flow, we DON'T pass the remote pubkey - it will be obtained when they scan
+        // Constructor signature: NDKNip46Signer(ndk, remotePubkeyOrBunkerUrl?, localSigner)
+        // For client-initiated (QR), pass undefined as second parameter
+        const remoteSigner = new NDKNip46Signer(ndk, undefined, localSigner)
 
         setConnectionStatus('connecting')
         setIsConnecting(true)
@@ -249,7 +251,7 @@ export default function RemoteSignerModal({ isOpen, onClose, onLoginSuccess }: R
 
   return (
     <div className="fixed inset-0 bg-background/80 backdrop-blur-md flex items-center justify-center z-50 p-4">
-      <div className="bg-card rounded-lg p-6 max-w-md w-full shadow-xl border-2 border-border">
+      <div className="bg-card rounded-lg p-6 max-w-md w-full shadow-xl border-2 border-border max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-2xl font-bold text-foreground">Remote Signer</h2>
