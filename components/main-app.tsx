@@ -301,9 +301,9 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
     console.log("[NostrJournal] 🔧 Checking if remote signer is available...")
     
     try {
-      const unifiedSigner = await import('@/lib/auth/unified-remote-signer')
-      
-      if (unifiedSigner.isConnected()) {
+        const { isRemoteSignerConnected } = await import('@/lib/ndk-signer-manager')
+        
+        if (isRemoteSignerConnected()) {
         console.log("[NostrJournal] ✅ Remote signer is available")
         return true
       }
@@ -631,7 +631,8 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
           
           try {
             const unifiedSigner = await import('@/lib/auth/unified-remote-signer')
-            const result = await unifiedSigner.resumeSession()
+            const { initializeSigner } = await import('@/lib/ndk-signer-manager')
+        const result = await initializeSigner(authData)
             
             if (result) {
               console.log("[NostrJournal] ✅ Remote signer auto-resumed successfully")

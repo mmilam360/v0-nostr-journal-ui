@@ -155,8 +155,17 @@ export async function initializeSignerFromAuthData(authData: AuthData): Promise<
         localStorage.setItem('nip46-local-key', localSigner.privateKey!)
       }
 
-      // Create NIP-46 signer
-      const remoteSigner = new NDKNip46Signer(bunkerNDK, authData.bunkerUri, localSigner)
+      // Create NIP-46 signer with proper permissions
+      const remoteSigner = new NDKNip46Signer(bunkerNDK, authData.bunkerUri, localSigner, {
+        // Request permissions for all the event kinds we need
+        permissions: [
+          'read',
+          'write', 
+          'sign_event',
+          'nip04_encrypt',
+          'nip04_decrypt'
+        ]
+      })
 
       console.log('[NDK Signer Manager] Waiting for remote signer to be ready...')
       await remoteSigner.blockUntilReady()
@@ -205,7 +214,21 @@ export async function signEventWithRemote(unsignedEvent: NostrEvent, authData: A
     } else if (authData.authMethod === 'remote') {
       // Use NIP-46 remote signer
       if (!globalSigner) {
-        throw new Error('No remote signer available')
+        console.log('[NDK Signer Manager] No global signer, attempting to reconnect...')
+        const reconnected = await initializeSigner(authData)
+        if (!reconnected) {
+          throw new Error('Failed to reconnect remote signer')
+        }
+      }
+
+      // Ensure the remote signer is still connected and ready
+      const nip46Signer = globalSigner as NDKNip46Signer
+      if (!nip46Signer.isReady()) {
+        console.log('[NDK Signer Manager] Remote signer not ready, attempting to reconnect...')
+        const reconnected = await initializeSigner(authData)
+        if (!reconnected) {
+          throw new Error('Remote signer connection lost and failed to reconnect')
+        }
       }
 
       const ndkEvent = new NDKEvent(ndk, unsignedEvent)
@@ -323,6 +346,27 @@ export function isSignerReady(): boolean {
 export async function cleanupSigner() {
   console.log('[NDK Signer Manager] Cleaning up signer...')
   clearActiveSigner()
+}
+
+/**
+ * Check if the remote signer is connected and ready
+ */
+export function isRemoteSignerConnected(): boolean {
+  if (!globalSigner) return false
+  
+  if (currentAuthData?.authMethod === 'remote') {
+    const nip46Signer = globalSigner as NDKNip46Signer
+    return nip46Signer.isReady()
+  }
+  
+  return false
+}
+
+/**
+ * Get the current active signer
+ */
+export function getActiveSigner(): NDKSigner | null {
+  return globalSigner
 }
 
 // Declare window.nostr for TypeScript
