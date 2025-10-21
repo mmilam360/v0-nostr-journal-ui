@@ -155,17 +155,13 @@ export async function initializeSignerFromAuthData(authData: AuthData): Promise<
         localStorage.setItem('nip46-local-key', localSigner.privateKey!)
       }
 
-      // Create NIP-46 signer with proper permissions
-      const remoteSigner = new NDKNip46Signer(bunkerNDK, authData.bunkerUri, localSigner, {
-        // Request permissions for all the event kinds we need
-        permissions: [
-          'read',
-          'write', 
-          'sign_event',
-          'nip04_encrypt',
-          'nip04_decrypt'
-        ]
-      })
+      // Create NIP-46 signer with relay URLs
+      const relayUrls = authData.relays || [
+        'wss://relay.nsec.app',
+        'wss://relay.damus.io',
+        'wss://nos.lol',
+      ]
+      const remoteSigner = new NDKNip46Signer(bunkerNDK, authData.bunkerUri, localSigner, relayUrls)
 
       console.log('[NDK Signer Manager] Waiting for remote signer to be ready...')
       await remoteSigner.blockUntilReady()
@@ -215,7 +211,7 @@ export async function signEventWithRemote(unsignedEvent: NostrEvent, authData: A
       // Use NIP-46 remote signer
       if (!globalSigner) {
         console.log('[NDK Signer Manager] No global signer, attempting to reconnect...')
-        const reconnected = await initializeSigner(authData)
+        const reconnected = await initializeSignerFromAuthData(authData)
         if (!reconnected) {
           throw new Error('Failed to reconnect remote signer')
         }
@@ -225,7 +221,7 @@ export async function signEventWithRemote(unsignedEvent: NostrEvent, authData: A
       const nip46Signer = globalSigner as NDKNip46Signer
       if (!nip46Signer.isReady()) {
         console.log('[NDK Signer Manager] Remote signer not ready, attempting to reconnect...')
-        const reconnected = await initializeSigner(authData)
+        const reconnected = await initializeSignerFromAuthData(authData)
         if (!reconnected) {
           throw new Error('Remote signer connection lost and failed to reconnect')
         }

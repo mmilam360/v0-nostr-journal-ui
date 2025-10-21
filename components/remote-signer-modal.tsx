@@ -122,8 +122,9 @@ export default function RemoteSignerModal({ isOpen, onClose, onLoginSuccess }: R
             const bunkerUrl = `bunker://${event.pubkey}?relay=wss://relay.nsec.app`
             console.log('[RemoteSignerModal] Creating signer with bunker URL:', bunkerUrl)
 
-            // Create the remote signer with the bunker URL
-            const remoteSigner = new NDKNip46Signer(ndk, bunkerUrl, localSigner)
+            // Create the remote signer with the bunker URL and relay URLs
+            const relayUrls = ['wss://relay.nsec.app', 'wss://relay.damus.io', 'wss://nos.lol']
+            const remoteSigner = new NDKNip46Signer(ndk, bunkerUrl, localSigner, relayUrls)
 
             // Wait for signer to be ready
             await remoteSigner.blockUntilReady()
@@ -216,8 +217,9 @@ export default function RemoteSignerModal({ isOpen, onClose, onLoginSuccess }: R
         localStorage.setItem('nip46-local-key', localSigner.privateKey!)
       }
 
-      // Create NIP-46 signer
-      const remoteSigner = new NDKNip46Signer(ndk, bunkerUrl, localSigner)
+      // Create NIP-46 signer with relay URLs
+      const relayUrls = ['wss://relay.nsec.app', 'wss://relay.damus.io', 'wss://nos.lol']
+      const remoteSigner = new NDKNip46Signer(ndk, bunkerUrl, localSigner, relayUrls)
 
       // Wait for connection
       await remoteSigner.blockUntilReady()
