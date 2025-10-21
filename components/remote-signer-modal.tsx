@@ -1,8 +1,12 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { NDK, NDKNip46Signer, NDKPrivateKeySigner } from '@nostr-dev-kit/ndk'
 import QRCode from 'qrcode'
+
+// Dynamic imports will be done in the functions that need them
+type NDK = any
+type NDKNip46Signer = any
+type NDKPrivateKeySigner = any
 
 interface RemoteSignerModalProps {
   isOpen: boolean
@@ -32,7 +36,11 @@ export default function RemoteSignerModal({ isOpen, onClose, onLoginSuccess }: R
       console.log('[RemoteSignerModal] Generating nostrconnect URL...')
       setIsGenerating(true)
       setErrorMessage('')
-      
+
+      // Dynamically import NDK
+      const { default: NDK, NDKPrivateKeySigner } = await import('@nostr-dev-kit/ndk')
+      console.log('[RemoteSignerModal] NDK imported successfully')
+
       // Create NDK instance
       const ndk = new NDK({
         explicitRelayUrls: [
@@ -91,11 +99,14 @@ export default function RemoteSignerModal({ isOpen, onClose, onLoginSuccess }: R
     }
   }
 
-  const startNostrConnectListening = async (ndk: NDK, localSigner: NDKPrivateKeySigner, localPubkey: string) => {
+  const startNostrConnectListening = async (ndk: any, localSigner: any, localPubkey: string) => {
     try {
       console.log('[RemoteSignerModal] Starting nostrconnect listening...')
       setConnectionStatus('connecting')
       setIsConnecting(true)
+
+      // Dynamically import NDK types
+      const { NDKNip46Signer } = await import('@nostr-dev-kit/ndk')
 
       // Subscribe to NIP-46 connection requests
       const filter = {
@@ -109,7 +120,7 @@ export default function RemoteSignerModal({ isOpen, onClose, onLoginSuccess }: R
       const sub = ndk.subscribe(filter, { closeOnEose: false })
 
       // Wait for connection with timeout
-      const connectionPromise = new Promise<{ remotePubkey: string; remoteSigner: NDKNip46Signer }>((resolve, reject) => {
+      const connectionPromise = new Promise<{ remotePubkey: string; remoteSigner: any }>((resolve, reject) => {
         const timeout = setTimeout(() => {
           sub.stop()
           reject(new Error('Connection timeout after 120 seconds'))
@@ -200,6 +211,10 @@ export default function RemoteSignerModal({ isOpen, onClose, onLoginSuccess }: R
       setConnectionStatus('connecting')
       setIsConnecting(true)
       setErrorMessage('')
+
+      // Dynamically import NDK
+      const { default: NDK, NDKPrivateKeySigner, NDKNip46Signer } = await import('@nostr-dev-kit/ndk')
+      console.log('[RemoteSignerModal] NDK imported successfully for bunker connection')
 
       // Create NDK instance
       const ndk = new NDK({
