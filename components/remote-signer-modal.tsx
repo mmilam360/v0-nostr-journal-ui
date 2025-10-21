@@ -129,15 +129,8 @@ export default function RemoteSignerModal({ isOpen, onClose, onLoginSuccess }: R
             console.log('[RemoteSignerModal] 📬 Received NIP-46 event from:', event.pubkey)
 
             // Create the remote signer with the actual remote pubkey
-            const remoteSigner = new NDKNip46Signer(ndk, event.pubkey, localSigner, {
-              permissions: [
-                'read',
-                'write',
-                'sign_event',
-                'nip04_encrypt',
-                'nip04_decrypt'
-              ]
-            })
+            // NOTE: Don't pass permissions object - NDK handles this internally
+            const remoteSigner = new NDKNip46Signer(ndk, event.pubkey, localSigner)
 
             // Wait for signer to be ready
             await remoteSigner.blockUntilReady()
@@ -235,16 +228,9 @@ export default function RemoteSignerModal({ isOpen, onClose, onLoginSuccess }: R
         localStorage.setItem('nip46-local-key', localSigner.privateKey!)
       }
 
-      // Create NIP-46 signer with proper permissions
-      const remoteSigner = new NDKNip46Signer(ndk, bunkerUrl, localSigner, {
-        permissions: [
-          'read',
-          'write',
-          'sign_event',
-          'nip04_encrypt',
-          'nip04_decrypt'
-        ]
-      })
+      // Create NIP-46 signer
+      // NOTE: Don't pass permissions object - NDK handles this internally
+      const remoteSigner = new NDKNip46Signer(ndk, bunkerUrl, localSigner)
 
       // Wait for connection
       await remoteSigner.blockUntilReady()
@@ -320,23 +306,31 @@ export default function RemoteSignerModal({ isOpen, onClose, onLoginSuccess }: R
         </p>
 
         {/* QR Code */}
-        {qrCodeDataUrl ? (
-          <div className="flex justify-center mb-6">
-            <div className="p-4 bg-white rounded-lg border-2 border-border">
-              <img
-                src={qrCodeDataUrl}
-                alt="QR Code"
-                className="w-64 h-64"
-              />
+        <div className="mb-6">
+          {qrCodeDataUrl ? (
+            <div className="flex flex-col items-center gap-3">
+              <div className="p-4 bg-white rounded-lg border-2 border-border">
+                <img
+                  src={qrCodeDataUrl}
+                  alt="QR Code"
+                  className="w-64 h-64"
+                />
+              </div>
+              {connectionStatus === 'connecting' && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Waiting for QR scan...</span>
+                </div>
+              )}
             </div>
-          </div>
-        ) : (
-          <div className="flex justify-center mb-6">
-            <div className="w-64 h-64 bg-muted rounded-lg border-2 border-dashed border-border flex items-center justify-center">
-              <Loader2 className="w-8 h-8 text-muted-foreground animate-spin" />
+          ) : (
+            <div className="flex justify-center">
+              <div className="w-64 h-64 bg-muted rounded-lg border-2 border-dashed border-border flex items-center justify-center">
+                <Loader2 className="w-8 h-8 text-muted-foreground animate-spin" />
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
         {/* Nostr Connect URL */}
         <div className="mb-6">
@@ -400,14 +394,6 @@ export default function RemoteSignerModal({ isOpen, onClose, onLoginSuccess }: R
         {errorMessage && (
           <div className="mb-4 p-3 bg-destructive/10 border-2 border-destructive/50 rounded-lg text-destructive text-sm">
             {errorMessage}
-          </div>
-        )}
-
-        {/* Connection Status */}
-        {connectionStatus === 'connecting' && (
-          <div className="mb-4 p-3 bg-primary/10 border-2 border-primary/50 rounded-lg text-primary text-sm flex items-center gap-2">
-            <Loader2 className="w-4 h-4 animate-spin" />
-            {isConnecting ? 'Connecting to remote signer...' : 'Waiting for connection...'}
           </div>
         )}
 
