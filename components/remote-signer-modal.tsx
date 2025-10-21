@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect } from 'react'
 import QRCode from 'qrcode'
+import { Copy, Loader2, X } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 
 // Dynamic imports will be done in the functions that need them
 type NDK = any
@@ -21,39 +23,26 @@ export default function RemoteSignerModal({ isOpen, onClose, onLoginSuccess }: R
   const [isConnecting, setIsConnecting] = useState(false)
   const [connectionStatus, setConnectionStatus] = useState<'idle' | 'connecting' | 'connected' | 'error'>('idle')
   const [errorMessage, setErrorMessage] = useState('')
-  const [isGenerating, setIsGenerating] = useState(false)
+  const [copied, setCopied] = useState(false)
 
-  // Generate nostrconnect URL and QR code when modal opens
+  // Generate nostrconnect URL and QR code IMMEDIATELY when modal opens
   useEffect(() => {
-    if (isOpen && !nostrConnectUrl) {
-      console.log('[RemoteSignerModal] Modal opened, generating URL...')
+    if (isOpen) {
+      console.log('[RemoteSignerModal] Modal opened, generating URL immediately...')
       generateNostrConnectUrl()
     }
-  }, [isOpen, nostrConnectUrl])
+  }, [isOpen])
 
   const generateNostrConnectUrl = async () => {
     try {
       console.log('[RemoteSignerModal] Generating nostrconnect URL...')
-      setIsGenerating(true)
       setErrorMessage('')
 
       // Dynamically import NDK
       const { default: NDK, NDKPrivateKeySigner } = await import('@nostr-dev-kit/ndk')
       console.log('[RemoteSignerModal] NDK imported successfully')
 
-      // Create NDK instance
-      const ndk = new NDK({
-        explicitRelayUrls: [
-          'wss://relay.nsec.app',
-          'wss://relay.damus.io',
-          'wss://nos.lol',
-        ],
-      })
-
-      await ndk.connect()
-      console.log('[RemoteSignerModal] NDK connected')
-
-      // Get or create local signer
+      // Get or create local signer (synchronous from localStorage)
       const localSignerKey = localStorage.getItem('nip46-local-key')
       const localSigner = localSignerKey
         ? new NDKPrivateKeySigner(localSignerKey)
@@ -67,17 +56,16 @@ export default function RemoteSignerModal({ isOpen, onClose, onLoginSuccess }: R
       const localPubkey = localUser.pubkey
 
       // Create the nostrconnect:// URI
-      const connectUri = `nostrconnect://${localPubkey}?relay=wss://relay.nsec.app&metadata=${encodeURIComponent(JSON.stringify({ 
-        name: 'Nostr Journal', 
-        description: 'Private journaling on Nostr' 
+      const connectUri = `nostrconnect://${localPubkey}?relay=wss://relay.nsec.app&metadata=${encodeURIComponent(JSON.stringify({
+        name: 'Nostr Journal',
+        description: 'Private journaling on Nostr'
       }))}`
 
       setNostrConnectUrl(connectUri)
-      console.log('[RemoteSignerModal] Generated nostrconnect URI:', connectUri)
+      console.log('[RemoteSignerModal] ✅ Generated nostrconnect URI instantly')
 
       // Generate QR code
-      console.log('[RemoteSignerModal] Generating QR code...')
-      const qrCodeDataUrl = await QRCode.toDataURL(connectUri, {
+      const qrDataUrl = await QRCode.toDataURL(connectUri, {
         width: 256,
         margin: 2,
         color: {
@@ -85,17 +73,27 @@ export default function RemoteSignerModal({ isOpen, onClose, onLoginSuccess }: R
           light: '#FFFFFF'
         }
       })
-      setQrCodeDataUrl(qrCodeDataUrl)
-      console.log('[RemoteSignerModal] QR code generated successfully')
+      setQrCodeDataUrl(qrDataUrl)
+      console.log('[RemoteSignerModal] ✅ QR code generated instantly')
 
-      // Start listening for connections
-      startNostrConnectListening(ndk, localSigner, localPubkey)
+      // Now connect to NDK and start listening (async in background)
+      const ndk = new NDK({
+        explicitRelayUrls: [
+          'wss://relay.nsec.app',
+          'wss://relay.damus.io',
+          'wss://nos.lol',
+        ],
+      })
+
+      ndk.connect().then(() => {
+        console.log('[RemoteSignerModal] NDK connected, now listening for remote signer...')
+        startNostrConnectListening(ndk, localSigner, localPubkey)
+      })
 
     } catch (error) {
       console.error('[RemoteSignerModal] Failed to generate nostrconnect URL:', error)
       setErrorMessage('Failed to generate connection URL')
       setConnectionStatus('error')
-      setIsGenerating(false)
     }
   }
 
@@ -186,7 +184,6 @@ export default function RemoteSignerModal({ isOpen, onClose, onLoginSuccess }: R
 
       console.log('[RemoteSignerModal] ✅ Nostrconnect connection successful!')
       setConnectionStatus('connected')
-      setIsGenerating(false)
 
       // Close modal and call success callback
       onClose()
@@ -293,7 +290,9 @@ export default function RemoteSignerModal({ isOpen, onClose, onLoginSuccess }: R
   const copyToClipboard = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text)
+      setCopied(true)
       console.log('[RemoteSignerModal] Copied to clipboard')
+      setTimeout(() => setCopied(false), 2000)
     } catch (error) {
       console.error('[RemoteSignerModal] Failed to copy:', error)
     }
@@ -302,98 +301,132 @@ export default function RemoteSignerModal({ isOpen, onClose, onLoginSuccess }: R
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 bg-white/80 backdrop-blur-md flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl border border-gray-200">
+    <div className="fixed inset-0 bg-background/80 backdrop-blur-md flex items-center justify-center z-50 p-4">
+      <div className="bg-card rounded-lg p-6 max-w-md w-full shadow-xl border-2 border-border">
         {/* Header */}
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-bold text-gray-900">Remote signer</h2>
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-2xl font-bold text-foreground">Remote Signer</h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 text-xl"
+            className="text-muted-foreground hover:text-foreground transition-colors"
           >
-            ×
+            <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Instructions */}
-        <p className="text-gray-600 text-sm mb-6">
-          Use the below URL to connect to your bunker
+        <p className="text-muted-foreground text-sm mb-6">
+          Scan the QR code with your remote signer app (like nsec.app) or paste a bunker:// URL below
         </p>
 
         {/* QR Code */}
-        {isGenerating ? (
+        {qrCodeDataUrl ? (
           <div className="flex justify-center mb-6">
-            <div className="w-64 h-64 bg-gray-100 rounded flex items-center justify-center">
-              <div className="text-gray-500">Generating QR code...</div>
+            <div className="p-4 bg-white rounded-lg border-2 border-border">
+              <img
+                src={qrCodeDataUrl}
+                alt="QR Code"
+                className="w-64 h-64"
+              />
             </div>
           </div>
-        ) : qrCodeDataUrl ? (
+        ) : (
           <div className="flex justify-center mb-6">
-            <img 
-              src={qrCodeDataUrl} 
-              alt="QR Code" 
-              className="w-64 h-64"
-            />
+            <div className="w-64 h-64 bg-muted rounded-lg border-2 border-dashed border-border flex items-center justify-center">
+              <Loader2 className="w-8 h-8 text-muted-foreground animate-spin" />
+            </div>
           </div>
-        ) : null}
+        )}
 
         {/* Nostr Connect URL */}
-        <div className="mb-4">
-          <div className="flex items-center space-x-2">
+        <div className="mb-6">
+          <label className="text-sm font-medium text-foreground mb-2 block">
+            Connection URL
+          </label>
+          <div className="flex items-center gap-2">
             <input
               type="text"
-              value={isGenerating ? 'Generating connection URL...' : nostrConnectUrl}
+              value={nostrConnectUrl || 'Generating...'}
               readOnly
-              className="flex-1 px-3 py-2 border border-dashed border-gray-300 rounded text-sm bg-gray-50"
+              className="flex-1 px-3 py-2 border-2 border-border rounded-lg text-sm bg-muted text-foreground font-mono text-xs"
             />
-            <button
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => copyToClipboard(nostrConnectUrl)}
               disabled={!nostrConnectUrl}
-              className="p-2 text-gray-400 hover:text-gray-600 disabled:opacity-50"
+              className="shrink-0"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-              </svg>
-            </button>
+              {copied ? (
+                <>
+                  <Copy className="w-4 h-4 mr-1" />
+                  Copied
+                </>
+              ) : (
+                <>
+                  <Copy className="w-4 h-4 mr-1" />
+                  Copy
+                </>
+              )}
+            </Button>
           </div>
         </div>
 
         {/* Separator */}
-        <div className="text-center text-gray-500 text-sm mb-4">Or</div>
+        <div className="relative my-6">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-border"></div>
+          </div>
+          <div className="relative flex justify-center text-xs uppercase">
+            <span className="bg-card px-2 text-muted-foreground">Or paste bunker URL</span>
+          </div>
+        </div>
 
         {/* Bunker URL Input */}
         <div className="mb-6">
+          <label className="text-sm font-medium text-foreground mb-2 block">
+            Bunker URL
+          </label>
           <input
             type="text"
             value={bunkerUrl}
             onChange={(e) => setBunkerUrl(e.target.value)}
             placeholder="bunker://..."
-            className="w-full px-3 py-2 border border-dashed border-gray-300 rounded text-sm bg-gray-50"
+            className="w-full px-3 py-2 border-2 border-border hover:border-primary focus:border-primary rounded-lg text-sm bg-background text-foreground transition-colors"
           />
         </div>
 
         {/* Error Message */}
         {errorMessage && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
+          <div className="mb-4 p-3 bg-destructive/10 border-2 border-destructive/50 rounded-lg text-destructive text-sm">
             {errorMessage}
           </div>
         )}
 
         {/* Connection Status */}
         {connectionStatus === 'connecting' && (
-          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded text-blue-700 text-sm">
-            {isConnecting ? 'Connecting...' : 'Waiting for connection...'}
+          <div className="mb-4 p-3 bg-primary/10 border-2 border-primary/50 rounded-lg text-primary text-sm flex items-center gap-2">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            {isConnecting ? 'Connecting to remote signer...' : 'Waiting for connection...'}
           </div>
         )}
 
         {/* Log in Button */}
-        <button
+        <Button
           onClick={handleBunkerConnect}
           disabled={isConnecting || !bunkerUrl.trim()}
-          className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-medium py-3 px-4 rounded transition-colors"
+          className="w-full"
+          size="lg"
         >
-          Log in
-        </button>
+          {isConnecting ? (
+            <>
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              Connecting...
+            </>
+          ) : (
+            'Connect with Bunker URL'
+          )}
+        </Button>
       </div>
     </div>
   )
