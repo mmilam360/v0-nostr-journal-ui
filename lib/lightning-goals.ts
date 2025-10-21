@@ -5,7 +5,7 @@ const pool = new SimplePool()
 const RELAYS = ['wss://relay.damus.io', 'wss://relay.snort.social', 'wss://nos.lol', 'wss://relay.nostr.band']
 
 // Import signer
-import { signEventWithRemote } from './signer-manager'
+import { signEventWithRemote } from './ndk-signer-manager'
 
 // Add debug mode
 const DEBUG = true
