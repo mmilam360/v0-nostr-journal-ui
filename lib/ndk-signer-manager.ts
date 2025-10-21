@@ -155,13 +155,21 @@ export async function initializeSignerFromAuthData(authData: AuthData): Promise<
         localStorage.setItem('nip46-local-key', localSigner.privateKey!)
       }
 
-      // Create NIP-46 signer with relay URLs
+      // Create NIP-46 signer with relay URLs and permissions
       const relayUrls = authData.relays || [
         'wss://relay.nsec.app',
         'wss://relay.damus.io',
         'wss://nos.lol',
       ]
-      const remoteSigner = new NDKNip46Signer(bunkerNDK, authData.bunkerUri, localSigner, relayUrls)
+
+      // Request comprehensive permissions
+      const permissions = {
+        name: 'Nostr Journal',
+        url: typeof window !== 'undefined' ? window.location.origin : 'https://nostr-journal.com',
+        perms: 'sign_event,nip04_encrypt,nip04_decrypt,nip44_encrypt,nip44_decrypt'
+      }
+
+      const remoteSigner = new NDKNip46Signer(bunkerNDK, authData.bunkerUri, localSigner, relayUrls, permissions)
 
       console.log('[NDK Signer Manager] Waiting for remote signer to be ready...')
       await remoteSigner.blockUntilReady()

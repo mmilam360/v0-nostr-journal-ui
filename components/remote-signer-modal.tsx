@@ -124,7 +124,15 @@ export default function RemoteSignerModal({ isOpen, onClose, onLoginSuccess }: R
 
             // Create the remote signer with the bunker URL and relay URLs
             const relayUrls = ['wss://relay.nsec.app', 'wss://relay.damus.io', 'wss://nos.lol']
-            const remoteSigner = new NDKNip46Signer(ndk, bunkerUrl, localSigner, relayUrls)
+
+            // Request comprehensive permissions upfront
+            const permissions = {
+              name: 'Nostr Journal',
+              url: typeof window !== 'undefined' ? window.location.origin : 'https://nostr-journal.com',
+              perms: 'sign_event,nip04_encrypt,nip04_decrypt,nip44_encrypt,nip44_decrypt'
+            }
+
+            const remoteSigner = new NDKNip46Signer(ndk, bunkerUrl, localSigner, relayUrls, permissions)
 
             // Wait for signer to be ready
             await remoteSigner.blockUntilReady()
@@ -219,7 +227,15 @@ export default function RemoteSignerModal({ isOpen, onClose, onLoginSuccess }: R
 
       // Create NIP-46 signer with relay URLs
       const relayUrls = ['wss://relay.nsec.app', 'wss://relay.damus.io', 'wss://nos.lol']
-      const remoteSigner = new NDKNip46Signer(ndk, bunkerUrl, localSigner, relayUrls)
+
+      // Request comprehensive permissions upfront
+      const permissions = {
+        name: 'Nostr Journal',
+        url: typeof window !== 'undefined' ? window.location.origin : 'https://nostr-journal.com',
+        perms: 'sign_event,nip04_encrypt,nip04_decrypt,nip44_encrypt,nip44_decrypt'
+      }
+
+      const remoteSigner = new NDKNip46Signer(ndk, bunkerUrl, localSigner, relayUrls, permissions)
 
       // Wait for connection
       await remoteSigner.blockUntilReady()
