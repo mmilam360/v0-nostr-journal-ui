@@ -259,7 +259,7 @@ export default function LoginPageHorizontal({ onLoginSuccess }: LoginPageHorizon
     // NEVER clear the signer if we're on the 'choose' step (component unmounting after successful login)
     if (clearSigner && currentStep !== 'choose') {
       try {
-        const { clearActiveSigner } = require('@/lib/signer-connector')
+        const { clearActiveSigner } = require('@/lib/ndk-signer-manager')
         clearActiveSigner()
         console.log('[Login] 🛑 Cleared active signer')
       } catch (error) {

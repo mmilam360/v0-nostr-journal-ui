@@ -5,7 +5,7 @@ import { GeistMono } from "geist/font/mono"
 import { Suspense } from "react"
 import "./globals.css"
 import { ThemeProvider } from "@/lib/theme-provider"
-import { BitcoinConnectProvider } from '@/components/providers/bitcoin-connect-provider'
+import { NDKProvider } from '@/lib/ndk-provider'
 
 export const metadata: Metadata = {
   title: "Nostr Journal",
@@ -31,11 +31,11 @@ export default function RootLayout({
         <script src="https://cdn.jsdelivr.net/npm/@getalby/bitcoin-connect@latest/dist/bitcoin-connect.min.js"></script>
       </head>
       <body className={`font-sans ${GeistSans.variable} ${GeistMono.variable}`}>
-        <BitcoinConnectProvider>
+        <NDKProvider>
           <ThemeProvider>
             <Suspense fallback={null}>{children}</Suspense>
           </ThemeProvider>
-        </BitcoinConnectProvider>
+        </NDKProvider>
       </body>
     </html>
   )

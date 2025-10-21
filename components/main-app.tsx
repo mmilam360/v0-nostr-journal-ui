@@ -538,7 +538,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       
       // CRITICAL: Check if remote signer is active
       if (authData.authMethod === 'remote') {
-        const { getActiveSigner } = await import('@/lib/signer-connector')
+        const { getActiveSigner } = await import('@/lib/ndk-signer-manager')
         const signer = getActiveSigner()
         if (!signer) {
           console.error("[NostrJournal] ❌ Remote signer not active!")
@@ -619,7 +619,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       
       // CRITICAL: Check if remote signer is active
       if (authData.authMethod === 'remote') {
-        const { getActiveSigner } = await import('@/lib/signer-connector')
+        const { getActiveSigner } = await import('@/lib/ndk-signer-manager')
         const signer = getActiveSigner()
         if (!signer) {
           console.error("[NostrJournal] ❌ Remote signer not active!")
