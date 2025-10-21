@@ -108,6 +108,13 @@ export default function RemoteSignerModal({ isOpen, onClose, onLoginSuccess }: R
         // Store signer so we can cancel if user switches to bunker URL
         setNostrConnectSigner(remoteSigner)
 
+        // CRITICAL: Listen for authUrl events (popup authorization)
+        remoteSigner.on("authUrl", (url: string) => {
+          console.log('[RemoteSignerModal] 🔐 Auth URL received:', url)
+          // Open popup for user to authorize the connection
+          window.open(url, "auth", "width=600,height=600")
+        })
+
         setConnectionStatus('connecting')
         console.log('[RemoteSignerModal] 📡 Nostrconnect: Searching for connection in background...')
 
