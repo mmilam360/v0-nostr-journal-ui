@@ -362,13 +362,6 @@ export function isRemoteSignerConnected(): boolean {
   return false
 }
 
-/**
- * Get the current active signer
- */
-export function getActiveSigner(): NDKSigner | null {
-  return globalSigner
-}
-
 // Declare window.nostr for TypeScript
 declare global {
   interface Window {
