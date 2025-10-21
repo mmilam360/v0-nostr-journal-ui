@@ -9,6 +9,7 @@
     "start": "next start"
   },
   "dependencies": {
+    "@getalby/bitcoin-connect": "^3.11.3",
     "@getalby/bitcoin-connect-react": "^3.11.3",
     "@getalby/sdk": "^6.0.1",
     "@hookform/resolvers": "^3.10.0",

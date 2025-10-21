@@ -97,38 +97,86 @@ export default function RemoteSignerModal({ isOpen, onClose, onLoginSuccess }: R
       setConnectionStatus('connecting')
       setIsConnecting(true)
 
-      // Create NIP-46 signer with proper permissions
-      const remoteSigner = new NDKNip46Signer(ndk, '', localSigner, {
-        permissions: [
-          'read',
-          'write',
-          'sign_event',
-          'nip04_encrypt',
-          'nip04_decrypt'
-        ]
+      // Subscribe to NIP-46 connection requests
+      const filter = {
+        kinds: [24133], // NIP-46 request kind
+        '#p': [localPubkey],
+        since: Math.floor(Date.now() / 1000)
+      }
+
+      console.log('[RemoteSignerModal] Subscribing to NIP-46 connection requests...')
+
+      const sub = ndk.subscribe(filter, { closeOnEose: false })
+
+      // Wait for connection with timeout
+      const connectionPromise = new Promise<{ remotePubkey: string; remoteSigner: NDKNip46Signer }>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          sub.stop()
+          reject(new Error('Connection timeout after 120 seconds'))
+        }, 120000)
+
+        sub.on('event', async (event: any) => {
+          try {
+            console.log('[RemoteSignerModal] 📬 Received NIP-46 event from:', event.pubkey)
+
+            // Create the remote signer with the actual remote pubkey
+            const remoteSigner = new NDKNip46Signer(ndk, event.pubkey, localSigner, {
+              permissions: [
+                'read',
+                'write',
+                'sign_event',
+                'nip04_encrypt',
+                'nip04_decrypt'
+              ]
+            })
+
+            // Wait for signer to be ready
+            await remoteSigner.blockUntilReady()
+            console.log('[RemoteSignerModal] Remote signer connected!')
+
+            const user = await remoteSigner.user()
+            const remotePubkey = user.pubkey
+
+            clearTimeout(timeout)
+            sub.stop()
+            resolve({ remotePubkey, remoteSigner })
+          } catch (error) {
+            console.error('[RemoteSignerModal] Error handling NIP-46 event:', error)
+            reject(error)
+          }
+        })
+
+        sub.on('eose', () => {
+          console.log('[RemoteSignerModal] End of stored events, waiting for new connections...')
+        })
       })
 
-      // Wait for connection
-      await remoteSigner.blockUntilReady()
-      console.log('[RemoteSignerModal] Remote signer connected!')
+      const { remotePubkey, remoteSigner } = await connectionPromise
 
-      // Get the remote signer's pubkey
-      const remotePubkey = await remoteSigner.user().then(u => u.pubkey)
-      
+      // CRITICAL: Save signer to global state so main app can reuse it
+      const { setActiveSigner } = await import('@/lib/ndk-signer-manager')
+      setActiveSigner(remoteSigner)
+      console.log('[RemoteSignerModal] ✅ Saved remote signer to global state for instant reuse')
+
+      // Store bunker URI for reconnection
+      const bunkerUri = `bunker://${remotePubkey}?relay=wss://relay.nsec.app`
+      localStorage.setItem('nip46-bunker-uri', bunkerUri)
+
       // Create auth data
       const authData = {
         pubkey: remotePubkey,
         authMethod: 'remote' as const,
-        bunkerUri: nostrConnectUrl,
+        bunkerUri: bunkerUri,
         relays: ['wss://relay.nsec.app', 'wss://relay.damus.io', 'wss://nos.lol'],
-        sessionData: { bunkerUri: nostrConnectUrl },
+        sessionData: { bunkerUri },
         clientSecretKey: localSigner.privateKey,
         bunkerPubkey: remotePubkey
       }
 
       console.log('[RemoteSignerModal] ✅ Nostrconnect connection successful!')
       setConnectionStatus('connected')
-      
+      setIsGenerating(false)
+
       // Close modal and call success callback
       onClose()
       onLoginSuccess(authData)
@@ -192,7 +240,15 @@ export default function RemoteSignerModal({ isOpen, onClose, onLoginSuccess }: R
 
       // Get the remote signer's pubkey
       const remotePubkey = await remoteSigner.user().then(u => u.pubkey)
-      
+
+      // CRITICAL: Save signer to global state so main app can reuse it
+      const { setActiveSigner } = await import('@/lib/ndk-signer-manager')
+      setActiveSigner(remoteSigner)
+      console.log('[RemoteSignerModal] ✅ Saved remote signer to global state for instant reuse')
+
+      // Store bunker URI for reconnection
+      localStorage.setItem('nip46-bunker-uri', bunkerUrl)
+
       // Create auth data
       const authData = {
         pubkey: remotePubkey,
@@ -206,7 +262,7 @@ export default function RemoteSignerModal({ isOpen, onClose, onLoginSuccess }: R
 
       console.log('[RemoteSignerModal] ✅ Bunker connection successful!')
       setConnectionStatus('connected')
-      
+
       // Close modal and call success callback
       onClose()
       onLoginSuccess(authData)
@@ -231,8 +287,8 @@ export default function RemoteSignerModal({ isOpen, onClose, onLoginSuccess }: R
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-20 backdrop-blur-sm flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
+    <div className="fixed inset-0 bg-white/80 backdrop-blur-md flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl border border-gray-200">
         {/* Header */}
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-bold text-gray-900">Remote signer</h2>
