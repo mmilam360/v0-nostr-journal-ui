@@ -24,11 +24,18 @@ export default function RemoteSignerModal({ isOpen, onClose, onLoginSuccess }: R
   const [connectionStatus, setConnectionStatus] = useState<'idle' | 'connecting' | 'connected' | 'error'>('idle')
   const [errorMessage, setErrorMessage] = useState('')
   const [copied, setCopied] = useState(false)
+  const [activeFlow, setActiveFlow] = useState<'nostrconnect' | 'bunker'>('nostrconnect')
+  const [nostrConnectSigner, setNostrConnectSigner] = useState<any>(null) // To cancel if needed
 
   // Generate nostrconnect URL and QR code IMMEDIATELY when modal opens
   useEffect(() => {
     if (isOpen) {
       console.log('[RemoteSignerModal] Modal opened, generating URL immediately...')
+      // Reset to nostrconnect flow
+      setActiveFlow('nostrconnect')
+      setConnectionStatus('idle')
+      setErrorMessage('')
+      setBunkerUrl('')
       generateNostrConnectUrl()
     }
   }, [isOpen])
@@ -85,9 +92,9 @@ export default function RemoteSignerModal({ isOpen, onClose, onLoginSuccess }: R
         ],
       })
 
-      // Connect and start waiting for remote signer
+      // NOSTRCONNECT FLOW: Automatically connect in background
       ndk.connect().then(async () => {
-        console.log('[RemoteSignerModal] NDK connected, creating NIP-46 signer...')
+        console.log('[RemoteSignerModal] 🔄 Nostrconnect flow: NDK connected, waiting for QR scan...')
 
         // Dynamically import NDK types
         const { NDKNip46Signer } = await import('@nostr-dev-kit/ndk')
@@ -98,14 +105,23 @@ export default function RemoteSignerModal({ isOpen, onClose, onLoginSuccess }: R
         // For client-initiated (QR), pass undefined as second parameter
         const remoteSigner = new NDKNip46Signer(ndk, undefined, localSigner)
 
+        // Store signer so we can cancel if user switches to bunker URL
+        setNostrConnectSigner(remoteSigner)
+
         setConnectionStatus('connecting')
-        setIsConnecting(true)
-        console.log('[RemoteSignerModal] Waiting for remote signer to scan QR...')
+        console.log('[RemoteSignerModal] 📡 Nostrconnect: Searching for connection in background...')
 
         try {
           // This will wait for the remote signer to connect
           await remoteSigner.blockUntilReady()
-          console.log('[RemoteSignerModal] ✅ Remote signer connected!')
+
+          // Check if user switched to bunker flow
+          if (activeFlow !== 'nostrconnect') {
+            console.log('[RemoteSignerModal] ⚠️ User switched to bunker flow, aborting nostrconnect')
+            return
+          }
+
+          console.log('[RemoteSignerModal] ✅ Nostrconnect: Remote signer connected!')
 
           const user = await remoteSigner.user()
           const remotePubkey = user.pubkey
@@ -130,7 +146,7 @@ export default function RemoteSignerModal({ isOpen, onClose, onLoginSuccess }: R
             bunkerPubkey: remotePubkey
           }
 
-          console.log('[RemoteSignerModal] ✅ QR code connection successful!')
+          console.log('[RemoteSignerModal] ✅ Nostrconnect: Connection successful!')
           setConnectionStatus('connected')
 
           // Close modal and login
@@ -138,11 +154,17 @@ export default function RemoteSignerModal({ isOpen, onClose, onLoginSuccess }: R
           onLoginSuccess(authData)
 
         } catch (error) {
-          console.error('[RemoteSignerModal] Connection failed:', error)
-          setErrorMessage('Connection failed. Please try again.')
-          setConnectionStatus('error')
-          setIsConnecting(false)
+          // Only show error if still on nostrconnect flow
+          if (activeFlow === 'nostrconnect') {
+            console.error('[RemoteSignerModal] Nostrconnect connection failed:', error)
+            setErrorMessage('Connection failed. Please try again or use bunker URL.')
+            setConnectionStatus('error')
+          }
         }
+      }).catch(error => {
+        console.error('[RemoteSignerModal] NDK connection failed:', error)
+        setErrorMessage('Failed to connect to relay. Please try again.')
+        setConnectionStatus('error')
       })
 
     } catch (error) {
@@ -160,7 +182,10 @@ export default function RemoteSignerModal({ isOpen, onClose, onLoginSuccess }: R
     }
 
     try {
-      console.log('[RemoteSignerModal] Connecting with bunker URL:', bunkerUrl)
+      console.log('[RemoteSignerModal] 🔄 Switching to BUNKER flow with URL:', bunkerUrl)
+
+      // Switch to bunker flow (this will stop nostrconnect flow)
+      setActiveFlow('bunker')
       setConnectionStatus('connecting')
       setIsConnecting(true)
       setErrorMessage('')
@@ -279,10 +304,11 @@ export default function RemoteSignerModal({ isOpen, onClose, onLoginSuccess }: R
                   className="w-64 h-64"
                 />
               </div>
-              {connectionStatus === 'connecting' && (
+              {/* Show connection status only for nostrconnect flow */}
+              {connectionStatus === 'connecting' && activeFlow === 'nostrconnect' && (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Waiting for QR scan...</span>
+                  <span>Searching for connection in background...</span>
                 </div>
               )}
             </div>
@@ -360,14 +386,14 @@ export default function RemoteSignerModal({ isOpen, onClose, onLoginSuccess }: R
           </div>
         )}
 
-        {/* Log in Button */}
+        {/* Bunker Connect Button */}
         <Button
           onClick={handleBunkerConnect}
-          disabled={isConnecting || !bunkerUrl.trim()}
+          disabled={(isConnecting && activeFlow === 'bunker') || !bunkerUrl.trim()}
           className="w-full"
           size="lg"
         >
-          {isConnecting ? (
+          {isConnecting && activeFlow === 'bunker' ? (
             <>
               <Loader2 className="w-4 h-4 mr-2 animate-spin" />
               Connecting...
