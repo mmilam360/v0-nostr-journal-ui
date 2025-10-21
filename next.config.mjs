@@ -5,7 +5,8 @@ const nextConfig = {
     if (isServer) {
       config.externals = config.externals || [];
       config.externals.push({
-        'nostr-tools': 'commonjs nostr-tools'
+        'nostr-tools': 'commonjs nostr-tools',
+        '@nostr-dev-kit/ndk': 'commonjs @nostr-dev-kit/ndk'
       });
     }
 
@@ -14,6 +15,17 @@ const nextConfig = {
       net: false,
       tls: false,
       fs: false,
+      crypto: false,
+      stream: false,
+      buffer: false,
+      process: false,
+      util: false,
+      url: false,
+      assert: false,
+      http: false,
+      https: false,
+      zlib: false,
+      path: false,
     };
 
     return config;
