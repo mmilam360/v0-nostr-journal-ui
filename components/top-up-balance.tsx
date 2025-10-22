@@ -69,7 +69,7 @@ export function TopUpBalance({ userPubkey, authData, currentBalance, onTopUpComp
         setPaymentVerified(true)
 
         // Process the confirmed payment
-        await handlePaymentConfirmed(paymentHash)
+        await handlePaymentConfirmed(paymentHash, amount)
       } else if (attempts >= maxAttempts) {
         console.log('[TopUp] Payment polling timed out')
         clearInterval(pollInterval)
@@ -162,13 +162,15 @@ export function TopUpBalance({ userPubkey, authData, currentBalance, onTopUpComp
     }
   }
 
-  const handlePaymentConfirmed = async (paymentHash: string) => {
+  const handlePaymentConfirmed = async (paymentHash: string, amount: number) => {
     try {
       console.log('[TopUp] Payment confirmed, adding to stake...')
+      console.log('[TopUp] Amount:', amount, 'sats')
+      console.log('[TopUp] Payment hash:', paymentHash)
 
       // Add to stake using lightning-goals library
       const { addToStake } = await import('@/lib/lightning-goals')
-      await addToStake(userPubkey, invoiceData!.amount, paymentHash, authData)
+      await addToStake(userPubkey, amount, paymentHash, authData)
 
       console.log('[TopUp] Stake topped up successfully')
 
@@ -377,7 +379,7 @@ function BitcoinConnectTopUp({
   amount: number
   userPubkey: string
   authData: any
-  onPaymentConfirmed: (hash: string) => void
+  onPaymentConfirmed: (hash: string, amount: number) => void
   onCancel: () => void
 }) {
   const [isPaying, setIsPaying] = useState(false)
@@ -449,7 +451,7 @@ function BitcoinConnectTopUp({
 
         console.log('[TopUp] Payment verified on backend!')
         // Pass the REAL payment hash from WebLN for transaction history
-        onPaymentConfirmed(result.paymentHash)
+        onPaymentConfirmed(result.paymentHash, amount)
       } else {
         throw new Error('WebLN not available')
       }
