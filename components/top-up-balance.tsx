@@ -432,8 +432,17 @@ function BitcoinConnectTopUp({
 
         const verifyData = await verifyResponse.json()
 
-        if (!verifyData.success || !verifyData.paid) {
-          throw new Error('Payment could not be verified. Please contact support.')
+        console.log('[TopUp] Verification response:', verifyData)
+        console.log('[TopUp] Success:', verifyData.success)
+        console.log('[TopUp] Paid:', verifyData.paid)
+        console.log('[TopUp] Full response:', JSON.stringify(verifyData, null, 2))
+
+        if (!verifyData.success) {
+          throw new Error(`Verification failed: ${verifyData.error || 'Unknown error'}`)
+        }
+
+        if (!verifyData.paid) {
+          throw new Error(`Payment not confirmed yet. Status: ${verifyData.state || 'unknown'}. Please wait a moment and try again.`)
         }
 
         console.log('[TopUp] Payment verified on backend!')
