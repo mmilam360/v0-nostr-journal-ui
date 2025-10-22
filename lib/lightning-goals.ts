@@ -303,26 +303,14 @@ export async function updateLightningGoals(
   if (current && current.todayDate !== today) {
     console.log('[LightningGoals] 📅 New day detected, archiving previous day')
 
-    // Create transaction for yesterday's outcome
-    const yesterdayTransaction: TransactionHistory = current.todayGoalMet ? {
-      id: `goal_met-${Date.now()}`,
-      type: 'goal_met',
-      amount: current.todayRewardAmount || 0,
-      timestamp: Date.now(),
-      description: `Goal achieved: ${current.todayWords} words written`
-    } : {
-      id: `goal_missed-${Date.now()}`,
-      type: 'goal_missed',
-      amount: 0,
-      timestamp: Date.now(),
-      description: `Goal missed: Only ${current.todayWords} words written (${current.dailyWordGoal} needed)`
-    }
-
-    // Find existing transactions for yesterday
+    // Find existing transactions for yesterday (payout, top-ups, etc.)
     const existingHistoryEntry = current.history.find(h => h.date === current.todayDate)
     const existingTransactions = existingHistoryEntry?.transactions || []
 
-    // Add yesterday to history with transaction
+    console.log('[LightningGoals] Yesterday had', existingTransactions.length, 'transactions')
+
+    // Add yesterday to history with all its transactions
+    // No need to create a separate goal_met transaction - the payout transaction was already created
     updated.history = [
       {
         date: current.todayDate,
@@ -330,7 +318,7 @@ export async function updateLightningGoals(
         goalMet: current.todayGoalMet,
         rewardSent: current.todayRewardSent,
         amount: current.todayRewardAmount,
-        transactions: [...existingTransactions, yesterdayTransaction]
+        transactions: existingTransactions // Just use existing transactions
       },
       ...current.history.filter(h => h.date !== current.todayDate).slice(0, 6) // Keep only last 7 days
     ]
@@ -547,24 +535,68 @@ export async function confirmPayment(
 
 
 /**
- * Record reward sent
+ * Record reward sent - creates a payout transaction for accurate ledger tracking
  */
 export async function recordRewardSent(
   userPubkey: string,
   amount: number,
   authData: any
 ): Promise<void> {
+  console.log('[LightningGoals] ========================================')
   console.log('[LightningGoals] Recording reward sent:', amount)
-  
+
   const goals = await getLightningGoals(userPubkey)
-  
-  if (!goals) return
-  
+
+  if (!goals) {
+    console.log('[LightningGoals] No goals found, cannot record reward')
+    return
+  }
+
   const today = new Date().toISOString().split('T')[0]
-  
+
+  // CRITICAL: Create a payout transaction for accurate ledger tracking
+  const transaction: TransactionHistory = {
+    id: `payout-${Date.now()}`,
+    type: 'payout',
+    amount: amount,
+    timestamp: Date.now(),
+    description: `Daily goal reward: ${amount} sats sent to ${goals.lightningAddress}`,
+    txHash: undefined
+  }
+
+  // Find or create today's history entry
+  let todayHistory = goals.history.find(h => h.date === today)
+  if (!todayHistory) {
+    todayHistory = {
+      date: today,
+      words: 0,
+      goalMet: false,
+      rewardSent: false,
+      amount: 0,
+      transactions: []
+    }
+    goals.history.unshift(todayHistory)
+  }
+
+  // Add payout transaction to today's history
+  if (!todayHistory.transactions) {
+    todayHistory.transactions = []
+  }
+  todayHistory.transactions.push(transaction)
+
+  // Update balance - subtract payout
+  const newBalance = goals.currentBalance - amount
+  const newTotalWithdrawn = goals.totalWithdrawn + amount
+
+  console.log('[LightningGoals] Old balance:', goals.currentBalance)
+  console.log('[LightningGoals] Payout amount:', amount)
+  console.log('[LightningGoals] New balance:', newBalance)
+
+  // Single update with all changes to avoid race conditions
   await updateLightningGoals(userPubkey, {
-    currentBalance: goals.currentBalance - amount,
-    totalWithdrawn: goals.totalWithdrawn + amount,
+    ...goals,
+    currentBalance: newBalance,
+    totalWithdrawn: newTotalWithdrawn,
     todayRewardSent: true,
     todayRewardAmount: amount,
     todayGoalMet: true,
@@ -572,8 +604,9 @@ export async function recordRewardSent(
     totalRewardsEarned: goals.totalRewardsEarned + amount,
     lastRewardDate: today
   }, authData)
-  
-  console.log('[LightningGoals] ✅ Reward recorded')
+
+  console.log('[LightningGoals] ✅ Reward recorded with payout transaction')
+  console.log('[LightningGoals] ========================================')
 }
 
 /**
