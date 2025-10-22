@@ -57,18 +57,30 @@ export async function onRequestPost(context: any) {
     log('📋 Invoice string length:', invoice.paymentRequest?.length || 0)
     log('📋 Invoice string preview:', invoice.paymentRequest?.substring(0, 80) + '...')
     log('📋 Full invoice string:', invoice.paymentRequest)
+    log('📋 Full invoice object:', JSON.stringify(invoice, null, 2))
 
-    // Generate a tracking ID for this invoice
-    const paymentHash = `${userPubkey.substring(0, 8)}-topup-${amountSats}-${timestamp}`
+    // Extract payment hash from NWC response (if available)
+    let paymentHash = invoice.paymentHash || invoice.payment_hash || invoice.rHash || invoice.r_hash
 
-    log('✅ Generated tracking ID for invoice:', paymentHash)
-    log('✅ Will use invoice string for verification')
+    // If not available, try to get it from the invoice object
+    if (!paymentHash && invoice.invoice) {
+      paymentHash = invoice.invoice.paymentHash || invoice.invoice.payment_hash
+    }
+
+    // Last resort: generate tracking ID (though this won't work for verification)
+    if (!paymentHash) {
+      log('⚠️ No payment hash found in NWC response, generating tracking ID')
+      paymentHash = `${userPubkey.substring(0, 8)}-topup-${amountSats}-${timestamp}`
+    }
+
+    log('✅ Payment hash for verification:', paymentHash)
+    log('✅ Payment hash is real (64 char hex):', /^[a-f0-9]{64}$/i.test(paymentHash))
     log('========================================')
 
     const response = {
       success: true,
       invoice: invoice.paymentRequest,      // BOLT11 invoice string
-      paymentHash: paymentHash,             // Tracking ID
+      paymentHash: paymentHash,             // Real payment hash or tracking ID
       amount: amountSats,
       timestamp: new Date().toISOString()
     }

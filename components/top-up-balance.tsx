@@ -415,8 +415,10 @@ function BitcoinConnectTopUp({
         const result = await window.webln.sendPayment(data.invoice)
 
         console.log('[TopUp] WebLN payment successful:', result)
+        console.log('[TopUp] Real payment hash from WebLN:', result.paymentHash)
 
         // CRITICAL: Verify the payment on the backend before confirming
+        // Use the REAL payment hash from WebLN, not our tracking ID
         setIsPaying(false)
         setIsVerifying(true)
         console.log('[TopUp] Verifying payment on backend...')
@@ -426,7 +428,7 @@ function BitcoinConnectTopUp({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             invoiceString: data.invoice,
-            paymentHash: data.paymentHash
+            paymentHash: result.paymentHash  // Use REAL payment hash from WebLN
           })
         })
 
@@ -446,7 +448,8 @@ function BitcoinConnectTopUp({
         }
 
         console.log('[TopUp] Payment verified on backend!')
-        onPaymentConfirmed(data.paymentHash)
+        // Pass the REAL payment hash from WebLN for transaction history
+        onPaymentConfirmed(result.paymentHash)
       } else {
         throw new Error('WebLN not available')
       }
