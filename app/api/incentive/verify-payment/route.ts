@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
 
     log('✅ NWC connected successfully')
 
-    // Get wallet info for debugging
+    // Get wallet info and VERIFY permissions
     log('📱 Getting wallet info...')
     let walletInfo = null
     try {
@@ -70,17 +70,37 @@ export async function POST(request: NextRequest) {
         methods: walletInfo.methods || []
       })
 
-      // Check if lookupInvoice method is available
+      // CRITICAL: Check if lookup_invoice method is available
       if (walletInfo.methods && Array.isArray(walletInfo.methods)) {
-        if (!walletInfo.methods.includes('lookup_invoice') && !walletInfo.methods.includes('lookupInvoice')) {
-          log('⚠️ lookupInvoice method NOT available!')
-          log('⚠️ Available methods:', walletInfo.methods)
+        const hasLookupInvoice = walletInfo.methods.includes('lookup_invoice') ||
+                                 walletInfo.methods.includes('lookupInvoice')
+
+        if (!hasLookupInvoice) {
+          log('❌ lookup_invoice method NOT available!')
+          log('❌ Available methods:', walletInfo.methods)
+
+          // Return error - payment verification is not possible
+          return NextResponse.json({
+            success: false,
+            paid: false,
+            error: 'NWC connection does not have lookup_invoice permission. Please reconfigure with lookup_invoice enabled.',
+            availableMethods: walletInfo.methods
+          }, {
+            status: 400,
+            headers: {
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+            }
+          })
         } else {
-          log('✅ lookupInvoice method is available')
+          log('✅ lookup_invoice method is available')
         }
+      } else {
+        log('❌ Could not verify NWC methods!')
+        throw new Error('Could not verify NWC connection permissions')
       }
     } catch (infoError: any) {
-      log('⚠️ Could not get wallet info:', infoError.message)
+      log('❌ Could not get wallet info:', infoError.message)
+      throw new Error('Failed to verify NWC connection: ' + infoError.message)
     }
 
     // Look up invoice via NWC
@@ -94,136 +114,127 @@ export async function POST(request: NextRequest) {
     let invoiceStatus: any = null
     let lookupMethod = 'invoice_verification'
 
-    if (invoiceString) {
-      try {
-        log('🔍 Attempting invoice lookup via NWC...')
-
-        // Method 1: Try invoice string DIRECTLY (most common format)
-        try {
-          log('🔍 Method 1: Looking up by invoice string (direct)...')
-          log('📋 Invoice string length:', invoiceString.length)
-          log('📋 Invoice preview:', invoiceString.substring(0, 50) + '...')
-
-          invoiceStatus = await nwc.lookupInvoice(invoiceString)
-          lookupMethod = 'nwc_invoice_direct'
-          log('✅ Invoice lookup successful with direct invoice string')
-
-        } catch (directError: any) {
-          log('⚠️ Direct invoice lookup failed:', directError.message)
-
-          // Method 2: Try invoice string in object
-          try {
-            log('🔍 Method 2: Looking up by invoice string (object format)...')
-
-            invoiceStatus = await nwc.lookupInvoice({ invoice: invoiceString })
-            lookupMethod = 'nwc_invoice_object'
-            log('✅ Invoice lookup successful with invoice object')
-
-          } catch (invoiceError: any) {
-            log('⚠️ Invoice object lookup failed:', invoiceError.message)
-            log('⚠️ Error type:', invoiceError.constructor.name)
-
-            // Method 3: Try with payment hash if it's a real one
-            if (isRealPaymentHash) {
-              try {
-                log('🔍 Method 3: Looking up by payment hash...')
-                log('📋 Payment hash:', paymentHash)
-
-                invoiceStatus = await nwc.lookupInvoice({
-                  payment_hash: paymentHash
-                })
-                lookupMethod = 'nwc_payment_hash'
-                log('✅ Invoice lookup successful with payment hash')
-
-              } catch (hashError: any) {
-                log('⚠️ Payment hash lookup failed:', hashError.message)
-
-                // All methods failed
-                invoiceStatus = {
-                  settled: false,
-                  paid: false,
-                  amount: 0,
-                  state: 'pending'
-                }
-                lookupMethod = 'all_lookup_methods_failed'
-                log('❌ All lookup methods failed')
-              }
-            } else {
-              log('⚠️ Not a real payment hash, skipping payment hash lookup')
-
-              // All methods failed
-              invoiceStatus = {
-                settled: false,
-                paid: false,
-                amount: 0,
-                state: 'pending'
-              }
-              lookupMethod = 'all_lookup_methods_failed_tracking'
-              log('❌ All lookup methods failed for tracking ID')
-            }
-          }
-        }
-
-      } catch (lookupError: any) {
-        log('❌ Invoice lookup failed:', lookupError.message)
-        log('❌ Error type:', lookupError.constructor.name)
-
-        invoiceStatus = {
-          settled: false,
-          paid: false,
-          amount: 0,
-          state: 'pending'
-        }
-        lookupMethod = 'lookup_failed'
-      }
-    } else {
-      log('⚠️ No invoice string available for verification')
-      invoiceStatus = {
-        settled: false,
+    // CRITICAL: Invoice string is REQUIRED for verification
+    if (!invoiceString) {
+      log('❌ No invoice string provided - cannot verify payment!')
+      return NextResponse.json({
+        success: false,
         paid: false,
-        amount: 0,
-        state: 'pending'
+        error: 'Invoice string is required for payment verification'
+      }, {
+        status: 400,
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+        }
+      })
+    }
+
+    try {
+      log('🔍 Attempting invoice lookup via NWC...')
+      log('📋 Invoice string length:', invoiceString.length)
+      log('📋 Invoice preview:', invoiceString.substring(0, 50) + '...')
+
+      // Try direct invoice string (recommended by Alby SDK)
+      try {
+        log('🔍 Calling nwc.lookupInvoice(invoiceString) directly...')
+        invoiceStatus = await nwc.lookupInvoice(invoiceString)
+        lookupMethod = 'nwc_invoice_direct'
+        log('✅ Invoice lookup successful!')
+        log('📋 Invoice status response:', JSON.stringify(invoiceStatus, null, 2))
+
+      } catch (directError: any) {
+        log('❌ Direct invoice lookup failed:', directError.message)
+        log('❌ Error type:', directError.constructor.name)
+        log('❌ Error stack:', directError.stack)
+
+        // If direct method fails, the invoice lookup is not working
+        // This could mean:
+        // 1. The invoice is not found (wrong invoice string)
+        // 2. The NWC connection doesn't have proper permissions
+        // 3. The invoice is still pending (not paid yet)
+        throw directError
       }
-      lookupMethod = 'no_invoice_string'
+
+    } catch (lookupError: any) {
+      log('========================================')
+      log('❌ INVOICE LOOKUP FAILED')
+      log('❌ Error:', lookupError.message)
+      log('❌ Error type:', lookupError.constructor.name)
+      log('========================================')
+
+      // Return NOT PAID (this is normal for pending invoices)
+      // The frontend will continue polling
+      return NextResponse.json({
+        success: true,  // Request succeeded
+        paid: false,    // But payment is not confirmed
+        error: lookupError.message,
+        state: 'pending',
+        lookupMethod: 'lookup_failed'
+      }, {
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+        }
+      })
     }
 
     log('📋 Invoice status received:', JSON.stringify(invoiceStatus, null, 2))
 
-    // Check if paid (multiple possible field names)
-    log('🔍 Checking payment status...')
-    log('  settled:', invoiceStatus.settled)
-    log('  state:', invoiceStatus.state)
-    log('  status:', invoiceStatus.status)
-    log('  paid:', invoiceStatus.paid)
+    // CRITICAL: Check if paid - MUST be explicitly confirmed
+    log('========================================')
+    log('🔍 CHECKING PAYMENT STATUS')
+    log('========================================')
+    log('📋 Raw invoice status:', JSON.stringify(invoiceStatus, null, 2))
+    log('  settled:', invoiceStatus?.settled)
+    log('  state:', invoiceStatus?.state)
+    log('  status:', invoiceStatus?.status)
+    log('  paid:', invoiceStatus?.paid)
 
-    const isPaid = invoiceStatus.settled === true ||
-                   invoiceStatus.state === 'settled' ||
-                   invoiceStatus.status === 'SETTLED' ||
-                   invoiceStatus.paid === true
+    // STRICT CHECK: Payment is ONLY confirmed if explicitly marked as settled/paid
+    const isPaid = !!(
+      invoiceStatus.settled === true ||
+      invoiceStatus.state === 'SETTLED' ||
+      invoiceStatus.status === 'SETTLED' ||
+      invoiceStatus.paid === true
+    )
 
+    // Extract amount from various possible fields
     const amount = invoiceStatus.amount ||
                    invoiceStatus.value ||
                    (invoiceStatus.amt_msat ? Math.floor(invoiceStatus.amt_msat / 1000) : null)
 
     log('========================================')
-    log('🔍 PAYMENT STATUS ANALYSIS')
+    log('🔍 PAYMENT VERIFICATION RESULT')
     log('========================================')
-    log('✅ Is paid:', isPaid)
+    log('✅ Is Paid:', isPaid ? 'YES - PAYMENT CONFIRMED' : 'NO - PAYMENT NOT CONFIRMED')
     log('💰 Amount:', amount, 'sats')
     log('🔍 Lookup method:', lookupMethod)
-    log('📋 Raw status fields:')
-    log('  - settled:', invoiceStatus.settled)
-    log('  - state:', invoiceStatus.state)
-    log('  - status:', invoiceStatus.status)
-    log('  - paid:', invoiceStatus.paid)
-    log('  - amount:', invoiceStatus.amount)
-    log('  - value:', invoiceStatus.value)
-    log('  - amt_msat:', invoiceStatus.amt_msat)
+    log('🔍 Settled at:', invoiceStatus.settled_at || invoiceStatus.settledAt || 'N/A')
+    log('🔍 State:', invoiceStatus.state || invoiceStatus.status || 'unknown')
     log('========================================')
+
+    // CRITICAL: Only return paid:true if NWC explicitly confirmed payment
+    if (!isPaid) {
+      log('⏳ Payment not yet confirmed - returning paid:false')
+      return NextResponse.json({
+        success: true,
+        paid: false,
+        amount: amount,
+        state: invoiceStatus.state || invoiceStatus.status || 'pending',
+        lookupMethod: lookupMethod,
+        message: 'Payment not yet confirmed by NWC'
+      }, {
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+        }
+      })
+    }
+
+    log('🎉 PAYMENT CONFIRMED BY NWC!')
+    log('💰 Returning paid:true with amount:', amount, 'sats')
 
     const response = {
       success: true,
-      paid: isPaid,
+      paid: true,
       amount: amount,
       settledAt: invoiceStatus.settled_at || invoiceStatus.settledAt,
       state: invoiceStatus.state || invoiceStatus.status,

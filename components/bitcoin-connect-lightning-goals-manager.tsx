@@ -862,7 +862,6 @@ function BitcoinConnectLightningGoalsManagerInner({
               {/* Primary: QR Code */}
               <div className="border-2 border-blue-200 dark:border-blue-800 rounded-lg p-6 bg-blue-50 dark:bg-blue-900/20">
                 <div className="text-center mb-4">
-                  <div className="text-5xl mb-3">📱</div>
                   <h3 className="text-lg font-semibold text-blue-700 dark:text-blue-300 mb-2">
                     Scan QR Code to Pay
                   </h3>
