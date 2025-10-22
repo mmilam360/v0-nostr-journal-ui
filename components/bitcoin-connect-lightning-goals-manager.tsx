@@ -743,7 +743,7 @@ function BitcoinConnectLightningGoalsManagerInner({
                 </>
               ) : (
                 <>
-                  <span className="text-2xl">⚡</span>
+                  <Zap className="w-5 h-5 mr-2" />
                   Create Stake Invoice
                 </>
               )}
@@ -770,7 +770,7 @@ function BitcoinConnectLightningGoalsManagerInner({
                            disabled:opacity-50 disabled:cursor-not-allowed transition-colors
                            flex items-center justify-center gap-2"
                 >
-                  <span className="text-xl">📱</span>
+                  <Smartphone className="w-5 h-5" />
                   Generate QR Code Invoice
                 </button>
               </div>
@@ -818,7 +818,9 @@ function BitcoinConnectLightningGoalsManagerInner({
               {/* Primary: 1-Click Payment */}
               <div className="border-2 border-green-200 dark:border-green-800 rounded-lg p-6 bg-green-50 dark:bg-green-900/20">
                 <div className="text-center mb-4">
-                  <div className="text-5xl mb-3">⚡</div>
+                  <div className="flex justify-center mb-3">
+                    <Zap className="w-16 h-16 text-green-600" />
+                  </div>
                   <h3 className="text-lg font-semibold text-green-700 dark:text-green-300 mb-2">
                     Pay with Connected Wallet
                   </h3>

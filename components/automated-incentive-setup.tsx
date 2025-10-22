@@ -431,7 +431,7 @@ export function AutomatedIncentiveSetup({ userPubkey, authData, onPaymentSuccess
   }
 
   const handleQuitChallenge = async () => {
-    if (confirm('⚠️ WARNING: Are you sure you want to quit the Lightning Goals challenge?\n\nThis will:\n• Cancel your daily goals\n• FORFEIT your remaining stake balance\n• Reset your progress streak\n\nYou will NOT receive a refund. This action cannot be undone.\n\nAre you absolutely sure?')) {
+    if (confirm('WARNING: Are you sure you want to quit the Lightning Goals challenge?\n\nThis will:\n• Cancel your daily goals\n• FORFEIT your remaining stake balance\n• Reset your progress streak\n\nYou will NOT receive a refund. This action cannot be undone.\n\nAre you absolutely sure?')) {
       try {
         console.log('[Setup] User quitting challenge - forfeiting stake balance')
         

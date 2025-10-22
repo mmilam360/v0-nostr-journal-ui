@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
-import { X, Zap, CheckCircle, XCircle, DollarSign, CreditCard, RotateCcw, Smartphone, Plus, TrendingUp } from 'lucide-react'
+import { X, Zap, CheckCircle, XCircle, DollarSign, CreditCard, RotateCcw, Smartphone, Plus, TrendingUp, AlertTriangle } from 'lucide-react'
 import { BitcoinConnectLightningGoalsManager } from './bitcoin-connect-lightning-goals-manager'
 import { TopUpBalance } from './top-up-balance'
 
@@ -337,7 +337,9 @@ function LightningGoalsSummary({
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-800 p-6 rounded-lg max-w-md w-full">
             <div className="text-center">
-              <div className="text-4xl mb-4">⚠️</div>
+              <div className="flex justify-center mb-4">
+                <AlertTriangle className="w-16 h-16 text-yellow-600" />
+              </div>
               <h3 className="text-lg font-semibold mb-2">Cancel Lightning Goal?</h3>
               <p className="text-gray-600 mb-6">
                 Are you sure you want to cancel your current stake? You will not receive a refund of your {goals.currentBalance} sats balance.
@@ -468,7 +470,7 @@ export function IncentiveModal({
       <div className="max-w-2xl w-full max-h-[90vh] overflow-y-auto bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700">
         <div className="flex flex-row items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
           <h2 className="flex items-center gap-2 text-xl font-semibold">
-            <span className="text-2xl">⚡</span>
+            <Zap className="w-6 h-6 text-yellow-500" />
             Lightning Goals
           </h2>
           <Button variant="ghost" size="sm" onClick={onClose}>

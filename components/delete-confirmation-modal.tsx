@@ -109,10 +109,15 @@ export default function DeleteConfirmationModal({ note, onConfirm, onCancel }: D
 
           {!deleteResult && (
             <div className="mt-4 p-3 bg-red-900/20 border border-red-800 rounded-lg">
-              <p className="text-xs text-red-300 mb-1">⚠️ This action cannot be undone</p>
-              <p className="text-xs text-red-400">
-                The note will be permanently deleted from all your devices and cannot be recovered.
-              </p>
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 text-red-300 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-xs text-red-300 mb-1">This action cannot be undone</p>
+                  <p className="text-xs text-red-400">
+                    The note will be permanently deleted from all your devices and cannot be recovered.
+                  </p>
+                </div>
+              </div>
             </div>
           )}
         </div>
