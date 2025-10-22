@@ -165,6 +165,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   const [hasLightningGoals, setHasLightningGoals] = useState(false)
   const [userLightningAddress, setUserLightningAddress] = useState<string>('')
   const [showStreakAnimation, setShowStreakAnimation] = useState(false)
+  const [previousStreak, setPreviousStreak] = useState(0)
   const [showRelayManager, setShowRelayManager] = useState(false)
   const [showRelaysInDropdown, setShowRelaysInDropdown] = useState(false)
 
@@ -391,21 +392,32 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   const checkLightningGoals = async () => {
     try {
       const goals = await getLightningGoals(authData.pubkey)
-      
+
       if (goals && goals.status === 'active') {
         setHasLightningGoals(true)
-        setUserStreak(goals.currentStreak)
-        
+
+        // Check if streak has increased
+        const newStreak = goals.currentStreak || 0
+        if (newStreak > previousStreak && previousStreak > 0) {
+          console.log('[MainApp] 🎉 Streak increased!', previousStreak, '->', newStreak)
+          setShowStreakAnimation(true)
+          setTimeout(() => setShowStreakAnimation(false), 3000)
+        }
+
+        setPreviousStreak(newStreak)
+        setUserStreak(newStreak)
+
         // Set Lightning address from master event
         if (goals.lightningAddress) {
           console.log('[MainApp] ⚡ Setting Lightning address from master event:', goals.lightningAddress)
           setUserLightningAddress(goals.lightningAddress)
         }
-        
+
         console.log('[MainApp] ✅ Active goals found, Balance:', goals.currentBalance)
       } else {
         setHasLightningGoals(false)
         setUserStreak(0)
+        setPreviousStreak(0)
         console.log('[MainApp] ❌ No active stake found')
       }
     } catch (error) {
@@ -600,6 +612,29 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
       }
     }
   }, [authData?.pubkey])
+
+  // Background polling for Lightning Goals updates
+  useEffect(() => {
+    if (!isIncentiveEnabled() || !authData?.pubkey || !hasLightningGoals) {
+      return
+    }
+
+    console.log('[MainApp] 🔄 Starting Lightning Goals background polling...')
+
+    // Poll every 30 seconds for updates
+    const pollInterval = setInterval(async () => {
+      console.log('[MainApp] 🔄 Polling Lightning Goals status...')
+      await checkLightningGoals()
+    }, 30000) // 30 seconds
+
+    // Initial check
+    checkLightningGoals()
+
+    return () => {
+      console.log('[MainApp] 🛑 Stopping Lightning Goals background polling')
+      clearInterval(pollInterval)
+    }
+  }, [authData?.pubkey, hasLightningGoals])
 
   // AUDIT POINT 4: Update word count when notes change
   useEffect(() => {
@@ -1602,11 +1637,23 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
                     {hasLightningGoals ? (
                       <>
                         {/* Mobile: Circle with number */}
-                        <div className="sm:hidden flex items-center justify-center w-8 h-8 bg-orange-100 dark:bg-orange-900/30 rounded-full">
-                          <span className="text-orange-600 dark:text-orange-400 font-bold text-sm">{userStreak}</span>
+                        <div className={`sm:hidden flex items-center justify-center w-8 h-8 bg-orange-100 dark:bg-orange-900/30 rounded-full transition-all duration-300 ${
+                          showStreakAnimation ? 'animate-truefocus ring-2 ring-green-500 bg-green-100 dark:bg-green-900/30' : ''
+                        }`}>
+                          <span className={`font-bold text-sm ${
+                            showStreakAnimation ? 'text-green-600 dark:text-green-400' : 'text-orange-600 dark:text-orange-400'
+                          }`}>
+                            {userStreak}
+                          </span>
                         </div>
-                        {/* Desktop: Full text */}
-                        <span className="hidden sm:inline font-semibold">{userStreak} day streak</span>
+                        {/* Desktop: Full text with animation */}
+                        <span className={`hidden sm:inline font-semibold transition-all duration-300 ${
+                          showStreakAnimation
+                            ? 'animate-truefocus text-green-600'
+                            : ''
+                        }`}>
+                          {userStreak} day streak
+                        </span>
                       </>
                     ) : (
                       <>
@@ -2197,12 +2244,20 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
           setHasLightningGoals(hasSetup)
           if (!hasSetup) {
             setUserStreak(0)
+            setPreviousStreak(0)
           } else {
             // Refresh Lightning Goals data when setup is active
             await checkLightningGoals()
           }
         }}
         onStakeActivated={checkLightningGoals}
+        onStreakUpdate={(newStreak) => {
+          console.log('[MainApp] 🎉 Streak updated from modal:', newStreak)
+          setShowStreakAnimation(true)
+          setPreviousStreak(userStreak)
+          setUserStreak(newStreak)
+          setTimeout(() => setShowStreakAnimation(false), 3000)
+        }}
       />
     )}
     

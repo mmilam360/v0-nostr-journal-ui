@@ -5,15 +5,16 @@ import { Button } from '@/components/ui/button'
 import { X, Zap, CheckCircle, XCircle, DollarSign, CreditCard, RotateCcw, Smartphone } from 'lucide-react'
 import { BitcoinConnectLightningGoalsManager } from './bitcoin-connect-lightning-goals-manager'
 
-function LightningGoalsSummary({ 
-  goals, 
-  currentWordCount, 
-  userPubkey, 
-  authData, 
+function LightningGoalsSummary({
+  goals,
+  currentWordCount,
+  userPubkey,
+  authData,
   onRefresh,
   onSetupStatusChange,
-  onClose
-}: { 
+  onClose,
+  onStreakUpdate
+}: {
   goals: any
   currentWordCount: number
   userPubkey: string
@@ -21,6 +22,7 @@ function LightningGoalsSummary({
   onRefresh: () => void
   onSetupStatusChange?: (hasSetup: boolean) => void
   onClose?: () => void
+  onStreakUpdate?: (newStreak: number) => void
 }) {
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
   const [activeTab, setActiveTab] = useState<'progress' | 'history'>('progress')
@@ -328,6 +330,7 @@ interface IncentiveModalProps {
   onWordCountProcessed?: () => void
   onSetupStatusChange?: (hasSetup: boolean) => void
   onStakeActivated?: () => void
+  onStreakUpdate?: (newStreak: number) => void
 }
 
 export function IncentiveModal({
@@ -340,7 +343,8 @@ export function IncentiveModal({
   userLightningAddress,
   onWordCountProcessed,
   onSetupStatusChange,
-  onStakeActivated
+  onStakeActivated,
+  onStreakUpdate
 }: IncentiveModalProps) {
   const [hasSetup, setHasSetup] = useState(false)
   const [goals, setGoals] = useState<any>(null)
@@ -448,12 +452,14 @@ export function IncentiveModal({
               onRefresh={loadGoals}
               onSetupStatusChange={onSetupStatusChange}
               onClose={onClose}
+              onStreakUpdate={onStreakUpdate}
             />
                 ) : (
                   <BitcoinConnectLightningGoalsManager
                     userPubkey={userPubkey}
                     authData={authData}
                     currentWordCount={lastSavedWordCount || 0}
+                    onStreakUpdate={onStreakUpdate}
                     onStakeActivated={async () => {
                       console.log('[IncentiveModal] 🎉 Stake activated, switching to Progress/Summary...')
                       

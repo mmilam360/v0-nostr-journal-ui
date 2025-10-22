@@ -13,44 +13,49 @@ interface InvoiceData {
   amount: number
 }
 
-export function BitcoinConnectLightningGoalsManager({ 
+export function BitcoinConnectLightningGoalsManager({
   userPubkey,
   authData,
   currentWordCount = 0,
   onStakeActivated,
-  onSetupStatusChange
-}: { 
+  onSetupStatusChange,
+  onStreakUpdate
+}: {
   userPubkey: string
   authData: any
   currentWordCount?: number
   onStakeActivated?: () => void
   onSetupStatusChange?: (hasSetup: boolean) => void
+  onStreakUpdate?: (newStreak: number) => void
 }) {
   return (
     <ClientOnly fallback={<div className="p-8 text-center">Loading payment system...</div>}>
-      <BitcoinConnectLightningGoalsManagerInner 
-        userPubkey={userPubkey} 
-        authData={authData} 
+      <BitcoinConnectLightningGoalsManagerInner
+        userPubkey={userPubkey}
+        authData={authData}
         currentWordCount={currentWordCount}
         onStakeActivated={onStakeActivated}
         onSetupStatusChange={onSetupStatusChange}
+        onStreakUpdate={onStreakUpdate}
       />
     </ClientOnly>
   )
 }
 
-function BitcoinConnectLightningGoalsManagerInner({ 
-  userPubkey, 
+function BitcoinConnectLightningGoalsManagerInner({
+  userPubkey,
   authData,
   currentWordCount = 0,
   onStakeActivated,
-  onSetupStatusChange
-}: { 
+  onSetupStatusChange,
+  onStreakUpdate
+}: {
   userPubkey: string
   authData: any
   currentWordCount?: number
   onStakeActivated?: () => void
   onSetupStatusChange?: (hasSetup: boolean) => void
+  onStreakUpdate?: (newStreak: number) => void
 }) {
   const [isConnected, setIsConnected] = useState(false)
   

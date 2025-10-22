@@ -335,6 +335,29 @@ button {
   animation: fade-in 0.3s ease-out;
 } */
 
+/* TrueFocus animation - for streak updates */
+@keyframes truefocus {
+  0% {
+    opacity: 0.4;
+    filter: blur(4px);
+    transform: scale(0.95);
+  }
+  50% {
+    opacity: 1;
+    filter: blur(0px);
+    transform: scale(1.15);
+  }
+  100% {
+    opacity: 1;
+    filter: blur(0px);
+    transform: scale(1);
+  }
+}
+
+.animate-truefocus {
+  animation: truefocus 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
 /* Ensure dropdown menus are always on top */
 [data-radix-popper-content-wrapper] {
   z-index: 9999 !important;
