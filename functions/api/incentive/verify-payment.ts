@@ -96,31 +96,30 @@ export async function onRequestPost(context: any) {
     if (invoiceString) {
       try {
         log('🔍 Attempting invoice lookup via NWC...')
-        
-        // For Cloudflare Functions, prioritize invoice string lookup
-        // since we can't reliably extract payment hashes without Node.js built-ins
+
+        // Method 1: Try invoice string DIRECTLY (most common format)
         try {
-          log('🔍 Method 1: Looking up by invoice string (Cloudflare Functions)...')
+          log('🔍 Method 1: Looking up by invoice string (direct)...')
           log('📋 Invoice string length:', invoiceString.length)
           log('📋 Invoice preview:', invoiceString.substring(0, 50) + '...')
-          
+
           invoiceStatus = await nwc.lookupInvoice(invoiceString)
-          lookupMethod = 'nwc_invoice_string'
-          log('✅ Invoice lookup successful with invoice string')
-          
-        } catch (invoiceError) {
-          log('⚠️ Invoice string lookup failed:', invoiceError.message)
-          log('⚠️ Error type:', invoiceError.constructor.name)
-          log('⚠️ Full error:', invoiceError)
-          
-          // Method 2: Try with invoice parameter
+          lookupMethod = 'nwc_invoice_direct'
+          log('✅ Invoice lookup successful with direct invoice string')
+
+        } catch (directError) {
+          log('⚠️ Direct invoice lookup failed:', directError.message)
+          log('⚠️ Error type:', directError.constructor.name)
+          log('⚠️ Full error:', directError)
+
+          // Method 2: Try invoice in object format
           try {
-            log('🔍 Method 2: Looking up with invoice parameter...')
+            log('🔍 Method 2: Looking up by invoice string (object format)...')
             invoiceStatus = await nwc.lookupInvoice({
               invoice: invoiceString
             })
-            lookupMethod = 'nwc_invoice_param'
-            log('✅ Invoice lookup successful with invoice parameter')
+            lookupMethod = 'nwc_invoice_object'
+            log('✅ Invoice lookup successful with invoice object')
             
           } catch (paramError) {
             log('⚠️ Invoice parameter lookup failed:', paramError.message)

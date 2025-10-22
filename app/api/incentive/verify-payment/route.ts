@@ -98,34 +98,58 @@ export async function POST(request: NextRequest) {
       try {
         log('🔍 Attempting invoice lookup via NWC...')
 
-        // Try invoice string lookup first
+        // Method 1: Try invoice string DIRECTLY (most common format)
         try {
-          log('🔍 Method 1: Looking up by invoice string...')
+          log('🔍 Method 1: Looking up by invoice string (direct)...')
           log('📋 Invoice string length:', invoiceString.length)
           log('📋 Invoice preview:', invoiceString.substring(0, 50) + '...')
 
-          invoiceStatus = await nwc.lookupInvoice({ invoice: invoiceString })
-          lookupMethod = 'nwc_invoice_string'
-          log('✅ Invoice lookup successful with invoice string')
+          invoiceStatus = await nwc.lookupInvoice(invoiceString)
+          lookupMethod = 'nwc_invoice_direct'
+          log('✅ Invoice lookup successful with direct invoice string')
 
-        } catch (invoiceError: any) {
-          log('⚠️ Invoice string lookup failed:', invoiceError.message)
-          log('⚠️ Error type:', invoiceError.constructor.name)
+        } catch (directError: any) {
+          log('⚠️ Direct invoice lookup failed:', directError.message)
 
-          // Method 2: Try with payment hash if it's a real one
-          if (isRealPaymentHash) {
-            try {
-              log('🔍 Method 2: Looking up by payment hash...')
-              log('📋 Payment hash:', paymentHash)
+          // Method 2: Try invoice string in object
+          try {
+            log('🔍 Method 2: Looking up by invoice string (object format)...')
 
-              invoiceStatus = await nwc.lookupInvoice({
-                payment_hash: paymentHash
-              })
-              lookupMethod = 'nwc_payment_hash'
-              log('✅ Invoice lookup successful with payment hash')
+            invoiceStatus = await nwc.lookupInvoice({ invoice: invoiceString })
+            lookupMethod = 'nwc_invoice_object'
+            log('✅ Invoice lookup successful with invoice object')
 
-            } catch (hashError: any) {
-              log('⚠️ Payment hash lookup failed:', hashError.message)
+          } catch (invoiceError: any) {
+            log('⚠️ Invoice object lookup failed:', invoiceError.message)
+            log('⚠️ Error type:', invoiceError.constructor.name)
+
+            // Method 3: Try with payment hash if it's a real one
+            if (isRealPaymentHash) {
+              try {
+                log('🔍 Method 3: Looking up by payment hash...')
+                log('📋 Payment hash:', paymentHash)
+
+                invoiceStatus = await nwc.lookupInvoice({
+                  payment_hash: paymentHash
+                })
+                lookupMethod = 'nwc_payment_hash'
+                log('✅ Invoice lookup successful with payment hash')
+
+              } catch (hashError: any) {
+                log('⚠️ Payment hash lookup failed:', hashError.message)
+
+                // All methods failed
+                invoiceStatus = {
+                  settled: false,
+                  paid: false,
+                  amount: 0,
+                  state: 'pending'
+                }
+                lookupMethod = 'all_lookup_methods_failed'
+                log('❌ All lookup methods failed')
+              }
+            } else {
+              log('⚠️ Not a real payment hash, skipping payment hash lookup')
 
               // All methods failed
               invoiceStatus = {
@@ -134,21 +158,9 @@ export async function POST(request: NextRequest) {
                 amount: 0,
                 state: 'pending'
               }
-              lookupMethod = 'all_lookup_methods_failed'
-              log('❌ All lookup methods failed')
+              lookupMethod = 'all_lookup_methods_failed_tracking'
+              log('❌ All lookup methods failed for tracking ID')
             }
-          } else {
-            log('⚠️ Not a real payment hash, skipping payment hash lookup')
-
-            // All methods failed
-            invoiceStatus = {
-              settled: false,
-              paid: false,
-              amount: 0,
-              state: 'pending'
-            }
-            lookupMethod = 'all_lookup_methods_failed_tracking'
-            log('❌ All lookup methods failed for tracking ID')
           }
         }
 
