@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react'
 import { WalletConnect } from './wallet-connect'
 import { ClientOnly } from './client-only'
 import { LightningInvoiceQR } from './lightning-invoice-qr'
-import { CheckCircle } from 'lucide-react'
+import { CheckCircle, Zap } from 'lucide-react'
 import * as bolt11 from 'bolt11'
 
 interface InvoiceData {

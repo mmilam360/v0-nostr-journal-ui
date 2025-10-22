@@ -174,7 +174,14 @@ function LightningGoalsSummary({
         userPubkey={userPubkey}
         authData={authData}
         currentBalance={goals.currentBalance}
-        onTopUpComplete={onRefresh}
+        onTopUpComplete={async () => {
+          // Refresh goals in the modal
+          await onRefresh()
+          // Also refresh the parent component (main-app) to update header balance
+          if (onStakeActivated) {
+            await onStakeActivated()
+          }
+        }}
       />
 
       {/* Actions */}
