@@ -18,14 +18,6 @@ export async function onRequestPost(context: any) {
       throw new Error('Invalid amount: ' + amountSats)
     }
 
-    if (amountSats < 100) {
-      throw new Error('Minimum top-up is 100 sats')
-    }
-
-    if (amountSats > 1000000) {
-      throw new Error('Maximum top-up is 1,000,000 sats')
-    }
-
     if (!userPubkey || typeof userPubkey !== 'string') {
       throw new Error('Invalid userPubkey')
     }
