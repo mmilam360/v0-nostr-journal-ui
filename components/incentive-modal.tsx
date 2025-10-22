@@ -14,7 +14,8 @@ function LightningGoalsSummary({
   onRefresh,
   onSetupStatusChange,
   onClose,
-  onStreakUpdate
+  onStreakUpdate,
+  onStakeActivated
 }: {
   goals: any
   currentWordCount: number
@@ -24,6 +25,7 @@ function LightningGoalsSummary({
   onSetupStatusChange?: (hasSetup: boolean) => void
   onClose?: () => void
   onStreakUpdate?: (newStreak: number) => void
+  onStakeActivated?: () => void
 }) {
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
   const [activeTab, setActiveTab] = useState<'progress' | 'history'>('progress')
@@ -232,10 +234,18 @@ function LightningGoalsSummary({
                           <span>Goal Achieved</span>
                         </div>
                       ) : (
-                        <div className="flex items-center gap-1 text-red-600 dark:text-red-400 text-sm font-medium">
-                          <XCircle className="w-4 h-4" />
-                          <span>Goal Missed</span>
-                        </div>
+                        // Check if this is the stake creation day
+                        day.transactions?.some((tx: any) => tx.type === 'stake_created') ? (
+                          <div className="flex items-center gap-1 text-blue-600 dark:text-blue-400 text-sm font-medium">
+                            <TrendingUp className="w-4 h-4" />
+                            <span>New Goal Started</span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1 text-red-600 dark:text-red-400 text-sm font-medium">
+                            <XCircle className="w-4 h-4" />
+                            <span>Goal Missed</span>
+                          </div>
+                        )
                       )}
                     </div>
 
@@ -509,6 +519,7 @@ export function IncentiveModal({
               onSetupStatusChange={onSetupStatusChange}
               onClose={onClose}
               onStreakUpdate={onStreakUpdate}
+              onStakeActivated={onStakeActivated}
             />
                 ) : (
                   <BitcoinConnectLightningGoalsManager
