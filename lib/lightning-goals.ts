@@ -116,9 +116,9 @@ export async function addTransaction(
   
   // Add the transaction
   todayHistory.transactions.push(transaction)
-  
+
   // Update balance based on transaction type
-  if (transaction.type === 'deposit') {
+  if (transaction.type === 'deposit' || transaction.type === 'top_up' || transaction.type === 'stake_created') {
     goals.currentBalance += transaction.amount
     goals.totalDeposited += transaction.amount
   } else if (transaction.type === 'payout') {
@@ -160,18 +160,31 @@ export async function getLightningGoals(userPubkey: string): Promise<LightningGo
   const event = events[0]
   const getTag = (name: string) => event.tags.find(t => t[0] === name)?.[1] || ''
   
-  // Parse history
+  // Parse history with transactions
   const history: DayHistory[] = []
   for (let i = 1; i <= 7; i++) {
     const dayData = getTag(`day_${i}`)
     if (dayData) {
       const [date, words, goalMet, rewardSent, amount] = dayData.split('|')
+
+      // Parse transactions for this day
+      let transactions: TransactionHistory[] = []
+      const txData = getTag(`day_${i}_tx`)
+      if (txData) {
+        try {
+          transactions = JSON.parse(txData)
+        } catch (e) {
+          console.error('[LightningGoals] Failed to parse transactions for day', i, e)
+        }
+      }
+
       history.push({
         date,
         words: parseInt(words),
         goalMet: goalMet === 'true',
         rewardSent: rewardSent === 'true',
-        amount: parseInt(amount)
+        amount: parseInt(amount),
+        transactions
       })
     }
   }
@@ -370,12 +383,22 @@ export async function updateLightningGoals(
     ["last_missed_date", updated.lastMissedDate]
   ]
   
-  // Add history
+  // Add history with transactions
   updated.history.forEach((day, i) => {
+    // Basic day info
     tags.push([
       `day_${i + 1}`,
       `${day.date}|${day.words}|${day.goalMet}|${day.rewardSent}|${day.amount}`
     ])
+
+    // Serialize transactions for this day
+    if (day.transactions && day.transactions.length > 0) {
+      const txData = JSON.stringify(day.transactions)
+      tags.push([
+        `day_${i + 1}_tx`,
+        txData
+      ])
+    }
   })
   
   // Create event

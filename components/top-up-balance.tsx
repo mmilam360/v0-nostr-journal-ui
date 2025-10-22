@@ -22,6 +22,62 @@ export function TopUpBalance({ userPubkey, authData, currentBalance, onTopUpComp
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>('')
   const [copied, setCopied] = useState(false)
   const [paymentMethod, setPaymentMethod] = useState<'invoice' | 'bitcoin-connect' | null>(null)
+  const [isCheckingPayment, setIsCheckingPayment] = useState(false)
+  const [paymentVerified, setPaymentVerified] = useState(false)
+
+  const checkPaymentStatus = async (invoice: string, paymentHash: string) => {
+    try {
+      console.log('[TopUp] Checking payment status...')
+
+      const response = await fetch('/api/incentive/verify-payment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          invoiceString: invoice,
+          paymentHash: paymentHash
+        })
+      })
+
+      const data = await response.json()
+
+      console.log('[TopUp] Payment verification response:', data)
+
+      return data.paid === true
+    } catch (err: any) {
+      console.error('[TopUp] Error checking payment:', err)
+      return false
+    }
+  }
+
+  const startPaymentPolling = async (invoice: string, paymentHash: string, amount: number) => {
+    console.log('[TopUp] Starting payment polling...')
+    setIsCheckingPayment(true)
+
+    const maxAttempts = 60 // Poll for up to 5 minutes (60 * 5 seconds)
+    let attempts = 0
+
+    const pollInterval = setInterval(async () => {
+      attempts++
+      console.log('[TopUp] Polling attempt', attempts, 'of', maxAttempts)
+
+      const isPaid = await checkPaymentStatus(invoice, paymentHash)
+
+      if (isPaid) {
+        console.log('[TopUp] Payment verified!')
+        clearInterval(pollInterval)
+        setIsCheckingPayment(false)
+        setPaymentVerified(true)
+
+        // Process the confirmed payment
+        await handlePaymentConfirmed(paymentHash)
+      } else if (attempts >= maxAttempts) {
+        console.log('[TopUp] Payment polling timed out')
+        clearInterval(pollInterval)
+        setIsCheckingPayment(false)
+        setError('Payment verification timed out. Please contact support if you have paid.')
+      }
+    }, 5000) // Check every 5 seconds
+  }
 
   const handleCreateTopUpInvoice = async () => {
     const amount = parseInt(topUpAmount)
@@ -72,6 +128,9 @@ export function TopUpBalance({ userPubkey, authData, currentBalance, onTopUpComp
         amount: data.amount
       })
       setPaymentMethod('invoice')
+
+      // Start polling for payment
+      startPaymentPolling(data.invoice, data.paymentHash, data.amount)
     } catch (err: any) {
       console.error('[TopUp] Error creating invoice:', err)
       setError(err.message || 'Failed to create invoice')
@@ -136,50 +195,76 @@ export function TopUpBalance({ userPubkey, authData, currentBalance, onTopUpComp
             Top-Up Payment
           </h3>
           <p className="text-sm text-gray-600 dark:text-gray-400">
-            Scan QR code or copy invoice to pay
+            {paymentVerified ? 'Payment Confirmed!' : isCheckingPayment ? 'Waiting for payment...' : 'Scan QR code or copy invoice to pay'}
           </p>
         </div>
 
-        {/* QR Code */}
-        {qrCodeDataUrl && (
-          <div className="flex justify-center mb-4">
-            <img src={qrCodeDataUrl} alt="Payment QR Code" className="w-64 h-64 rounded-lg" />
+        {/* Payment Status */}
+        {paymentVerified ? (
+          <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-6 text-center mb-4">
+            <CheckCircle className="w-16 h-16 mx-auto mb-3 text-green-600 dark:text-green-400" />
+            <p className="text-lg font-semibold text-green-900 dark:text-green-100 mb-1">
+              Payment Verified!
+            </p>
+            <p className="text-sm text-green-700 dark:text-green-300">
+              Your balance has been updated
+            </p>
           </div>
-        )}
-
-        {/* Copy Invoice */}
-        <div className="space-y-3">
-          <Button
-            onClick={handleCopyInvoice}
-            variant="outline"
-            className="w-full"
-          >
-            {copied ? (
-              <>
-                <CheckCircle className="w-4 h-4 mr-2" />
-                Copied!
-              </>
-            ) : (
-              <>
-                <Copy className="w-4 h-4 mr-2" />
-                Copy Invoice
-              </>
+        ) : (
+          <>
+            {/* QR Code */}
+            {qrCodeDataUrl && (
+              <div className="flex justify-center mb-4">
+                <img src={qrCodeDataUrl} alt="Payment QR Code" className="w-64 h-64 rounded-lg" />
+              </div>
             )}
-          </Button>
 
-          <Button
-            onClick={() => {
-              setInvoiceData(null)
-              setPaymentMethod(null)
-              setQrCodeDataUrl('')
-              setError('')
-            }}
-            variant="outline"
-            className="w-full"
-          >
-            Cancel
-          </Button>
-        </div>
+            {/* Checking Status */}
+            {isCheckingPayment && (
+              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded p-3 text-sm text-blue-700 dark:text-blue-300 mb-4 flex items-center justify-center gap-2">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Checking for payment...
+              </div>
+            )}
+
+            {/* Copy Invoice */}
+            <div className="space-y-3">
+              <Button
+                onClick={handleCopyInvoice}
+                variant="outline"
+                className="w-full"
+                disabled={paymentVerified}
+              >
+                {copied ? (
+                  <>
+                    <CheckCircle className="w-4 h-4 mr-2" />
+                    Copied!
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-4 h-4 mr-2" />
+                    Copy Invoice
+                  </>
+                )}
+              </Button>
+
+              <Button
+                onClick={() => {
+                  setInvoiceData(null)
+                  setPaymentMethod(null)
+                  setQrCodeDataUrl('')
+                  setError('')
+                  setIsCheckingPayment(false)
+                  setPaymentVerified(false)
+                }}
+                variant="outline"
+                className="w-full"
+              >
+                Cancel
+              </Button>
+            </div>
+          </>
+        )}
       </div>
     )
   }
@@ -297,6 +382,7 @@ function BitcoinConnectTopUp({
 }) {
   const [isPaying, setIsPaying] = useState(false)
   const [error, setError] = useState('')
+  const [isVerifying, setIsVerifying] = useState(false)
 
   const handlePayWithWebLN = async () => {
     setIsPaying(true)
@@ -304,6 +390,7 @@ function BitcoinConnectTopUp({
 
     try {
       // Create invoice
+      console.log('[TopUp] Creating invoice for Bitcoin Connect payment...')
       const response = await fetch('/api/incentive/create-topup-invoice', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -320,12 +407,36 @@ function BitcoinConnectTopUp({
         throw new Error(data.error || 'Failed to create invoice')
       }
 
+      console.log('[TopUp] Invoice created, requesting WebLN payment...')
+
       // Pay with WebLN
       if (window.webln) {
         await window.webln.enable()
         const result = await window.webln.sendPayment(data.invoice)
 
-        console.log('[TopUp] Payment successful:', result)
+        console.log('[TopUp] WebLN payment successful:', result)
+
+        // CRITICAL: Verify the payment on the backend before confirming
+        setIsPaying(false)
+        setIsVerifying(true)
+        console.log('[TopUp] Verifying payment on backend...')
+
+        const verifyResponse = await fetch('/api/incentive/verify-payment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            invoiceString: data.invoice,
+            paymentHash: data.paymentHash
+          })
+        })
+
+        const verifyData = await verifyResponse.json()
+
+        if (!verifyData.success || !verifyData.paid) {
+          throw new Error('Payment could not be verified. Please contact support.')
+        }
+
+        console.log('[TopUp] Payment verified on backend!')
         onPaymentConfirmed(data.paymentHash)
       } else {
         throw new Error('WebLN not available')
@@ -333,8 +444,10 @@ function BitcoinConnectTopUp({
     } catch (err: any) {
       console.error('[TopUp] Payment error:', err)
       setError(err.message || 'Payment failed')
+      setIsVerifying(false)
     } finally {
       setIsPaying(false)
+      setIsVerifying(false)
     }
   }
 
@@ -358,10 +471,15 @@ function BitcoinConnectTopUp({
       <div className="space-y-3">
         <Button
           onClick={handlePayWithWebLN}
-          disabled={isPaying}
+          disabled={isPaying || isVerifying}
           className="w-full bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700"
         >
-          {isPaying ? (
+          {isVerifying ? (
+            <>
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              Verifying Payment...
+            </>
+          ) : isPaying ? (
             <>
               <Loader2 className="w-4 h-4 mr-2 animate-spin" />
               Processing Payment...
@@ -378,6 +496,7 @@ function BitcoinConnectTopUp({
           onClick={onCancel}
           variant="outline"
           className="w-full"
+          disabled={isPaying || isVerifying}
         >
           Cancel
         </Button>
