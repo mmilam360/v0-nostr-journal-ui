@@ -3,34 +3,39 @@
 import { useEffect, useState } from 'react'
 import { ClientOnly } from './client-only'
 
-export function BitcoinConnectLightningGoalsMonitor({ 
-  userPubkey, 
+export function BitcoinConnectLightningGoalsMonitor({
+  userPubkey,
   currentWordCount,
-  authData 
-}: { 
+  authData,
+  onGoalCompleted
+}: {
   userPubkey: string
   currentWordCount: number
   authData: any
+  onGoalCompleted?: () => void
 }) {
   return (
     <ClientOnly fallback={null}>
-      <BitcoinConnectLightningGoalsMonitorInner 
-        userPubkey={userPubkey} 
-        currentWordCount={currentWordCount} 
-        authData={authData} 
+      <BitcoinConnectLightningGoalsMonitorInner
+        userPubkey={userPubkey}
+        currentWordCount={currentWordCount}
+        authData={authData}
+        onGoalCompleted={onGoalCompleted}
       />
     </ClientOnly>
   )
 }
 
-function BitcoinConnectLightningGoalsMonitorInner({ 
-  userPubkey, 
+function BitcoinConnectLightningGoalsMonitorInner({
+  userPubkey,
   currentWordCount,
-  authData 
-}: { 
+  authData,
+  onGoalCompleted
+}: {
   userPubkey: string
   currentWordCount: number
   authData: any
+  onGoalCompleted?: () => void
 }) {
   const [goals, setGoals] = useState<any>(null)
   const [hasCheckedToday, setHasCheckedToday] = useState(false)

@@ -8,13 +8,15 @@ interface Props {
   authData: any
   currentWordCount: number
   userLightningAddress: string
+  onGoalCompleted?: () => void
 }
 
 export function LightningGoalsMonitor({
   userPubkey,
   authData,
   currentWordCount,
-  userLightningAddress
+  userLightningAddress,
+  onGoalCompleted
 }: Props) {
   const isProcessingRef = useRef(false)
   const lastCountRef = useRef(0)
@@ -121,8 +123,14 @@ export function LightningGoalsMonitor({
       
       // Record it
       await recordRewardSent(userPubkey, rewardAmount, authData)
-      
+
       console.log('[Monitor] 🎉 Complete! Reward recorded in goals')
+
+      // Trigger goal completion animation
+      if (onGoalCompleted) {
+        console.log('[Monitor] ⚡ Triggering goal completion animation')
+        onGoalCompleted()
+      }
       
     } catch (error) {
       console.error('[Monitor] ❌ Error sending reward:', error)

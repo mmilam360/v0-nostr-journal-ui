@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
-import { X, Zap, CheckCircle, XCircle, DollarSign, CreditCard, RotateCcw, Smartphone, Plus, TrendingUp, AlertTriangle } from 'lucide-react'
+import { X, Zap, CheckCircle, XCircle, DollarSign, CreditCard, RotateCcw, Smartphone, Plus, TrendingUp, AlertTriangle, Lock } from 'lucide-react'
 import { BitcoinConnectLightningGoalsManager } from './bitcoin-connect-lightning-goals-manager'
 import { TopUpBalance } from './top-up-balance'
 
@@ -256,7 +256,7 @@ function LightningGoalsSummary({
                           <div key={txIndex} className="flex items-start gap-2 text-sm bg-gray-50 dark:bg-gray-800 p-2 rounded">
                             {tx.type === 'stake_created' && (
                               <>
-                                <DollarSign className="w-4 h-4 text-blue-600 dark:text-blue-400 mt-0.5" />
+                                <Lock className="w-4 h-4 text-blue-600 dark:text-blue-400 mt-0.5" />
                                 <div className="flex-1">
                                   <div className="font-medium text-blue-700 dark:text-blue-300">Stake Created</div>
                                   <div className="text-xs text-gray-600 dark:text-gray-400">Deposited {tx.amount} sats</div>
@@ -397,6 +397,7 @@ interface IncentiveModalProps {
   onSetupStatusChange?: (hasSetup: boolean) => void
   onStakeActivated?: () => void
   onStreakUpdate?: (newStreak: number) => void
+  onGoalCompleted?: () => void
 }
 
 export function IncentiveModal({
@@ -410,7 +411,8 @@ export function IncentiveModal({
   onWordCountProcessed,
   onSetupStatusChange,
   onStakeActivated,
-  onStreakUpdate
+  onStreakUpdate,
+  onGoalCompleted
 }: IncentiveModalProps) {
   const [hasSetup, setHasSetup] = useState(false)
   const [goals, setGoals] = useState<any>(null)

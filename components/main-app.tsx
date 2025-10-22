@@ -29,6 +29,7 @@ import PublishConfirmationModal from "@/components/publish-confirmation-modal"
 import PublishModal from "@/components/publish-modal"
 import DeleteConfirmationModal from "@/components/delete-confirmation-modal"
 import ProfilePage from "@/components/profile-page"
+import { ElectricBorder } from "@/components/electric-border"
 import { isIncentiveEnabled } from "@/lib/feature-flags"
 import { getLightningGoals } from "@/lib/lightning-goals"
 // LightningGoalsMonitor will be dynamically imported below
@@ -167,6 +168,7 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
   const [showStreakAnimation, setShowStreakAnimation] = useState(false)
   const [previousStreak, setPreviousStreak] = useState(0)
   const [showRelayManager, setShowRelayManager] = useState(false)
+  const [showElectricBorder, setShowElectricBorder] = useState(false)
   const [showRelaysInDropdown, setShowRelaysInDropdown] = useState(false)
 
   // Clear selective storage on app startup for consistent cross-device experience
@@ -2213,6 +2215,10 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
             currentWordCount={lastSavedWordCount || 0}
             userLightningAddress={userLightningAddress}
             onWordCountProcessed={() => setLastSavedWordCount(null)}
+            onGoalCompleted={() => {
+              console.log('[MainApp] ⚡ Goal completed from monitor! Showing electric border animation')
+              setShowElectricBorder(true)
+            }}
           />
         )
       } else {
@@ -2258,9 +2264,16 @@ export function MainApp({ authData, onLogout }: MainAppProps) {
           setUserStreak(newStreak)
           setTimeout(() => setShowStreakAnimation(false), 3000)
         }}
+        onGoalCompleted={() => {
+          console.log('[MainApp] ⚡ Goal completed! Showing electric border animation')
+          setShowElectricBorder(true)
+        }}
       />
     )}
-    
+
+    {/* Electric Border Animation */}
+    <ElectricBorder show={showElectricBorder} duration={2000} />
+
     </ErrorBoundary>
   )
 }
