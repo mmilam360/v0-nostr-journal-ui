@@ -70,7 +70,7 @@ export interface DayHistory {
 
 export interface TransactionHistory {
   id: string
-  type: 'deposit' | 'payout' | 'refund'
+  type: 'deposit' | 'payout' | 'refund' | 'top_up' | 'stake_created' | 'goal_met' | 'goal_missed'
   amount: number
   timestamp: number
   description: string
@@ -289,26 +289,46 @@ export async function updateLightningGoals(
   const today = new Date().toISOString().split('T')[0]
   if (current && current.todayDate !== today) {
     console.log('[LightningGoals] 📅 New day detected, archiving previous day')
-    
-    // Add yesterday to history
+
+    // Create transaction for yesterday's outcome
+    const yesterdayTransaction: TransactionHistory = current.todayGoalMet ? {
+      id: `goal_met-${Date.now()}`,
+      type: 'goal_met',
+      amount: current.todayRewardAmount || 0,
+      timestamp: Date.now(),
+      description: `Goal achieved: ${current.todayWords} words written`
+    } : {
+      id: `goal_missed-${Date.now()}`,
+      type: 'goal_missed',
+      amount: 0,
+      timestamp: Date.now(),
+      description: `Goal missed: Only ${current.todayWords} words written (${current.dailyWordGoal} needed)`
+    }
+
+    // Find existing transactions for yesterday
+    const existingHistoryEntry = current.history.find(h => h.date === current.todayDate)
+    const existingTransactions = existingHistoryEntry?.transactions || []
+
+    // Add yesterday to history with transaction
     updated.history = [
       {
         date: current.todayDate,
         words: current.todayWords,
         goalMet: current.todayGoalMet,
         rewardSent: current.todayRewardSent,
-        amount: current.todayRewardAmount
+        amount: current.todayRewardAmount,
+        transactions: [...existingTransactions, yesterdayTransaction]
       },
-      ...current.history.slice(0, 6) // Keep only last 7 days
+      ...current.history.filter(h => h.date !== current.todayDate).slice(0, 6) // Keep only last 7 days
     ]
-    
+
     // Reset today's tracking
     updated.todayDate = today
     updated.todayWords = 0
     updated.todayGoalMet = false
     updated.todayRewardSent = false
     updated.todayRewardAmount = 0
-    
+
     // Update streak
     if (current.todayGoalMet) {
       updated.currentStreak = (current.currentStreak || 0) + 1
@@ -410,7 +430,7 @@ export async function createStake(
   const today = new Date().toISOString().split('T')[0]
   const now = Date.now()
   
-  // Create initial history entry with deposit transaction
+  // Create initial history entry with stake_created transaction
   const initialHistory: DayHistory[] = [{
     date: today,
     words: 0,
@@ -418,11 +438,11 @@ export async function createStake(
     rewardSent: false,
     amount: 0,
     transactions: config.paymentHash ? [{
-      id: `deposit-${now}`,
-      type: 'deposit',
+      id: `stake_created-${now}`,
+      type: 'stake_created',
       amount: config.depositAmount,
       timestamp: now,
-      description: `Initial stake deposit for ${config.dailyWordGoal} words daily goal`,
+      description: `Stake created: ${config.depositAmount} sats deposited for ${config.dailyWordGoal} word daily goal (${config.dailyReward} sats reward)`,
       txHash: config.paymentHash
     }] : []
   }]
@@ -534,25 +554,33 @@ export async function recordRewardSent(
 }
 
 /**
- * Add to stake (top up)
+ * Add to stake (top up) with transaction history
  */
 export async function addToStake(
   userPubkey: string,
   amount: number,
+  paymentHash: string,
   authData: any
 ): Promise<void> {
   console.log('[LightningGoals] Adding to stake:', amount)
-  
+
   const goals = await getLightningGoals(userPubkey)
-  
+
   if (!goals) throw new Error('No goals found')
-  
-  await updateLightningGoals(userPubkey, {
-    currentBalance: goals.currentBalance + amount,
-    totalDeposited: goals.totalDeposited + amount
-  }, authData)
-  
-  console.log('[LightningGoals] ✅ Stake topped up')
+
+  // Add transaction to history
+  const transaction: TransactionHistory = {
+    id: `topup-${Date.now()}`,
+    type: 'top_up',
+    amount: amount,
+    timestamp: Date.now(),
+    description: `Top-up: Added ${amount} sats to stake`,
+    txHash: paymentHash
+  }
+
+  await addTransaction(userPubkey, transaction, authData)
+
+  console.log('[LightningGoals] ✅ Stake topped up with transaction history')
 }
 
 /**
