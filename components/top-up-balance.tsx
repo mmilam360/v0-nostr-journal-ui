@@ -50,33 +50,72 @@ export function TopUpBalance({ userPubkey, authData, currentBalance, onTopUpComp
   }
 
   const startPaymentPolling = async (invoice: string, paymentHash: string, amount: number) => {
-    console.log('[TopUp] Starting payment polling...')
+    console.log('[TopUp] ========================================')
+    console.log('[TopUp] 🔍 STARTING PAYMENT VERIFICATION')
+    console.log('[TopUp] 🔒 SECURITY: This is the ONLY way payments can be confirmed')
+    console.log('[TopUp] 🔒 SECURITY: WebLN responses are NOT trusted')
+    console.log('[TopUp] ========================================')
+    console.log('[TopUp] Payment hash:', paymentHash)
+    console.log('[TopUp] Invoice preview:', invoice.substring(0, 50) + '...')
+    console.log('[TopUp] Will check every 3 seconds for up to 3 minutes')
+    
     setIsCheckingPayment(true)
 
-    const maxAttempts = 60 // Poll for up to 5 minutes (60 * 5 seconds)
+    const maxAttempts = 60 // Poll for up to 3 minutes (60 * 3 seconds) - MATCHES STAKE VERIFICATION
     let attempts = 0
 
     const pollInterval = setInterval(async () => {
       attempts++
-      console.log('[TopUp] Polling attempt', attempts, 'of', maxAttempts)
+      
+      try {
+        console.log(`[TopUp] 🔄 Verification attempt ${attempts}/${maxAttempts}`)
+        console.log(`[TopUp] Time remaining: ${Math.floor((maxAttempts - attempts) * 3 / 60)} minutes`)
+        
+        const isPaid = await checkPaymentStatus(invoice, paymentHash)
 
-      const isPaid = await checkPaymentStatus(invoice, paymentHash)
+        if (isPaid) {
+          console.log('[TopUp] ========================================')
+          console.log('[TopUp] 🎉 PAYMENT CONFIRMED!')
+          console.log('[TopUp] 🔒 SECURITY: Payment verified via NWC backend - NOT WebLN')
+          console.log('[TopUp] ========================================')
+          console.log('[TopUp] 💰 Crediting balance:', amount, 'sats')
+          
+          clearInterval(pollInterval)
+          setIsCheckingPayment(false)
+          setPaymentVerified(true)
 
-      if (isPaid) {
-        console.log('[TopUp] Payment verified!')
-        clearInterval(pollInterval)
-        setIsCheckingPayment(false)
-        setPaymentVerified(true)
-
-        // Process the confirmed payment
-        await handlePaymentConfirmed(paymentHash, amount)
-      } else if (attempts >= maxAttempts) {
-        console.log('[TopUp] Payment polling timed out')
-        clearInterval(pollInterval)
-        setIsCheckingPayment(false)
-        setError('Payment verification timed out. Please contact support if you have paid.')
+          // Process the confirmed payment
+          await handlePaymentConfirmed(paymentHash, amount)
+        } else if (attempts >= maxAttempts) {
+          console.log('[TopUp] ========================================')
+          console.log('[TopUp] ⏰ VERIFICATION TIMEOUT')
+          console.log('[TopUp] ========================================')
+          console.log('[TopUp] Checked', maxAttempts, 'times over 3 minutes')
+          console.log('[TopUp] No payment detected')
+          
+          clearInterval(pollInterval)
+          setIsCheckingPayment(false)
+          setError(`Payment verification timed out after 3 minutes. If you paid, please contact support with this payment hash: ${paymentHash.substring(0, 16)}...`)
+        } else {
+          // Still waiting
+          console.log('[TopUp] ⏳ Payment not confirmed yet, will check again in 3 seconds')
+        }
+        
+      } catch (error) {
+        console.error('[TopUp] ❌ Verification error:', error)
+        console.error('[TopUp] ❌ Error details:', {
+          message: error.message,
+          attempts: attempts,
+          maxAttempts: maxAttempts
+        })
+        
+        if (attempts >= maxAttempts) {
+          clearInterval(pollInterval)
+          setIsCheckingPayment(false)
+          setError('Payment verification failed after maximum attempts. Please try again.')
+        }
       }
-    }, 5000) // Check every 5 seconds
+    }, 3000) // Check every 3 seconds - MATCHES STAKE VERIFICATION
   }
 
   const handleCreateTopUpInvoice = async () => {
@@ -226,6 +265,9 @@ export function TopUpBalance({ userPubkey, authData, currentBalance, onTopUpComp
               <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded p-3 text-sm text-blue-700 dark:text-blue-300 mb-4 flex items-center justify-center gap-2">
                 <Loader2 className="w-4 h-4 animate-spin" />
                 Checking for payment...
+                <div className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                  Checking every 3 seconds for up to 3 minutes
+                </div>
               </div>
             )}
 
@@ -410,58 +452,49 @@ function BitcoinConnectTopUp({
       }
 
       console.log('[TopUp] Invoice created, requesting WebLN payment...')
+      console.log('[TopUp] 🔒 SECURITY: WebLN will ONLY trigger payment, verification via NWC only')
 
-      // Pay with WebLN
-      if (window.webln) {
-        await window.webln.enable()
-        const result = await window.webln.sendPayment(data.invoice)
-
-        console.log('[TopUp] WebLN payment successful:', result)
-        console.log('[TopUp] Real payment hash from WebLN:', result.paymentHash)
-
-        // CRITICAL: Verify the payment on the backend before confirming
-        // Use the REAL payment hash from WebLN, not our tracking ID
-        setIsPaying(false)
-        setIsVerifying(true)
-        console.log('[TopUp] Verifying payment on backend...')
-
-        const verifyResponse = await fetch('/api/incentive/verify-payment', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            invoiceString: data.invoice,
-            paymentHash: result.paymentHash  // Use REAL payment hash from WebLN
-          })
-        })
-
-        const verifyData = await verifyResponse.json()
-
-        console.log('[TopUp] Verification response:', verifyData)
-        console.log('[TopUp] Success:', verifyData.success)
-        console.log('[TopUp] Paid:', verifyData.paid)
-        console.log('[TopUp] Full response:', JSON.stringify(verifyData, null, 2))
-
-        if (!verifyData.success) {
-          throw new Error(`Verification failed: ${verifyData.error || 'Unknown error'}`)
+      // CRITICAL SECURITY: Start verification polling FIRST, before any WebLN interaction
+      // This ensures verification is ALWAYS running regardless of WebLN behavior
+      console.log('[TopUp] 🔍 Starting NWC verification polling IMMEDIATELY...')
+      setIsPaying(false)
+      setIsVerifying(true)
+      
+      // Start the same robust verification polling as initial stake
+      startPaymentPolling(data.invoice, data.paymentHash, data.amount)
+      
+      // Now attempt WebLN payment (this is just a trigger, not verification)
+      try {
+        console.log('[TopUp] 🔌 Attempting WebLN payment trigger...')
+        if (window.webln) {
+          await window.webln.enable()
+          const result = await window.webln.sendPayment(data.invoice)
+          console.log('[TopUp] ✅ WebLN payment triggered!', result)
+          console.log('[TopUp] 🔍 Payment verification is already running via NWC...')
+          
+          // Note: We do NOT trust this response - verification polling will confirm if payment was actually made
+        } else {
+          throw new Error('WebLN not available')
         }
-
-        if (!verifyData.paid) {
-          throw new Error(`Payment not confirmed yet. Status: ${verifyData.state || 'unknown'}. Please wait a moment and try again.`)
-        }
-
-        console.log('[TopUp] Payment verified on backend!')
-        // Pass the REAL payment hash from WebLN for transaction history
-        onPaymentConfirmed(result.paymentHash, amount)
-      } else {
-        throw new Error('WebLN not available')
+        
+      } catch (weblnError) {
+        console.log('[TopUp] ⚠️ WebLN payment failed, but NWC verification continues:', weblnError)
+        console.log('[TopUp] 🔍 Showing QR code fallback while NWC verification continues...')
+        
+        // Show QR code as fallback if WebLN fails
+        // The verification polling will continue regardless
+        setError('WebLN payment failed, but verification continues. Please use QR code if needed.')
       }
+      
+      // CRITICAL: Payment confirmation will ONLY happen via verification polling success
+      // This completely prevents the security vulnerability of trusting WebLN responses
+      
     } catch (err: any) {
-      console.error('[TopUp] Payment error:', err)
-      setError(err.message || 'Payment failed')
+      console.error('[TopUp] ❌ WebLN payment process failed:', err)
+      setError(err.message || 'Payment process failed. Please try the QR code method instead.')
       setIsVerifying(false)
     } finally {
       setIsPaying(false)
-      setIsVerifying(false)
     }
   }
 
@@ -492,6 +525,9 @@ function BitcoinConnectTopUp({
             <>
               <Loader2 className="w-4 h-4 mr-2 animate-spin" />
               Verifying Payment...
+              <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                Checking every 3 seconds for up to 3 minutes
+              </div>
             </>
           ) : isPaying ? (
             <>
