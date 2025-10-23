@@ -1,4 +1,5 @@
 import { NostrWebLNProvider } from '@getalby/sdk'
+import { decode } from 'light-bolt11-decoder'
 
 const log = (msg: string, data?: any) => console.log(`[CreateTopUpInvoice] ${msg}`, data || '')
 
@@ -95,13 +96,33 @@ export async function onRequestPost(context: any) {
                     invoice.result.hash
     }
 
-    // Last resort: generate tracking ID
-    // (invoice string will be used for verification, this is just for tracking)
+    // CRITICAL: If NWC didn't provide payment hash, decode BOLT11 invoice to extract it
     if (!paymentHash) {
       log('⚠️ No payment hash found in NWC response')
-      log('⚠️ Will use invoice string for verification instead')
-      log('⚠️ Available fields in invoice response:', Object.keys(invoice))
-      paymentHash = `topup-${userPubkey.substring(0, 8)}-${amountSats}-${timestamp}`
+      log('🔍 Decoding BOLT11 invoice to extract payment hash...')
+
+      try {
+        const decoded = decode(invoice.paymentRequest)
+        log('📋 Decoded invoice:', JSON.stringify(decoded, null, 2))
+
+        // Find payment hash in decoded sections
+        const paymentHashSection = decoded.sections.find((section: any) =>
+          section.name === 'payment_hash'
+        )
+
+        if (paymentHashSection && paymentHashSection.value) {
+          paymentHash = paymentHashSection.value
+          log('✅ Extracted payment hash from BOLT11:', paymentHash)
+        } else {
+          log('⚠️ No payment_hash section found in decoded invoice')
+          log('⚠️ Available sections:', decoded.sections.map((s: any) => s.name))
+          throw new Error('Could not extract payment hash from invoice')
+        }
+      } catch (decodeError) {
+        log('❌ Error decoding BOLT11 invoice:', decodeError.message)
+        log('❌ Falling back to tracking ID')
+        paymentHash = `topup-${userPubkey.substring(0, 8)}-${amountSats}-${timestamp}`
+      }
     }
 
     log('✅ Payment hash for verification:', paymentHash)
