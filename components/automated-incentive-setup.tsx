@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Target, Zap, Wallet, CheckCircle, AlertCircle, Clock, Copy, QrCode, RefreshCw } from 'lucide-react'
+import { Target, Zap, Wallet, CheckCircle, AlertCircle, Clock, Copy, QrCode, RefreshCw, Loader2 } from 'lucide-react'
 import { IncentiveSuccessMessage } from './incentive-success-message'
 import QRCode from 'qrcode'
 
@@ -575,93 +575,77 @@ export function AutomatedIncentiveSetup({ userPubkey, authData, onPaymentSuccess
           </Button>
         ) : (
           <div className="space-y-4">
-            <div className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-lg">
-              <div className="flex items-center gap-2 mb-3">
-                <AlertCircle className="w-5 h-5 text-yellow-600" />
-                <span className="text-sm font-medium text-yellow-800 dark:text-yellow-200">Payment Required</span>
-              </div>
-              <p className="text-sm text-yellow-700 dark:text-yellow-300 mb-4">
-                Pay this Lightning invoice to activate your goals:
+            {/* Payment Screen - matches top-up design */}
+            <div className="text-center mb-4">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                Initial Stake Payment
+              </h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Scan QR code or copy invoice to pay
               </p>
-              
-              {/* Modern QR Code Display */}
-              <div className="bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 p-6 rounded-xl border border-amber-200 dark:border-amber-800 mb-4">
-                <div className="flex flex-col items-center space-y-4">
-                  {/* QR Code Container */}
-                  <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-lg border border-amber-200 dark:border-amber-700">
-                    {qrCodeDataUrl && (
-                      <img 
-                        src={qrCodeDataUrl} 
-                        alt="Lightning Invoice QR Code"
-                        className="w-48 h-48 rounded-lg"
-                      />
-                    )}
-                  </div>
-                  
-                  {/* QR Code Description */}
-                  <div className="text-center">
-                    <p className="text-sm font-medium text-amber-800 dark:text-amber-200 mb-1">
-                      Scan with Lightning Wallet
-                    </p>
-                    <p className="text-xs text-amber-600 dark:text-amber-400">
-                      Use any Lightning wallet to pay this invoice
-                    </p>
-                  </div>
-                </div>
+            </div>
+
+            {/* QR Code */}
+            {qrCodeDataUrl && (
+              <div className="flex justify-center mb-4">
+                <img src={qrCodeDataUrl} alt="Payment QR Code" className="w-64 h-64 rounded-lg" />
               </div>
-              
-              {/* Invoice Text Container */}
-              <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-amber-200 dark:border-amber-700 mb-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="w-2 h-2 bg-amber-500 rounded-full"></div>
-                  <span className="text-sm font-medium text-amber-800 dark:text-amber-200">Lightning Invoice</span>
-                </div>
-                <div className="bg-gray-50 dark:bg-gray-900 p-3 rounded-lg border font-mono text-xs break-all text-gray-700 dark:text-gray-300">
-                  {depositInvoice}
-                </div>
-              </div>
-              
-              {/* Modern Copy Button */}
-              <div className="space-y-2">
-                <Button 
-                  onClick={copyInvoice}
-                  className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-medium py-3 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 border-0"
-                >
-                  <Copy className="w-4 h-4 mr-2" />
-                  {showCopySuccess ? 'Copied!' : 'Copy Invoice'}
-                </Button>
-                
-                {/* Only show "Generate New Invoice" if settings have changed */}
-                {settingsHaveChanged() && (
-                  <Button 
-                    onClick={() => {
-                      setDepositInvoice(null)
-                      setInvoicePaid(false)
-                      setOriginalSettings(null)
-                    }}
-                    variant="outline"
-                    className="w-full border-gray-300 text-gray-700 hover:bg-gray-50"
-                  >
-                    <Zap className="w-4 h-4 mr-2" />
-                    Generate Lightning Invoice (New)
-                  </Button>
+            )}
+
+            {/* Checking Status */}
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded p-3 text-sm text-blue-700 dark:text-blue-300 mb-4 flex items-center justify-center gap-2">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Checking for payment...
+            </div>
+
+            {/* Copy Invoice */}
+            <div className="space-y-3">
+              <Button
+                onClick={copyInvoice}
+                variant="outline"
+                className="w-full"
+              >
+                {showCopySuccess ? (
+                  <>
+                    <CheckCircle className="w-4 h-4 mr-2" />
+                    Copied!
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-4 h-4 mr-2" />
+                    Copy Invoice
+                  </>
                 )}
-              </div>
-              
+              </Button>
+
+              {/* Only show "Generate New Invoice" if settings have changed */}
+              {settingsHaveChanged() && (
+                <Button
+                  onClick={() => {
+                    setDepositInvoice(null)
+                    setInvoicePaid(false)
+                    setOriginalSettings(null)
+                  }}
+                  variant="outline"
+                  className="w-full"
+                >
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                  Generate New Invoice
+                </Button>
+              )}
+
+              <Button
+                onClick={() => {
+                  setDepositInvoice('')
+                  setInvoicePaid(false)
+                  setOriginalSettings(null)
+                }}
+                variant="outline"
+                className="w-full"
+              >
+                Cancel
+              </Button>
             </div>
-            
-            {/* Payment Status Indicator */}
-            <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg">
-              <div className="flex items-center gap-2">
-                <div className="animate-spin">
-                  <Clock className="w-4 h-4 text-blue-600" />
-                </div>
-                <span className="text-sm text-blue-700 dark:text-blue-300">
-                  Waiting for payment... (checking every second)
-                </span>
-              </div>
-            </div>
-            
           </div>
         )}
         

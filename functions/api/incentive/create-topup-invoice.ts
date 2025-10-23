@@ -58,19 +58,50 @@ export async function onRequestPost(context: any) {
     log('📋 Invoice string preview:', invoice.paymentRequest?.substring(0, 80) + '...')
     log('📋 Full invoice string:', invoice.paymentRequest)
     log('📋 Full invoice object:', JSON.stringify(invoice, null, 2))
+    log('📋 Invoice object keys:', Object.keys(invoice))
+    log('📋 Invoice top-level fields:', {
+      paymentRequest: !!invoice.paymentRequest,
+      paymentHash: !!invoice.paymentHash,
+      payment_hash: !!invoice.payment_hash,
+      rHash: !!invoice.rHash,
+      r_hash: !!invoice.r_hash,
+      hash: !!invoice.hash
+    })
 
-    // Extract payment hash from NWC response (if available)
-    let paymentHash = invoice.paymentHash || invoice.payment_hash || invoice.rHash || invoice.r_hash
+    // Extract payment hash from NWC response - check all possible locations
+    let paymentHash = invoice.paymentHash ||
+                      invoice.payment_hash ||
+                      invoice.rHash ||
+                      invoice.r_hash ||
+                      invoice.hash
 
-    // If not available, try to get it from the invoice object
+    // If not available, try to get it from nested invoice object
     if (!paymentHash && invoice.invoice) {
-      paymentHash = invoice.invoice.paymentHash || invoice.invoice.payment_hash
+      log('🔍 Checking nested invoice object...')
+      paymentHash = invoice.invoice.paymentHash ||
+                    invoice.invoice.payment_hash ||
+                    invoice.invoice.rHash ||
+                    invoice.invoice.r_hash ||
+                    invoice.invoice.hash
     }
 
-    // Last resort: generate tracking ID (though this won't work for verification)
+    // Check for payment hash in any nested result/data objects
+    if (!paymentHash && invoice.result) {
+      log('🔍 Checking result object...')
+      paymentHash = invoice.result.paymentHash ||
+                    invoice.result.payment_hash ||
+                    invoice.result.rHash ||
+                    invoice.result.r_hash ||
+                    invoice.result.hash
+    }
+
+    // Last resort: generate tracking ID
+    // (invoice string will be used for verification, this is just for tracking)
     if (!paymentHash) {
-      log('⚠️ No payment hash found in NWC response, generating tracking ID')
-      paymentHash = `${userPubkey.substring(0, 8)}-topup-${amountSats}-${timestamp}`
+      log('⚠️ No payment hash found in NWC response')
+      log('⚠️ Will use invoice string for verification instead')
+      log('⚠️ Available fields in invoice response:', Object.keys(invoice))
+      paymentHash = `topup-${userPubkey.substring(0, 8)}-${amountSats}-${timestamp}`
     }
 
     log('✅ Payment hash for verification:', paymentHash)

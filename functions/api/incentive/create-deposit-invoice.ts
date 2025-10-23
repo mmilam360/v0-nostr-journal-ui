@@ -57,32 +57,56 @@ export async function onRequestPost(context: any) {
     log('📋 Invoice string length:', invoice.paymentRequest?.length || 0)
     log('📋 Invoice string preview:', invoice.paymentRequest?.substring(0, 80) + '...')
     log('📋 Full invoice string:', invoice.paymentRequest)
-    
-    // For Cloudflare Functions, we'll use the invoice string directly for verification
-    // since BOLT11 decoding requires Node.js built-ins that aren't available
-    log('🔍 Using invoice string for verification (Cloudflare Functions compatible)')
-    
-    let paymentHash = ''
-    
-    try {
-      log('📋 Invoice string length:', invoice.paymentRequest.length)
-      log('📋 Invoice preview:', invoice.paymentRequest.substring(0, 50) + '...')
-      
-      // Generate a tracking ID for this invoice
-      // The verify-payment function will use the invoice string directly
-      const timestamp = Date.now()
-      paymentHash = `${userPubkey.substring(0, 8)}-${amountSats}-${timestamp}`
-      
-      log('✅ Generated tracking ID for invoice:', paymentHash)
-      log('✅ Will use invoice string for verification')
-      
-    } catch (error) {
-      log('❌ Error generating tracking ID:', error.message)
-      throw new Error(`Failed to generate payment tracking: ${error.message}`)
+    log('📋 Full invoice object:', JSON.stringify(invoice, null, 2))
+    log('📋 Invoice object keys:', Object.keys(invoice))
+    log('📋 Invoice top-level fields:', {
+      paymentRequest: !!invoice.paymentRequest,
+      paymentHash: !!invoice.paymentHash,
+      payment_hash: !!invoice.payment_hash,
+      rHash: !!invoice.rHash,
+      r_hash: !!invoice.r_hash,
+      hash: !!invoice.hash
+    })
+
+    // Extract payment hash from NWC response - check all possible locations
+    let paymentHash = invoice.paymentHash ||
+                      invoice.payment_hash ||
+                      invoice.rHash ||
+                      invoice.r_hash ||
+                      invoice.hash
+
+    // If not available, try to get it from nested invoice object
+    if (!paymentHash && invoice.invoice) {
+      log('🔍 Checking nested invoice object...')
+      paymentHash = invoice.invoice.paymentHash ||
+                    invoice.invoice.payment_hash ||
+                    invoice.invoice.rHash ||
+                    invoice.invoice.r_hash ||
+                    invoice.invoice.hash
     }
-    
-    log('📋 Final payment hash (tracking ID):', paymentHash)
-    log('✅ Invoice created with tracking ID')
+
+    // Check for payment hash in any nested result/data objects
+    if (!paymentHash && invoice.result) {
+      log('🔍 Checking result object...')
+      paymentHash = invoice.result.paymentHash ||
+                    invoice.result.payment_hash ||
+                    invoice.result.rHash ||
+                    invoice.result.r_hash ||
+                    invoice.result.hash
+    }
+
+    // Last resort: generate tracking ID
+    // (invoice string will be used for verification, this is just for tracking)
+    if (!paymentHash) {
+      log('⚠️ No payment hash found in NWC response')
+      log('⚠️ Will use invoice string for verification instead')
+      log('⚠️ Available fields in invoice response:', Object.keys(invoice))
+      const timestamp = Date.now()
+      paymentHash = `deposit-${userPubkey.substring(0, 8)}-${amountSats}-${timestamp}`
+    }
+
+    log('✅ Payment hash for verification:', paymentHash)
+    log('✅ Payment hash is real (64 char hex):', /^[a-f0-9]{64}$/i.test(paymentHash))
     log('========================================')
     
     const response = {
