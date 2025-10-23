@@ -110,7 +110,8 @@ export async function onRequestPost(context: any) {
         } catch (directError) {
           log('⚠️ Direct invoice lookup failed:', directError.message)
           log('⚠️ Error type:', directError.constructor.name)
-          log('⚠️ Full error:', directError)
+          log('⚠️ Full error:', JSON.stringify(directError, null, 2))
+          log('⚠️ Error stack:', directError.stack)
 
           // Method 2: Try invoice in object format
           try {
@@ -176,8 +177,9 @@ export async function onRequestPost(context: any) {
                   
                 } catch (altError) {
                   log('❌ All alternative methods failed:', altError.message)
-                  
-                  // All methods failed
+
+                  // All methods failed - this is NORMAL for unpaid invoices
+                  // NWC may throw errors instead of returning status for unpaid invoices
                   invoiceStatus = {
                     settled: false,
                     paid: false,
@@ -185,13 +187,14 @@ export async function onRequestPost(context: any) {
                     state: 'pending'
                   }
                   lookupMethod = 'all_lookup_methods_failed'
-                  log('❌ All lookup methods failed')
+                  log('⚠️ All lookup methods failed - invoice may be unpaid or very recent')
+                  log('⚠️ This is NORMAL if the invoice has not been paid yet')
                 }
               }
             } else {
               log('⚠️ Not a real payment hash, skipping payment hash lookup')
-              
-              // All methods failed
+
+              // All methods failed - this is NORMAL for unpaid invoices
               invoiceStatus = {
                 settled: false,
                 paid: false,
@@ -199,7 +202,8 @@ export async function onRequestPost(context: any) {
                 state: 'pending'
               }
               lookupMethod = 'all_lookup_methods_failed_tracking'
-              log('❌ All lookup methods failed for tracking ID')
+              log('⚠️ All lookup methods failed for tracking ID - invoice may be unpaid')
+              log('⚠️ This is NORMAL if the invoice has not been paid yet')
             }
           }
         }
@@ -207,7 +211,8 @@ export async function onRequestPost(context: any) {
       } catch (lookupError) {
         log('❌ Invoice lookup failed:', lookupError.message)
         log('❌ Error type:', lookupError.constructor.name)
-        
+        log('⚠️ This is NORMAL if the invoice has not been paid yet')
+
         invoiceStatus = {
           settled: false,
           paid: false,
