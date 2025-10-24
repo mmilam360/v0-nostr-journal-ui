@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
-import { X, Zap, CheckCircle, XCircle, DollarSign, CreditCard, RotateCcw, Smartphone, Plus } from 'lucide-react'
+import { X, Zap, CheckCircle, XCircle, DollarSign, CreditCard, RotateCcw, Smartphone, Plus, TrendingUp, AlertTriangle, Lock } from 'lucide-react'
 import { BitcoinConnectLightningGoalsManager } from './bitcoin-connect-lightning-goals-manager'
 import { TopUpBalance } from './top-up-balance'
 
@@ -13,7 +13,9 @@ function LightningGoalsSummary({
   authData, 
   onRefresh,
   onSetupStatusChange,
-  onClose
+  onClose,
+  onStreakUpdate,
+  onStakeActivated
 }: { 
   goals: any
   currentWordCount: number
@@ -22,9 +24,10 @@ function LightningGoalsSummary({
   onRefresh: () => void
   onSetupStatusChange?: (hasSetup: boolean) => void
   onClose?: () => void
+  onStreakUpdate?: (newStreak: number) => void
+  onStakeActivated?: () => void
 }) {
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
-  const [showTopUpModal, setShowTopUpModal] = useState(false)
   const [activeTab, setActiveTab] = useState<'progress' | 'history'>('progress')
   
   // Fix negative numbers by properly handling baseline word count
@@ -167,6 +170,21 @@ function LightningGoalsSummary({
         </div>
       </div>
       
+
+      {/* Top Up Balance Section */}
+      <TopUpBalance
+        userPubkey={userPubkey}
+        authData={authData}
+        currentBalance={goals.currentBalance}
+        onTopUpComplete={async () => {
+          // Refresh goals in the modal
+          await onRefresh()
+          // Also refresh the parent component (main-app) to update header balance
+          if (onStakeActivated) {
+            await onStakeActivated()
+          }
+        }}
+      />
       
       {/* Actions */}
       <div className="flex gap-3">
@@ -176,13 +194,6 @@ function LightningGoalsSummary({
           className="flex-1"
         >
           Refresh
-        </Button>
-        <Button 
-          onClick={() => setShowTopUpModal(true)}
-          className="flex-1 bg-blue-500 hover:bg-blue-600 text-white flex items-center gap-2"
-        >
-          <Plus className="w-4 h-4" />
-          Top Up Balance
         </Button>
         <Button 
           onClick={() => setShowCancelConfirm(true)}
@@ -202,68 +213,114 @@ function LightningGoalsSummary({
         /* History Tab */
         <div className="space-y-4">
           <div className="bg-gray-50 dark:bg-gray-800 p-6 rounded-lg">
-            <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-gray-100">Reward History</h3>
+            <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-gray-100">Activity History</h3>
             {goals.history && goals.history.length > 0 ? (
               <div className="space-y-3">
                 {goals.history.slice(-10).reverse().map((day: any, index: number) => (
-                  <div key={index} className="flex justify-between items-center text-sm bg-white dark:bg-gray-700 p-3 rounded-lg border border-gray-200 dark:border-gray-600">
-                    <div className="flex flex-col">
-                      <span className="font-medium text-gray-900 dark:text-gray-100">{day.date}</span>
-                      <span className="text-gray-500 dark:text-gray-400 text-xs">
-                        {day.words} words written
+                  <div key={index} className="bg-white dark:bg-gray-700 p-4 rounded-lg border border-gray-200 dark:border-gray-600">
+                    {/* Date Header */}
+                    <div className="flex justify-between items-center mb-3 pb-2 border-b border-gray-200 dark:border-gray-600">
+                      <span className="font-semibold text-gray-900 dark:text-gray-100">{day.date}</span>
+                      <span className="text-sm text-gray-500 dark:text-gray-400">
+                        {day.words} words
                       </span>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <div className="flex flex-col items-end">
-                        <div className="flex items-center gap-2">
-                          <span className={day.goalMet ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'} className="flex items-center gap-1">
+
+                    {/* Day Summary */}
+                    <div className="flex items-center gap-2 mb-2">
                             {day.goalMet ? (
+                        <div className="flex items-center gap-1 text-green-600 dark:text-green-400 text-sm font-medium">
+                          <CheckCircle className="w-4 h-4" />
+                          <span>Goal Achieved</span>
+                        </div>
+                      ) : (
+                        // Check if this is the stake creation day
+                        day.transactions?.some((tx: any) => tx.type === 'stake_created') ? (
+                          <div className="flex items-center gap-1 text-blue-600 dark:text-blue-400 text-sm font-medium">
+                            <TrendingUp className="w-4 h-4" />
+                            <span>New Goal Started</span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1 text-red-600 dark:text-red-400 text-sm font-medium">
+                            <XCircle className="w-4 h-4" />
+                            <span>Goal Missed</span>
+                          </div>
+                        )
+                      )}
+                    </div>
+
+                    {/* Transaction History */}
+                    {day.transactions && day.transactions.length > 0 && (
+                      <div className="space-y-2 mt-3">
+                        {day.transactions.map((tx: any, txIndex: number) => (
+                          <div key={txIndex} className="flex items-start gap-2 text-sm bg-gray-50 dark:bg-gray-800 p-2 rounded">
+                            {tx.type === 'stake_created' && (
                               <>
-                                <CheckCircle className="w-4 h-4" />
-                                Goal Met
-                              </>
-                            ) : (
-                              <>
-                                <XCircle className="w-4 h-4" />
-                                Goal Missed
+                                <Lock className="w-4 h-4 text-blue-600 dark:text-blue-400 mt-0.5" />
+                                <div className="flex-1">
+                                  <div className="font-medium text-blue-700 dark:text-blue-300">Stake Created</div>
+                                  <div className="text-xs text-gray-600 dark:text-gray-400">Deposited {tx.amount} sats</div>
+                                </div>
                               </>
                             )}
-                          </span>
+                            {tx.type === 'top_up' && (
+                              <>
+                                <Plus className="w-4 h-4 text-purple-600 dark:text-purple-400 mt-0.5" />
+                                <div className="flex-1">
+                                  <div className="font-medium text-purple-700 dark:text-purple-300">Balance Top-Up</div>
+                                  <div className="text-xs text-gray-600 dark:text-gray-400">Added {tx.amount} sats</div>
+                                </div>
+                              </>
+                            )}
+                            {tx.type === 'goal_met' && (
+                              <>
+                                <CheckCircle className="w-4 h-4 text-green-600 dark:text-green-400 mt-0.5" />
+                                <div className="flex-1">
+                                  <div className="font-medium text-green-700 dark:text-green-300">Goal Achieved</div>
+                                  <div className="text-xs text-gray-600 dark:text-gray-400">{tx.description}</div>
                         </div>
-                        {day.rewardSent && (
-                          <span className="text-green-600 dark:text-green-400 text-xs font-medium flex items-center gap-1">
-                            <Zap className="w-3 h-3" />
-                            {goals.dailyReward} sats paid out
-                          </span>
-                        )}
-                        {/* Show transaction history */}
-                        {day.transactions && day.transactions.length > 0 && (
-                          <div className="flex flex-col items-end gap-1 mt-2">
-                            {day.transactions.map((tx: any, txIndex: number) => (
-                              <div key={txIndex} className="flex items-center gap-1">
-                                {tx.type === 'deposit' && (
-                                  <span className="text-blue-600 dark:text-blue-400 text-xs flex items-center gap-1">
-                                    <CreditCard className="w-3 h-3" />
-                                    +{tx.amount} sats deposit
-                                  </span>
+                              </>
+                            )}
+                            {tx.type === 'goal_missed' && (
+                              <>
+                                <XCircle className="w-4 h-4 text-red-600 dark:text-red-400 mt-0.5" />
+                                <div className="flex-1">
+                                  <div className="font-medium text-red-700 dark:text-red-300">Goal Missed</div>
+                                  <div className="text-xs text-gray-600 dark:text-gray-400">{tx.description}</div>
+                                </div>
+                              </>
                                 )}
                                 {tx.type === 'payout' && (
-                                  <span className="text-green-600 dark:text-green-400 text-xs flex items-center gap-1">
-                                    <Zap className="w-3 h-3" />
-                                    -{tx.amount} sats payout
-                                  </span>
+                              <>
+                                <Zap className="w-4 h-4 text-orange-600 dark:text-orange-400 mt-0.5" />
+                                <div className="flex-1">
+                                  <div className="font-medium text-orange-700 dark:text-orange-300">Reward Paid</div>
+                                  <div className="text-xs text-gray-600 dark:text-gray-400">Sent {tx.amount} sats</div>
+                                </div>
+                              </>
+                            )}
+                            {(tx.type === 'deposit' || tx.type === 'refund') && (
+                              <>
+                                <CreditCard className="w-4 h-4 text-blue-600 dark:text-blue-400 mt-0.5" />
+                                <div className="flex-1">
+                                  <div className="font-medium text-blue-700 dark:text-blue-300">
+                                    {tx.type === 'deposit' ? 'Deposit' : 'Refund'}
+                                  </div>
+                                  <div className="text-xs text-gray-600 dark:text-gray-400">
+                                    {tx.type === 'deposit' ? '+' : '+'}{tx.amount} sats
+                                  </div>
+                                </div>
+                              </>
                                 )}
                               </div>
                             ))}
                           </div>
                         )}
-                      </div>
-                    </div>
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="text-gray-500 dark:text-gray-400 text-center py-4">No history yet</p>
+              <p className="text-gray-500 dark:text-gray-400 text-center py-4">No activity yet</p>
             )}
           </div>
           
@@ -292,40 +349,14 @@ function LightningGoalsSummary({
         </div>
       )}
 
-      {/* Top-Up Modal */}
-      {showTopUpModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="max-w-md w-full bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700">
-            <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
-              <h3 className="text-lg font-semibold flex items-center gap-2">
-                <Plus className="w-5 h-5 text-blue-500" />
-                Top Up Balance
-              </h3>
-              <Button variant="ghost" size="sm" onClick={() => setShowTopUpModal(false)}>
-                <X className="w-4 h-4" />
-              </Button>
-            </div>
-            <div className="p-6">
-              <TopUpBalance
-                userPubkey={userPubkey}
-                authData={authData}
-                currentBalance={goals.currentBalance}
-                onTopUpComplete={() => {
-                  setShowTopUpModal(false)
-                  onRefresh() // Refresh the goals data
-                }}
-              />
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Cancel Stake Confirmation Popup */}
       {showCancelConfirm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-800 p-6 rounded-lg max-w-md w-full">
             <div className="text-center">
-              <div className="text-4xl mb-4">⚠️</div>
+              <div className="flex justify-center mb-4">
+                <AlertTriangle className="w-16 h-16 text-yellow-600" />
+              </div>
               <h3 className="text-lg font-semibold mb-2">Cancel Lightning Goal?</h3>
               <p className="text-gray-600 mb-6">
                 Are you sure you want to cancel your current stake? You will not receive a refund of your {goals.currentBalance} sats balance.
@@ -365,6 +396,8 @@ interface IncentiveModalProps {
   onWordCountProcessed?: () => void
   onSetupStatusChange?: (hasSetup: boolean) => void
   onStakeActivated?: () => void
+  onStreakUpdate?: (newStreak: number) => void
+  onGoalCompleted?: () => void
 }
 
 export function IncentiveModal({
@@ -377,7 +410,9 @@ export function IncentiveModal({
   userLightningAddress,
   onWordCountProcessed,
   onSetupStatusChange,
-  onStakeActivated
+  onStakeActivated,
+  onStreakUpdate,
+  onGoalCompleted
 }: IncentiveModalProps) {
   const [hasSetup, setHasSetup] = useState(false)
   const [goals, setGoals] = useState<any>(null)
@@ -454,7 +489,7 @@ export function IncentiveModal({
       <div className="max-w-2xl w-full max-h-[90vh] overflow-y-auto bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700">
         <div className="flex flex-row items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
           <h2 className="flex items-center gap-2 text-xl font-semibold">
-            <span className="text-2xl">⚡</span>
+            <Zap className="w-6 h-6 text-yellow-500" />
             Lightning Goals
           </h2>
           <Button variant="ghost" size="sm" onClick={onClose}>
@@ -485,12 +520,15 @@ export function IncentiveModal({
               onRefresh={loadGoals}
               onSetupStatusChange={onSetupStatusChange}
               onClose={onClose}
+              onStreakUpdate={onStreakUpdate}
+              onStakeActivated={onStakeActivated}
             />
                 ) : (
                   <BitcoinConnectLightningGoalsManager
                     userPubkey={userPubkey}
                     authData={authData}
                     currentWordCount={lastSavedWordCount || 0}
+                    onStreakUpdate={onStreakUpdate}
                     onStakeActivated={async () => {
                       console.log('[IncentiveModal] 🎉 Stake activated, switching to Progress/Summary...')
                       
