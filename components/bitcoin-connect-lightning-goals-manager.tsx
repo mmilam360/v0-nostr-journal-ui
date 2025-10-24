@@ -811,70 +811,160 @@ function BitcoinConnectLightningGoalsManagerInner({
         </div>
       )}
       
-      {/* Show invoice screen if screen is invoice - Clean Top-Up Style Design */}
+      {/* Show invoice screen if screen is invoice */}
       {screen === 'invoice' && invoiceData && (
-        <div className="bg-gray-50 dark:bg-gray-800 p-6 rounded-lg border border-gray-200 dark:border-gray-700">
-          <div className="text-center mb-4">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
-              Pay Your Stake
-            </h3>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              {loading ? 'Waiting for payment...' : 'Scan QR code or copy invoice to pay'}
-            </p>
-          </div>
-
-          {/* QR Code */}
-          <div className="flex justify-center mb-4">
-            <div className="bg-white dark:bg-gray-900 p-4 rounded-lg border-2 border-gray-200 dark:border-gray-700">
-              <LightningInvoiceQR 
-                invoice={invoiceData.invoice}
-                amount={invoiceData.amount}
-              />
-            </div>
-          </div>
-
-          {/* Checking Status */}
-          {loading && (
-            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded p-3 text-sm text-blue-700 dark:text-blue-300 mb-4 flex items-center justify-center gap-2">
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 dark:border-blue-400"></div>
-              Checking for payment...
-              <div className="text-xs text-blue-600 dark:text-blue-400 mt-1">
-                Checking every 3 seconds for up to 3 minutes
+        <div className="space-y-6">
+          <h2 className="text-2xl font-bold text-center">Pay Your Stake</h2>
+          
+          {/* Payment Success Alert */}
+          {showPaymentSuccess && (
+            <div className="bg-green-100 dark:bg-green-900/30 border border-green-300 dark:border-green-700 rounded-lg p-4 text-center">
+              <div className="flex items-center justify-center gap-2 text-green-700 dark:text-green-300">
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+                <span className="font-semibold">Payment Confirmed!</span>
               </div>
+              <p className="text-sm text-green-600 dark:text-green-400 mt-1">
+                Switching to Progress/Summary...
+              </p>
             </div>
           )}
+          
+          {/* Show different UI based on payment method chosen */}
+          {paymentMethod === 'connect' ? (
+            // CONNECT WALLET FLOW: Show 1-click payment prominently
+            <>
+              {/* Primary: 1-Click Payment */}
+              <div className="border-2 border-green-200 dark:border-green-800 rounded-lg p-6 bg-green-50 dark:bg-green-900/20">
+                <div className="text-center mb-4">
+                  <div className="text-5xl mb-3">⚡</div>
+                  <h3 className="text-lg font-semibold text-green-700 dark:text-green-300 mb-2">
+                    Pay with Connected Wallet
+                  </h3>
+                  <p className="text-3xl font-bold text-green-600 dark:text-green-400 mb-3">
+                    {invoiceData.amount} sats
+                  </p>
+                </div>
+                
+                <button
+                  onClick={payInvoice}
+                  disabled={loading}
+                  className="w-full py-4 bg-green-500 text-white rounded-lg font-medium text-lg
+                           hover:bg-green-600 disabled:bg-gray-300 transition-colors"
+                >
+                  {loading ? 'Processing Payment...' : '⚡ Pay Now'}
+                </button>
+                
+                <p className="text-xs text-gray-600 dark:text-gray-400 mt-3 text-center">
+                  Instant 1-click payment from your connected wallet
+                </p>
+              </div>
+              
+              {/* Secondary: QR Code Alternative */}
+              <details className="border-2 border-blue-200 dark:border-blue-800 rounded-lg bg-blue-50 dark:bg-blue-900/20">
+                <summary className="p-4 cursor-pointer text-sm font-medium text-blue-700 dark:text-blue-300 hover:text-blue-800 dark:hover:text-blue-200">
+                  Or scan QR code with another wallet
+                </summary>
+                <div className="p-4 border-t border-blue-200 dark:border-blue-800">
+                  <LightningInvoiceQR 
+                    invoice={invoiceData.invoice}
+                    amount={invoiceData.amount}
+                  />
+                </div>
+              </details>
+            </>
+          ) : (
+            // GENERATE INVOICE FLOW: Show QR code prominently - Top-Up Style Design
+            <>
+              {/* Primary: QR Code */}
+              <div className="bg-gray-50 dark:bg-gray-800 p-6 rounded-lg border border-gray-200 dark:border-gray-700">
+                <div className="text-center mb-4">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                    Stake Payment
+                  </h3>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    {loading ? 'Waiting for payment...' : 'Scan QR code or copy invoice to pay'}
+                  </p>
+                </div>
+                
+                {/* QR Code */}
+                <div className="flex justify-center mb-4">
+                  <div className="bg-white dark:bg-gray-900 p-4 rounded-lg border-2 border-gray-200 dark:border-gray-700">
+                    <LightningInvoiceQR 
+                      invoice={invoiceData.invoice}
+                      amount={invoiceData.amount}
+                    />
+                  </div>
+                </div>
+                
+                {/* Payment verification for QR code payments */}
+                {paymentMethod === 'invoice' && loading && (
+                  <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded p-3 text-sm text-blue-700 dark:text-blue-300 mb-4 flex items-center justify-center gap-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 dark:border-blue-400"></div>
+                    Checking for payment...
+                    <div className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                      Checking every 3 seconds for up to 3 minutes
+                    </div>
+                  </div>
+                )}
+              </div>
+              
+              {/* Secondary: Connect Wallet Alternative */}
+              <details className="border-2 border-green-200 dark:border-green-800 rounded-lg bg-green-50 dark:bg-green-900/20">
+                <summary className="p-4 cursor-pointer text-sm font-medium text-green-700 dark:text-green-300 hover:text-green-800 dark:hover:text-green-200">
+                  Or connect a wallet for 1-click payment
+                </summary>
+                <div className="p-4 border-t border-green-200 dark:border-green-800 text-center">
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                    Connect a WebLN-compatible wallet to pay instantly
+                  </p>
+                  <WalletConnect />
+                  <button
+                    onClick={payInvoice}
+                    disabled={loading || !isConnected}
+                    className="w-full mt-3 py-3 bg-green-500 text-white rounded-lg font-medium
+                             hover:bg-green-600 disabled:bg-gray-300 transition-colors"
+                  >
+                    {loading ? 'Processing...' : 'Pay with Connected Wallet'}
+                  </button>
+                </div>
+              </details>
+            </>
+          )}
+          
+          {/* Payment Status (shown for both methods) */}
+          {loading && (
+            <div className="text-center p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 dark:border-blue-400 mx-auto mb-3"></div>
+              <p className="text-sm font-medium text-blue-800 dark:text-blue-300 mb-2">
+                ⏳ Waiting for Payment...
+              </p>
+              <p className="text-xs text-blue-600 dark:text-blue-400">
+                Pay the invoice above from any Lightning wallet
+              </p>
+              <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                Checking automatically every 3 seconds
+              </p>
+              <p className="text-xs text-blue-500 dark:text-blue-500 mt-2">
+                This usually takes 5-30 seconds after you pay
+              </p>
+            </div>
+          )}
+          
 
-          {/* Copy Invoice */}
-          <div className="space-y-3">
-            <button
-              onClick={async () => {
-                try {
-                  await navigator.clipboard.writeText(invoiceData.invoice)
-                  // Could add a brief "Copied!" feedback here if needed
-                } catch (err) {
-                  console.error('Failed to copy:', err)
-                }
-              }}
-              className="w-full py-3 bg-blue-500 text-white rounded-lg font-medium hover:bg-blue-600 transition-colors flex items-center justify-center gap-2"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-              </svg>
-              Copy Invoice
-            </button>
-
-            <button
-              onClick={() => {
-                setScreen('setup')
-                setPaymentMethod(null)
-                setInvoiceData(null)
-                setVerificationStarted(false)
-              }}
-              className="w-full py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
-            >
-              ← Back to setup
-            </button>
-          </div>
+               {/* Back Button */}
+               <button
+                 onClick={() => {
+                   setScreen('setup')
+                   setPaymentMethod(null)
+                   setInvoiceData(null)
+                   setVerificationStarted(false)
+                 }}
+                 className="w-full py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
+               >
+                 ← Back to setup
+               </button>
         </div>
       )}
       
