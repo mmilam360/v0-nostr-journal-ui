@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react'
 import { WalletConnect } from './wallet-connect'
 import { ClientOnly } from './client-only'
 import { LightningInvoiceQR } from './lightning-invoice-qr'
-import { CheckCircle } from 'lucide-react'
+import { CheckCircle, Smartphone } from 'lucide-react'
 import * as bolt11 from 'bolt11'
 
 interface InvoiceData {
@@ -748,28 +748,53 @@ function BitcoinConnectLightningGoalsManagerInner({
               Pay instantly with your connected Bitcoin wallet
             </p>
             
-            {/* Alternative Payment Method */}
-            <details className="mt-4">
-              <summary className="text-sm text-blue-600 dark:text-blue-400 cursor-pointer hover:text-blue-700 dark:hover:text-blue-300 text-center">
-                Or pay manually with QR code
-              </summary>
-              <div className="mt-3">
-                <button
-                  onClick={async () => {
-                    setPaymentMethod('invoice')
-                    await createDepositInvoice()
-                  }}
-                  disabled={loading || !lightningAddress || dailyReward <= 0 || stakeAmount <= 0}
-                  className="w-full py-3 border-2 border-blue-200 dark:border-blue-800 rounded-lg
-                           bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30
-                           disabled:opacity-50 disabled:cursor-not-allowed transition-colors
-                           flex items-center justify-center gap-2"
-                >
-                  <span className="text-xl">📱</span>
-                  Generate QR Code Invoice
-                </button>
-              </div>
-            </details>
+            {/* Alternative Payment Method - Top-Up Style Design */}
+            <div className="mt-4">
+              <details className="border-2 border-blue-200 dark:border-blue-800 rounded-lg bg-blue-50 dark:bg-blue-900/20">
+                <summary className="p-4 cursor-pointer text-sm font-medium text-blue-700 dark:text-blue-300 hover:text-blue-800 dark:hover:text-blue-200 flex items-center justify-center gap-2">
+                  <Smartphone className="w-4 h-4" />
+                  Or pay manually with QR code
+                </summary>
+                <div className="p-4 border-t border-blue-200 dark:border-blue-800">
+                  <div className="text-center mb-4">
+                    <h3 className="text-lg font-semibold text-blue-700 dark:text-blue-300 mb-2">
+                      Manual Payment Option
+                    </h3>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      Generate a QR code invoice to pay with any Lightning wallet
+                    </p>
+                  </div>
+                  
+                  <button
+                    onClick={async () => {
+                      setPaymentMethod('invoice')
+                      await createDepositInvoice()
+                    }}
+                    disabled={loading || !lightningAddress || dailyReward <= 0 || stakeAmount <= 0}
+                    className="w-full py-4 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 
+                             disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed 
+                             text-white rounded-lg font-medium text-lg transition-all duration-200
+                             flex items-center justify-center gap-2 shadow-lg hover:shadow-xl"
+                  >
+                    {loading ? (
+                      <>
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                        Creating Invoice...
+                      </>
+                    ) : (
+                      <>
+                        <Smartphone className="w-5 h-5" />
+                        Generate QR Code Invoice
+                      </>
+                    )}
+                  </button>
+                  
+                  <div className="mt-3 text-xs text-gray-500 dark:text-gray-400 text-center">
+                    <p>Scan with any Lightning wallet to pay instantly</p>
+                  </div>
+                </div>
+              </details>
+            </div>
             
             {/* Validation Message */}
             {(!lightningAddress || dailyReward <= 0 || stakeAmount <= 0) && (
@@ -850,33 +875,36 @@ function BitcoinConnectLightningGoalsManagerInner({
               </details>
             </>
           ) : (
-            // GENERATE INVOICE FLOW: Show QR code prominently
+            // GENERATE INVOICE FLOW: Show QR code prominently - Top-Up Style Design
             <>
               {/* Primary: QR Code */}
-              <div className="border-2 border-blue-200 dark:border-blue-800 rounded-lg p-6 bg-blue-50 dark:bg-blue-900/20">
+              <div className="bg-gray-50 dark:bg-gray-800 p-6 rounded-lg border border-gray-200 dark:border-gray-700">
                 <div className="text-center mb-4">
-                  <div className="text-5xl mb-3">📱</div>
-                  <h3 className="text-lg font-semibold text-blue-700 dark:text-blue-300 mb-2">
-                    Scan QR Code to Pay
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                    Stake Payment
                   </h3>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    {loading ? 'Waiting for payment...' : 'Scan QR code or copy invoice to pay'}
+                  </p>
                 </div>
                 
-                <LightningInvoiceQR 
-                  invoice={invoiceData.invoice}
-                  amount={invoiceData.amount}
-                />
+                {/* QR Code */}
+                <div className="flex justify-center mb-4">
+                  <div className="bg-white dark:bg-gray-900 p-4 rounded-lg border-2 border-gray-200 dark:border-gray-700">
+                    <LightningInvoiceQR 
+                      invoice={invoiceData.invoice}
+                      amount={invoiceData.amount}
+                    />
+                  </div>
+                </div>
                 
                 {/* Payment verification for QR code payments */}
-                {paymentMethod === 'invoice' && (
-                  <div className="mt-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
-                    <div className="text-center">
-                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-yellow-600 dark:border-yellow-400 mx-auto mb-2"></div>
-                      <p className="text-sm text-yellow-800 dark:text-yellow-300">
-                        ⏳ Waiting for payment confirmation...
-                      </p>
-                      <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-1">
-                        This usually takes 5-30 seconds
-                      </p>
+                {paymentMethod === 'invoice' && loading && (
+                  <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded p-3 text-sm text-blue-700 dark:text-blue-300 mb-4 flex items-center justify-center gap-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 dark:border-blue-400"></div>
+                    Checking for payment...
+                    <div className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                      Checking every 3 seconds for up to 3 minutes
                     </div>
                   </div>
                 )}
