@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
-import { X, Zap, CheckCircle, XCircle, DollarSign, CreditCard, RotateCcw, Smartphone } from 'lucide-react'
+import { X, Zap, CheckCircle, XCircle, DollarSign, CreditCard, RotateCcw, Smartphone, Plus } from 'lucide-react'
 import { BitcoinConnectLightningGoalsManager } from './bitcoin-connect-lightning-goals-manager'
+import { TopUpBalance } from './top-up-balance'
 
 function LightningGoalsSummary({ 
   goals, 
@@ -23,6 +24,7 @@ function LightningGoalsSummary({
   onClose?: () => void
 }) {
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
+  const [showTopUpModal, setShowTopUpModal] = useState(false)
   const [activeTab, setActiveTab] = useState<'progress' | 'history'>('progress')
   
   // Fix negative numbers by properly handling baseline word count
@@ -176,6 +178,13 @@ function LightningGoalsSummary({
           Refresh
         </Button>
         <Button 
+          onClick={() => setShowTopUpModal(true)}
+          className="flex-1 bg-blue-500 hover:bg-blue-600 text-white flex items-center gap-2"
+        >
+          <Plus className="w-4 h-4" />
+          Top Up Balance
+        </Button>
+        <Button 
           onClick={() => setShowCancelConfirm(true)}
           variant="destructive"
           className="flex-1"
@@ -279,6 +288,34 @@ function LightningGoalsSummary({
           {/* Lightning Address */}
           <div className="text-center text-sm text-gray-500">
             <p>Rewards sent to: <span className="font-mono">{goals.lightningAddress}</span></p>
+          </div>
+        </div>
+      )}
+
+      {/* Top-Up Modal */}
+      {showTopUpModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="max-w-md w-full bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+              <h3 className="text-lg font-semibold flex items-center gap-2">
+                <Plus className="w-5 h-5 text-blue-500" />
+                Top Up Balance
+              </h3>
+              <Button variant="ghost" size="sm" onClick={() => setShowTopUpModal(false)}>
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+            <div className="p-6">
+              <TopUpBalance
+                userPubkey={userPubkey}
+                authData={authData}
+                currentBalance={goals.currentBalance}
+                onTopUpComplete={() => {
+                  setShowTopUpModal(false)
+                  onRefresh() // Refresh the goals data
+                }}
+              />
+            </div>
           </div>
         </div>
       )}

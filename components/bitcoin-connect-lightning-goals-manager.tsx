@@ -748,52 +748,35 @@ function BitcoinConnectLightningGoalsManagerInner({
               Pay instantly with your connected Bitcoin wallet
             </p>
             
-            {/* Alternative Payment Method - Top-Up Style Design */}
+            {/* Alternative Payment Method - Instant QR Code */}
             <div className="mt-4">
-              <details className="border-2 border-blue-200 dark:border-blue-800 rounded-lg bg-blue-50 dark:bg-blue-900/20">
-                <summary className="p-4 cursor-pointer text-sm font-medium text-blue-700 dark:text-blue-300 hover:text-blue-800 dark:hover:text-blue-200 flex items-center justify-center gap-2">
-                  <Smartphone className="w-4 h-4" />
-                  Or pay manually with QR code
-                </summary>
-                <div className="p-4 border-t border-blue-200 dark:border-blue-800">
-                  <div className="text-center mb-4">
-                    <h3 className="text-lg font-semibold text-blue-700 dark:text-blue-300 mb-2">
-                      Manual Payment Option
-                    </h3>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">
-                      Generate a QR code invoice to pay with any Lightning wallet
-                    </p>
-                  </div>
-                  
-                  <button
-                    onClick={async () => {
-                      setPaymentMethod('invoice')
-                      await createDepositInvoice()
-                    }}
-                    disabled={loading || !lightningAddress || dailyReward <= 0 || stakeAmount <= 0}
-                    className="w-full py-4 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 
-                             disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed 
-                             text-white rounded-lg font-medium text-lg transition-all duration-200
-                             flex items-center justify-center gap-2 shadow-lg hover:shadow-xl"
-                  >
-                    {loading ? (
-                      <>
-                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                        Creating Invoice...
-                      </>
-                    ) : (
-                      <>
-                        <Smartphone className="w-5 h-5" />
-                        Generate QR Code Invoice
-                      </>
-                    )}
-                  </button>
-                  
-                  <div className="mt-3 text-xs text-gray-500 dark:text-gray-400 text-center">
-                    <p>Scan with any Lightning wallet to pay instantly</p>
-                  </div>
-                </div>
-              </details>
+              <button
+                onClick={async () => {
+                  setPaymentMethod('invoice')
+                  await createDepositInvoice()
+                }}
+                disabled={loading || !lightningAddress || dailyReward <= 0 || stakeAmount <= 0}
+                className="w-full py-4 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 
+                         disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed 
+                         text-white rounded-lg font-medium text-lg transition-all duration-200
+                         flex items-center justify-center gap-2 shadow-lg hover:shadow-xl"
+              >
+                {loading ? (
+                  <>
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                    Creating Invoice...
+                  </>
+                ) : (
+                  <>
+                    <Smartphone className="w-5 h-5" />
+                    Or pay manually with QR code
+                  </>
+                )}
+              </button>
+              
+              <div className="mt-3 text-xs text-gray-500 dark:text-gray-400 text-center">
+                <p>Scan with any Lightning wallet to pay instantly</p>
+              </div>
             </div>
             
             {/* Validation Message */}
@@ -803,10 +786,6 @@ function BitcoinConnectLightningGoalsManagerInner({
               </p>
             )}
             
-            {/* Info Text */}
-            <p className="text-xs text-gray-500 dark:text-gray-400 text-center mt-4">
-              Both methods work the same way - choose whichever is most convenient for you
-            </p>
           </div>
         </div>
       )}
