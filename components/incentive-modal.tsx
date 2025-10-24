@@ -241,10 +241,19 @@ function LightningGoalsSummary({
                             <span>New Goal Started</span>
                           </div>
                         ) : (
-                          <div className="flex items-center gap-1 text-red-600 dark:text-red-400 text-sm font-medium">
-                            <XCircle className="w-4 h-4" />
-                            <span>Goal Missed</span>
-                          </div>
+                          // Check if this is today (don't show "missed" for today)
+                          day.isToday ? (
+                            <div className="flex items-center gap-1 text-orange-600 dark:text-orange-400 text-sm font-medium">
+                              <AlertTriangle className="w-4 h-4" />
+                              <span>In Progress</span>
+                            </div>
+                          ) : (
+                            // Only show "missed" for past days
+                            <div className="flex items-center gap-1 text-red-600 dark:text-red-400 text-sm font-medium">
+                              <XCircle className="w-4 h-4" />
+                              <span>Goal Missed</span>
+                            </div>
+                          )
                         )
                       )}
                     </div>
