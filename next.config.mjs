@@ -1,6 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // output: 'export', // Temporarily disabled for API route testing
+  output: 'export', // Re-enabled for Cloudflare Pages deployment
   webpack: (config, { isServer }) => {
     if (isServer) {
       config.externals = config.externals || [];
