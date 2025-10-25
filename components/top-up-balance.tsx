@@ -70,23 +70,23 @@ export function TopUpBalance({ userPubkey, authData, currentBalance, onTopUpComp
       try {
         console.log(`[TopUp] 🔄 Verification attempt ${attempts}/${maxAttempts}`)
         console.log(`[TopUp] Time remaining: ${Math.floor((maxAttempts - attempts) * 3 / 60)} minutes`)
-        
-        const isPaid = await checkPaymentStatus(invoice, paymentHash)
 
-        if (isPaid) {
+      const isPaid = await checkPaymentStatus(invoice, paymentHash)
+
+      if (isPaid) {
           console.log('[TopUp] ========================================')
           console.log('[TopUp] 🎉 PAYMENT CONFIRMED!')
           console.log('[TopUp] 🔒 SECURITY: Payment verified via NWC backend - NOT WebLN')
           console.log('[TopUp] ========================================')
           console.log('[TopUp] 💰 Crediting balance:', amount, 'sats')
           
-          clearInterval(pollInterval)
-          setIsCheckingPayment(false)
-          setPaymentVerified(true)
+        clearInterval(pollInterval)
+        setIsCheckingPayment(false)
+        setPaymentVerified(true)
 
-          // Process the confirmed payment
-          await handlePaymentConfirmed(paymentHash, amount)
-        } else if (attempts >= maxAttempts) {
+        // Process the confirmed payment
+        await handlePaymentConfirmed(paymentHash, amount)
+      } else if (attempts >= maxAttempts) {
           console.log('[TopUp] ========================================')
           console.log('[TopUp] ⏰ VERIFICATION TIMEOUT')
           console.log('[TopUp] ========================================')
@@ -110,8 +110,8 @@ export function TopUpBalance({ userPubkey, authData, currentBalance, onTopUpComp
         })
         
         if (attempts >= maxAttempts) {
-          clearInterval(pollInterval)
-          setIsCheckingPayment(false)
+        clearInterval(pollInterval)
+        setIsCheckingPayment(false)
           setError('Payment verification failed after maximum attempts. Please try again.')
         }
       }
@@ -141,6 +141,15 @@ export function TopUpBalance({ userPubkey, authData, currentBalance, onTopUpComp
           timestamp: Date.now()
         })
       })
+
+      console.log('[TopUp] Response status:', response.status)
+      console.log('[TopUp] Response headers:', Object.fromEntries(response.headers.entries()))
+      
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('[TopUp] API error response:', errorText)
+        throw new Error(`API returned ${response.status}: ${errorText}`)
+      }
 
       const data = await response.json()
 
@@ -379,9 +388,18 @@ export function TopUpBalance({ userPubkey, authData, currentBalance, onTopUpComp
         {/* Payment Method Buttons */}
         <div className="space-y-2">
           <Button
+            onClick={handleBitcoinConnect}
+            className="w-full bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700"
+          >
+            <Wallet className="w-4 h-4 mr-2" />
+            Pay with Bitcoin Connect
+          </Button>
+
+          <Button
             onClick={handleCreateTopUpInvoice}
             disabled={isCreatingInvoice}
-            className="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700"
+            variant="outline"
+            className="w-full"
           >
             {isCreatingInvoice ? (
               <>
@@ -394,15 +412,6 @@ export function TopUpBalance({ userPubkey, authData, currentBalance, onTopUpComp
                 Generate Invoice
               </>
             )}
-          </Button>
-
-          <Button
-            onClick={handleBitcoinConnect}
-            variant="outline"
-            className="w-full"
-          >
-            <Wallet className="w-4 h-4 mr-2" />
-            Pay with Bitcoin Connect
           </Button>
         </div>
       </div>
@@ -445,6 +454,15 @@ function BitcoinConnectTopUp({
         })
       })
 
+      console.log('[TopUp] Bitcoin Connect Response status:', response.status)
+      console.log('[TopUp] Bitcoin Connect Response headers:', Object.fromEntries(response.headers.entries()))
+      
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('[TopUp] Bitcoin Connect API error response:', errorText)
+        throw new Error(`API returned ${response.status}: ${errorText}`)
+      }
+
       const data = await response.json()
 
       if (!data.success) {
@@ -466,16 +484,16 @@ function BitcoinConnectTopUp({
       // Now attempt WebLN payment (this is just a trigger, not verification)
       try {
         console.log('[TopUp] 🔌 Attempting WebLN payment trigger...')
-        if (window.webln) {
-          await window.webln.enable()
-          const result = await window.webln.sendPayment(data.invoice)
+      if (window.webln) {
+        await window.webln.enable()
+        const result = await window.webln.sendPayment(data.invoice)
           console.log('[TopUp] ✅ WebLN payment triggered!', result)
           console.log('[TopUp] 🔍 Payment verification is already running via NWC...')
           
           // Note: We do NOT trust this response - verification polling will confirm if payment was actually made
-        } else {
-          throw new Error('WebLN not available')
-        }
+      } else {
+        throw new Error('WebLN not available')
+      }
         
       } catch (weblnError) {
         console.log('[TopUp] ⚠️ WebLN payment failed, but NWC verification continues:', weblnError)
