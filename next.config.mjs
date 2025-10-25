@@ -1,6 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: 'export', // Re-enabled for Cloudflare Pages deployment
+  // output: 'export', // Disabled - deploying as regular Next.js app for API routes
   webpack: (config, { isServer }) => {
     if (isServer) {
       config.externals = config.externals || [];
